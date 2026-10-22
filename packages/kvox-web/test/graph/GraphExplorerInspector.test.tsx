@@ -762,7 +762,9 @@ describe('the inspector on a phone', () => {
     for (const name of ['Focus', 'Expand']) {
       expect(within(group).getByRole('button', { name })).toBeInTheDocument();
     }
-    expect(within(group).getByRole('link', { name: 'Open page' })).toBeInTheDocument();
+    // The third action is "Path to…" (GIC-13); Open page moves behind the overflow menu.
+    expect(within(group).getByRole('button', { name: 'Path to…' })).toBeInTheDocument();
+    expect(within(group).queryByRole('link', { name: 'Open page' })).not.toBeInTheDocument();
     // Pin and Hide sit behind the overflow menu on a phone.
     expect(within(group).queryByRole('button', { name: 'Hide' })).not.toBeInTheDocument();
     expect(await within(group).findByText('18 evidence')).toBeInTheDocument();
@@ -771,6 +773,7 @@ describe('the inspector on a phone', () => {
     await user.click(within(group).getByRole('button', { name: 'Node actions' }));
     expect(await screen.findByRole('menuitem', { name: 'Pin' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Hide' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Open page' })).toBeInTheDocument();
     await user.keyboard('{Escape}');
 
     // Half height: the scrollable tab strip.

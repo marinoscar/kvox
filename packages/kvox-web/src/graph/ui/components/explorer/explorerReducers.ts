@@ -61,6 +61,10 @@ export interface ReducerContext {
   dimColor: string;
   /** Compact window: the seeds and the focus keep their labels while others thin out. */
   compact?: boolean;
+  /** Path mode (GIC-13): the nodes of the shown path. Non-empty: they are lit and labelled, every other node dims (until a focus takes over). */
+  pathNodeIds?: ReadonlySet<string>;
+  /** Path mode (GIC-13): the edges of the shown path, drawn thicker and labelled; every other edge dims. */
+  pathEdgeIds?: ReadonlySet<string>;
 }
 
 /** `colour` at `DIM_OPACITY`; `fallback` when the string is not a colour MUI can read. */
@@ -100,7 +104,7 @@ export function buildNodeReducer(ctx: ReducerContext): (node: string, data: Disp
   const focus = activeFocus(ctx);
   return (node, data) => {
     const out = base(node, data);
-    if (out.hidden === true || !faded.has(node) || node === focus || ctx.markedIds?.has(node) === true) return out;
+    if (out.hidden === true || !faded.has(node) || node === focus || ctx.markedIds?.has(node) === true || ctx.pathNodeIds?.has(node) === true) return out;
     return timeDimmedNode(out, ctx);
   };
 }
@@ -108,6 +112,7 @@ export function buildNodeReducer(ctx: ReducerContext): (node: string, data: Disp
 function buildFocusNodeReducer(ctx: ReducerContext): (node: string, data: Display) => Display {
   const focus = activeFocus(ctx);
   const lit: HighlightSet | null = highlightSet(ctx.graph, focus);
+  const pathNodes = ctx.pathNodeIds && ctx.pathNodeIds.size > 0 ? ctx.pathNodeIds : null;
   return (node, data) => {
     if (!ctx.visibleIds.has(node)) return { ...data, hidden: true };
 
@@ -132,6 +137,15 @@ function buildFocusNodeReducer(ctx: ReducerContext): (node: string, data: Displa
       out.zIndex = 4;
     }
     if (!lit) {
+      if (pathNodes && !marked) {
+        if (pathNodes.has(node)) {
+          out.forceLabel = true;
+          out.highlighted = true;
+          out.zIndex = 3;
+          return out;
+        }
+        return dimNode(out, data, ctx.dimColor);
+      }
       if (isStub || (ctx.compact && data.isSeed === true)) out.forceLabel = true;
       return out;
     }
@@ -145,14 +159,19 @@ function buildFocusNodeReducer(ctx: ReducerContext): (node: string, data: Displa
       if (node === focus) out.highlighted = true;
       return out;
     }
-    out.color = dimmed(data.color, ctx.dimColor);
-    if (typeof data.iconColor === 'string') out.iconColor = dimmed(data.iconColor, ctx.dimColor);
-    out.label = '';
-    out.ringSize = 0;
-    out.gapSize = 0;
-    out.zIndex = 0;
-    return out;
+    return dimNode(out, data, ctx.dimColor);
   };
+}
+
+/** A node pushed into the background: dimmed colour, no label, no ring. */
+function dimNode(out: Display, data: Display, dimColor: string): Display {
+  out.color = dimmed(data.color, dimColor);
+  if (typeof data.iconColor === 'string') out.iconColor = dimmed(data.iconColor, dimColor);
+  out.label = '';
+  out.ringSize = 0;
+  out.gapSize = 0;
+  out.zIndex = 0;
+  return out;
 }
 
 /** Builds the `edgeReducer` for the current interaction. An edge with a dimmed end is dimmed too. */
@@ -173,6 +192,7 @@ function buildFocusEdgeReducer(ctx: ReducerContext): (edge: string, data: Displa
   const focus = activeFocus(ctx);
   const lit = highlightSet(ctx.graph, focus);
   const labelFocusEdges = lit !== null && lit.edges.size <= MAX_FOCUS_EDGE_LABELS;
+  const pathEdges = ctx.pathEdgeIds && ctx.pathEdgeIds.size > 0 ? ctx.pathEdgeIds : null;
   return (edge, data) => {
     const [source, target] = ctx.graph.extremities(edge);
     if (!ctx.visibleIds.has(source) || !ctx.visibleIds.has(target)) return { ...data, hidden: true };
@@ -186,7 +206,18 @@ function buildFocusEdgeReducer(ctx: ReducerContext): (edge: string, data: Displa
     }
     if (hovered) out.zIndex = 3;
 
-    if (!lit) return out;
+    if (!lit) {
+      if (!pathEdges) return out;
+      if (pathEdges.has(edge)) {
+        out.size = Math.max(Number(data.size ?? 1) * 2, 3);
+        out.zIndex = 3;
+        out.label = typeof data.label === 'string' ? data.label : '';
+        return out;
+      }
+      out.color = dimmed(data.color, ctx.dimColor);
+      out.zIndex = 0;
+      return out;
+    }
     if (lit.nodes.has(source) && lit.nodes.has(target)) {
       out.zIndex = Math.max(Number(out.zIndex ?? 0), lit.edges.has(edge) ? 2 : 1);
       return out;

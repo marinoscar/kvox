@@ -152,6 +152,8 @@ export interface GraphCanvasControls {
   getCamera?: () => CameraSnapshot;
   /** Puts the camera back exactly, without animation. */
   setCamera?: (camera: CameraSnapshot) => void;
+  /** Animates the camera to frame these nodes (path mode's "Show on canvas"); ids not on the canvas are ignored. */
+  fitTo?: (ids: readonly string[]) => void;
   /** Flies the camera to a node and zooms in to it (the palette's "On canvas" result); a no-op for a node that is not drawn. */
   focusNode?: (id: string) => void;
   /** The rectangle the canvas shows, in graph coordinates (the minimap's viewport), or `null` before the first frame. */
@@ -260,6 +262,10 @@ export interface GraphCanvasProps {
   markedIds?: ReadonlySet<string>;
   /** Nodes the TimeBar dims (no evidence in the brushed window, or not active in the bar under the pointer). A selected, focused or marked node is never dimmed. */
   dimmedIds?: ReadonlySet<string> | null;
+  /** Path mode (GIC-13): the nodes of the shown path. Non-empty: they are lit and every other node is dimmed. */
+  pathNodeIds?: ReadonlySet<string>;
+  /** Path mode (GIC-13): the edges of the shown path, drawn thicker; every other edge is dimmed. */
+  pathEdgeIds?: ReadonlySet<string>;
   /** `touch` enables long-press and the enlarged pick radius and disables hover and double-click expand. Default `pointer`. */
   inputModality?: 'touch' | 'pointer';
   /** The performance budgets of the window (GIC-08). Omitted: sigma's defaults, as the overview uses it. */
@@ -407,6 +413,8 @@ function CanvasBehaviour({
   previewId = null,
   markedIds,
   dimmedIds,
+  pathNodeIds,
+  pathEdgeIds,
   layout,
   seedIds,
   pinsKey,
@@ -470,6 +478,23 @@ function CanvasBehaviour({
         return { x, y, ratio };
       },
       setCamera: (state) => sigma.getCamera().setState(state),
+      fitTo: (ids) => {
+        const points = ids
+          .filter((id) => graph.hasNode(id))
+          .map((id) => sigma.getNodeDisplayData(id))
+          .filter((point): point is NonNullable<typeof point> => Boolean(point));
+        if (points.length === 0) return;
+        const xs = points.map((point) => point.x);
+        const ys = points.map((point) => point.y);
+        const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+        const target = {
+          x: (Math.min(...xs) + Math.max(...xs)) / 2,
+          y: (Math.min(...ys) + Math.max(...ys)) / 2,
+          ratio: Math.min(1, Math.max(0.05, span * 1.6 + 0.05)),
+        };
+        if (reducedMotion) sigma.getCamera().setState(target);
+        else void sigma.getCamera().animate(target, { duration: 300 });
+      },
       focusNode: (id) => {
         const display = sigma.getNodeDisplayData(id);
         if (!display) return;
@@ -496,7 +521,7 @@ function CanvasBehaviour({
         };
       },
     }),
-    [camera, sigma],
+    [camera, sigma, graph, reducedMotion],
   );
 
   // Labels are drawn onto a 2D canvas once; if the webfont lands after the
@@ -569,6 +594,8 @@ function CanvasBehaviour({
   // View state goes through the reducers, never into the graph's attributes.
   const markedKey = markedIds ? [...markedIds].sort().join(',') : '';
   const dimmedKey = dimmedIds ? [...dimmedIds].sort().join(',') : '';
+  const pathNodeKey = pathNodeIds ? [...pathNodeIds].sort().join(',') : '';
+  const pathEdgeKey = pathEdgeIds ? [...pathEdgeIds].sort().join(',') : '';
   // Hover is for a pointer; a touch preview takes its place on a phone.
   const focusId = (touch ? null : hoverId) ?? previewId;
   const constrained = budgets?.constrained ?? compact;
@@ -581,6 +608,8 @@ function CanvasBehaviour({
       hoveredEdgeId,
       markedIds: new Set(markedKey ? markedKey.split(',') : []),
       dimmedIds: dimmedKey ? new Set(dimmedKey.split(',')) : null,
+      pathNodeIds: new Set(pathNodeKey ? pathNodeKey.split(',') : []),
+      pathEdgeIds: new Set(pathEdgeKey ? pathEdgeKey.split(',') : []),
       accent: theme.palette.primary.main,
       dimColor,
       compact: constrained,
@@ -599,6 +628,8 @@ function CanvasBehaviour({
     hoveredEdgeId,
     markedKey,
     dimmedKey,
+    pathNodeKey,
+    pathEdgeKey,
     dimColor,
     constrained,
     theme.palette.primary.main,
