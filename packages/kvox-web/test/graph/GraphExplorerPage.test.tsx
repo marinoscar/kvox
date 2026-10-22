@@ -253,7 +253,7 @@ describe('GraphExplorerPage — seeding', () => {
 
   it('renders an overview hand-off at once, before the expand returns', async () => {
     useExpand(async (body) => {
-      await delay(150);
+      await delay(600);
       return HttpResponse.json({ data: expandFixture(body) });
     });
     setExplorerHandoff({

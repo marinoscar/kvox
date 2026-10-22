@@ -536,7 +536,7 @@ export function TimeBar(props: TimeBarProps) {
           '&:focus-visible': { outline: `2px solid ${accent}`, outlineOffset: -2 },
         }}
       >
-        <Box ref={plotRef} sx={{ width: '100%', height: '100%' }}>
+        <Box ref={plotRef} component="span" sx={{ display: 'block', width: '100%', height: '100%' }}>
           <svg width={width} height={plotHeight} viewBox={`0 0 ${width} ${plotHeight}`} aria-hidden focusable="false" style={{ display: 'block' }}>
             <path d={stripPath} fill="currentColor" opacity={0.35} />
             {shownFrom !== null && shownTo !== null && (
