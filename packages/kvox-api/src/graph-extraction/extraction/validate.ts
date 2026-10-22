@@ -53,6 +53,7 @@ import {
   type SegmentAliasEntry,
 } from './extraction-context.js';
 import {
+  EXTRACTABLE_ITEM_STATUSES,
   rawExtractionSchema,
   type RawCite,
   type RawEntity,
@@ -570,12 +571,13 @@ function validateItem(
   if (cites.evidence.length === 0) return drop('uncited');
   if ([subject, owner, counterparty].some((e) => e !== null && !e.alive)) return drop('dangling');
 
+  const allowedStatuses = EXTRACTABLE_ITEM_STATUSES[kind] ?? [];
   const status =
-    kind === 'commitment' && ['open', 'done', 'dropped'].includes(item.status ?? '')
-      ? (item.status as 'open' | 'done' | 'dropped')
-      : kind === 'commitment'
-        ? 'open'
-        : null;
+    allowedStatuses.length === 0
+      ? null
+      : allowedStatuses.includes(item.status ?? '')
+        ? (item.status as NonNullable<ItemPayload['status']>)
+        : 'open';
   const sensitivity =
     kind === 'person_fact'
       ? (['business', 'personal', 'sensitive'] as const).find((s) => s === item.sensitivity) ?? type.sensitivityDefault

@@ -129,6 +129,7 @@ const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() !=
 export const ITEM_KIND_TYPE_KEYS: Readonly<Record<string, GroupKey>> = {
   commitment: 'Commitment',
   decision: 'Decision',
+  risk: 'Risk',
   claim: 'Claim',
   person_fact: 'PersonFact',
 };

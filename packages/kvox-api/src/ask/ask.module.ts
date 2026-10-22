@@ -32,7 +32,7 @@ import { AskUserDataService } from './user-data/ask-user-data.service.js';
 //
 // WHAT IT IMPORTS, AND WHY EACH ONE:
 //
-//   • the graph slice: access (scope validation), the read services the seven tools call, the
+//   • the graph slice: access (scope validation), the read services the eight tools call, the
 //     entity brief and the AI run resolver (the one place a refused model becomes a 409).
 //   • the search slice: `SearchService` (the `search` tool's document leg, spec §9.4) and the host's
 //     transcript-visibility rule.

@@ -20,6 +20,7 @@ export const {
   EvidenceTool,
   GetEntityTool,
   ListCommitmentsTool,
+  ListRisksTool,
   NeighborsTool,
   SearchTool,
   TimelineTool,

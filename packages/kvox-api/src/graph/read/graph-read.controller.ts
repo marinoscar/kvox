@@ -98,6 +98,9 @@ export class GraphReadController {
       'reviewed. Keyset-paginated by `nextCursor`.\n\n' +
       '- **`sort=updated`** (default): most recently changed first.\n' +
       '- **`sort=viewed`**: only the entities you have opened, most recent first.\n' +
+      '- **`sort=mentions`**: the most-mentioned first, by the notes and transcripts that mention ' +
+      'the entity; with **`since`** (`YYYY-MM-DD` or an ISO 8601 datetime) only mentions recorded on or ' +
+      'after it count and entities with none are left out. The top `limit`; `nextCursor` is always `null`.\n' +
       '- **`q`**: fuzzy match on labels and aliases, the top `limit` by similarity; `nextCursor` ' +
       'is always `null` and `sort` is ignored.\n' +
       '- **`transcriptId`**: the Persons identified as a speaker in that transcript, each with ' +
@@ -107,7 +110,8 @@ export class GraphReadController {
   @ApiQuery({ name: 'type', required: false, type: String, description: 'Comma-separated entity type keys' })
   @ApiQuery({ name: 'q', required: false, type: String })
   @ApiQuery({ name: 'transcriptId', required: false, type: String, format: 'uuid' })
-  @ApiQuery({ name: 'sort', required: false, enum: ['updated', 'viewed'] })
+  @ApiQuery({ name: 'sort', required: false, enum: ['updated', 'viewed', 'mentions'] })
+  @ApiQuery({ name: 'since', required: false, type: String, description: 'With sort=mentions: YYYY-MM-DD or ISO 8601 datetime' })
   @ApiQuery({ name: 'cursor', required: false, type: String })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: '1-50 (default 25)' })
   @ApiDataResponse(ListEntitiesResponseDto, { description: 'A page of entities' })
@@ -211,7 +215,7 @@ export class GraphReadController {
       'it attended, discussed or is part of. Each event carries up to five evidence ids and ' +
       'the total.\n\n' +
       '- **`as_of`** drops events after that instant.\n' +
-      '- **`kinds`** keeps a subset of `commitment, decision, claim, person_fact, relation, meeting`.\n' +
+      '- **`kinds`** keeps a subset of `commitment, decision, claim, person_fact, risk, relation, meeting`.\n' +
       '- `sensitive` person facts appear only with **`includeSensitive=true`**.\n\n' +
       'Keyset-paginated by `nextCursor`. A query that runs longer than 3 s is a **503** with ' +
       '`details.reason: "graph_query_timeout"`.',

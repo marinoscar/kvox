@@ -135,7 +135,7 @@ export type RelationPayload = z.infer<typeof relationPayloadSchema>;
  *
  * @stability experimental
  */
-export const ITEM_PAYLOAD_KINDS = ['commitment', 'decision', 'claim', 'person_fact'] as const;
+export const ITEM_PAYLOAD_KINDS = ['commitment', 'decision', 'claim', 'person_fact', 'risk'] as const;
 /**
  * The `ItemPayloadKind` type (item payload kind).
  *
@@ -154,7 +154,7 @@ export const itemDedupSchema = z.object({
   verdict: z.enum(['same', 'new', 'supersedes', 'known']),
   /** The existing `kg_items` row (same / supersedes / known), or a possible duplicate of a `new` one. */
   targetItemId: z.guid().nullable(),
-  /** Only for verdict `same` on a commitment: what the restatement changed. */
+  /** Only for verdict `same` on a commitment: what the restatement changed. A risk's change of status is a new row that supersedes. */
   changes: z
     .object({
       status: z.enum(['open', 'done', 'dropped']).optional(),
@@ -190,8 +190,8 @@ export const itemPayloadSchema = temporalSchema.extend({
    * never by the model: `{ ref: 'meeting' }` for commitment/decision.
    */
   meeting: endpointRefSchema.nullable().default(null),
-  /** Commitment only. */
-  status: z.enum(['open', 'done', 'dropped']).nullable().default(null),
+  /** Commitment (`open | done | dropped`) and risk (`open | mitigated | closed`) only. */
+  status: z.enum(['open', 'done', 'dropped', 'mitigated', 'closed']).nullable().default(null),
   occurredAt: isoDate.nullable(),
   dueAt: isoDate.nullable(),
   /** person_fact only (required there). */

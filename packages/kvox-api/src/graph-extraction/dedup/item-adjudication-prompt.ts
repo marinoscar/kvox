@@ -46,7 +46,7 @@ export interface ItemSide {
 export interface ItemAdjudicationPair {
   /** `p1`, `p2`, … — unique within one call. */
   pairId: string;
-  /** `commitment` | `decision` | `claim` | `person_fact`. */
+  /** `commitment` | `decision` | `risk` | `claim` | `person_fact`. */
   kind: string;
   /** The subject's type (Person, Project, …), for the system prompt's wording. */
   subjectType: string | null;
@@ -57,6 +57,7 @@ export interface ItemAdjudicationPair {
 const KIND_LABEL: Record<string, string> = {
   commitment: 'commitment',
   decision: 'decision',
+  risk: 'risk',
   claim: 'claim',
   person_fact: 'fact about a person',
 };

@@ -73,6 +73,9 @@ export const BRIEF_SECTION_TITLES = [
   'People changes',
 ] as const;
 
+/** The optional sixth section (#664): shown between "Risks / claims" and "People changes" only when the brief carries open risks. */
+export const BRIEF_OPEN_RISKS_TITLE = 'Open risks';
+
 function formatDay(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
@@ -303,6 +306,11 @@ export function EntityBriefCard({ brief, ontology, onRefresh }: EntityBriefCardP
       <Section title={BRIEF_SECTION_TITLES[3]} count={sections.risksClaims.length}>
         <EntryList entries={sections.risksClaims} empty="No risks or claims recorded." />
       </Section>
+      {sections.openRisks && sections.openRisks.length > 0 && (
+        <Section title={BRIEF_OPEN_RISKS_TITLE} count={sections.openRisks.length}>
+          <EntryList entries={sections.openRisks} empty="No open risks." />
+        </Section>
+      )}
       <Section title={BRIEF_SECTION_TITLES[4]} count={sections.peopleChanges.length}>
         {sections.peopleChanges.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
@@ -347,6 +355,7 @@ export function EntityBriefCard({ brief, ontology, onRefresh }: EntityBriefCardP
         sections.decisions.length === 0 &&
         commitmentCount === 0 &&
         sections.risksClaims.length === 0 &&
+        (sections.openRisks?.length ?? 0) === 0 &&
         sections.peopleChanges.length === 0 &&
         !brief.digest && (
           <Alert severity="info" sx={{ mt: 2 }}>

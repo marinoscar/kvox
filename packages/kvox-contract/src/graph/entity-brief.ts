@@ -25,6 +25,7 @@ export const BRIEF_SECTION_LIMITS = {
   decisions: 10,
   openCommitments: 20,
   risksClaims: 10,
+  openRisks: 10,
   peopleChanges: 20,
 } as const;
 /**
@@ -117,7 +118,7 @@ export type BriefEntityRef = z.infer<typeof briefEntityRefSchema>;
  */
 export const briefEntrySchema = z.object({
   itemId: z.uuid(),
-  kind: z.enum(['commitment', 'decision', 'claim', 'person_fact']),
+  kind: z.enum(['commitment', 'decision', 'claim', 'person_fact', 'risk']),
   title: z.string().nullable(),
   statement: z.string(),
   occurredAt: z.string().nullable(),
@@ -238,6 +239,12 @@ export const entityBriefResponseSchema = z.object({
       yours: z.array(briefEntrySchema).max(BRIEF_SECTION_LIMITS.openCommitments),
     }),
     risksClaims: z.array(briefEntrySchema).max(BRIEF_SECTION_LIMITS.risksClaims),
+    /**
+     * "Open risks" (#664): open, not-superseded `risk` items about a Project, Product or Organization,
+     * highest severity first. The key is ABSENT (not an empty array) when there is none, and for every
+     * other entity type.
+     */
+    openRisks: z.array(briefEntrySchema).max(BRIEF_SECTION_LIMITS.openRisks).optional(),
     peopleChanges: z.array(peopleChangeSchema).max(BRIEF_SECTION_LIMITS.peopleChanges),
   }),
   related: z.array(relatedSourceSchema).max(BRIEF_RELATED_LIMIT),
