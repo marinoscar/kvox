@@ -5399,7 +5399,8 @@ extraction — asking for, and estimating, a draft proposal from a note
 (issue #363), entity resolution — merging, un-merging and marking two
 entities as distinct (issue #364) — the read layer — the entity index, an entity's page, its
 neighbourhood, timeline, mentions and citations, plus the explorer's expand
-(issue #370) — an entity's **brief**, "what's the latest on …?" in one
+(issue #370) and the top-k evidence-weighted **paths** between two nodes
+(GIC-12, #673) — an entity's **brief**, "what's the latest on …?" in one
 call (issue #372) — the whole-graph overview, read from a precomputed
 snapshot, plus its manual refresh (issue #371) — reviewing, committing and
 reverting proposals (issue #366) — the ontology itself as OWL/RDFS and
@@ -6261,6 +6262,36 @@ retry re-embeds nothing that is unchanged) are server-only, run on your own
 AI key, and are throttled on your own provider bucket. `kg.embed` never embeds
 a `sensitive` personal fact.
 
+#### Topics from past meetings
+
+Meetings extracted before Topics existed list their subjects only as plain
+text (issue #666, epic #661; [`ontology.md` §11](specs/ontology.md#11-job-types)).
+Both routes require `graph:write` and act only on **your own** meetings (no id
+in the path, so there is nothing to answer `404` for).
+
+##### POST /graph/topics/promote
+
+Queues `kg.topics_promote` (`{ maxRuntimeMs: 30 min, maxAttempts: 3 }`,
+server-only, on your own AI key). It matches each topic string to the Topics
+you already have, then writes **draft proposals** to review at `/graph/review`:
+one per Topic, holding the Topic (new or linked) and a "Meeting discussed Topic"
+row per meeting, each citing the meeting's own source. Nothing reaches your
+graph until you commit a proposal; running it again proposes nothing already
+proposed or already in your graph. A request while a run is pending or running
+joins it.
+
+**Response:** `202` `{ "jobId": "…", "deduplicated": false }`
+**Errors:** `401` · `403` · `409` `details.reason: "graph_disabled"` (connected
+knowledge is off for this deployment).
+
+##### GET /graph/topics/promote
+
+**Response:** `200` `{ "job": { "id", "status": "pending" | "running" |
+"succeeded" | "failed", "createdAt", "finishedAt" } | null, "proposedTopics": 0 }`
+— your latest run (`null` if you never ran it) and the topic proposals waiting
+for review, which grows while a run works.
+**Errors:** `401` · `403`.
+
 #### Proposals — review, commit, revert
 
 A **proposal** is what extraction (and `kg.resolve`, and later imports)
@@ -6682,13 +6713,22 @@ counted).
       "mentions": 4,
       "evidence": 11,
       "items": { "commitment": 2, "decision": 0, "claim": 3, "person_fact": 1 },
-      "openCommitments": 1
+      "openCommitments": 1,
+      "relationsByType": { "WORKS_FOR": 1, "REPORTS_TO": 2, "ATTENDED": 3 },
+      "relationsByNeighborType": { "Organization": 1, "Person": 2, "Meeting": 3 }
     },
     "createdAt": "2026-01-10T09:00:00.000Z",
     "updatedAt": "2026-09-20T10:00:00.000Z"
   }
 }
 ```
+
+`counts.relationsByType` and `counts.relationsByNeighborType` split the same
+readable, currently valid relations that `counts.relations` counts, by
+relation type and by the type of the entity at the other end (both
+directions); each sums to `relations`. They feed the explorer inspector's
+Expand menu ("Works for 3", "Person 2"): choosing one sends `types` or
+`relationTypes` to `POST /graph/explore/expand`. An older API omits them.
 
 **Errors:** `401` · `403` without `graph:read` · `404` no such entity, not
 yours, or merged.
@@ -6861,13 +6901,14 @@ Query: `hops` (1 or 2, default 1), `types`, `relationTypes`, `as_of`,
     "seedIds": ["0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11"],
     "asOf": "2026-09-26T12:00:00.000Z",
     "nodes": [
-      { "id": "0b6f…", "nodeKind": "entity", "type": "Person", "label": "Sarah Chen-Li", "depth": 0, "degree": 6, "status": null, "occurredAt": null },
-      { "id": "9a2e…", "nodeKind": "item", "type": "commitment", "label": "Ship the Q3 pricing memo", "depth": 1, "degree": 1, "status": "open", "occurredAt": "2026-09-01T00:00:00.000Z" }
+      { "id": "0b6f…", "nodeKind": "entity", "type": "Person", "label": "Sarah Chen-Li", "depth": 0, "degree": 6, "status": null, "occurredAt": null, "mentionCount": 14, "lastSeenAt": "2026-09-20T10:00:00.000Z" },
+      { "id": "9a2e…", "nodeKind": "item", "type": "commitment", "label": "Ship the Q3 pricing memo", "depth": 1, "degree": 1, "status": "open", "occurredAt": "2026-09-01T00:00:00.000Z", "lastSeenAt": "2026-09-02T09:00:00.000Z" }
     ],
     "edges": [
-      { "id": "virt:9a2e…:ASSIGNED_TO", "type": "ASSIGNED_TO", "source": "9a2e…", "target": "0b6f…", "valid": null, "confidence": null, "virtual": true, "props": {} },
+      { "id": "virt:9a2e…:ASSIGNED_TO", "type": "ASSIGNED_TO", "source": "9a2e…", "target": "0b6f…", "valid": null, "confidence": null, "virtual": true, "props": {}, "evidenceCount": 2, "lastEvidenceAt": "2026-09-02T09:00:00.000Z" },
       { "id": "3c1f…", "type": "WORKS_FOR", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.92, "virtual": false, "props": {} },
-      { "id": "5d27…", "type": "HAS_ROLE", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.9, "virtual": false, "props": { "title": "Director", "businessUnit": "Pricing" } }
+      { "id": "5d27…", "type": "HAS_ROLE", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.9, "virtual": false, "props": { "title": "Director", "businessUnit": "Pricing" } },
+      { "id": "8b40…", "type": "INVOLVED_IN", "source": "0b6f…", "target": "c2a9…", "valid": null, "confidence": 0.88, "virtual": false, "props": { "role": "approver", "stance": "skeptical" } }
     ],
     "truncated": false,
     "cap": 150
@@ -6875,9 +6916,86 @@ Query: `hops` (1 or 2, default 1), `types`, `relationTypes`, `as_of`,
 }
 ```
 
+Weights and recency (all optional; an older API omits them): a node carries
+`mentionCount` (readable `linked`/`new` mentions, entities only) and
+`lastSeenAt` (latest such mention, or for an item its latest evidence); an
+edge carries `evidenceCount` and `lastEvidenceAt` (a `virtual` item edge
+carries the item's). They are computed for the returned page only, and
+evidence of a `sensitive` fact is never counted. Truncation order is
+unchanged: depth, then degree, then id.
+
 **Errors:** `400` invalid parameter or unknown `type`/`relationTypes` key ·
 `401` · `403` without `graph:read` · `404` no such entity, not yours, or
 merged · `503` `graph_query_timeout`.
+
+##### GET /graph/paths
+
+The top `k` evidence-weighted paths between two nodes, with the graph slice
+they cover — the answer to "how is Joe connected to the Copilot rollout?"
+(GIC-12, #673). A synchronous read with the neighbourhood's 3 s budget, not a
+queue job.
+
+- A search is a **bidirectional breadth-first walk**, one SQL statement per
+  level, with the neighbourhood's predicates: readable rows only, `as_of`
+  evaluated per relation and item, `IDENTIFIED_AS` never an edge.
+- A path has at most `maxHops` edges and passes only through **entities**: an
+  item (commitment, decision, claim, person fact) may be `from` or `to`, never
+  a stop on the way. A `sensitive` person fact is never reachable: as `from`
+  or `to` it is the same 404 as a node that does not exist.
+- Every relation is walked **both ways** to find a connection (so a symmetric
+  `FRIEND_OF` needs no special case), but each returned edge keeps its stored
+  direction (`source` to `target`).
+- **Score** = the mean of `log(1 + evidenceCount)` over the path's edges,
+  multiplied by a hub factor `1 / (1 + 0.25 · ln(1 + max(0, degree - 10)))` for
+  each intermediate node, so a well-evidenced route through a meeting beats an
+  equally long one through a company that touches everything. Paths are
+  **distinct** (no two share a node set; between the same two nodes the better
+  evidenced parallel edge is used) and ordered best first, ties on fewer hops.
+- Each BFS level reads at most 2,000 edge rows (a hub stops being read);
+  `truncated: true` says a cap was hit, so a stronger path than those returned
+  may exist. A hub reached only as a middle node of a short path costs nothing.
+- `types` limits the entity types / item kinds a path may **pass through** (the
+  endpoints are always kept); `relationTypes` limits the edges it may follow.
+  An unknown key in either is a **400**.
+
+Query: `from`, `to` (uuids, required, different), `k` (1–5, default 3),
+`maxHops` (1–5, default 4), `types`, `relationTypes`, `as_of`.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "from": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
+    "to": "4a9e51c2-7d0b-4f3a-8a61-5c2d9e7b0f33",
+    "asOf": null,
+    "paths": [
+      { "nodeIds": ["0b6f…", "4a9e…"], "edgeIds": ["3c1f…"], "hops": 1, "score": 0.6931 },
+      { "nodeIds": ["0b6f…", "7e4d…", "1d20…", "4a9e…"], "edgeIds": ["5d27…", "8b13…", "2f64…"], "hops": 3, "score": 0.5120 }
+    ],
+    "slice": {
+      "seedIds": ["0b6f…", "4a9e…"],
+      "asOf": "2026-10-21T12:00:00.000Z",
+      "nodes": [ { "id": "0b6f…", "nodeKind": "entity", "type": "Person", "label": "Joe", "depth": 0, "degree": 6, "status": null, "occurredAt": null, "mentionCount": 14, "lastSeenAt": "2026-10-20T10:00:00.000Z" } ],
+      "edges": [ { "id": "3c1f…", "type": "ATTENDED", "source": "0b6f…", "target": "4a9e…", "valid": null, "confidence": 0.92, "virtual": false, "props": {}, "evidenceCount": 1, "lastEvidenceAt": "2026-10-20T10:00:00.000Z" } ],
+      "truncated": false,
+      "cap": 300
+    },
+    "truncated": false
+  }
+}
+```
+
+`slice` is the union of the nodes and edges of the returned paths (the two
+endpoints are always in it, so a client can name them when `paths` is empty);
+the endpoints are at `depth` 0, every other node at 1. `asOf` is `null` when
+the request had no `as_of`, otherwise the instant applied. `paths: []` means
+nothing connects the two within `maxHops` — it is not an error, and the client
+may offer to raise `maxHops`.
+
+**Errors:** `400` an invalid parameter, `from` equal to `to`, or an unknown
+`types`/`relationTypes` key · `401` · `403` without `graph:read` · `404` either
+node is not one of your readable nodes (the message never says which) · `503`
+`graph_query_timeout`.
 
 ##### GET /graph/entities/{id}/timeline
 
@@ -6948,6 +7066,26 @@ says more were reachable.
 `graph:read` · `404` **all-or-nothing**: if even one `nodeIds` entry is not
 one of your readable entities or items, the whole request is a 404 that
 does not say which · `503` `graph_query_timeout`.
+
+##### GET /graph/evidence/by-subject
+
+The citations that support one entity, relation or item, **newest source
+first** and at most 50, resolved to links exactly as `GET /graph/evidence`
+does. It is what the explorer inspector shows under a selected edge or node.
+
+**Query:** `kind` (`entity`, `relation` or `item`, required) and `id` (the
+subject's uuid, required).
+
+**Response:** `200` `{ "data": { "items": [ /* EvidenceLink, as below */ ] } }`.
+
+The subject is authorised first, like every graph read: a subject that is not
+yours, is not in your reviewed graph, or does not exist answers one identical
+`404` per kind. An item holding a `sensitive` person fact answers the item
+`404` too: its evidence is never returned, and the explorer never asks for a
+person fact's evidence at all.
+
+**Errors:** `400` missing or malformed `kind` or `id` · `401` · `403` without
+`graph:read` · `404` no such subject, or not yours.
 
 ##### GET /graph/evidence/{id}
 

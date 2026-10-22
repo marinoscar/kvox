@@ -60,6 +60,7 @@ import {
   notSensitiveSql,
   readableEntitySql,
   readableItemSql,
+  readableMentionSql,
   textArray,
   uuidArray,
 } from './read-sql.js';
@@ -105,6 +106,13 @@ export interface EdgeRow {
   virtual: boolean;
   /** `kg_relations.props` for a stored edge; absent/null for a derived one. */
   props?: unknown;
+}
+
+/** One aggregate row of the enrichment queries. */
+interface AggRow {
+  id: string;
+  n: number;
+  last: Date | null;
 }
 
 type Tx = KvoxGraphTx;
@@ -220,12 +228,17 @@ export class GraphNeighborhoodService {
 
         const truncated = sorted.length > opts.cap || walkRows > rowCap;
         const nodes: GraphNode[] = sorted.slice(0, opts.cap);
-        const edges = await this.inducedEdges(tx, ownerId, nodes.map((n) => n.id), opts, virtualEdges, schema);
+        const induced = await this.inducedEdges(tx, ownerId, nodes.map((n) => n.id), opts, virtualEdges, schema);
+        // Enrichment runs on the FINAL page only (after the cap), never on the walk.
+        const [enrichedNodes, edges] = await Promise.all([
+          this.enrichNodes(tx, ownerId, nodes),
+          this.enrichEdges(tx, ownerId, induced),
+        ]);
 
         return {
           seedIds: seeds,
           asOf: opts.asOf.toISOString(),
-          nodes,
+          nodes: enrichedNodes,
           edges,
           truncated,
           cap: opts.cap,
@@ -256,11 +269,13 @@ export class GraphNeighborhoodService {
   }
 
   /** `r.type = ANY(...)` when filtered, else TRUE. */
-  private relationTypeSql(a: string, relationTypes: string[] | undefined): KvoxSql {
+  /** @internal Shared with GraphPathsService. */
+  relationTypeSql(a: string, relationTypes: string[] | undefined): KvoxSql {
     return relationTypes ? Prisma.sql`${ident(a)}.type = ANY(${textArray(relationTypes)})` : Prisma.sql`TRUE`;
   }
 
-  private itemOk(a: string, asOf: Date): KvoxSql {
+  /** @internal Shared with GraphPathsService. */
+  itemOk(a: string, asOf: Date): KvoxSql {
     return Prisma.sql`${readableItemSql(a)} AND ${notSensitiveSql(a)} AND ${itemValidAtSql(a, asOf)}`;
   }
 
@@ -316,7 +331,8 @@ export class GraphNeighborhoodService {
       GROUP BY b.node_id`;
   }
 
-  private async loadEntities(
+  /** @internal Shared with GraphPathsService. */
+  async loadEntities(
     tx: Tx,
     ownerId: string,
     ids: string[],
@@ -341,7 +357,8 @@ export class GraphNeighborhoodService {
     }));
   }
 
-  private async loadItems(
+  /** @internal Shared with GraphPathsService. */
+  async loadItems(
     tx: Tx,
     ownerId: string,
     ids: string[],
@@ -394,6 +411,82 @@ export class GraphNeighborhoodService {
     const rows = await tx.$queryRaw<{ id: string; degree: number }[]>`
       SELECT x.id::text AS id, count(*)::int AS degree FROM (${Prisma.join(parts, ' UNION ALL ')}) x GROUP BY x.id`;
     return new Map(rows.map((r) => [r.id, r.degree]));
+  }
+
+  /**
+   * `mentionCount` / `lastSeenAt` for the final page of nodes: readable
+   * mentions for an entity; latest evidence for an item (no mention count).
+   * One LATERAL aggregate per row, driven by `kg_mentions(owner_id, entity_id)`
+   * and `kg_evidence(subject_kind, subject_id)`.
+   */
+  /** @internal Shared with GraphPathsService. */
+  async enrichNodes(tx: Tx, ownerId: string, nodes: GraphNode[]): Promise<GraphNode[]> {
+    if (nodes.length === 0) return nodes;
+    const owner = Prisma.sql`${ownerId}::uuid`;
+    const entityIds = nodes.filter((n) => n.nodeKind === 'entity').map((n) => n.id);
+    const itemIds = nodes.filter((n) => n.nodeKind === 'item').map((n) => n.id);
+    const [mentionRows, evidenceRows] = await Promise.all([
+      entityIds.length === 0
+        ? Promise.resolve([] as AggRow[])
+        : tx.$queryRaw<AggRow[]>`
+            SELECT x.id::text AS id, m.n, m.last
+            FROM unnest(${uuidArray(entityIds)}) AS x(id)
+            CROSS JOIN LATERAL (
+              SELECT count(*)::int AS n, max(km.created_at) AS last FROM kg_mentions km
+              WHERE km.owner_id = ${owner} AND km.entity_id = x.id AND ${readableMentionSql('km')}
+            ) m`,
+      itemIds.length === 0 ? Promise.resolve([] as AggRow[]) : this.itemEvidence(tx, ownerId, itemIds),
+    ]);
+    const mentions = new Map(mentionRows.map((r) => [r.id, r]));
+    const evidence = new Map(evidenceRows.map((r) => [r.id, r]));
+    return nodes.map((n) => {
+      if (n.nodeKind === 'entity') {
+        const r = mentions.get(n.id);
+        return { ...n, mentionCount: Number(r?.n ?? 0), lastSeenAt: r?.last ? new Date(r.last).toISOString() : null };
+      }
+      const r = evidence.get(n.id);
+      return { ...n, lastSeenAt: r?.last ? new Date(r.last).toISOString() : null };
+    });
+  }
+
+  /** Evidence count + latest time per readable, non-sensitive item (evidence of a sensitive item is never counted). */
+  private itemEvidence(tx: Tx, ownerId: string, itemIds: string[]): Promise<AggRow[]> {
+    const owner = Prisma.sql`${ownerId}::uuid`;
+    return tx.$queryRaw<AggRow[]>`
+      SELECT x.id::text AS id, ev.n, ev.last
+      FROM unnest(${uuidArray(itemIds)}) AS x(id)
+      JOIN kg_items i ON i.id = x.id AND i.owner_id = ${owner} AND ${readableItemSql('i')} AND ${notSensitiveSql('i')}
+      CROSS JOIN LATERAL (
+        SELECT count(*)::int AS n, max(e.created_at) AS last FROM kg_evidence e
+        WHERE e.owner_id = ${owner} AND e.subject_kind = 'item'::kg_evidence_subject_kind AND e.subject_id = x.id
+      ) ev`;
+  }
+
+  /** `evidenceCount` / `lastEvidenceAt` for the final edges; a virtual edge carries its item's. */
+  /** @internal Shared with GraphPathsService. */
+  async enrichEdges(tx: Tx, ownerId: string, edges: GraphEdge[]): Promise<GraphEdge[]> {
+    if (edges.length === 0) return edges;
+    const owner = Prisma.sql`${ownerId}::uuid`;
+    const relationIds = edges.filter((e) => !e.virtual).map((e) => e.id);
+    const itemIds = [...new Set(edges.filter((e) => e.virtual).map((e) => e.source))];
+    const [relRows, itemRows] = await Promise.all([
+      relationIds.length === 0
+        ? Promise.resolve([] as AggRow[])
+        : tx.$queryRaw<AggRow[]>`
+            SELECT x.id::text AS id, ev.n, ev.last
+            FROM unnest(${uuidArray(relationIds)}) AS x(id)
+            CROSS JOIN LATERAL (
+              SELECT count(*)::int AS n, max(e.created_at) AS last FROM kg_evidence e
+              WHERE e.owner_id = ${owner} AND e.subject_kind = 'relation'::kg_evidence_subject_kind AND e.subject_id = x.id
+            ) ev`,
+      itemIds.length === 0 ? Promise.resolve([] as AggRow[]) : this.itemEvidence(tx, ownerId, itemIds),
+    ]);
+    const rel = new Map(relRows.map((r) => [r.id, r]));
+    const item = new Map(itemRows.map((r) => [r.id, r]));
+    return edges.map((e) => {
+      const r = e.virtual ? item.get(e.source) : rel.get(e.id);
+      return { ...e, evidenceCount: Number(r?.n ?? 0), lastEvidenceAt: r?.last ? new Date(r.last).toISOString() : null };
+    });
   }
 
   /** Every readable, as-of-valid edge with BOTH ends in `ids`. */

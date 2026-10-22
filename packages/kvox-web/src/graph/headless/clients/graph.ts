@@ -70,6 +70,8 @@ import type {
   GraphOverviewRefreshResponse as ContractGraphOverviewRefreshResponse,
   GraphExportFormat as ContractGraphExportFormat,
   CreateGraphExportResponse as ContractCreateGraphExportResponse,
+  TopicsPromoteRequestResponse as ContractTopicsPromoteRequestResponse,
+  TopicsPromoteStatus as ContractTopicsPromoteStatus,
   GraphImportFormat as ContractGraphImportFormat,
   GraphImportFailureReason as ContractGraphImportFailureReason,
   GraphImportViolation as ContractGraphImportViolation,
@@ -286,6 +288,10 @@ export interface GraphEntityCounts {
   };
   /** How many of the commitments are still open. */
   openCommitments: number;
+  /** Readable relations per relation type key, both directions; feeds the explorer's Expand menu. Absent from an older API. */
+  relationsByType?: Record<string, number>;
+  /** The same relations per entity type of the entity at the other end. Absent from an older API. */
+  relationsByNeighborType?: Record<string, number>;
 }
 
 /**
@@ -350,6 +356,13 @@ export interface GraphEdge {
    * Optional here because an older API omits it — read it as `{}` when absent.
    */
   props?: Record<string, unknown>;
+  /**
+   * Evidence rows behind the edge (a virtual item edge carries the item's
+   * count). Optional: an older API omits it.
+   */
+  evidenceCount?: number;
+  /** ISO instant of the latest evidence behind the edge, or `null` when none; optional like {@link GraphEdge.evidenceCount}. */
+  lastEvidenceAt?: string | null;
 }
 
 // TODO(web-domain): align with @marinoscar/kvox-contract
@@ -1013,6 +1026,101 @@ export function expandGraph(host: KvoxWebHost, params: GraphExpandParams, signal
 }
 
 /**
+ * The most paths one {@link getGraphPaths} call may ask for.
+ *
+ * @stability experimental
+ */
+export const GRAPH_PATHS_MAX_K = 5;
+/**
+ * The longest path, in edges, one {@link getGraphPaths} call may ask for.
+ *
+ * @stability experimental
+ */
+export const GRAPH_PATHS_MAX_HOPS = 5;
+
+/**
+ * Options for {@link getGraphPaths}.
+ *
+ * @stability experimental
+ */
+export interface GraphPathsParams {
+  /** Id of the entity (or item) the paths start at. */
+  from: string;
+  /** Id of the entity (or item) the paths end at; must differ from `from`. */
+  to: string;
+  /** How many distinct paths to return, 1 to {@link GRAPH_PATHS_MAX_K}. The API default is 3. */
+  k?: number;
+  /** The longest path to look for, in edges, 1 to {@link GRAPH_PATHS_MAX_HOPS}. The API default is 4. */
+  maxHops?: number;
+  /** Entity types and item kinds a path may pass through. The endpoints are always kept. Omitted means no restriction. */
+  types?: readonly string[];
+  /** Relation types a path may follow. Omitted means all. */
+  relationTypes?: readonly string[];
+  /** Evaluate the graph as of this date (`YYYY-MM-DD`) or ISO 8601 instant. Omitted means now. */
+  asOf?: string;
+}
+
+/**
+ * One path between two nodes, as ids into {@link GraphPathsResponse.slice}.
+ *
+ * @stability experimental
+ */
+export interface GraphPath {
+  /** The nodes in walking order, `from` first and `to` last. */
+  nodeIds: string[];
+  /** The edge between each consecutive pair of nodes, by id in the slice. An edge keeps its stored direction. */
+  edgeIds: string[];
+  /** Number of edges; `edgeIds.length`. */
+  hops: number;
+  /** Mean `log(1 + evidenceCount)` over the edges, discounted for passing through high-degree hubs. Higher is stronger. */
+  score: number;
+}
+
+/**
+ * The answer of {@link getGraphPaths}.
+ *
+ * @stability experimental
+ */
+export interface GraphPathsResponse {
+  /** The start node, as requested. */
+  from: string;
+  /** The end node, as requested. */
+  to: string;
+  /** The `as_of` instant that was applied, or `null` when the request had none (now). */
+  asOf: string | null;
+  /** The best paths first. Empty when nothing connects the two within `maxHops`. */
+  paths: GraphPath[];
+  /** The union of the nodes and edges of every returned path; the two endpoints are always in it. */
+  slice: GraphSlice;
+  /** `true` when a per-hop cap was hit, so a stronger path than those returned may exist. */
+  truncated: boolean;
+}
+
+/**
+ * Fetches the top evidence-weighted paths between two nodes (`GET /api/graph/paths`).
+ * `asOf` is sent as the API's `as_of`; an absent option is omitted so the API default applies.
+ * A node the caller cannot read rejects with a 404; a search that takes too long, with a 503 `graph_query_timeout`.
+ *
+ * @stability experimental
+ */
+export function getGraphPaths(
+  host: KvoxWebHost,
+  params: GraphPathsParams,
+  signal?: AbortSignal,
+): Promise<GraphPathsResponse> {
+  const query = buildGraphQuery({
+    from: params.from,
+    to: params.to,
+    k: params.k,
+    maxHops: params.maxHops,
+    types: params.types,
+    relationTypes: params.relationTypes,
+    as_of: params.asOf,
+  });
+  return kvoxGet<GraphPathsResponse>(host, `/graph/paths${query}`, { signal });
+}
+
+/**
  * Fetches one citation resolved to a link (`GET /api/graph/evidence/:id`).
  *
  * @stability experimental
@@ -1041,6 +1149,29 @@ export async function getEvidenceBatch(host: KvoxWebHost, ids: readonly string[]
     ),
   );
   return pages.flatMap((page) => page.items);
+}
+
+/**
+ * What {@link getSubjectEvidence} can be asked about.
+ *
+ * @stability experimental
+ */
+export type EvidenceSubjectKind = 'entity' | 'relation' | 'item';
+
+/**
+ * Fetches the citations that support one entity, relation or item, newest source first and at most 50 (`GET /api/graph/evidence/by-subject`). The API answers 404 for a subject that is not the caller's, and for a sensitive personal fact; callers also never ask about a person fact.
+ *
+ * @stability experimental
+ */
+export async function getSubjectEvidence(
+  host: KvoxWebHost,
+  kind: EvidenceSubjectKind,
+  id: string,
+  signal?: AbortSignal,
+): Promise<EvidenceLink[]> {
+  const query = buildGraphQuery({ kind, id });
+  const page = await kvoxGet<{ items: EvidenceLink[] }>(host, `/graph/evidence/by-subject${query}`, { signal });
+  return page.items;
 }
 
 /**
@@ -2832,4 +2963,48 @@ export interface GraphAiConfig {
  */
 export function getGraphAiConfig(host: KvoxWebHost, signal?: AbortSignal): Promise<GraphAiConfig> {
   return kvoxGet<GraphAiConfig>(host, '/ai-tasks/config', { signal });
+}
+
+// -----------------------------------------------------------------------------
+// Topics from past meetings (#666, epic #661)
+// -----------------------------------------------------------------------------
+
+/**
+ * Answer to a request to find topics in past meetings. Alias of the contract's `TopicsPromoteRequestResponse`.
+ *
+ * @stability experimental
+ */
+export type TopicsPromoteRequestResponse = ContractTopicsPromoteRequestResponse;
+
+/**
+ * Where the latest "Find topics in past meetings" run stands. Alias of the contract's `TopicsPromoteStatus`.
+ *
+ * @stability experimental
+ */
+export type TopicsPromoteStatus = ContractTopicsPromoteStatus;
+
+/**
+ * Queues the `kg.topics_promote` job for the caller (`POST /api/graph/topics/promote`, `graph:write`, 202).
+ * It uses the caller's own AI key, so it only ever runs on a click. 409 `graph_disabled` when connected knowledge is off.
+ *
+ * @param host - The host whose HTTP port performs the request.
+ * @returns The queued run, or the one already in flight.
+ *
+ * @stability experimental
+ */
+export function requestTopicsPromote(host: KvoxWebHost): Promise<TopicsPromoteRequestResponse> {
+  return kvoxPost<TopicsPromoteRequestResponse>(host, '/graph/topics/promote', {});
+}
+
+/**
+ * Reads the latest run and the topic proposals waiting for review (`GET /api/graph/topics/promote`, `graph:write`).
+ *
+ * @param host - The host whose HTTP port performs the request.
+ * @param signal - Aborts the request.
+ * @returns The latest run (or `null`) and the count of proposals waiting.
+ *
+ * @stability experimental
+ */
+export function getTopicsPromoteStatus(host: KvoxWebHost, signal?: AbortSignal): Promise<TopicsPromoteStatus> {
+  return kvoxGet<TopicsPromoteStatus>(host, '/graph/topics/promote', { signal });
 }

@@ -1,0 +1,7 @@
+---
+'@marinoscar/kvox-contract': minor
+'@marinoscar/kvox-api': minor
+'@marinoscar/kvox-web': minor
+---
+
+Evidence-first inspector for the graph explorer (GIC-11, #672). `ExplorerInspector` replaces the side panel in the Insight Canvas shell's inspector slot: a node header (type glyph, aliases, first and last seen, mentions), an edge header (relation, ends, role and stance, validity, confidence, evidence count), tabs Overview, Evidence, Connections, Timeline and Ask in the ARIA tabs pattern, a Selection view for two or more marked nodes, and an Expand split button whose menu expands by relation type or entity type (`expand(id, { relationTypes | types })`, shared with the "+N more" stubs). The Evidence tab lists quotes twenty at a time as `article` cards with the source, date, badges and the API's "Open at source" deep link; a person fact's evidence is never requested. The selection and tab live in the URL (`?sel=`, `?tab=`), so Back from a source returns to the same canvas state. `GraphExplorerPage` takes `slots` (`GraphExplorerPageSlots`: the host's `AskPanel` for the Ask tab, and `NodeActions`); `useGraphBrief` gains `markViewed`; new `useGraphEvidenceFeed` and `getSubjectEvidence`. API and contract: `GET /api/graph/evidence/by-subject?kind=&id=` (at most 50 citations, newest source first, 404 for a sensitive item) and, on `GET /api/graph/entities/:id`, the additive optional `counts.relationsByType` and `counts.relationsByNeighborType`.

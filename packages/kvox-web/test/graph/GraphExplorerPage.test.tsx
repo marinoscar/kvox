@@ -366,8 +366,8 @@ describe('GraphExplorerPage — seeding', () => {
   });
 });
 
-describe('GraphExplorerPage — selection and the side panel', () => {
-  it('selects on click, and offers Expand, Open page, Hide and Make seed', async () => {
+describe('GraphExplorerPage — selection and the inspector', () => {
+  it('selects on click, and offers Expand, Open page, Hide and Focus (make seed)', async () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
@@ -384,7 +384,7 @@ describe('GraphExplorerPage — selection and the side panel', () => {
     await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ACME_ID]));
     expect(await within(canvas).findByRole('button', { name: 'Dana Li' })).toBeInTheDocument();
 
-    await user.click(within(panel).getByRole('button', { name: 'Make seed' }));
+    await user.click(within(panel).getByRole('button', { name: 'Focus' }));
     await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(`${JOE_ID},${ACME_ID}`));
     // Writing the new seed list to the URL does not reload the graph.
     expect(within(canvas).getByRole('button', { name: 'Dana Li' })).toBeInTheDocument();
@@ -414,7 +414,7 @@ describe('GraphExplorerPage — selection and the side panel', () => {
     await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ANA_ID]));
   });
 
-  it('shows an edge with its validity and confidence', async () => {
+  it('shows an edge with its validity and confidence, and opens on its Evidence tab', async () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
@@ -423,7 +423,10 @@ describe('GraphExplorerPage — selection and the side panel', () => {
     expect(within(panel).getByText('Joe Rivera → Ana Diaz')).toBeInTheDocument();
     expect(within(panel).getByText('Since Sep 2026')).toBeInTheDocument();
     expect(within(panel).getByText('Confidence 90%')).toBeInTheDocument();
-    expect(within(panel).getByRole('link', { name: /Evidence on Joe Rivera's page/ })).toHaveAttribute(
+    // An edge opens on Evidence (GIC-11); the entity page is one tab away.
+    expect(within(panel).getByRole('tab', { name: 'Evidence', selected: true })).toBeInTheDocument();
+    await user.click(within(panel).getByRole('tab', { name: 'Overview' }));
+    expect(within(panel).getByRole('link', { name: "Open Joe Rivera's page" })).toHaveAttribute(
       'href',
       `/graph/entities/${JOE_ID}`,
     );
@@ -448,6 +451,7 @@ describe('GraphExplorerPage — selection and the side panel', () => {
     const canvas = await canvasReady();
     await user.click(within(canvas).getByRole('button', { name: `edge ${gid(410)}` }));
     const panel = await screen.findByRole('group', { name: 'Has role' });
+    await user.click(within(panel).getByRole('tab', { name: 'Overview' }));
     expect(within(panel).getByText('Role')).toBeInTheDocument();
     expect(within(panel).getByText('Managing Director')).toBeInTheDocument();
     expect(within(panel).getByText('Business unit')).toBeInTheDocument();
@@ -800,7 +804,7 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     expect(await screen.findByRole('group', { name: 'Acme Corp' })).toBeInTheDocument();
   });
 
-  it('Select mode marks nodes by tapping instead of previewing or opening them', async () => {
+  it('Select mode marks nodes by tapping instead of previewing or opening them, and 2+ marks show the Selection view', async () => {
     mockTouchInput();
     act(() => setViewportWidth(820));
     const user = userEvent.setup();
@@ -814,11 +818,15 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-marked', 'true');
     expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toHaveAttribute('data-marked', 'true');
     expect(canvas).toHaveAttribute('data-preview', '');
-    expect(screen.queryByRole('region', { name: 'Inspector' })).not.toBeInTheDocument();
     expect(screen.getByText('2 selected')).toBeInTheDocument();
+    // Two marked nodes open the inspector on the Selection view (GIC-11), not on either node.
+    const inspector = await screen.findByRole('region', { name: 'Inspector' });
+    expect(within(inspector).getByRole('group', { name: 'Selection' })).toBeInTheDocument();
+    expect(within(inspector).getByRole('heading', { name: '2 nodes selected' })).toBeInTheDocument();
 
     await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
     expect(screen.getByText('1 selected')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Inspector' })).not.toBeInTheDocument());
   });
 
   it('the context menu offers Open details, Expand, Pin and Hide, and Pin sticks', async () => {

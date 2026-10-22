@@ -92,6 +92,38 @@ describe('edge props (#440)', () => {
   });
 });
 
+describe('stakeholder edge props (#663)', () => {
+  const schema = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
+  const resolver = (type: string) => schema.relationType(type);
+
+  it('returns INVOLVED_IN, USES, OFFERED_BY, PARTNER_OF and KNOWS_ABOUT edges with role, stance, stage and level', () => {
+    const edges = mergeEdgeRows(
+      [
+        row({ id: 'i1', type: 'INVOLVED_IN', source: A, target: B, virtual: false, vnull: false, props: { stance: 'skeptical', role: 'approver', stray: 1 } }),
+        row({ id: 'u1', type: 'USES', source: B, target: A, virtual: false, props: { stage: 'piloting' } }),
+        row({ id: 'o1', type: 'OFFERED_BY', source: A, target: B, virtual: false, props: {} }),
+        row({ id: 'p1', type: 'PARTNER_OF', source: A, target: B, virtual: false, props: {} }),
+        row({ id: 'k1', type: 'KNOWS_ABOUT', source: A, target: B, virtual: false, props: { level: 'expert' } }),
+      ],
+      resolver,
+    );
+    const byId = Object.fromEntries(edges.map((e) => [e.id, e]));
+    expect(byId.i1.props).toEqual({ role: 'approver', stance: 'skeptical' });
+    expect(byId.u1.props).toEqual({ stage: 'piloting' });
+    expect(byId.k1.props).toEqual({ level: 'expert' });
+    expect(byId.o1.props).toEqual({});
+    expect(edges.every((e) => !e.virtual)).toBe(true);
+  });
+
+  it('omits an absent stance', () => {
+    const [edge] = mergeEdgeRows(
+      [row({ id: 'i1', type: 'INVOLVED_IN', source: A, target: B, virtual: false, props: { role: 'sponsor', stance: null } })],
+      resolver,
+    );
+    expect(edge.props).toEqual({ role: 'sponsor' });
+  });
+});
+
 describe('edgeValid', () => {
   it('is null for a non-temporal edge', () => {
     expect(edgeValid({ vfrom: null, vto: null, vnull: true, precision: null })).toBeNull();

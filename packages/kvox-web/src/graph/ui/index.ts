@@ -17,6 +17,7 @@ export type {
   GraphEntityPageSlots,
 } from './pages/GraphEntityPage.js';
 export { GraphExplorerPage } from './pages/GraphExplorerPage.js';
+export type { GraphExplorerNodeActionsProps, GraphExplorerPageProps, GraphExplorerPageSlots } from './pages/GraphExplorerPage.js';
 export { GraphOverviewPage } from './pages/GraphOverviewPage.js';
 export { GraphImportPage } from './pages/GraphImportPage.js';
 export { GraphReviewPage, reviewTarget } from './pages/GraphReviewPage.js';
@@ -42,7 +43,7 @@ export { ProposalReviewSheet, REVIEW_SHEET_WIDTH } from './components/review/Pro
 export type { ProposalReviewSheetProps } from './components/review/ProposalReviewSheet.js';
 
 export { useGraphExplorer } from './hooks/useGraphExplorer.js';
-export type { UseGraphExplorerOptions, UseGraphExplorerResult } from './hooks/useGraphExplorer.js';
+export type { ExpandOnly, UseGraphExplorerOptions, UseGraphExplorerResult } from './hooks/useGraphExplorer.js';
 
 export {
   GraphNotePageProvider,

@@ -54,6 +54,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
@@ -79,10 +80,9 @@ import { InsightCanvasLayout } from '../components/explorer/shell/InsightCanvasL
 import { explorerBudgets } from '../components/explorer/shell/explorerBudgets.js';
 import { useInputModality } from '../components/explorer/shell/useInputModality.js';
 import { useWindowClass } from '../components/explorer/shell/useWindowClass.js';
-import {
-  ExplorerSidePanel,
-  type ExplorerSelection,
-} from '../components/explorer/ExplorerSidePanel.js';
+import { ExplorerInspector } from '../components/explorer/inspector/ExplorerInspector.js';
+import { buildSelection, summariseSelection } from '../components/explorer/inspector/inspectorModel.js';
+import { useInspectorUrlState } from '../components/explorer/inspector/useInspectorUrlState.js';
 import { GraphLegend } from '../components/explorer/GraphLegend.js';
 import { ExplorerListView } from '../components/explorer/ExplorerListView.js';
 import { ExplorerToolbar, ExplorerToolbarSkeleton } from '../components/explorer/ExplorerToolbar.js';
@@ -121,9 +121,9 @@ import { canvasLoaders } from '../components/explorer/canvasLoaders.js';
 import { isWebGLAvailable } from '../components/explorer/webgl.js';
 import { GRAPH_NOT_FOUND_MESSAGE } from '../../headless/hooks/graphHookUtils.js';
 import { useGraphEffectiveOntology } from '../../headless/hooks/useGraphAttributeDefs.js';
-import { useGraphExplorer } from '../hooks/useGraphExplorer.js';
+import { useGraphExplorer, type ExpandOnly } from '../hooks/useGraphExplorer.js';
+import type { GraphEntityAskPanelProps } from './GraphEntityPage.js';
 import { getGraphEntity, listGraphEntities } from '../../headless/clients/graph.js';
-import { relationPropsDisplay, relationTypeLabel } from '../../headless/utils/graphDisplay.js';
 
 import { useKvoxHost } from '../../../core/headless/index.js';
 const GraphCanvas = lazy(() => canvasLoaders.graphCanvas());
@@ -158,11 +158,50 @@ function fiveYearsAgo(): string {
 }
 
 /**
- * The `/graph/explore` page: a bounded, interactive exploration of the graph with filters, an `as of` date, a canvas view and a list view, whose state lives in the URL.
+ * The slots of {@link GraphExplorerPage}: what the host adds to the inspector. Ask belongs to the ask slice, which depends on this one, so the host supplies it.
+ *
+ * @remarks
+ * `AskPanel` is the entity page's own slot type (`GraphEntityPageSlots.AskPanel`), so a host passes the same component to both. It renders in the inspector's Ask tab only while `host.features().graphEnabled` is `true`; without it the tab does not exist.
+ *
+ * @stability experimental
+ * @extensionPoint slot
+ */
+export interface GraphExplorerPageSlots {
+  /** The Ask panel the inspector's Ask tab opens for the selected entity. */
+  AskPanel?: ComponentType<GraphEntityAskPanelProps>;
+  /** Actions drawn as the third primary action of a selected node ("Path to…", GIC-13). */
+  NodeActions?: ComponentType<GraphExplorerNodeActionsProps>;
+}
+
+/**
+ * The props of the `NodeActions` slot of {@link GraphExplorerPageSlots}.
  *
  * @stability experimental
  */
-export function GraphExplorerPage() {
+export interface GraphExplorerNodeActionsProps {
+  /** The id of the node the inspector shows. */
+  nodeId: string;
+}
+
+/**
+ * The props of {@link GraphExplorerPage}.
+ *
+ * @stability experimental
+ */
+export interface GraphExplorerPageProps {
+  /** What the host adds to the inspector. */
+  slots?: GraphExplorerPageSlots;
+}
+
+/**
+ * The `/graph/explore` page: a bounded, interactive exploration of the graph with filters, an `as of` date, a canvas view and a list view, whose state lives in the URL.
+ *
+ * @param props - See {@link GraphExplorerPageProps}.
+ * @returns The page.
+ *
+ * @stability experimental
+ */
+export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const host = useKvoxHost();
   const theme = useTheme();
   const navigate = useNavigate();
@@ -314,6 +353,7 @@ export function GraphExplorerPage() {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [marked, setMarked] = useState<Set<string>>(() => new Set());
+  const [revealed, setRevealed] = useState<Set<string>>(() => new Set());
   const [contextTarget, setContextTarget] = useState<ExplorerContextTarget | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const canvasControls = useRef<GraphCanvasControls | null>(null);
@@ -353,49 +393,18 @@ export function GraphExplorerPage() {
   );
   const pinsKey = `explore:${seedKey}:${asOf ?? ''}`;
 
-  const selection: ExplorerSelection | null = useMemo(() => {
-    if (!selected) return null;
-    if (selected.kind === 'node') {
-      if (!graph.hasNode(selected.id)) return null;
-      const attrs = graph.getNodeAttributes(selected.id);
-      return {
-        kind: 'node',
-        id: selected.id,
-        label: attrs.label,
-        typeLabel: typeLabel(attrs.entityType),
-        nodeKind: attrs.nodeKind,
-        degree: attrs.degree,
-        status: attrs.status,
-        occurredAt: attrs.occurredAt,
-        isSeed: state.seedIds.includes(selected.id),
-        expanded: state.expanded.has(selected.id),
-      };
-    }
-    if (!graph.hasEdge(selected.id)) return null;
-    const attrs = graph.getEdgeAttributes(selected.id);
-    const [source, target] = graph.extremities(selected.id);
-    const sourceAttrs = graph.getNodeAttributes(source);
-    const targetAttrs = graph.getNodeAttributes(target);
-    const pageEnd =
-      sourceAttrs.nodeKind === 'entity'
-        ? { id: source, label: sourceAttrs.label }
-        : targetAttrs.nodeKind === 'entity'
-          ? { id: target, label: targetAttrs.label }
-          : null;
-    return {
-      kind: 'edge',
-      id: selected.id,
-      relationLabel: relationTypeLabel(attrs.relationType, ontology),
-      fromLabel: sourceAttrs.label,
-      toLabel: targetAttrs.label,
-      pageId: pageEnd?.id ?? null,
-      pageLabel: pageEnd?.label ?? null,
-      valid: attrs.valid,
-      confidence: attrs.confidence,
-      virtual: attrs.virtual,
-      props: relationPropsDisplay(attrs.relationType, attrs.props, ontology),
-    };
-  }, [selected, graph, version, ontology, typeLabel, state]);
+  const selection = useMemo(
+    () =>
+      buildSelection({
+        selected,
+        state,
+        ontology,
+        typeLabel,
+        pinned: (id) => canvasControls.current?.isPinned(id) ?? false,
+      }),
+    // The graph is mutated in place: `version` is what changes. `pinnedCount` re-reads the pin.
+    [selected, state, version, ontology, typeLabel, pinnedCount],
+  );
 
   const selectNode = useCallback(
     (id: string, announce = false) => {
@@ -413,6 +422,20 @@ export function GraphExplorerPage() {
     setSelected(null);
     setPreviewId(null);
   }, []);
+
+  // The rings "Show on canvas" drew belong to the selection they were drawn for.
+  useEffect(() => {
+    setRevealed((current) => (current.size === 0 ? current : new Set()));
+  }, [selected]);
+
+  // The selection and the open tab live in the URL, so Back from "Open at source" lands on the same canvas state.
+  const inspectorUrl = useInspectorUrlState({
+    selected,
+    setSelected,
+    ready: nodeCount > 0 && !explorer.isLoading,
+    hasNode: (id) => graph.hasNode(id),
+    hasEdge: (id) => graph.hasEdge(id),
+  });
 
   /** A tap or click on a node, in the canvas's own words: what it MEANS depends on the input and the mode. */
   const onNodeActivate = useCallback(
@@ -468,7 +491,17 @@ export function GraphExplorerPage() {
   );
 
   // --- Actions -------------------------------------------------------------------------
-  const onExpand = useCallback((id: string) => void expand(id), [expand]);
+  const onExpand = useCallback((id: string, only?: ExpandOnly) => void expand(id, only), [expand]);
+
+  // "Expand all" of the Selection view: one request at a time (a newer request aborts the one in flight).
+  const onExpandAll = useCallback(
+    (ids: string[]) => {
+      void (async () => {
+        for (const id of ids) await expand(id);
+      })();
+    },
+    [expand],
+  );
 
   const onHide = useCallback(
     (id: string) => {
@@ -482,6 +515,13 @@ export function GraphExplorerPage() {
       setSelected((current) => (current?.kind === 'node' && current.id === id ? null : current));
     },
     [hide],
+  );
+
+  const onHideAll = useCallback(
+    (ids: string[]) => {
+      for (const id of ids) if (!state.seedIds.includes(id)) onHide(id);
+    },
+    [onHide, state],
   );
 
   const onMakeSeed = useCallback(
@@ -855,7 +895,6 @@ export function GraphExplorerPage() {
   }
 
   const loadingFacets = initialLoading || ontologyLoading;
-  const compactLayout = windowClass === 'compact';
 
   const topBar = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
@@ -944,6 +983,22 @@ export function GraphExplorerPage() {
     () => new Set([...marked].filter((id) => graph.hasNode(id))),
     [marked, graph, version],
   );
+  // Two or more marked nodes: the inspector shows the Selection view instead of one node.
+  const multi = useMemo(
+    () => (markedVisible.size >= 2 ? summariseSelection(state, markedVisible) : null),
+    [markedVisible, state, version],
+  );
+  // "Show on canvas" of the Connections tab rings a group's nodes with the canvas's marked rings.
+  const canvasMarked = useMemo(
+    () => (revealed.size === 0 ? markedVisible : new Set([...markedVisible, ...[...revealed].filter((id) => graph.hasNode(id))])),
+    [markedVisible, revealed, graph, version],
+  );
+  const closeInspector = useCallback(() => {
+    if (multi) setMarked(new Set());
+    deselect();
+  }, [multi, deselect]);
+  const askAvailable = host.features().graphEnabled === true ? slots?.AskPanel : undefined;
+  const NodeActionsSlot = slots?.NodeActions;
 
   return (
     <Box sx={{ py: { xs: 1, sm: 2 }, minWidth: 0 }}>
@@ -960,20 +1015,39 @@ export function GraphExplorerPage() {
           topBar={topBar}
           facets={facets}
           facetsActiveCount={activeFilterCount({ hiddenTypes, hiddenRelationTypes: hiddenRelations, asOf })}
-          inspectorOpen={!listView && selection !== null}
+          inspectorOpen={!listView && (selection !== null || multi !== null)}
           onInspectorOpenChange={(open) => {
-            if (!open) deselect();
+            if (!open) closeInspector();
           }}
           inspector={
-            <ExplorerSidePanel
+            <ExplorerInspector
               selection={selection}
+              multi={multi}
+              graph={graph}
+              version={version}
+              ontology={ontology}
+              typeLabel={typeLabel}
+              windowClass={windowClass}
+              inputModality={inputModality}
               atCap={atCap}
-              expanding={selection?.kind === 'node' && explorer.expandingId === selection.id}
+              expandingId={explorer.expandingId}
+              hiddenRelationTypes={hiddenRelations}
+              hiddenTypes={hiddenTypes}
+              tab={inspectorUrl.tab}
+              onTabChange={inspectorUrl.setTab}
               onExpand={onExpand}
+              onExpandAll={onExpandAll}
               onHide={onHide}
+              onHideAll={onHideAll}
               onMakeSeed={onMakeSeed}
-              onClose={deselect}
-              actionsFirst={compactLayout}
+              onPin={onPin}
+              onSelectNode={(id) => selectNode(id, true)}
+              onShowOnCanvas={(ids) => setRevealed(new Set(ids))}
+              onClose={closeInspector}
+              AskPanel={askAvailable}
+              extraActions={
+                NodeActionsSlot && selection?.kind === 'node' ? <NodeActionsSlot nodeId={selection.id} /> : undefined
+              }
             />
           }
           canvas={({ canvasInsets }) =>
@@ -1014,7 +1088,7 @@ export function GraphExplorerPage() {
                       visibleIds={visibleIds}
                       selectedId={selected?.kind === 'node' ? selected.id : null}
                       previewId={previewId}
-                      markedIds={markedVisible}
+                      markedIds={canvasMarked}
                       layout={layout}
                       seedIds={state.seedIds}
                       pinsKey={pinsKey}

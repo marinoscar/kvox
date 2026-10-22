@@ -259,6 +259,9 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
         openCommitments: 1,
       },
     });
+    // GIC-11: the same two readable relations, grouped for the explorer inspector's Expand menu.
+    expect(detail.counts.relationsByType).toEqual({ WORKS_FOR: 1, ATTENDED: 1 });
+    expect(detail.counts.relationsByNeighborType).toEqual({ Organization: 1, Meeting: 1 });
     // Both aliases are inserted at the same instant, so the (createdAt, id) order between them is a uuid coin toss.
     expect(detail.aliases.map((a) => a.alias).sort()).toEqual(['Joe', 'Joseph']);
 
@@ -283,6 +286,87 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
       expect(err).toBeInstanceOf(NotFoundException);
       expect((err as NotFoundException).getResponse()).toEqual((messages[0] as NotFoundException).getResponse());
     }
+  });
+
+  it('groups relations by relation type and by the type at the other end, in both directions (GIC-11)', async () => {
+    const { user, g } = await owner();
+    const { user: other } = await owner('b');
+    const ana = await g.entity('Person', 'Ana');
+    const ben = await g.entity('Person', 'Ben');
+    const cy = await g.entity('Person', 'Cy');
+    const acme = await g.entity('Organization', 'Acme');
+    const atlas = await g.entity('Project', 'Atlas');
+    await g.relation('REPORTS_TO', ana, ben); // out
+    await g.relation('REPORTS_TO', cy, ana); // in
+    await g.relation('WORKS_FOR', ana, acme);
+    await g.relation('INVOLVED_IN', ana, atlas, { props: { role: 'stakeholder', stance: 'skeptical' } });
+    // None of these is counted: not valid now, not reviewed, rejected, or a merged-away end.
+    await g.relation('WORKS_FOR', ana, acme, { valid: '[2010-01-01,2012-01-01)', precision: 'year' });
+    await g.relation('REPORTS_TO', ana, cy, { reviewStatus: 'unreviewed' });
+    await g.relation('REPORTS_TO', ana, ben, { reviewStatus: 'rejected' });
+    const gone = await g.entity('Person', 'Gone', { reviewStatus: 'merged', mergedIntoId: ben });
+    await g.relation('REPORTS_TO', ana, gone, { reviewStatus: 'accepted' });
+
+    const detail = await reads.getEntity({ id: user.id }, ana);
+    expect(detail.counts.relations).toBe(4);
+    expect(detail.counts.relationsByType).toEqual({ REPORTS_TO: 2, WORKS_FOR: 1, INVOLVED_IN: 1 });
+    expect(detail.counts.relationsByNeighborType).toEqual({ Person: 2, Organization: 1, Project: 1 });
+    // Both maps add up to `relations`.
+    const sum = (m: Record<string, number> | undefined) => Object.values(m ?? {}).reduce((a, b) => a + b, 0);
+    expect(sum(detail.counts.relationsByType)).toBe(detail.counts.relations);
+    expect(sum(detail.counts.relationsByNeighborType)).toBe(detail.counts.relations);
+
+    // An entity with no relations has empty maps, and another owner's entity is still the 404.
+    const lone = await g.entity('Person', 'Lone');
+    const alone = await reads.getEntity({ id: user.id }, lone);
+    expect(alone.counts.relationsByType).toEqual({});
+    expect(alone.counts.relationsByNeighborType).toEqual({});
+    await expect(reads.getEntity({ id: other.id }, ana)).rejects.toThrow(NotFoundException);
+  });
+
+  it('lists the citations of one subject newest source first, and never those of a sensitive item (GIC-11)', async () => {
+    const { user, g } = await owner();
+    const { user: other } = await owner('b');
+    const joe = await g.entity('Person', 'Joe');
+    const acme = await g.entity('Organization', 'Acme');
+    const relation = await g.relation('WORKS_FOR', joe, acme);
+    const older = await g.note();
+    const newer = await g.note();
+    await prisma.note.update({ where: { id: older.id }, data: { createdAt: new Date('2026-01-01T00:00:00Z') } });
+    await prisma.note.update({ where: { id: newer.id }, data: { createdAt: new Date('2026-06-01T00:00:00Z') } });
+    await g.evidence('relation', relation, { noteId: older.id, noteVersion: 1, quote: 'Joe joined Acme' });
+    await g.evidence('relation', relation, { noteId: newer.id, noteVersion: 1, quote: 'Joe is still at Acme' });
+    const claim = await g.item('claim', { subjectId: joe });
+    const personal = await g.item('person_fact', { subjectId: joe, sensitivity: 'personal' });
+    const sensitive = await g.item('person_fact', { subjectId: joe, sensitivity: 'sensitive' });
+    const unreviewed = await g.item('claim', { subjectId: joe, reviewStatus: 'unreviewed' });
+
+    const forRelation = await evidence.forSubject(user.id, 'relation', relation);
+    // The relation's own seed row ('WORKS_FOR') plus the two notes; the newest source comes first.
+    expect(forRelation.map((link) => link.quote).slice(0, 2)).toEqual(['Joe is still at Acme', 'Joe joined Acme']);
+    expect(forRelation.every((link) => link.subjectKind === 'relation' && link.subjectId === relation)).toBe(true);
+
+    expect((await evidence.forSubject(user.id, 'entity', joe)).map((link) => link.quote)).toEqual(['Joe']);
+    expect(await evidence.forSubject(user.id, 'item', claim)).toHaveLength(1);
+    expect(await evidence.forSubject(user.id, 'item', personal)).toHaveLength(1);
+
+    // The sensitive item answers the item 404, with the evidence row sitting right there.
+    expect(await prisma.kgEvidence.count({ where: { subjectKind: 'item', subjectId: sensitive } })).toBe(1);
+    const sensitiveError = await evidence.forSubject(user.id, 'item', sensitive).catch((e: unknown) => e);
+    expect(sensitiveError).toBeInstanceOf(NotFoundException);
+
+    // Not reviewed, not yours, not there: the same 404 per kind.
+    const misses = await Promise.all(
+      [
+        () => evidence.forSubject(user.id, 'item', unreviewed),
+        () => evidence.forSubject(other.id, 'relation', relation),
+        () => evidence.forSubject(other.id, 'entity', joe),
+        () => evidence.forSubject(user.id, 'relation', '00000000-0000-4000-8000-000000000000'),
+      ].map((call) => call().then(() => null, (e: unknown) => e)),
+    );
+    for (const err of misses) expect(err).toBeInstanceOf(NotFoundException);
+    expect((misses[0] as NotFoundException).getResponse()).toEqual((sensitiveError as NotFoundException).getResponse());
+    expect((misses[1] as NotFoundException).getResponse()).toEqual((misses[3] as NotFoundException).getResponse());
   });
 
   // ---------------------------------------------------------------------------
