@@ -154,6 +154,38 @@ export interface GraphCanvasControls {
   setCamera?: (camera: CameraSnapshot) => void;
   /** Animates the camera to frame these nodes (path mode's "Show on canvas"); ids not on the canvas are ignored. */
   fitTo?: (ids: readonly string[]) => void;
+  /** Flies the camera to a node and zooms in to it (the palette's "On canvas" result); a no-op for a node that is not drawn. */
+  focusNode?: (id: string) => void;
+  /** The rectangle the canvas shows, in graph coordinates (the minimap's viewport), or `null` before the first frame. */
+  getViewport?: () => CanvasViewport | null;
+  /** Centres the camera on a point in graph coordinates, without changing the zoom (dragging the minimap). */
+  panToGraph?: (x: number, y: number) => void;
+  /** Calls `listener` after every frame the canvas draws (camera moves and layout steps); returns the unsubscribe function. */
+  onFrame?: (listener: () => void) => () => void;
+}
+
+/**
+ * A point in graph coordinates (the `x` and `y` attributes of the nodes).
+ *
+ * @stability experimental
+ */
+export interface CanvasPoint {
+  /** Horizontal position in graph coordinates. */
+  x: number;
+  /** Vertical position in graph coordinates. */
+  y: number;
+}
+
+/**
+ * The part of the graph the canvas shows, as the two opposite corners of its viewport in graph coordinates.
+ *
+ * @stability experimental
+ */
+export interface CanvasViewport {
+  /** The graph point under the canvas's top-left corner. */
+  topLeft: CanvasPoint;
+  /** The graph point under the canvas's bottom-right corner. */
+  bottomRight: CanvasPoint;
 }
 
 /**
@@ -409,6 +441,8 @@ function CanvasBehaviour({
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
 
   const reducedMotion = useReducedMotion();
+  const reducedMotionRef = useRef(reducedMotion);
+  reducedMotionRef.current = reducedMotion;
   const layoutControls = useCanvasLayout({
     graph,
     version,
@@ -457,6 +491,31 @@ function CanvasBehaviour({
         };
         if (reducedMotion) sigma.getCamera().setState(target);
         else void sigma.getCamera().animate(target, { duration: 300 });
+      },
+      focusNode: (id) => {
+        const display = sigma.getNodeDisplayData(id);
+        if (!display) return;
+        const target = { x: display.x, y: display.y, ratio: Math.min(sigma.getCamera().getState().ratio, 0.5) };
+        if (reducedMotionRef.current) sigma.getCamera().setState(target);
+        else void sigma.getCamera().animate(target, { duration: 300 });
+      },
+      getViewport: () => {
+        const { width, height } = sigma.getDimensions();
+        if (width === 0 || height === 0) return null;
+        return {
+          topLeft: sigma.viewportToGraph({ x: 0, y: 0 }),
+          bottomRight: sigma.viewportToGraph({ x: width, y: height }),
+        };
+      },
+      panToGraph: (x, y) => {
+        const framed = sigma.viewportToFramedGraph(sigma.graphToViewport({ x, y }));
+        sigma.getCamera().setState({ x: framed.x, y: framed.y });
+      },
+      onFrame: (listener) => {
+        sigma.on('afterRender', listener);
+        return () => {
+          sigma.removeListener('afterRender', listener);
+        };
       },
     }),
     [camera, sigma, graph, reducedMotion],

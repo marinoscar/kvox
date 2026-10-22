@@ -19,9 +19,10 @@
  *
  * ENTRY POINTS it hands the page: `connectButton` (top bar), `pathToAction`
  * (the inspector's NodeActions), `contextMenuItems` (the node menu) and
- * `openPicker(fromId?)`. The command palette and the Start-here card call
- * `openPicker` too (see the graph README); until they exist, `?pathFrom=<id>`
- * opens the picker with A filled in, which is the same entry point as a link.
+ * `openPicker(fromId?)`. The command palette ("Connect A and B") and the
+ * Start-here card ("Connect two things") call `openPicker` too (see the graph
+ * README); `?pathFrom=<id>` opens the picker with A filled in, the same entry
+ * point as a link.
  */
 
 import AltRouteIcon from '@mui/icons-material/AltRoute';

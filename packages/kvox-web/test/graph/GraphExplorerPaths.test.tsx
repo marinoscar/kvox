@@ -261,6 +261,23 @@ describe('path mode — URL and entry points', () => {
     expect(pathRequests.at(-1)!.searchParams.get('maxHops')).toBe('2');
   });
 
+  it('the command palette offers "Connect A \u2194 B\u2026", which opens the picker', async () => {
+    const user = userEvent.setup();
+    renderExplorer(`/graph/explore?seed=${JOE_ID}`);
+    await screen.findByTestId('fake-canvas');
+    await user.keyboard('/');
+    await user.click(await screen.findByRole('option', { name: /Connect A/ }));
+    expect(await screen.findByRole('combobox', { name: 'From (A)' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'To (B)' })).toBeInTheDocument();
+  });
+
+  it('the Start-here "Connect two things" card opens the picker', async () => {
+    const user = userEvent.setup();
+    renderExplorer('/graph/explore?start=1');
+    await user.click(await screen.findByRole('button', { name: 'Connect two things' }));
+    expect(await screen.findByRole('combobox', { name: 'From (A)' })).toBeInTheDocument();
+  });
+
   it('swaps A and B', async () => {
     const user = userEvent.setup();
     renderExplorer(`/graph/explore?${PAIR}`);
