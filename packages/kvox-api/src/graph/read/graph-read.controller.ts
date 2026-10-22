@@ -25,6 +25,12 @@ import {
   evidenceBatchQuerySchema,
   listEntitiesQuerySchema,
   mentionsQuerySchema,
+  GRAPH_PATHS_MAX_HOPS,
+  GRAPH_PATHS_MAX_K,
+  GraphPathsResponseDto,
+  graphPathsQuerySchema,
+  type GraphPathsQuery,
+  type GraphPathsResponse,
   type EvidenceBatchQuery,
   type EvidenceBatchResponse,
   type EvidenceLink,
@@ -36,6 +42,7 @@ import {
 } from './dto/graph-read.dto.js';
 import { GraphEvidenceService } from './graph-evidence.service.js';
 import { GraphNeighborhoodService } from './graph-neighborhood.service.js';
+import { GraphPathsService } from './graph-paths.service.js';
 import { GraphReadService } from './graph-read.service.js';
 import { KvoxAuth } from '../../core/index.js';
 import { GRAPH_READ_PERMISSION } from '../graph.permissions.js';
@@ -66,6 +73,7 @@ export class GraphReadController {
     private readonly reads: GraphReadService,
     private readonly evidence: GraphEvidenceService,
     private readonly neighborhoods: GraphNeighborhoodService,
+    private readonly pathFinder: GraphPathsService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -215,6 +223,50 @@ export class GraphReadController {
     @CurrentGraphActor() user: GraphActor,
   ): Promise<TimelineResponse> {
     return this.reads.timeline(user, id, query);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Paths
+  // ---------------------------------------------------------------------------
+
+  @Get('paths')
+  @KvoxAuth(GRAPH_READ_PERMISSION)
+  @ApiOperation({
+    summary: 'Paths between two entities',
+    description:
+      'The top `k` evidence-weighted paths from one node to another, with the graph slice they ' +
+      'cover: "how is Joe connected to the Copilot rollout?".\n\n' +
+      '- A path has at most **`maxHops`** edges and passes only through entities: an item ' +
+      '(commitment, decision, claim, person fact) can be an endpoint, never a stop on the way.\n' +
+      '- **Score** = the mean of `log(1 + evidenceCount)` over the path\'s edges, discounted for ' +
+      'each very-high-degree node it passes through. Paths are distinct (no repeated node set), best first.\n' +
+      '- Every relation is walked both ways to find a connection, but each returned edge keeps its ' +
+      'stored direction (`source` to `target`).\n' +
+      '- **`as_of`** evaluates relations and items at that instant. **`types`** limits the entity ' +
+      'types / item kinds a path may pass through; **`relationTypes`** the edges it may follow. ' +
+      'Unknown keys are a **400**.\n' +
+      '- `paths: []` means nothing connects the two within `maxHops`. `truncated` says a per-hop ' +
+      'cap was hit (a hub), so a stronger path than those returned may exist.\n\n' +
+      '`sensitive` person facts are never on a path. If either node is not one of your readable ' +
+      'nodes the answer is a **404** that does not say which. A query that runs longer than 3 s is ' +
+      'a **503** with `details.reason: "graph_query_timeout"`.',
+  })
+  @ApiQuery({ name: 'from', required: true, type: String, format: 'uuid' })
+  @ApiQuery({ name: 'to', required: true, type: String, format: 'uuid' })
+  @ApiQuery({ name: 'k', required: false, type: Number, description: `1-${GRAPH_PATHS_MAX_K} (default 3)` })
+  @ApiQuery({ name: 'maxHops', required: false, type: Number, description: `1-${GRAPH_PATHS_MAX_HOPS} (default 4)` })
+  @ApiQuery({ name: 'types', required: false, type: String, description: 'Comma-separated entity types / item kinds a path may pass through' })
+  @ApiQuery({ name: 'relationTypes', required: false, type: String, description: 'Comma-separated relation types a path may follow' })
+  @ApiQuery({ name: 'as_of', required: false, type: String, description: 'YYYY-MM-DD or ISO 8601 with offset' })
+  @ApiDataResponse(GraphPathsResponseDto, { description: 'The paths and their slice' })
+  @ApiResponse({ status: 400, description: 'Invalid parameter, `from` equal to `to`, or unknown type key' })
+  @ApiResponse({ status: 404, description: 'Either node is not one of your readable nodes' })
+  @ApiResponse({ status: 503, description: 'The search exceeded its 3 s budget (`graph_query_timeout`)' })
+  async paths(
+    @Query(new ZodValidationPipe(graphPathsQuerySchema)) query: GraphPathsQuery,
+    @CurrentGraphActor() user: GraphActor,
+  ): Promise<GraphPathsResponse> {
+    return this.pathFinder.paths(user, query);
   }
 
   // ---------------------------------------------------------------------------
