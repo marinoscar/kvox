@@ -56,9 +56,17 @@ export const listEntitiesQuerySchema = z.object({
   q: z.string().trim().min(1).max(200).optional().describe('Fuzzy match on labels and aliases. Top `limit` by similarity; no further pages.'),
   transcriptId: z.uuid().optional().describe('Only Persons identified as a speaker in this transcript. 404 without view access to it.'),
   sort: z
-    .enum(['updated', 'viewed'])
+    .enum(['updated', 'viewed', 'mentions'])
     .default('updated')
-    .describe('`updated`: most recently changed first. `viewed`: the entities you viewed, most recent first. Ignored with `q`.'),
+    .describe(
+      '`updated`: most recently changed first. `viewed`: the entities you viewed, most recent first. `mentions`: most-mentioned first (the notes and transcripts that mention the entity, counted since `since`); the top `limit`, no further pages. Ignored with `q`.',
+    ),
+  since: z
+    .union([z.iso.date(), z.iso.datetime({ offset: true })])
+    .optional()
+    .describe(
+      'With `sort=mentions` only: count the mentions recorded on or after this instant (`YYYY-MM-DD`, 00:00:00Z that day, or an ISO 8601 datetime with an offset) and leave out entities with none. Ignored for the other sorts.',
+    ),
   cursor: z.string().max(500).optional().describe('`nextCursor` from the previous page.'),
   limit: z.coerce.number().int().min(1).max(50).default(25),
 });
