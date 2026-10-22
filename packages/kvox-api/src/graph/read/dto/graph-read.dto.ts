@@ -17,6 +17,8 @@ import {
   evidenceBatchResponseSchema,
   graphPathsQuerySchema,
   graphPathsResponseSchema,
+  graphConnectRequestSchema,
+  graphConnectResponseSchema,
 } from '@marinoscar/kvox-contract/graph';
 
 // The wire schemas of this file moved to `@marinoscar/kvox-contract/graph` (issue #488, file `graph/graph-read.ts`); they are re-exported below so no importer changes.
@@ -70,6 +72,14 @@ export {
   type GraphPath,
   graphPathsResponseSchema,
   type GraphPathsResponse,
+  GRAPH_CONNECT_MAX_DOCUMENTS,
+  GRAPH_CONNECT_MAX_ENTITIES,
+  GRAPH_CONNECT_MAX_HOPS,
+  graphConnectRequestSchema,
+  graphConnectResponseSchema,
+  type GraphConnectRequest,
+  type GraphConnectResponse,
+  type GraphConnectPath,
 } from '@marinoscar/kvox-contract/graph';
 
 export class ListEntitiesQueryDto extends createZodDto(listEntitiesQuerySchema) {}
@@ -88,3 +98,5 @@ export class EvidenceLinkDto extends createZodDto(evidenceLinkSchema) {}
 export class EvidenceBatchResponseDto extends createZodDto(evidenceBatchResponseSchema) {}
 export class GraphPathsQueryDto extends createZodDto(graphPathsQuerySchema) {}
 export class GraphPathsResponseDto extends createZodDto(graphPathsResponseSchema) {}
+export class GraphConnectRequestDto extends createZodDto(graphConnectRequestSchema) {}
+export class GraphConnectResponseDto extends createZodDto(graphConnectResponseSchema) {}

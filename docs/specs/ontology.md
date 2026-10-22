@@ -3826,6 +3826,24 @@ is never reachable; every relation is walked both ways but returned in its
 stored direction. A path scores `mean(log(1 + evidenceCount))` times a hub
 factor per intermediate node (`graph-path-ranking.ts`). Wire shape: API.md.
 
+**What connects these (GIC-14, #675).** `POST /api/graph/connect`
+(`graph:read`, owner-only, one 404 for any unreadable input) takes up to 10
+notes, 10 transcripts and 20 entities (at least two distinct inputs, or a lone
+note or transcript for "what this note touches") and answers with the entities
+they **share** and the **bridges** between them. `GraphConnectService`
+(`packages/kvox-api/src/graph/read/graph-connect.service.ts`) resolves a
+document to the entities of its readable `kg_mentions` (`linked`/`new`; an
+entity input is itself plus its one-hop neighbours), ranks an entity shared by
+two or more inputs by coverage then mention count, and finds one bridge per
+pair of inputs (at most six pairs) with `GraphPathsService`, all inside one 3 s
+budget. A `sensitive` PersonFact is an item, never an entity, and the slice
+excludes it. The explorer asks it from the Selection view ("Find connections"),
+and from `?connectNotes=id1,id2,…`, which the notes library ("Explore
+connections" on 2–10 selected notes) and the note page ("Explore in graph",
+"Compare with…") open. Shared entities are ringed on the canvas. Multi-select
+is Shift-click, a lasso (Shift+drag, or a plain drag with the Select tool),
+Select mode taps on touch, and Space on the focused node in Select mode.
+
 ### 22.3 Whole-graph overview (`/graph/overview`)
 
 **Built (issue #371, epic #347).** `packages/kvox-api/src/graph/layout/` holds the

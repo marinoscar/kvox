@@ -48,6 +48,7 @@ import { graphPreferencesSchema } from './preferences/graph-preferences.schema.j
 import { KgPurgeService } from './purge/kg-purge.service.js';
 import { GraphEvidenceService } from './read/graph-evidence.service.js';
 import { GraphNeighborhoodService } from './read/graph-neighborhood.service.js';
+import { GraphConnectService } from './read/graph-connect.service.js';
 import { GraphPathsService } from './read/graph-paths.service.js';
 import { GraphReadController } from './read/graph-read.controller.js';
 import { GraphReadService } from './read/graph-read.service.js';
@@ -168,6 +169,7 @@ export class GraphModule {
       GraphReadService,
       GraphNeighborhoodService,
       GraphPathsService,
+      GraphConnectService,
       GraphEvidenceService,
       // Speaker naming -> Person + IDENTIFIED_AS, via `kg.speaker_link` (#356).
       SpeakerLinkReconciler,
@@ -230,6 +232,7 @@ export class GraphModule {
         GraphReadService,
         GraphNeighborhoodService,
         GraphPathsService,
+        GraphConnectService,
         GraphEvidenceService,
         EntityBriefService,
         EntityDigestEnqueuer,

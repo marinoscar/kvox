@@ -34,6 +34,7 @@ const ROUTES: { name: string; method: 'get' | 'post'; url: string; body?: unknow
   { name: 'mentions', method: 'get', url: `/api/graph/entities/${ENTITY}/mentions` },
   { name: 'paths', method: 'get', url: `/api/graph/paths?from=${ENTITY}&to=${OTHER}` },
   { name: 'expand', method: 'post', url: '/api/graph/explore/expand', body: { nodeIds: [ENTITY] } },
+  { name: 'connect', method: 'post', url: '/api/graph/connect', body: { entityIds: [ENTITY, OTHER] } },
   { name: 'evidence', method: 'get', url: `/api/graph/evidence/${EVIDENCE}` },
   { name: 'evidence batch', method: 'get', url: `/api/graph/evidence?ids=${EVIDENCE}` },
 ];
@@ -178,6 +179,37 @@ describe('Graph read routes (integration)', () => {
       .set(authHeader(user.accessToken))
       .send(body)
       .expect(400);
+  });
+
+  it.each([
+    [{}],
+    [{ entityIds: [ENTITY] }],
+    [{ noteIds: [ENTITY, ENTITY] }],
+    [{ noteIds: ['nope', ENTITY] }],
+    [{ noteIds: Array.from({ length: 11 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`) }],
+    [{ entityIds: Array.from({ length: 21 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`) }],
+    [{ entityIds: [ENTITY, OTHER], maxHops: 4 }],
+    [{ entityIds: [ENTITY, OTHER], maxHops: 0 }],
+    [{ entityIds: [ENTITY, OTHER], as_of: 'yesterday' }],
+  ])('rejects the connect body %j with 400', async (body) => {
+    const user = await createMockTestUser(context, { roleName: 'viewer' });
+    await request(context.app.getHttpServer())
+      .post('/api/graph/connect')
+      .set(authHeader(user.accessToken))
+      .send(body)
+      .expect(400);
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('answers connect with a 404 when an input is not readable', async () => {
+    const user = await createMockTestUser(context, { roleName: 'viewer' });
+    // The readable-entity lookup finds none of the two requested.
+    prismaMock.$queryRaw.mockResolvedValue([] as never);
+    await request(context.app.getHttpServer())
+      .post('/api/graph/connect')
+      .set(authHeader(user.accessToken))
+      .send({ entityIds: [ENTITY, OTHER] })
+      .expect(404);
   });
 
   it('rejects an unknown type key with 400 naming it', async () => {

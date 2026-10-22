@@ -149,6 +149,7 @@ export { parseAsOf } from './read/as-of.js';
 export { GraphEvidenceService } from './read/graph-evidence.service.js';
 export { GraphNeighborhoodService } from './read/graph-neighborhood.service.js';
 export { GraphPathsService } from './read/graph-paths.service.js';
+export { GraphConnectService } from './read/graph-connect.service.js';
 export { GraphReadService } from './read/graph-read.service.js';
 export { readableEntitySql } from './read/read-sql.js';
 export { AS_OF_RELATION_STATUSES, READABLE_ENTITY_STATUSES, READABLE_ITEM_STATUSES, TIMELINE_ITEM_STATUSES } from './read/readable.js';
