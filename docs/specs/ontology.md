@@ -217,10 +217,9 @@ prompt (§14).
   Cypher, SQL, or any other query language from a model or a user; every
   graph read is one of the fixed shapes in §9 and §12.
 
-**Deferred to v2, not rejected — listed in full in §5.7:** a `Concept`/topic
-layer distinct from `Project`, corpus-wide sensemaking summaries, and a
-neighbourhood-graph rendering library choice (§13 names candidates, installs
-none).
+**Deferred to v2, not rejected — listed in full in §5.7:** corpus-wide
+sensemaking summaries. The `Concept`/topic layer shipped as `Topic` in ontology
+1.3.0 (§5.1) and the rendering library is sigma.js + graphology (§22.1).
 
 ## 2. Standards profile
 
@@ -233,7 +232,7 @@ runtime dependency on these vocabularies; they exist so that a future export
 | Area | Vocabulary | How kvox aligns |
 |---|---|---|
 | Core entities | Schema.org | `Person`, `Organization` map to `schema:Person`/`schema:Organization` by name and by the properties each entry keeps (§5.1) |
-| Concepts and taxonomies | SKOS | Named as the alignment target for the *deferred* `Concept`/topic layer (§5.7) — not used by anything in scope today |
+| Concepts and taxonomies | SKOS | The alignment target for the `Topic` entity type and the `BROADER` relation (§5.1, §5.2; ontology 1.3.0) |
 | Provenance | PROV-O | `kg_evidence` (§10) is structurally a `prov:wasDerivedFrom`/`prov:used` pair — an entity or item "used" a segment or note span as its evidence — without importing `prov:Agent`/`prov:Activity` as graph nodes, because kvox's own `jobs`/`audit_events` tables already record who/what generated a row |
 
 **Every type declares its own alignment, so an export is derived, never
@@ -363,8 +362,9 @@ one of these three moments.
 
 ### 5.1 Entity types
 
-Six entity types, one event anchor, and one fact type with its own handling
-— eight labels total, each with a one-line disambiguation rule against its
+Nine entity types (`Topic` and `Product` arrived in 1.3.0), one event anchor
+and two item-backed fact types (`Claim`, `PersonFact`) plus the `Commitment`,
+`Decision` and `Risk` item types, each with a one-line disambiguation rule against its
 nearest neighbour, because the failure mode a narrow ontology exists to
 prevent (§3.5) is precisely two people creating two entities for the same
 real-world thing because nothing told them which label to reach for.
@@ -391,7 +391,7 @@ that meetings, decisions and commitments attach to. *Positive:* "Q2 pilot,"
 topic with no start/end and nothing else attaching to it as a unit of work —
 that is a topic, not a project, and it lives today as a free-text entry in
 `Meeting.topics[]` (a plain string array property, never a graph node) rather
-than as the deferred `Concept` type §5.7 names. The line is deliberately
+than as a `Project`; a recurring subject that other notes share is a `Topic` (§5.1). The line is deliberately
 conservative: creating a `Project` for every recurring conversation subject
 would flood the graph with nodes that never anchor a `Commitment` or
 `Decision`, the exact "invented structure nobody's data populates" failure
@@ -1823,7 +1823,7 @@ epic's foundation phase (§16, P1) actually needs to enable.
 
 ## 11. Job types
 
-Eleven types, all under `packages/kvox-api/src/graph/handlers/` (planned) except
+Twelve types, all under `packages/kvox-api/src/graph/handlers/` (planned) except
 `ask.respond`, which lives under `packages/kvox-api/src/ask/handlers/` (built, issue #378; moved into the package by #497) —
 Ask is its own module (§21), reusing the graph's job-queue conventions
 rather than being folded into a handler directory it does not belong in.
@@ -1840,7 +1840,7 @@ directory:
 | `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — **built, issue #372** (`packages/kvox-api/src/graph/brief/entity-digest.handler.ts`, not `graph/handlers/` — the same "extraction lives beside its module" deviation `kg.extract` already takes); same credential reasoning; deduplicated per entity |
 | `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Embeds through `KvoxAi.embed` (feature `graph_embed`, via `GraphEmbedder`) on the user's own key, resolved by the platform; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
 | `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued after any `TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and since #405 a versioned rename/clear or a restore — rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
-| `kg.graph_layout` | `{ maxRuntimeMs: 15m, maxAttempts: 2 }` | **No** | §22.3 — reads every relation and entity the owner's graph holds to compute clusters and a layout; no AI key involved, but no node-side artifact for a worker to fetch or produce the way `media.audio.transcode`'s single input file is either — the computation *is* reading the owner's whole graph over the Prisma pool. Deduplicated per owner, one pending layout job at a time |
+| `kg.graph_layout` | `{ maxRuntimeMs: 15m, maxAttempts: 2 }` | **No** | §22.3 — reads every relation and entity the owner's graph holds to compute clusters, a layout and the approximate-betweenness `connectors` (§22.3); no AI key involved, but no node-side artifact for a worker to fetch or produce the way `media.audio.transcode`'s single input file is either — the computation *is* reading the owner's whole graph over the Prisma pool. Deduplicated per owner, one pending layout job at a time |
 | `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | Server-only, destructive fan-out — the identical AGENTS.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead. `maxAttempts: 1` (#357 corrects this table's earlier `3`), for the identical reason `user.data.purge` and `note.generate` carry it: a destructive fan-out that fails part-way must surface as a `failed` job a person looks at, never silently resume minutes later. The service is re-entrant — every step selects what is still there and deletes it — so the retry path is a person asking again ("Forget this person" a second time, or re-running the Danger Zone deletion), never an automatic one |
 | `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped. **Built, issue #384** (`packages/kvox-api/src/graph/migrate/kg-migrate.handler.ts`): subject `user`/ownerId with ordinary dedup, payload `{ ownerId, targetVersion }`, no AI call; queued hourly by the enqueue-only `KgMigrateSchedulerTask` (minute 17, `KG_MIGRATE_SCHEDULE_ENABLED`) at `HOUSEKEEPING_PRIORITY` through `enqueueHousekeepingJob` with a subject type **and** id (`kg.export`'s sweep passes a subject type alone; the helper scopes its in-flight check and dedup key to exactly what it is given), and re-run for one owner by the admin job list's Retry |
 | `kg.topics_promote` | `{ maxRuntimeMs: 30m, maxAttempts: 3 }` | **No** | #666 (GIC-05, epic #661) — turns the free-text `props.topics` of a user's past Meeting entities into DRAFT Topic proposals (`kind: 'import'`, no note), one per Topic, each a Topic row (new or linked) plus a `Meeting DISCUSSED Topic` row per meeting cited by the meeting's own evidence. Server-only: embeddings and adjudication spend the user's own key. Resolution goes through the ordinary pipeline; an exact label or alias match to an existing Topic links to it even when adjudication is off. Idempotent: pairs with a live `DISCUSSED` edge or a pending topics-promote proposal are skipped, so a re-run creates nothing. Subject `user`/userId, payload `{ userId }`, enqueued only by `POST /api/graph/topics/promote` (the "Find topics in past meetings" button on `/settings/knowledge-graph`; never a cron, never automatic). Never writes the graph; `GET /api/graph/topics/promote` reports the run and the proposals waiting |
@@ -1976,6 +1976,23 @@ override), entity `merge`/`merges/:id/reverse`/`distinct-pairs` (§7),
 `entities/:id/forget` (§15), and `POST /api/graph/overview/refresh` (§22.3, a
 manual re-cluster).
 
+**Insight Canvas routes, all `graph:read` and owner-only (a node
+the caller cannot read is the same 404; a query over its 3 s budget is a 503
+`graph_query_timeout`), except the topics routes.**
+
+| Route | Answers | Detail |
+|---|---|---|
+| `GET /api/graph/paths?from&to&k&maxHops&types&relationTypes&as_of` | The top `k` (1 to 5, default 3) evidence-weighted paths of at most `maxHops` (1 to 5, default 4) edges | §22.2 |
+| `POST /api/graph/connect` | What up to 10 notes, 10 transcripts and 20 entities share, and the paths that bridge them. A read, though a `POST` | §22.2 |
+| `GET /api/graph/activity?ids&bucket&from&to` | Evidence counts per week or month for up to 300 nodes (the TimeBar) | §22.2 |
+| `GET /api/graph/insights?window=30d\|90d\|365d` | Themes, connectors, rising entities, fading ties, open risks | §22.3 |
+| `GET /api/graph/entities?sort=mentions&since=` | The top `limit` entities by distinct notes plus transcripts mentioning them since `since`; no further pages | §22.2 |
+| `POST` and `GET /api/graph/topics/promote` | `graph:write`. Queue `kg.topics_promote` (202) and report the latest run and the topic proposals waiting | §11 |
+
+`GET /api/graph/entities/:id/brief` gains an optional `openRisks` section (§9.1)
+and `POST /api/ask/conversations/:id/messages` an optional `scope` (§21.3).
+Response shapes: `docs/API.md` and `/api/docs`.
+
 **Ask is a separate controller and OpenAPI tag (`Ask`,
 `packages/kvox-api/src/ask/ask-conversations.controller.ts`, built by #376) but a reused permission.**
 `GET/POST/PATCH/DELETE /api/ask/conversations[...]`, `POST .../messages`, and
@@ -2031,7 +2048,12 @@ routes landing on the API — the sections below describe the shipped design,
 not a plan. **The neighbourhood-canvas explorer (§22) is built too (issue
 #374)**: `/graph/explore` and the entity page's `NeighborhoodWidget`. The
 entity page's Ask panel (§21.5) came later, with issue #381, through the
-header's `actions` slot.
+header's `actions` slot. The explorer became the **Insight Canvas** (§22.2): a
+responsive three-window-class shell, Start here, an evidence-first inspector,
+path mode, a TimeBar, insights, lenses and history. The settings page
+(`/settings/knowledge-graph`) gained **Find topics in past meetings**
+(`kg.topics_promote`, §11), which proposes Topics from the free-text
+`Meeting.topics[]` of past meetings for review at `/graph/review`.
 
 **Proposal panel** — a side sheet on the note page, **not a tab**. Per
 Settings UI Pattern rule 2 (AGENTS.md), a tab gate is about *content*
@@ -2569,6 +2591,12 @@ except invented per-user instead of once centrally. Attributes on an
 line this document draws for v1.
 
 ### 17.4 Versioning and maintenance
+
+**Current version and changelog.** The definition is at 1.3.0
+(`packages/kvox-contract/src/ontology/version.ts`, `CHANGELOG`): `Topic`,
+`Product`, the `Risk` item type, `BROADER`, `DISCUSSED`/`PART_OF`/`ABOUT`
+widening and the stakeholder and market relations (§5.1, §5.2). It is a minor
+bump, so `ONTOLOGY_MIGRATIONS` stays empty.
 
 **Semver on the definition file.** Every graph row — `kg_entities`,
 `kg_relations`, `kg_items` — carries the `ontology_version` it was written
@@ -3363,7 +3391,7 @@ by `ask_messages_one_running_turn_uniq_idx` (§10), which #378 maps to 409
 
 ### 21.3 One turn, one job
 
-`POST /api/ask/conversations/:id/messages` `{ content, model? }` enqueues
+`POST /api/ask/conversations/:id/messages` `{ content, model?, scope? }` enqueues
 **`ask.respond`** (§11) and returns **202** with both the new user message
 and a `pending` assistant message — the identical two-row-per-turn shape a
 chat UI needs to render immediately without waiting on the job.
@@ -3375,6 +3403,18 @@ message history, calling tools as needed, and writing every delta into
 delivery-mechanism discipline** `note_generations` already establishes
 (`docs/specs/notes.md` §5.1): a turn completes identically whether or not the
 SSE stream below is open, and closing the tab loses nothing.
+
+**Scoped Ask.** `scope: { entityIds?, evidenceIds? }` (at most 50 of each,
+`ASK_SCOPE_MAX_IDS`) carries what the user selected in the explorer ("Ask about
+this selection", §22.2). The ids are **starting handles**, never evidence:
+`resolveAskScope` (`packages/kvox-api/src/ask/ask-scope.ts`) registers each
+readable subject (an evidence id resolves to the entity, item or relation it
+supports) as a handle in the turn's registry, and the agent still reads quotes
+through its `evidence` tool, so the graph is never a retrieval source on its
+own (§9.4). The POST checks every id as the asker: one that is missing, another
+user's, unreadable or a `sensitive` PersonFact's makes the whole request a
+**404** with one sentence ("Selection not found"); the job re-checks and drops
+an id that has vanished since.
 
 **Caps.** A hard **step cap** (a fixed number of tool calls per turn) and a
 **token cap** (per turn, drawn from the resolved model's own output ceiling,
@@ -3706,6 +3746,9 @@ prompts and #382's evals name:
 | `list_commitments` | `entity`, `direction` `owned_by`\|`owed_to`\|`any`, `status` `open`\|`done`\|`dropped`\|`superseded`\|`any` (open), `dueBefore`, `limit` 1–25 (15) | one owner-scoped `kg_items` query, `due_at ASC NULLS LAST, occurred_at DESC` | `[{ ref, statement, status, due, owner, counterparty, madeOn, evidence }]` |
 | `list_risks` (#664) | `subject`, `status` `open`\|`mitigated`\|`closed`\|`superseded`\|`any` (open), `severity` `low`\|`medium`\|`high`, `limit` 1–25 (15) | one owner-scoped `kg_items` query (`kind = 'risk'`), severity high to low then `occurred_at DESC NULLS LAST`; empty when the `work` domain is off | `[{ ref, statement, status, severity, kind, mitigation?, subject, raisedOn, evidence }]` |
 
+There is no path-finding tool: the agent walks `neighbors` hop by hop, and
+`GET /api/graph/paths` (§22.2) is an explorer surface only.
+
 A neighbourhood edge carries a `rel` ref only when it is a stored relation
 (citable, with evidence); a derived item-column edge (`virtual`) has
 `ref: null`.
@@ -3843,21 +3886,26 @@ below, rather than left open any further.
 `graphology-layout-forceatlas2` `^0.10.1`, `graphology-types` `^0.24.8`.
 `packages/kvox-web/src/graph/ui/components/explorer/GraphCanvas.tsx` is the **one** file
 in the codebase that imports `sigma`, generic enough that the entity page's
-`NeighborhoodWidget` (§13) and the future whole-graph overview (§22.3) both
+`NeighborhoodWidget` (§13) and the whole-graph overview (§22.3) both
 draw through it rather than each carrying its own renderer.
 
-⚠ **The ForceAtlas2 settle runs on the main thread, in frame-sized slices,
-for a fixed 180 iterations (2 per frame, ~1.5s at 60fps) — not in
-`graphology-layout-forceatlas2`'s own web-worker supervisor.** That
-supervisor spawns its worker from a `blob:` URL, and production's CSP
-(`infra/nginx/csp.conf`) is `worker-src 'self'`: the worker would be refused
-in exactly the environment that matters, and loosening the CSP for a layout
-is not a trade worth making. Bounding the settle by iteration count rather
-than the clock is also what makes it **deterministic** — the same graph
-always reaches the same picture regardless of how fast the machine is —
-which is what `?layout=static` (never moves a node; used by the visual test
-suite, and applied automatically whenever `prefers-reduced-motion: reduce`
-is set) depends on.
+**Layout runs in a same-origin module worker.** `layout/layout.worker.ts` runs
+ForceAtlas2 for a fixed 180 iterations (2 per chunk), then
+`graphology-layout-noverlap`, and posts transferable `Float32Array` frames; it
+is started with `new Worker(new URL('./layout.worker.js', import.meta.url), {
+type: 'module' })`, so the bundler emits it as its own file and production's
+`worker-src 'self'` (`infra/nginx/csp.conf`) allows it with **no CSP change**.
+`graphology-layout-forceatlas2/worker` is never used: its supervisor builds a
+`blob:` worker the CSP would refuse. Without `Worker`, or if the worker
+errors, the same algorithm runs on the main thread in 8 ms slices per frame.
+Bounding the settle by iteration count (and a time box, below) rather than the
+clock keeps it **deterministic**, which is also what `?layout=static` (never
+moves a node; applied automatically under `prefers-reduced-motion: reduce`)
+depends on. After an expand only nodes never laid out move; the rest are fixed,
+and a dragged or `P`-pinned node stays where it is. Other layouts: `concentric`
+(rings by hop from the seeds, the default for an ego view under 40 nodes).
+Positions tween over 300 ms, or jump once under reduced motion. Detail:
+[the graph README](../../packages/kvox-web/src/graph/README.md#explorer-layout-668).
 
 Seeded from an entity page, a search result, or a bare visit to
 `/graph/explore` itself (in which case it seeds from the caller's
@@ -3868,11 +3916,11 @@ costs one bounded request instead of the client silently downloading more of
 the graph than the screen can usefully show. Filters — **entity/relation
 type**, **domain** (§17.2 — hiding `personal`-domain rows for a user who has
 that domain enabled but does not want it cluttering this particular view),
-and an **`as_of` slider** (§9.1 — rendering the graph as it stood on a past
+and an **`as_of` date** (§9.1 — set by the TimeBar's brush, below — rendering the graph as it stood on a past
 date, reusing the identical range-containment query the entity brief already
 runs) — narrow what expansion is allowed to add, not merely what is
 displayed, so a filtered-out type is never fetched at all. **A hard
-300-node cap** — past it, expansion is refused with a message naming the cap
+node cap** (300, or 120 on a constrained window, see the budgets below) — past it, expansion is refused with a message naming the cap
 rather than silently degrading into an unreadable hairball or a frozen tab;
 300 is chosen against sigma.js's own practical WebGL ceiling for a
 force-directed layout that still redraws smoothly on an ordinary laptop, not
@@ -3890,6 +3938,62 @@ selected entity's page, and `Escape` deselects — each selection is also
 announced through a live region for a screen-reader user who cannot see the
 canvas at all.
 
+**The Insight Canvas.** `GraphExplorerPage` renders through one
+component tree, `InsightCanvasLayout`, with five slots (`topBar`, `facets`,
+`canvas`, `inspector`, `timeBar`). The pieces below plug into those slots;
+their component-level contracts are in
+[the graph README](../../packages/kvox-web/src/graph/README.md).
+
+- **Responsive design.** Three **window classes**, read by the explorer's own
+  hook (`useWindowClass`): `compact` under 600 px (phone), `medium` 600 to
+  1199 px (tablet portrait, a narrowed desktop window), `expanded` from 1200
+  px. 600 equals the platform's `sm` gate by design; the explorer reads its own
+  width and adds none of the five platform shell gates. The canvas is never
+  remounted on a class change, so a rotation keeps the camera, the selection
+  and the inspector. Compact: the inspector is a bottom sheet (peek, half,
+  full) and the facets a drawer. Medium: a 56 px facets rail with popovers and
+  a closable 360 px inspector overlay. Expanded: three resizable panes whose
+  widths persist per user and window class.
+- **Input model.** Touch versus pointer is read from `(pointer: coarse)` and
+  `(hover: none)` (`useInputModality`), independent of the width, and never
+  from the user agent. Touch: a first tap previews a node, a second opens the
+  inspector, a 500 ms long-press opens the node menu and arms dragging, and
+  "Select" mode marks nodes. A coarse pointer gets 44 px targets and picks
+  within 22 px of a node. Every gesture has a keyboard and screen-reader
+  equivalent (live region, ARIA tabs, `role="slider"` handles).
+- **Budgets** (`shell/explorerBudgets.ts`, one place). "Constrained" is a
+  compact window **or** a coarse pointer: visible node cap 120 (else 300),
+  layout time box 1.5 s (else 3 s), `devicePixelRatio` capped at 2, edges
+  hidden while the camera moves above 500 edges (else 1,000), reduced label
+  density. A compact window opens a graph over 120 nodes as the list view.
+- **Entry states.** With no `?seed=`, no hand-off and nothing viewed, the page
+  shows **Start here** instead of a search box: the overview's themes, "Who
+  and what is active" (`GET /api/graph/entities?type=&sort=mentions&since=`, one
+  call per type) and recent entities. A command palette (Ctrl/Cmd+K or `/`)
+  searches the canvas and the graph, adds or replaces seeds, and runs
+  actions. A minimap appears on request (medium) or above 150 nodes
+  (expanded), never on compact.
+- **Inspector.** Evidence first: a node opens on Overview, an edge on Evidence;
+  tabs Overview, Evidence, Connections, Timeline and (with the host's Ask slot)
+  Ask. An evidence card shows the quote even when its source is gone, with
+  "Open at source". A `sensitive` PersonFact is never asked about for evidence.
+  The selection is in the URL (`sel`, `tab`).
+- **Path mode.** "Connect A and B" asks `GET /api/graph/paths` for three paths
+  and shows each hop with its strongest quote; "Show on canvas" lights the path
+  and dims the rest. It is reached from the top bar, the inspector, the node
+  menu, the palette and the Start-here card, and is a bottom-sheet strip on
+  compact, an overlay on medium and expanded. URL: `pathFrom`, `pathTo`,
+  `pathHops`, `pathRel`.
+- **TimeBar, insights, lenses, history.** Described in the paragraphs below
+  and in §22.3 (Insights).
+- **Visual language.** Type is encoded three ways, never by colour alone: a
+  validated categorical palette (light and dark variants), a bundled pictogram
+  drawn as a `data:` URL (no remote asset), and a legend label; node size from
+  mention count, edge width from evidence count, a stance accent on
+  `INVOLVED_IN`, and curved parallel edges. With a focus (hover, first tap or
+  selection) the node, its neighbours and their edges stay lit and the rest
+  drops to 15% opacity.
+
 **Paths between two nodes (GIC-12, #673).** `GET /api/graph/paths?from&to&k&maxHops&types&relationTypes&as_of`
 (`graph:read`, owner-only, a node that is not yours or not readable is the same
 404) answers "how is A connected to B?" with the top `k` (1–5) distinct paths of
@@ -3906,8 +4010,7 @@ factor per intermediate node (`graph-path-ranking.ts`). Wire shape: API.md.
 The explorer's shareable state is the URL: `seed`, `asOf`, `types` and
 `relTypes` (the node and relation types SHOWN; absent means all), `layout`,
 `view`, `focus`, `lens`, plus the inspector's `sel` and `tab`; `from`/`to`
-(time bar) and `pathFrom`/`pathTo` (path mode) belong to the stories that write
-them. Pins and positions are never in the URL. A **lens** is a named bundle of
+(the TimeBar's brush) and `pathFrom`/`pathTo`/`pathHops`/`pathRel` (path mode). Pins and positions are never in the URL. A **lens** is a named bundle of
 seeds, shown types and relations, layout and pinned positions
 (`explorer/lenses/`). Four built-in presets (People network, Project map,
 Stakeholders & stance, Commitments & risks) are trimmed to the types and
@@ -3932,7 +4035,7 @@ transcript's `recorded_at` or note's `created_at`, falling back to its own
 creation time; a `sensitive` PersonFact contributes nothing. In the explorer
 (`packages/kvox-web/src/graph/ui/components/explorer/timebar/`) the brush is the
 `from`/`to` URL range: the graph is evaluated `as_of` the range end (the same
-semantics as the as-of slider it replaces on the canvas) and nodes with no
+semantics as the as-of slider the TimeBar replaced on the canvas) and nodes with no
 evidence in the window are dimmed client-side. Wire shape: API.md.
 
 ### 22.3 Whole-graph overview (`/graph/overview`)
@@ -4176,11 +4279,10 @@ printed in a brief).
   hold infrastructure secrets outliving whichever administrator configured
   them. Every `kg_*` table's `owner_id` **Cascade**s for the identical
   reason `user_ai_keys.user_id` does.
-- **A `Concept`/topic layer in v1.** Deferred, not permanently rejected
-  (§5.7) — today's `Meeting.topics[]` free-text property answers "what came
-  up" without committing to a taxonomy this document has no evidence users
-  need yet; promoting it to a graph node is a natural, low-risk v2 addition
-  once real usage shows which topics recur enough to be worth linking.
+- **A `Concept`/topic layer in v1.** Deferred at v1, shipped in ontology
+  1.3.0 as `Topic` (§5.1, §5.7): `Meeting.topics[]` free text answered "what
+  came up" but could not link topics across notes. The `kg.topics_promote`
+  job (§11) promotes existing `Meeting.topics[]` entries into `Topic` proposals.
 - **A new bottom-bar destination for the graph, at the time this document
   was written.** Rejected per §13 and `apps/web/src/config/destinations.ts`'s
   own stated ceiling: the bar was at exactly four non-pinned destinations by

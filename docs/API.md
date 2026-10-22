@@ -5469,7 +5469,7 @@ an already-curated graph unreadable.
 ```json
 {
   "data": {
-    "version": "1.2.0",
+    "version": "1.3.0",
     "domains": [
       { "key": "core", "label": "Core", "enabled": true, "alwaysOn": true },
       { "key": "work", "label": "Work", "enabled": true, "alwaysOn": false },
@@ -5552,6 +5552,15 @@ declares one (every `personal`-domain relation: `"personal"`; absent =
 `Milestone` and the relations `SPOUSE_OF`, `PARENT_OF`, `FRIEND_OF`,
 `INTERESTED_IN`, `TRAVELED_ON` and `HAS_MILESTONE`, every one
 `sensitivityDefault: "personal"` — never pre-checked in review.
+
+Ontology 1.3.0 (`docs/specs/ontology.md` §5.1, §5.2) adds the entity types
+`Topic` (`core`) and `Product` (`work`), the item type `Risk` (`work`,
+`storage: "item"`, `itemKind: "risk"`) and the relations `BROADER`
+(`core`) and, in `work`, `INVOLVED_IN`, `USES`, `OFFERED_BY`, `CUSTOMER_OF`,
+`PARTNER_OF`, `COMPETITOR_OF`, `CONCERNS` and `KNOWS_ABOUT`; `PARTNER_OF` and
+`COMPETITOR_OF` carry `symmetric: true`. With the `work` domain off the
+response has no `Product` or `Risk`, and the relations that need them are
+pruned. Nothing about the response shape changes.
 
 A relation prop may carry `identity: true`, **only when set** (#440): the
 prop takes part in the relation's identity alongside its `required` props,
@@ -6638,8 +6647,8 @@ statement timeout**; a query that exceeds it is a **503** with
 
 ##### GET /graph/entities
 
-The entity index: your people, organizations, projects and meetings,
-keyset-paginated by `nextCursor`.
+The entity index: your people, organizations, projects, topics, products and
+meetings (every entity type in your effective ontology), keyset-paginated by `nextCursor`.
 
 | Parameter | Notes |
 |---|---|
@@ -6762,7 +6771,7 @@ Query: `cursor`, `limit` (1–50, default 25).
 "What's the latest on …?" in one call (issue #372, epic #347;
 `docs/specs/ontology.md` §9.1, §9.2). **Assembled from stored rows only —
 this request never calls an AI model and never answers 409.** Five
-deterministic, cited sections; the latest AI-written digest as it was last
+deterministic, cited sections, plus an optional sixth for risks; the latest AI-written digest as it was last
 stored; and related sources fusing full-text/semantic search with the
 documents your own graph cites for this entity.
 
@@ -6774,6 +6783,10 @@ documents your own graph cites for this entity.
   ended in the window, touching the entity or its 1-hop Persons — a
   promotion surfaces as one `ended` + one `started`). Every entry cites at
   least one evidence id you own; `sensitive` person facts never appear.
+  **`openRisks`** (optional, for a `Project`, `Product` or `Organization`):
+  the open, not-superseded `Risk` items about the entity, highest `severity`
+  first and then newest (at most 10), each cited. The key is absent when
+  there is none, and always when the `work` domain is off.
 - **`digest`** — the latest `kg.entity_digest` job's output, each statement
   citing the evidence it relies on, or `null` before the first run (or with
   `as_of`). When it is stale (nothing written since the entity's newest
