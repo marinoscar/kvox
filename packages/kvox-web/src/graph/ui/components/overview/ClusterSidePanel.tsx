@@ -3,7 +3,7 @@
  * it (#375; spec §22.3).
  *
  * A right-hand `Paper` from `sm` up; a bottom `Drawer` on a phone — the
- * `ExplorerSidePanel` (#374) shape exactly. That `down('sm')` is a PAGE-LEVEL
+ * shape the explorer's side panel had (#374). That `down('sm')` is a PAGE-LEVEL
  * read deciding where one page puts one panel, not a sixth app-chrome
  * breakpoint gate (CLAUDE.md, Settings UI Pattern rule 5).
  *

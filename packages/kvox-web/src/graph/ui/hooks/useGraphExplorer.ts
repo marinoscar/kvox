@@ -56,6 +56,18 @@ import { graphErrorMessage, isAbortError } from '../../headless/hooks/graphHookU
 
 import { KvoxApiError, useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
 /**
+ * Narrows one expand to part of a node's neighbourhood. Every list is intersected with the filters already in force: a type or relation the user has hidden is not asked for.
+ *
+ * @stability experimental
+ */
+export interface ExpandOnly {
+  /** Only neighbours of these entity types or item kinds. */
+  types?: readonly string[];
+  /** Only neighbours reached along these relation types. */
+  relationTypes?: readonly string[];
+}
+
+/**
  * Options for {@link useGraphExplorer}.
  *
  * @stability experimental
@@ -97,8 +109,10 @@ export interface UseGraphExplorerResult {
   load: (seedIds: readonly string[]) => Promise<void>;
   /** Starts from the overview's hand-off: draws its nodes at once, then expands them to add their edges and neighbours. */
   loadHandoff: (handoff: ExplorerHandoff) => Promise<void>;
-  /** Adds a node's one-hop neighbourhood. At the node cap it sends nothing and sets `capped`. */
-  expand: (nodeId: string) => Promise<void>;
+  /**
+   * Adds a node's one-hop neighbourhood, or with `only` just the neighbours of one entity type or along one relation type (the inspector's Expand menu, GIC-11; the "+N more" stubs ask for the same thing). At the node cap it sends nothing and sets `capped`.
+   */
+  expand: (nodeId: string, only?: ExpandOnly) => Promise<void>;
   /** Re-evaluates the graph as of a date (`YYYY-MM-DD`) or now (`null`), rebuilding from the seeds and expanded nodes while keeping positions. */
   setAsOf: (date: string | null) => Promise<void>;
   /** Hides these node types; filters are sent to the server, and seeds are never removed. */
@@ -115,6 +129,12 @@ export interface UseGraphExplorerResult {
   retry: () => Promise<void>;
   /** Aborts anything in flight and clears the graph, keeping the filters and `as of` date. */
   reset: () => void;
+}
+
+/** `wanted` limited to what `allowed` permits; `allowed` itself when nothing is wanted; `undefined` for no restriction at all. */
+function narrowTo(allowed: string[] | undefined, wanted: readonly string[] | undefined): string[] | undefined {
+  if (!wanted) return allowed;
+  return allowed ? wanted.filter((key) => allowed.includes(key)) : [...wanted];
 }
 
 function allowedList(universe: readonly string[], hidden: ReadonlySet<string>): string[] | undefined {
@@ -290,7 +310,7 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
   );
 
   const expand = useCallback(
-    async (nodeId: string) => {
+    async (nodeId: string, only?: ExpandOnly) => {
       const state = stateRef.current;
       if (!state.graph.hasNode(nodeId)) return;
       // A "+N more" stub expands ITS TYPE of its parent, not itself.
@@ -307,11 +327,23 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
       setError(null);
       try {
         const filters = filtersFor(state);
+        // A stub asks for its own type; the menu for the type or relation it names. Either way the
+        // request is the allowed lists narrowed, never widened.
+        const narrow = isStub ? { types: [stub.stubType!] } : only;
+        const types = narrowTo(filters.types, narrow?.types);
+        const relationTypes = narrowTo(filters.relationTypes, narrow?.relationTypes);
+        if ((types && types.length === 0) || (relationTypes && relationTypes.length === 0)) {
+          // Everything asked for is hidden by a filter: nothing to fetch.
+          if (isStub) dropStub(state, nodeId);
+          bump();
+          return;
+        }
         const slice = await expandGraph(host, 
           {
             nodeIds: [targetId],
-            ...filters,
-            ...(isStub ? { types: [stub.stubType!] } : {}),
+            asOf: filters.asOf,
+            ...(types ? { types } : {}),
+            ...(relationTypes ? { relationTypes } : {}),
             cap: capacity,
           },
           controller.signal,

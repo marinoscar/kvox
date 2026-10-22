@@ -15,6 +15,7 @@ import type {
 import { http, HttpResponse } from './msw-compat.js';
 import {
   briefFixture,
+  edgeEvidenceFixtures,
   countsFor,
   emptyCommitResult,
   entityDetail,
@@ -136,6 +137,18 @@ export const graphHandlers = [
   http.get(`${API_BASE}/graph/evidence`, ({ request }) => {
     const ids = new URL(request.url).searchParams.get('ids')?.split(',') ?? [];
     return HttpResponse.json({ data: { items: evidenceFixtures.filter((ev) => ids.includes(ev.id)) } });
+  }),
+
+  // GIC-11: the citations of one subject. Declared before `evidence/:id`, or `by-subject` is read as an id.
+  http.get(`${API_BASE}/graph/evidence/by-subject`, ({ request }) => {
+    const url = new URL(request.url);
+    const kind = url.searchParams.get('kind');
+    const id = url.searchParams.get('id');
+    return HttpResponse.json({
+      data: {
+        items: [...evidenceFixtures, ...edgeEvidenceFixtures].filter((ev) => ev.subjectKind === kind && ev.subjectId === id),
+      },
+    });
   }),
 
   http.get(`${API_BASE}/graph/evidence/:id`, ({ params }) => {

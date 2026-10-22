@@ -176,6 +176,46 @@ describe('useGraphExplorer — expand', () => {
     expect(result.current.state.graph.order).toBe(before);
   });
 
+  it('narrows an expand to one relation type, and adds only that relation\'s neighbours (GIC-11)', async () => {
+    const { result } = renderExplorer();
+    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.expand(ACME_ID, { relationTypes: ['PART_OF'] }));
+
+    expect(bodies[1].nodeIds).toEqual([ACME_ID]);
+    expect(bodies[1].relationTypes).toEqual(['PART_OF']);
+    expect(bodies[1].types).toBeUndefined();
+    const graph = result.current.state.graph;
+    expect(graph.hasNode(gid(6))).toBe(true); // Project Atlas, PART_OF Acme
+    expect(graph.hasNode(gid(12))).toBe(false); // Dana Li WORKS_FOR Acme
+  });
+
+  it('narrows an expand to one entity type', async () => {
+    const { result } = renderExplorer();
+    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.expand(ACME_ID, { types: ['Person'] }));
+
+    expect(bodies[1].types).toEqual(['Person']);
+    expect(bodies[1].relationTypes).toBeUndefined();
+    expect(result.current.state.graph.hasNode(gid(12))).toBe(true);
+    expect(result.current.state.graph.hasNode(gid(6))).toBe(false);
+  });
+
+  it('intersects a narrowed expand with the filters in force, and sends nothing for a type the user hid', async () => {
+    const { result } = renderExplorer();
+    await act(() => result.current.load([JOE_ID]));
+    act(() => {
+      result.current.setHiddenRelationTypes(['PART_OF']);
+      result.current.setHiddenTypes(['Person']);
+    });
+    const before = bodies.length;
+    await act(() => result.current.expand(ACME_ID, { relationTypes: ['PART_OF'] }));
+    await act(() => result.current.expand(ACME_ID, { types: ['Person'] }));
+    expect(bodies).toHaveLength(before);
+
+    await act(() => result.current.expand(ACME_ID, { relationTypes: ['PART_OF', 'WORKS_FOR'] }));
+    expect(bodies.at(-1)!.relationTypes).toEqual(['WORKS_FOR']);
+  });
+
   it('sends NO request at the cap and says so', async () => {
     server.use(
       http.post('*/api/graph/explore/expand', async ({ request }) => {

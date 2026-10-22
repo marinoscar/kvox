@@ -121,6 +121,15 @@ export function useInsightCanvas(): InsightCanvasContextValue {
 }
 
 /**
+ * Like {@link useInsightCanvas}, but `null` outside an {@link InsightCanvasLayout} instead of throwing: for a slot component that is also rendered on its own (tests, previews).
+ *
+ * @stability experimental
+ */
+export function useOptionalInsightCanvas(): InsightCanvasContextValue | null {
+  return useContext(InsightCanvasContext);
+}
+
+/**
  * Props of {@link InsightCanvasLayout}.
  *
  * @stability experimental

@@ -283,6 +283,53 @@ export const evidenceFixtures: EvidenceLink[] = [
   },
 ];
 
+/** Evidence behind the explorer fixture's `REPORTS_TO` edge (`gid(411)`, GIC-11). */
+export const EV_EDGE_NOTE = gid(711);
+export const EV_EDGE_GONE = gid(712);
+
+export const edgeEvidenceFixtures: EvidenceLink[] = [
+  {
+    id: EV_EDGE_NOTE,
+    subjectKind: 'relation',
+    subjectId: gid(411),
+    quote: 'Joe now reports to Ana.',
+    createdAt: '2026-09-02T10:00:00.000Z',
+    source: {
+      kind: 'note',
+      noteId: NOTE_ID,
+      noteTitle: 'Org changes',
+      noteVersion: 2,
+      currentNoteVersion: 2,
+      charStart: 4,
+      charEnd: 27,
+      versionChanged: false,
+      available: true,
+      href: `/notes/${NOTE_ID}?v=2`,
+    },
+  },
+  {
+    id: EV_EDGE_GONE,
+    subjectKind: 'relation',
+    subjectId: gid(411),
+    quote: 'Ana is taking over the platform group.',
+    createdAt: '2026-08-30T10:00:00.000Z',
+    source: {
+      kind: 'segment',
+      transcriptId: null,
+      transcriptTitle: null,
+      segmentId: null,
+      segmentRev: null,
+      currentSegmentRev: null,
+      startMs: null,
+      endMs: null,
+      textChanged: false,
+      available: false,
+      href: null,
+      hasAudio: false,
+    },
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Brief (#372)
 // ---------------------------------------------------------------------------

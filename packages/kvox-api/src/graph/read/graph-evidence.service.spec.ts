@@ -306,3 +306,48 @@ describe('GraphEvidenceService.getOne / getMany', () => {
     await expect(svc.getMany(USER, [])).resolves.toEqual([]);
   });
 });
+
+describe('GraphEvidenceService.forSubject (GIC-11)', () => {
+  const ITEM = '00000000-0000-4000-8000-0000000000a1';
+
+  function withAccess(item: { sensitivity: string | null } | null) {
+    const { svc, access } = build({});
+    access.require.mockImplementation(async (_user: string, kind: string) => {
+      if (kind === 'item' && item) return item as never;
+      if (kind === 'item') throw new NotFoundException('Item not found');
+      return { id: SUBJ } as never;
+    });
+    const listed = jest.spyOn(svc, 'listForSubject').mockResolvedValue([
+      { link: { id: 'e1' } as never, occurredAt: null },
+      { link: { id: 'e2' } as never, occurredAt: null },
+    ]);
+    return { svc, access, listed };
+  }
+
+  it('authorises the subject, then lists its citations newest first', async () => {
+    const { svc, access, listed } = withAccess(null);
+    const links = await svc.forSubject(USER, 'relation', SUBJ);
+    expect(access.require).toHaveBeenCalledWith(USER, 'relation', SUBJ, 'view');
+    expect(listed).toHaveBeenCalledWith(USER, 'relation', SUBJ, 50);
+    expect(links.map((l) => l.id)).toEqual(['e1', 'e2']);
+  });
+
+  it('answers the item 404 for a sensitive item and never lists its evidence', async () => {
+    const { svc, listed } = withAccess({ sensitivity: 'sensitive' });
+    await expect(svc.forSubject(USER, 'item', ITEM)).rejects.toThrow('Item not found');
+    expect(listed).not.toHaveBeenCalled();
+  });
+
+  it('lists the evidence of a personal (non-sensitive) item', async () => {
+    const { svc, listed } = withAccess({ sensitivity: 'personal' });
+    await svc.forSubject(USER, 'item', ITEM);
+    expect(listed).toHaveBeenCalledWith(USER, 'item', ITEM, 50);
+  });
+
+  it('does not list anything for a subject the caller cannot see', async () => {
+    const { svc, access, listed } = withAccess(null);
+    access.require.mockRejectedValue(new NotFoundException('Entity not found'));
+    await expect(svc.forSubject(USER, 'entity', SUBJ)).rejects.toThrow('Entity not found');
+    expect(listed).not.toHaveBeenCalled();
+  });
+});

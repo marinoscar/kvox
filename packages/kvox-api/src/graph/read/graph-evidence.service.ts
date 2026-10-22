@@ -24,12 +24,12 @@
 // share lookup per distinct transcript the caller does not own.
 // =============================================================================
 
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 
 import { KVOX_OBJECT_STORE, type KvoxObjectStorePort, KVOX_PRISMA } from '../../ports/index.js';
 import { NoteAccessService } from '../../notes/index.js';
 import { TranscriptAccessService, transcriptHasAudio } from '../../transcripts/index.js';
-import { GraphAccessService } from '../access/graph-access.service.js';
+import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-access.service.js';
 import type { EvidenceLink } from './dto/graph-read.dto.js';
 import { isManualEvidenceRow } from '../write/manual-evidence.js';
 import type { KvoxGraphDb, KgEvidenceRow as KgEvidence } from '../data/graph-db.js';
@@ -117,6 +117,28 @@ export class GraphEvidenceService {
       userId,
       unique.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])),
     );
+  }
+
+  /**
+   * The citations of one entity, relation or item for the explorer inspector
+   * (GIC-11), newest source first, at most {@link SUBJECT_EVIDENCE_MAX}.
+   *
+   * The subject is authorised first by `GraphAccessService` (another owner's
+   * row, an unreviewed or rejected one and a missing one all answer the same
+   * 404). The evidence of a `sensitive` item (a sensitive PersonFact) is never
+   * returned: that item answers the item 404, as if it did not exist.
+   */
+  async forSubject(userId: string, subjectKind: EvidenceSubjectKind, subjectId: string): Promise<EvidenceLink[]> {
+    if (subjectKind === 'item') {
+      const item = await this.access.require(userId, 'item', subjectId, 'view');
+      if (item.sensitivity === 'sensitive') throw new NotFoundException(GRAPH_NOT_FOUND_MESSAGES.item);
+    } else if (subjectKind === 'relation') {
+      await this.access.require(userId, 'relation', subjectId, 'view');
+    } else {
+      await this.access.require(userId, 'entity', subjectId, 'view');
+    }
+    const found = await this.listForSubject(userId, subjectKind, subjectId, SUBJECT_EVIDENCE_MAX);
+    return found.map((entry) => entry.link);
   }
 
   /**

@@ -20,7 +20,7 @@ import Typography from '@mui/material/Typography';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { EntityTypeIcon } from '../entityTypeIcon.js';
-import { CAP_TOOLTIP } from './ExplorerSidePanel.js';
+import { CAP_TOOLTIP } from './inspector/inspectorModel.js';
 import type { ExplorerListRow } from './explorerModel.js';
 
 export interface ExplorerListViewProps {
