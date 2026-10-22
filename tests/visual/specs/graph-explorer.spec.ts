@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { harnessUrl, waitForInter } from '../support/harness';
-import { GRAPH_PERMS, JOE_ID, installGraphApi } from '../support/graphApi';
+import { ACME_ID, ANA_ID, GRAPH_PERMS, JOE_ID, REPORTS_TO_EDGE_ID, installGraphApi } from '../support/graphApi';
 
 /**
  * The graph explorer (`/graph/explore`, issue #374, epic #347) and the entity
@@ -28,25 +28,32 @@ test.use({ launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-s
 
 const PHONE = { width: 390, height: 844 };
 const TABLET = { width: 820, height: 1180 };
+const LAPTOP = { width: 1180, height: 800 };
 const DESKTOP = { width: 1440, height: 900 };
 
+// WIDTHS[0] and WIDTHS[3] are the phone and desktop the other tests in this file use.
 const WIDTHS = [
   ['phone-390', PHONE],
   ['tablet-820', TABLET],
+  ['laptop-1180', LAPTOP],
   ['desktop-1440', DESKTOP],
 ] as const;
 
+const THEMES = ['light', 'dark'] as const;
+
 const EXPLORE = `/graph/explore?seed=${JOE_ID}&layout=static`;
 
-async function openExplorer(page: Page, route = EXPLORE) {
-  await page.goto(harnessUrl({ route, perms: GRAPH_PERMS }));
+async function openExplorer(page: Page, route = EXPLORE, theme: 'light' | 'dark' = 'dark') {
+  await page.goto(harnessUrl({ route, perms: GRAPH_PERMS, theme }));
   await waitForInter(page);
   await expect(page.getByRole('heading', { level: 1, name: 'Explore' })).toBeVisible();
 }
 
 /** The canvas has its slice (the count comes from the same graph the canvas draws). */
-async function canvasReady(page: Page, count: number) {
-  await expect(page.getByLabel(`${count} of 300 nodes`)).toBeVisible();
+async function canvasReady(page: Page, count: number, cap?: number) {
+  // A compact window (under 600px) holds the explorer to the phone budget (GIC-08): 120 nodes, not 300.
+  cap ??= (page.viewportSize()?.width ?? 1440) < 600 ? 120 : 300;
+  await expect(page.getByLabel(`${count} of ${cap} nodes`)).toBeVisible();
   const app = page.getByRole('application', { name: /^Graph explorer/ });
   await expect(app).toBeVisible();
   await expect(app.locator('canvas').first()).toBeVisible();
@@ -56,16 +63,21 @@ async function canvasReady(page: Page, count: number) {
 }
 
 test.describe('Graph explorer', () => {
+  // #667: the visual language (type colour and pictogram, size, curved parallel
+  // edges: Joe to Acme is both WORKS_FOR and HAS_ROLE) at the four widths, in
+  // both themes.
   for (const [name, viewport] of WIDTHS) {
-    test(`explorer @ ${name}`, async ({ page }) => {
-      await installGraphApi(page, { surface: 'pages' });
-      await page.setViewportSize(viewport);
-      await openExplorer(page);
-      // Joe plus his five neighbours.
-      await canvasReady(page, 6);
+    for (const theme of THEMES) {
+      test(`explorer @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openExplorer(page, EXPLORE, theme);
+        // Joe plus his five neighbours.
+        await canvasReady(page, 6);
 
-      await expect(page).toHaveScreenshot(`graph-explorer-${name}.png`);
-    });
+        await expect(page).toHaveScreenshot(`graph-explorer-${name}-${theme}.png`);
+      });
+    }
   }
 
   test('one node expanded, side panel open @ desktop-1440', async ({ page }) => {
@@ -78,7 +90,7 @@ test.describe('Graph explorer', () => {
     await app.focus();
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
-    await expect(page.getByRole('complementary', { name: 'Acme Corp' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
     await page.keyboard.press('Enter');
     // Acme adds Ben Okafor, Dana Li and Project Atlas.
     await canvasReady(page, 9);
@@ -110,7 +122,7 @@ test.describe('Graph explorer', () => {
     await expect(page).toHaveScreenshot('graph-explorer-capped-desktop-1440.png');
   });
 
-  for (const [name, viewport] of [WIDTHS[0], WIDTHS[2]] as const) {
+  for (const [name, viewport] of [WIDTHS[0], WIDTHS[3]] as const) {
     test(`list view @ ${name}`, async ({ page }) => {
       await installGraphApi(page, { surface: 'pages' });
       await page.setViewportSize(viewport);
@@ -118,7 +130,15 @@ test.describe('Graph explorer', () => {
 
       const list = page.getByRole('region', { name: 'Graph as a list' });
       await expect(list.getByText('Acme Corp')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'List view', pressed: true })).toBeVisible();
+      if (viewport.width < 600) {
+        // On a phone the view controls are in the overflow menu.
+        await page.getByRole('button', { name: 'More actions' }).click();
+        await expect(page.getByRole('menuitem', { name: 'Graph view' })).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('menu')).toHaveCount(0);
+      } else {
+        await expect(page.getByRole('button', { name: 'List view', pressed: true })).toBeVisible();
+      }
 
       await expect(page).toHaveScreenshot(`graph-explorer-list-${name}.png`, { fullPage: true });
     });
@@ -126,7 +146,7 @@ test.describe('Graph explorer', () => {
 });
 
 test.describe('Entity page — Neighbourhood widget', () => {
-  for (const [name, viewport] of [WIDTHS[0], WIDTHS[2]] as const) {
+  for (const [name, viewport] of [WIDTHS[0], WIDTHS[3]] as const) {
     test(`neighbourhood widget @ ${name}`, async ({ page }) => {
       await installGraphApi(page, { surface: 'pages' });
       await page.setViewportSize(viewport);
@@ -144,4 +164,668 @@ test.describe('Entity page — Neighbourhood widget', () => {
       await expect(widget).toHaveScreenshot(`graph-neighbourhood-${name}.png`);
     });
   }
+});
+
+// =============================================================================
+// The responsive Insight Canvas shell (GIC-08, #669, epic #661)
+//
+// Four viewports, light and dark: a phone (390x844), a tablet in portrait
+// (820x1180), the SAME tablet in landscape (1180x820, still the `medium`
+// window class: 1200 is the first expanded width) and a laptop (1440x900).
+//
+// GIC-09 (#670) adds the "Start here" entry state, the command palette and the
+// minimap: their baselines are below (`Start here`, `Command palette`, `Minimap`).
+//
+// ⚠ Every baseline below is new and must be generated in the pinned Playwright
+// image (`.github/workflows/visual-baselines.yml`). The behavioural tests (touch
+// emulation, resizers, rotation, budgets) assert and need no baseline.
+// =============================================================================
+
+const LAPTOP_LANDSCAPE = { width: 1180, height: 820 };
+
+const SHELL_VIEWPORTS = [
+  ['phone-390', PHONE],
+  ['tablet-820', TABLET],
+  ['tablet-landscape-1180', LAPTOP_LANDSCAPE],
+  ['desktop-1440', DESKTOP],
+] as const;
+
+const THEMES = ['light', 'dark'] as const;
+
+async function openShell(page: Page, route: string, theme: 'light' | 'dark') {
+  await page.goto(harnessUrl({ route, perms: GRAPH_PERMS, theme }));
+  await waitForInter(page);
+  await expect(page.getByRole('heading', { level: 1, name: 'Explore' })).toBeVisible();
+}
+
+/**
+ * Selects Acme Corp by clicking its node and waits for the inspector. By click, not by keyboard: on a
+ * phone the bottom sheet takes focus when it opens (so a second ArrowRight would go to the sheet).
+ */
+async function selectAcme(page: Page) {
+  await cameraSettled(page);
+  const at = await nodePoint(page, ACME_ID);
+  await page.mouse.click(at.x, at.y);
+  await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
+}
+
+test.describe('Insight Canvas shell — baselines', () => {
+  for (const theme of THEMES) {
+    for (const [name, viewport] of SHELL_VIEWPORTS) {
+      test(`start here @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages', noRecents: true });
+        await page.setViewportSize(viewport);
+        await openShell(page, '/graph/explore?layout=static', theme);
+        await expect(page.getByRole('heading', { name: 'Where do you want to start?' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Themes' })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Globex/ }).first()).toBeVisible();
+        await expect(page.getByRole('region', { name: 'Person' })).toBeVisible();
+        await expect(page.getByRole('progressbar')).toHaveCount(0);
+        // 1, 2 and 3 columns, and never a horizontal page scroll.
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+        await expect(page).toHaveScreenshot(`graph-start-here-${name}-${theme}.png`);
+      });
+
+      test(`command palette @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openShell(page, EXPLORE, theme);
+        await canvasReady(page, 6);
+        await page.getByRole('button', { name: 'Search the graph' }).click();
+        const input = page.getByRole('combobox', { name: 'Search the graph and run commands' });
+        await expect(input).toBeFocused();
+        await input.fill('a');
+        await expect(page.getByRole('group', { name: 'On canvas' })).toBeVisible();
+        await expect(page.getByRole('group', { name: 'Actions' })).toBeVisible();
+        await page.waitForTimeout(300);
+
+        await expect(page).toHaveScreenshot(`graph-palette-${name}-${theme}.png`);
+      });
+
+      test(`ego view with the inspector open @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openShell(page, EXPLORE, theme);
+        await canvasReady(page, 6);
+        await selectAcme(page);
+        await expect(page.getByRole('region', { name: 'Inspector' })).toBeVisible();
+        // The camera pans the selection clear of the overlay or the sheet; let it settle.
+        await page.waitForTimeout(400);
+
+        await expect(page).toHaveScreenshot(`graph-shell-ego-${name}-${theme}.png`);
+      });
+
+      test(`facets open @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openShell(page, EXPLORE, theme);
+        await canvasReady(page, 6);
+
+        if (viewport.width < 600) {
+          // Compact: a left drawer behind the Filters button.
+          await page.getByRole('button', { name: 'Filters' }).click();
+          await expect(page.getByRole('dialog', { name: 'Filters' })).toBeVisible();
+        } else if (viewport.width < 1200) {
+          // Medium: the 56px chip rail; a chip opens a popover.
+          await page.getByRole('button', { name: 'Filters' }).click();
+          await expect(page.getByRole('dialog', { name: 'Filters' })).toBeVisible();
+        } else {
+          // Expanded: the left pane is simply there.
+          await expect(page.getByRole('region', { name: 'Filters' })).toBeVisible();
+        }
+        await expect(page.getByRole('group', { name: 'Filter the graph' })).toBeVisible();
+        await page.waitForTimeout(300);
+
+        await expect(page).toHaveScreenshot(`graph-shell-facets-${name}-${theme}.png`);
+      });
+    }
+
+    for (const snap of ['peek', 'half', 'full'] as const) {
+      test(`bottom sheet at ${snap} @ phone-390 ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(PHONE);
+        await openShell(page, EXPLORE, theme);
+        await canvasReady(page, 6);
+        await selectAcme(page);
+
+        const sheet = page.getByRole(snap === 'full' ? 'dialog' : 'region', { name: 'Inspector' });
+        // The handle is a button: arrow up goes up one snap.
+        const handle = page.getByRole('button', { name: /^Resize Inspector/ });
+        await handle.focus();
+        if (snap !== 'peek') await page.keyboard.press('ArrowUp');
+        if (snap === 'full') await page.keyboard.press('ArrowUp');
+        await expect(sheet).toHaveAttribute('data-snap', snap);
+        await page.waitForTimeout(400);
+
+        await expect(page).toHaveScreenshot(`graph-shell-sheet-${snap}-phone-390-${theme}.png`);
+      });
+    }
+  }
+});
+
+// -----------------------------------------------------------------------------
+// Behaviour: keyboard resizers and persisted widths (expanded)
+// -----------------------------------------------------------------------------
+
+test.describe('Insight Canvas shell — panes', () => {
+  test('resizers work from the keyboard and the widths survive a reload', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(DESKTOP);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6);
+    await selectAcme(page);
+
+    const facets = page.getByRole('separator', { name: 'Resize filters' });
+    await expect(facets).toHaveAttribute('aria-valuenow', '280');
+    await facets.focus();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await expect(facets).toHaveAttribute('aria-valuenow', '328');
+
+    const inspector = page.getByRole('separator', { name: 'Resize inspector' });
+    await inspector.focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(inspector).toHaveAttribute('aria-valuenow', '376');
+
+    // The pane really got wider (CSS px), not just the attribute.
+    const width = await page.getByRole('region', { name: 'Filters' }).evaluate((el) => el.getBoundingClientRect().width);
+    expect(Math.round(width)).toBe(328);
+
+    await page.reload();
+    await waitForInter(page);
+    await canvasReady(page, 6);
+    await expect(page.getByRole('separator', { name: 'Resize filters' })).toHaveAttribute('aria-valuenow', '328');
+  });
+
+  test('the keyboard stops at the limits', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(DESKTOP);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6);
+    const facets = page.getByRole('separator', { name: 'Resize filters' });
+    await facets.focus();
+    await page.keyboard.press('End');
+    await expect(facets).toHaveAttribute('aria-valuenow', '400');
+    await page.keyboard.press('Home');
+    await expect(facets).toHaveAttribute('aria-valuenow', '220');
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Behaviour: touch emulation (`hasTouch`, `isMobile`: a coarse pointer that cannot hover)
+// -----------------------------------------------------------------------------
+
+type Point = { x: number; y: number };
+
+async function cdpTouch(page: Page) {
+  const session = await page.context().newCDPSession(page);
+  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', at?: Point) =>
+    session.send('Input.dispatchTouchEvent', { type, touchPoints: at ? [{ x: at.x, y: at.y }] : [] });
+  return {
+    session,
+    async swipe(from: Point, to: Point, steps = 10) {
+      await send('touchStart', from);
+      for (let step = 1; step <= steps; step += 1) {
+        await send('touchMove', {
+          x: from.x + ((to.x - from.x) * step) / steps,
+          y: from.y + ((to.y - from.y) * step) / steps,
+        });
+        await page.waitForTimeout(12);
+      }
+      await send('touchEnd');
+    },
+    async hold(at: Point, ms: number) {
+      await send('touchStart', at);
+      await page.waitForTimeout(ms);
+      await send('touchEnd');
+    },
+  };
+}
+
+/** Where a node is drawn, in page coordinates (the canvas's own probe, see `GraphCanvas`). */
+async function nodePoint(page: Page, nodeId: string): Promise<Point> {
+  const container = page.locator('[data-camera-ratio]').first();
+  const box = await container.boundingBox();
+  if (!box) throw new Error('the canvas has no box');
+  const at = await container.evaluate(
+    (el, id) => (el as unknown as { kvoxProbe: { nodeViewport(id: string): Point | null } }).kvoxProbe.nodeViewport(id),
+    nodeId,
+  );
+  if (!at) throw new Error(`node ${nodeId} is not on the canvas`);
+  return { x: box.x + at.x, y: box.y + at.y };
+}
+
+async function camera(page: Page) {
+  const container = page.locator('[data-camera-ratio]').first();
+  const read = async (name: string) => Number(await container.getAttribute(`data-camera-${name}`));
+  return { x: await read('x'), y: await read('y'), ratio: await read('ratio') };
+}
+
+/** The camera stops moving (an animation, a pan-into-view). */
+async function cameraSettled(page: Page) {
+  let previous = await camera(page);
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await page.waitForTimeout(120);
+    const next = await camera(page);
+    if (next.x === previous.x && next.y === previous.y && next.ratio === previous.ratio) return next;
+    previous = next;
+  }
+  return previous;
+}
+
+// A coarse pointer holds the explorer to the phone budget: 120 nodes, whatever the width.
+const TOUCH_CAP = 120;
+
+test.describe('Insight Canvas shell — touch', () => {
+  test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
+
+  test('no horizontal page scroll at 390, and only the canvas takes the touch', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6, TOUCH_CAP);
+
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+
+    const touchAction = await page.evaluate(() => ({
+      canvas: getComputedStyle(document.querySelector('[data-camera-ratio]')!.parentElement!.parentElement!).touchAction,
+      body: getComputedStyle(document.body).touchAction,
+    }));
+    expect(touchAction.canvas).toBe('none');
+    expect(touchAction.body).not.toBe('none');
+
+    // A swipe across the canvas never moves the page.
+    const touch = await cdpTouch(page);
+    const box = (await page.locator('[data-camera-ratio]').first().boundingBox())!;
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    await touch.swipe({ x: box.x + box.width / 2, y: box.y + box.height * 0.7 }, { x: box.x + box.width / 2, y: box.y + box.height * 0.2 });
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  });
+
+  test('first tap highlights, second tap opens the sheet', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6, TOUCH_CAP);
+    await cameraSettled(page);
+
+    const at = await nodePoint(page, ACME_ID);
+    await page.touchscreen.tap(at.x, at.y);
+    await expect(page.getByRole('status').filter({ hasText: 'Tap again to open details' })).toContainText('Acme Corp');
+    await expect(page.getByRole('region', { name: 'Inspector' })).toHaveCount(0);
+
+    await page.touchscreen.tap(at.x, at.y);
+    const sheet = page.getByRole('region', { name: 'Inspector' });
+    await expect(sheet).toBeVisible();
+    await expect(sheet).toHaveAttribute('data-snap', 'peek');
+    await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
+  });
+
+  test('a long-press opens the context menu', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6, TOUCH_CAP);
+    await cameraSettled(page);
+
+    const touch = await cdpTouch(page);
+    await touch.hold(await nodePoint(page, ANA_ID), 700);
+    const menu = page.getByRole('menu', { name: 'Actions for Ana Diaz' });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Pin' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Expand' })).toBeVisible();
+    // A long-press is not a tap: nothing opened behind the menu.
+    await expect(page.getByRole('region', { name: 'Inspector' })).toHaveCount(0);
+  });
+
+  test('the sheet snaps peek, half, full by dragging the handle', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6, TOUCH_CAP);
+    await cameraSettled(page);
+
+    const at = await nodePoint(page, ACME_ID);
+    await page.touchscreen.tap(at.x, at.y);
+    await page.touchscreen.tap(at.x, at.y);
+    const sheet = page.getByRole('region', { name: 'Inspector' });
+    await expect(sheet).toHaveAttribute('data-snap', 'peek');
+
+    const touch = await cdpTouch(page);
+    const handle = async () => (await page.getByRole('button', { name: /^Resize Inspector/ }).boundingBox())!;
+
+    let box = await handle();
+    await touch.swipe({ x: box.x + box.width / 2, y: box.y + box.height / 2 }, { x: box.x + box.width / 2, y: box.y - 220 });
+    await expect(page.getByRole('region', { name: 'Inspector' })).toHaveAttribute('data-snap', 'half');
+
+    await page.waitForTimeout(350);
+    box = await handle();
+    await touch.swipe({ x: box.x + box.width / 2, y: box.y + box.height / 2 }, { x: box.x + box.width / 2, y: box.y - 300 });
+    await expect(page.getByRole('dialog', { name: 'Inspector' })).toHaveAttribute('data-snap', 'full');
+
+    // And down again: a swipe down from full lands on half, then peek.
+    await page.waitForTimeout(350);
+    box = await handle();
+    await touch.swipe({ x: box.x + box.width / 2, y: box.y + box.height / 2 }, { x: box.x + box.width / 2, y: box.y + 260 });
+    await expect(page.getByRole('region', { name: 'Inspector' })).toHaveAttribute('data-snap', /half|peek/);
+  });
+
+  test('a pinch changes the camera zoom', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6, TOUCH_CAP);
+    const before = await cameraSettled(page);
+
+    const touch = await cdpTouch(page);
+    const box = (await page.locator('[data-camera-ratio]').first().boundingBox())!;
+    await touch.session.send('Input.synthesizePinchGesture', {
+      x: box.x + box.width / 2,
+      y: box.y + box.height / 2,
+      scaleFactor: 2,
+      relativeSpeed: 400,
+      gestureSourceType: 'touch',
+    });
+    // Zooming in lowers sigma's camera ratio.
+    await expect.poll(async () => (await camera(page)).ratio).toBeLessThan(before.ratio);
+  });
+
+  test('a coarse pointer holds the graph to 120 nodes and the CapWarning says so', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages', explorerCapped: true });
+    await openShell(page, EXPLORE, 'dark');
+    await expect(page.getByLabel('120 of 120 nodes')).toBeVisible();
+    await expect(page.getByText(/Showing 120 nodes — the limit for the explorer/)).toBeVisible();
+    await expect(page.getByText(/Showing 300 nodes/)).toHaveCount(0);
+  });
+
+  test('touch shows the Select mode toggle and it marks nodes by tapping', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6, TOUCH_CAP);
+    await cameraSettled(page);
+
+    await page.getByRole('button', { name: 'Select' }).click();
+    await expect(page.getByRole('button', { name: 'Select', pressed: true })).toBeVisible();
+    const at = await nodePoint(page, ACME_ID);
+    await page.touchscreen.tap(at.x, at.y);
+    await expect(page.getByText('1 selected')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Inspector' })).toHaveCount(0);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Behaviour: rotation keeps the selection and the camera centre
+// -----------------------------------------------------------------------------
+
+test.describe('Insight Canvas shell — rotation', () => {
+  test.use({ viewport: TABLET, hasTouch: true, isMobile: true });
+
+  test('820x1180 to 1180x820 keeps the selection and the camera centre', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6, TOUCH_CAP);
+    // By keyboard: this context is a touch one, where a click is only the first tap (a preview).
+    const app = page.getByRole('application', { name: /^Graph explorer/ });
+    await app.focus();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
+    const before = await cameraSettled(page);
+    const inspectorTitle = page.getByRole('group', { name: 'Acme Corp' });
+    await expect(inspectorTitle).toBeVisible();
+
+    await page.setViewportSize(LAPTOP_LANDSCAPE);
+    await expect(inspectorTitle).toBeVisible();
+    await expect(page.getByLabel('6 of 120 nodes')).toBeVisible();
+    const after = await cameraSettled(page);
+
+    // The camera centre is in framed-graph units (0 to 1 across the graph's box): one node radius is
+    // about 0.02 of that, and a window resize must not move it by more.
+    expect(Math.abs(after.x - before.x)).toBeLessThan(0.02);
+    expect(Math.abs(after.y - before.y)).toBeLessThan(0.02);
+    expect(after.ratio).toBeCloseTo(before.ratio, 3);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// GIC-09: the palette's keyboard path, and the minimap (#670)
+// -----------------------------------------------------------------------------
+
+test.describe('Command palette — behaviour', () => {
+  test('Ctrl+K opens, Escape closes and the canvas takes the focus back', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(DESKTOP);
+    await openShell(page, EXPLORE, 'dark');
+    const app = await canvasReady(page, 6);
+    await app.focus();
+    await page.keyboard.press('Control+k');
+    await expect(page.getByRole('combobox', { name: 'Search the graph and run commands' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('combobox', { name: 'Search the graph and run commands' })).toHaveCount(0);
+    await expect(app).toBeFocused();
+  });
+
+  test('phone: a full-screen sheet with 44px rows', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(PHONE);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6);
+    await page.getByRole('button', { name: 'Search the graph' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Search the graph and run commands' });
+    await expect(dialog).toBeVisible();
+    const box = await dialog.boundingBox();
+    expect(box?.width).toBe(PHONE.width);
+    expect(box?.height).toBe(PHONE.height);
+    await page.getByRole('combobox', { name: 'Search the graph and run commands' }).fill('a');
+    const row = page.getByRole('option').first();
+    await expect(row).toBeVisible();
+    expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  });
+});
+
+test.describe('Minimap', () => {
+  for (const theme of THEMES) {
+    for (const [name, viewport] of SHELL_VIEWPORTS) {
+      test(`minimap @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages', explorerCapped: true });
+        await page.setViewportSize(viewport);
+        await openShell(page, EXPLORE, theme);
+        const cap = viewport.width < 600 ? 120 : 300;
+        await canvasReady(page, cap);
+        const minimap = page.getByTestId('explorer-minimap');
+        if (viewport.width < 600) {
+          // Compact: never.
+          await expect(minimap).toHaveCount(0);
+        } else {
+          if (viewport.width < 1200) {
+            // Medium: optional, switched on from the top bar.
+            await expect(minimap).toHaveCount(0);
+            await page.getByRole('button', { name: 'Minimap' }).click();
+          }
+          await expect(minimap).toBeVisible();
+          await expect(minimap).toHaveAttribute('aria-hidden', 'true');
+          await expect(minimap.getByTestId('minimap-viewport')).toBeVisible();
+        }
+        await page.waitForTimeout(300);
+
+        await expect(page).toHaveScreenshot(`graph-minimap-${name}-${theme}.png`);
+      });
+    }
+  }
+
+  test('dragging the viewport rectangle pans the camera', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages', explorerCapped: true });
+    await page.setViewportSize(DESKTOP);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 300);
+    await cameraSettled(page);
+    const before = await camera(page);
+    const minimap = page.getByTestId('explorer-minimap');
+    const box = (await minimap.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.3, { steps: 6 });
+    await page.mouse.up();
+    await expect.poll(async () => (await camera(page)).x).not.toBeCloseTo(before.x, 3);
+  });
+});
+
+
+// =============================================================================
+// The evidence-first inspector (GIC-11, #672, epic #661)
+//
+// Node view, edge view (Evidence tab) and Selection view, at 390 / 820 / 1180 /
+// 1440, light and dark. The edge is selected through the URL (`?sel=e:<id>`),
+// which the inspector restores once the graph has arrived, so no test has to
+// hit a thin line on a WebGL canvas.
+//
+// ⚠ Every baseline below is new and must be generated in the pinned Playwright
+// image (`.github/workflows/visual-baselines.yml`); none is committed from a
+// local run. The behavioural tests assert and need no baseline.
+// =============================================================================
+
+const EDGE_ROUTE = `${EXPLORE}&sel=e:${REPORTS_TO_EDGE_ID}&tab=evidence`;
+
+/** On a phone, lift the bottom sheet to half height so the tabs and their content are on screen. */
+async function liftSheet(page: Page, viewport: { width: number }) {
+  if (viewport.width >= 600) return;
+  const handle = page.getByRole('button', { name: /^Resize Inspector/ });
+  await handle.focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('region', { name: 'Inspector' })).toHaveAttribute('data-snap', 'half');
+  await page.waitForTimeout(400);
+}
+
+test.describe('Inspector — baselines', () => {
+  for (const theme of THEMES) {
+    for (const [name, viewport] of SHELL_VIEWPORTS) {
+      test(`node view @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openShell(page, EXPLORE, theme);
+        await canvasReady(page, 6);
+        await selectAcme(page);
+        await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
+        await liftSheet(page, viewport);
+        await page.waitForTimeout(400);
+
+        await expect(page).toHaveScreenshot(`graph-inspector-node-${name}-${theme}.png`);
+      });
+
+      test(`edge view with evidence @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openShell(page, EDGE_ROUTE, theme);
+        await canvasReady(page, 6);
+        await expect(page.getByRole('group', { name: 'Reports to' })).toBeVisible();
+        await liftSheet(page, viewport);
+        await expect(page.getByRole('article')).toHaveCount(3);
+        await page.waitForTimeout(400);
+
+        await expect(page).toHaveScreenshot(`graph-inspector-edge-${name}-${theme}.png`);
+      });
+    }
+  }
+});
+
+test.describe('Inspector — selection view baselines', () => {
+  // Select mode is a touch affordance: a coarse pointer, at every width.
+  test.use({ hasTouch: true, isMobile: true });
+
+  for (const theme of THEMES) {
+    for (const [name, viewport] of SHELL_VIEWPORTS) {
+      test(`selection view @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openShell(page, EXPLORE, theme);
+        await canvasReady(page, 6, TOUCH_CAP);
+        await cameraSettled(page);
+
+        await page.getByRole('button', { name: 'Select' }).click();
+        for (const nodeId of [ACME_ID, ANA_ID]) {
+          const at = await nodePoint(page, nodeId);
+          await page.touchscreen.tap(at.x, at.y);
+        }
+        await expect(page.getByRole('group', { name: 'Selection' })).toBeVisible();
+        await page.waitForTimeout(400);
+
+        await expect(page).toHaveScreenshot(`graph-inspector-selection-${name}-${theme}.png`);
+      });
+    }
+  }
+});
+
+// -----------------------------------------------------------------------------
+// Behaviour
+// -----------------------------------------------------------------------------
+
+test.describe('Inspector — behaviour', () => {
+  test('an edge opens on its evidence; "Open at source" leaves and Back returns to the same canvas state', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(DESKTOP);
+    await openShell(page, EDGE_ROUTE, 'dark');
+    await canvasReady(page, 6);
+
+    const panel = page.getByRole('group', { name: 'Reports to' });
+    await expect(panel.getByRole('tab', { name: 'Evidence', selected: true })).toBeVisible();
+    await expect(panel.getByRole('article')).toHaveCount(3);
+    // The source that is gone keeps its quote and offers no link.
+    await expect(panel.getByRole('article', { name: /^Transcript no longer available/ })).toContainText('Budget for the new reporting line is approved.');
+
+    await panel.getByRole('link', { name: 'Open at source: Org changes — Q3' }).click();
+    await expect(page).toHaveURL(/\/notes\//);
+    await page.goBack();
+    await waitForInter(page);
+    await canvasReady(page, 6);
+    await expect(page.getByRole('group', { name: 'Reports to' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Evidence', selected: true })).toBeVisible();
+    await expect(page.getByRole('article')).toHaveCount(3);
+  });
+
+  test('the Expand menu lists relation and entity types with counts', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(DESKTOP);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6);
+    await selectAcme(page);
+
+    await page.getByRole('button', { name: 'Expand by type' }).click();
+    const menu = page.getByRole('menu');
+    await expect(menu.getByRole('menuitem', { name: /^Works for/ })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: /^Person/ })).toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+
+  test('the tab strip is keyboard operable and scrolls on a phone', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(PHONE);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6);
+    await selectAcme(page);
+    await liftSheet(page, PHONE);
+
+    const tablist = page.getByRole('tablist');
+    await expect(tablist).toBeVisible();
+    await page.getByRole('tab', { name: 'Overview' }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('tab', { name: 'Evidence' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('tab', { name: 'Evidence', selected: true })).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('on a phone the peek shows the header, the primary actions and the evidence count, not the tabs', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(PHONE);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6);
+    await selectAcme(page);
+
+    const sheet = page.getByRole('region', { name: 'Inspector' });
+    await expect(sheet).toHaveAttribute('data-snap', 'peek');
+    await expect(sheet.getByRole('button', { name: 'Focus' })).toBeVisible();
+    await expect(sheet.getByRole('button', { name: 'Expand', exact: true })).toBeVisible();
+    await expect(sheet.getByText(/\d+ evidence/)).toBeVisible();
+    await expect(sheet.getByRole('tab')).toHaveCount(0);
+  });
 });
