@@ -1,0 +1,6 @@
+---
+"@marinoscar/kvox-api": minor
+"@marinoscar/kvox-eval": minor
+---
+
+Extraction, resolution and evaluation for ontology 1.3.0 (#665, epic #661). `@marinoscar/kvox-api`: the `kg.extract` system prompt gains two rules derived from the offered schema, a Project / Topic / Product boundary rule and a worked example of the Joe / Company A / Microsoft Copilot rollout (entities, `INVOLVED_IN {role, stance}`, `USES {stage}`, `OFFERED_BY`, `CONCERNS`, a Risk), each printed only for the types, relations and property choices the run offers; entity resolution counts a Product's vendor as its organization (`OFFERED_BY`, and a mention's `vendorName`) so "Copilot", "M365 Copilot" and "Microsoft 365 Copilot" resolve to one Product (the same affiliation list serves `kg.resolve`, `kg.embed` and the proposal stage); the item adjudication prompt adds a Risk rule (a risk raised again is the same risk with more evidence). `@marinoscar/kvox-eval`: the Joe / Company A / Copilot rollout scenario (m56, m57: note-only fixtures with a no-stance negative), Ask questions q43 and q44, and `citeFromMin` on an Ask question (at least N distinct `citeFrom` sources must be cited, default 1) with `scoreCiteFromHit`'s optional `min` argument.

@@ -128,6 +128,85 @@ export function affiliationRule(ctx: ExtractionContext): string | null {
   );
 }
 
+/** What each of the three "subject of work" types is, in one clause (the boundary rule, #665). */
+const SUBJECT_BOUNDARIES: ReadonlyArray<{ key: string; clause: string; example: string }> = [
+  { key: 'Project', clause: 'an effort with an owner and an expected end', example: '"Copilot rollout"' },
+  { key: 'Topic', clause: 'a recurring subject with neither', example: '"licensing cost"' },
+  { key: 'Product', clause: 'a named thing an organization buys, uses or offers', example: '"Microsoft Copilot"' },
+];
+
+/** The offered type keys of one run. */
+function offeredTypeKeys(ctx: ExtractionContext): Set<string> {
+  return new Set(ctx.offered.entityTypes.map((t) => t.key));
+}
+
+/**
+ * The boundary rule (#665, epic #661): Project, Topic and Product differ, so a
+ * "Copilot rollout" is never folded into "Microsoft Copilot" or "licensing
+ * cost". DERIVED from the offered schema: only the offered types among the
+ * three are named, and null unless at least two are offered.
+ */
+export function subjectBoundaryRule(ctx: ExtractionContext): string | null {
+  const types = offeredTypeKeys(ctx);
+  const offered = SUBJECT_BOUNDARIES.filter((b) => types.has(b.key));
+  if (offered.length < 2) return null;
+  const keys = offered.map((b) => b.key);
+  const list = `${keys.slice(0, -1).join(', ')} and ${keys[keys.length - 1]}`;
+  const defined = offered.map((b) => `a ${b.key} is ${b.clause}`).join(', ');
+  const examples = offered.map((b) => `${b.example} is a ${b.key}`).join(', ');
+  return `Keep ${list} apart: ${defined}; ${examples}. Never fold two of them into one row.`;
+}
+
+/**
+ * The worked example (#665): the Joe / Company A / Copilot scenario, once.
+ * Every piece is DERIVED from the offered schema — a type, relation or fact
+ * kind the run does not offer is never named, and a property value is printed
+ * only when the offered relation carries it as a choice — so a disabled domain
+ * or an excluded type never leaks in. Null unless Person, Organization,
+ * Project, Product, INVOLVED_IN and USES are all offered.
+ */
+export function stakeholderExampleRule(ctx: ExtractionContext): string | null {
+  const types = offeredTypeKeys(ctx);
+  const relation = (key: string) => ctx.offered.relationTypes.find((r) => r.type.key === key);
+  const involved = relation('INVOLVED_IN');
+  const uses = relation('USES');
+  if (!(types.has('Person') && types.has('Organization') && types.has('Project') && types.has('Product') && involved && uses)) {
+    return null;
+  }
+  const choice = (key: string, prop: string, value: string): boolean =>
+    offeredAttributes(relation(key)?.type.props ?? []).some(
+      (a) => a.key === prop && a.options?.choices?.some((c) => c.value === value),
+    );
+  const props = (key: string, wanted: Record<string, string>): string => {
+    const kept = Object.entries(wanted).filter(([prop, value]) => choice(key, prop, value));
+    return kept.length > 0 ? ` {${kept.map(([p, v]) => `${p}: ${v}`).join(', ')}}` : '';
+  };
+  const offeredBy = relation('OFFERED_BY');
+  const risk = ctx.offered.itemTypes.find((t) => t.key === 'Risk');
+
+  const entities = [
+    'Person Joe',
+    'Organization Company A',
+    ...(offeredBy ? ['Organization Microsoft'] : []),
+    'Product Microsoft Copilot',
+    'Project Copilot rollout',
+  ];
+  const rows = [
+    ...(relation('WORKS_FOR') ? ['Joe WORKS_FOR Company A'] : []),
+    `Joe INVOLVED_IN Copilot rollout${props('INVOLVED_IN', { role: 'stakeholder', stance: 'skeptical' })}`,
+    `Company A USES Microsoft Copilot${props('USES', { stage: 'piloting' })}`,
+    ...(offeredBy ? ['Microsoft Copilot OFFERED_BY Microsoft'] : []),
+    ...(relation('CONCERNS') ? ['Copilot rollout CONCERNS Microsoft Copilot'] : []),
+  ];
+  const blocker = risk && offeredAttributes(risk.attributes).some((a) => a.key === 'riskKind' && a.options?.choices?.some((c) => c.value === 'blocker'));
+  const fact = risk ? `; the fact Risk "licence budget not approved"${blocker ? ' {riskKind: blocker}' : ''} about Copilot rollout` : '';
+  return (
+    'Worked example: "Joe from Company A said he\'s skeptical about the Copilot rollout; Company A is piloting Microsoft Copilot; the licence budget isn\'t approved." ' +
+    `proposes the entities ${entities.join(', ')}; the relations ${rows.join('; ')}${fact}. ` +
+    'Propose a stance only when the source states one, as Joe\'s "skeptical" here; a person with no stated position gets no stance.'
+  );
+}
+
 function rules(ctx: ExtractionContext, caps?: ExtractionRowCaps): string[] {
   const hasContext = offeredContextText(ctx.note.contextText) !== null;
   const citeRule = hasContext
@@ -137,6 +216,10 @@ function rules(ctx: ExtractionContext, caps?: ExtractionRowCaps): string[] {
   if (hasContext) extra.push(CONTEXT_RULE);
   const affiliation = affiliationRule(ctx);
   if (affiliation) extra.push(affiliation);
+  const boundary = subjectBoundaryRule(ctx);
+  if (boundary) extra.push(boundary);
+  const example = stakeholderExampleRule(ctx);
+  if (example) extra.push(example);
   if (caps) extra.push(rowCapsRule(ctx, caps));
   return [
     citeRule,
