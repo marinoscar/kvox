@@ -688,6 +688,7 @@ describe('kvox-guarded routes', () => {
       'GraphExportController',
       'GraphExtractionController',
       'GraphImportController',
+      'GraphInsightsController',
       'GraphOverviewController',
       'GraphProposalsController',
       'GraphRdfController',

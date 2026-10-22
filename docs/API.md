@@ -7219,6 +7219,69 @@ unattended edits. **Never a `409`.**
 
 **Errors:** `401` · `403` without `graph:write`.
 
+#### Graph insights
+
+What deserves a look in your own graph, in plain language — issue #677
+(GIC-16), epic #661. Design: [`docs/specs/ontology.md`](specs/ontology.md) §22.3.
+
+##### GET /graph/insights
+
+Query: `window` — `30d` (default), `90d` or `365d`; anything else is `400`.
+
+- **`themes`** (≤ 8) and **`connectors`** (≤ 8) come from the latest
+  `kg.graph_layout` snapshot, with labels joined **live**. They carry `status`,
+  `pending`, `stale`, `tooLarge` and `computedAt` exactly as
+  `GET /graph/overview` does and are **never recomputed here**; this request
+  queues nothing. `connectorsReady: false` means the snapshot predates
+  connectors (refresh the overview). `connectors[].score` orders the list; show
+  `reason`, never the number.
+- **`rising`** (≤ 10): entities (not meetings) mentioned in at least 3 notes or
+  recordings in the window and at least 2x as many as in the window before.
+- **`fadingTies`** (≤ 10): pairs of people or organizations with at least 3
+  evidence rows before the window and none in it.
+- **`openRisks`** (≤ 10): open Risk items, high severity first.
+
+The window queries run inside the graph's 3 s budget. Sensitive person facts
+never contribute, and no quote text is returned.
+
+**Requires:** `graph:read`. Always your own graph, so there is no id to `404`.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "window": { "key": "30d", "days": 30, "from": "2026-09-22T00:00:00.000Z", "previousFrom": "2026-08-23T00:00:00.000Z" },
+    "status": "ready", "pending": false, "computedAt": "2026-10-20T08:00:00.000Z",
+    "stale": false, "tooLarge": false, "connectorsReady": true,
+    "themes": [
+      { "clusterId": 0, "label": "Acme Corp", "labelEntityId": "0b6f…", "size": 12,
+        "typeCounts": { "Person": 7 }, "memberSample": [{ "id": "0b6f…", "label": "Joe Rivera", "type": "Person", "degree": 5 }] }
+    ],
+    "connectors": [
+      { "entity": { "id": "0b6f…", "label": "Joe Rivera", "type": "Person" }, "score": 0.42,
+        "clusters": [{ "id": 0, "label": "Acme Corp" }, { "id": 1, "label": "Globex" }],
+        "reason": "Joe Rivera connects the Acme Corp group and the Globex group." }
+    ],
+    "rising": [
+      { "entity": { "id": "1c2d…", "label": "Ana Diaz", "type": "Person" }, "count": 5, "previous": 1,
+        "reason": "Came up in 5 conversations in the last 30 days, up from 1 before." }
+    ],
+    "fadingTies": [
+      { "from": { "id": "0b6f…", "label": "Joe Rivera", "type": "Person" }, "to": { "id": "1c2d…", "label": "Ana Diaz", "type": "Person" },
+        "relationTypes": ["KNOWS"], "lastEvidenceAt": "2026-05-01T00:00:00.000Z", "evidenceBefore": 4,
+        "reason": "You haven't discussed Joe Rivera with Ana Diaz since May 1, 2026." }
+    ],
+    "openRisks": [
+      { "id": "9a8b…", "title": "Legal review", "statement": "Legal has not signed off", "severity": "high",
+        "subject": { "id": "0b6f…", "label": "Project Atlas", "type": "Project" }, "occurredAt": "2026-09-10T00:00:00.000Z" }
+    ]
+  }
+}
+```
+
+**Errors:** `400` unknown `window` · `401` · `403` without `graph:read` · `503`
+with `details.reason: "graph_query_timeout"` when a window query exceeds 3 s.
+
 ### Ask
 
 Saved conversations with the read-only graph agent — issue #376, epic #348.

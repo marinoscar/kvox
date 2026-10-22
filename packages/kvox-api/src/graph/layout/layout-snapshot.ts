@@ -2,7 +2,7 @@
 // The stored `kg_graph_layouts` JSON shapes (#371, epic #347)
 // =============================================================================
 //
-// `clusters`  — { version: 1, items: ClusterRow[], clusterEdges, modularity, tooLarge }
+// `clusters`  — { version: 1, items: ClusterRow[], connectors?: {id, score, clusterIds}[], clusterEdges, modularity, tooLarge }
 // `positions` — { version: 1, types: string[], nodes: [id, x, y, clusterId, typeIndex, degree][] }
 //
 // Ids and numbers only — NEVER a label (spec §15). Written by the handler,
@@ -28,9 +28,17 @@ const clusterRowSchema = z.object({
   sampleIds: z.array(z.string()),
 });
 
+const connectorRowSchema = z.object({
+  id: z.string(),
+  score: z.number(),
+  clusterIds: z.array(z.number().int()),
+});
+
 export const storedClustersSchema = z.object({
   version: z.literal(LAYOUT_SNAPSHOT_VERSION),
   items: z.array(clusterRowSchema),
+  // GIC-16: absent in snapshots written before connectors existed (a minor, additive field).
+  connectors: z.array(connectorRowSchema).optional(),
   clusterEdges: z.array(z.object({ a: z.number().int(), b: z.number().int(), weight: z.number() })),
   modularity: z.number(),
   tooLarge: z.boolean(),
@@ -49,6 +57,7 @@ export function toStoredClusters(out: LayoutOutput): StoredClusters {
   return {
     version: LAYOUT_SNAPSHOT_VERSION,
     items: out.clusters,
+    connectors: out.connectors,
     clusterEdges: out.clusterEdges,
     modularity: out.modularity,
     tooLarge: out.tooLarge,

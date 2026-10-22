@@ -5,6 +5,7 @@ import { rangeFromPrecision, type TemporalEdge } from '../../graph/index.js';
 import { FakeProposalDb, OWNER, entityPayload, linked } from '../__fixtures__/dedup-fakes.js';
 import type { ItemAdjudication } from './dedup-core.js';
 import type { ItemCandidateResult } from './item-candidates.service.js';
+import { itemCommitAction } from './commit-contract.js';
 import { WorkItemDedupStage } from './work-item-dedup.stage.js';
 import { KvoxRateLimitError } from '../../ports/index.js';
 
@@ -319,6 +320,94 @@ describe('work-item-dedup stage', () => {
       await stage.run(db.ctx());
       expect(db.byRef('r1').payload.dedup).toMatchObject({ verdict: 'new' });
       expect(graph.liveEdges).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Risk (#665): the same risk raised in three notes is one Risk with three evidence rows
+  // ---------------------------------------------------------------------------
+  describe('a Risk is deduplicated like a Commitment', () => {
+    const RISK = 'dddddddd-0000-4000-8000-000000000001';
+    const riskPayload = (ref: string, statement: string, over: Record<string, unknown> = {}) =>
+      itemPayload(ref, {
+        kind: 'risk',
+        title: 'Licence budget not approved',
+        statement,
+        status: 'open',
+        props: { riskKind: 'blocker' },
+        ...over,
+      });
+    const riskCandidate = (cosine: number): ItemCandidateResult => ({
+      itemId: RISK,
+      cosine,
+      lexical: null,
+      row: {
+        id: RISK,
+        kind: 'risk',
+        title: 'Licence budget not approved',
+        statement: "The licence budget isn't approved.",
+        status: 'open',
+        occurredAt: '2026-09-08',
+        dueAt: null,
+        ownerPersonId: null,
+        counterpartyId: null,
+      },
+    });
+
+    it('the second note restating it verbatim is known: only evidence is appended', async () => {
+      const { db, stage, adjudication } = build({ known: { 'hash-i1': RISK } });
+      db.add('item', riskPayload('i1', "The licence budget isn't approved."));
+      await stage.run(db.ctx());
+      const row = db.byRef('i1');
+      expect(row.payload.dedup).toMatchObject({ verdict: 'known', targetItemId: RISK });
+      expect(row.flags).toEqual(['known']);
+      expect(adjudication.adjudicateItems).not.toHaveBeenCalled();
+      expect(itemCommitAction({ kind: 'risk', dedup: row.payload.dedup as never })).toEqual({ action: 'attach_evidence', targetItemId: RISK });
+    });
+
+    it('a third note rewording it is `same` after adjudication, and attaches its evidence to the one Risk', async () => {
+      const statement = 'Nobody has signed off the licence budget yet.';
+      const { db, stage, adjudication } = build({
+        candidates: { [statement]: [riskCandidate(0.95)] },
+        // The model may report a status change; for a Risk it is ignored, not applied.
+        verdicts: (pairs) => new Map(pairs.map((p) => [p.pairId, v('same', { status: 'done' })])),
+      });
+      db.add('item', riskPayload('i1', statement));
+      await stage.run(db.ctx());
+
+      const pairs = adjudication.adjudicateItems.mock.calls[0][1] as unknown as Array<{ kind: string; subjectType: string | null }>;
+      expect(pairs[0]).toMatchObject({ kind: 'risk', subjectType: 'Project' });
+      const row = db.byRef('i1');
+      expect(row.payload.dedup).toMatchObject({ verdict: 'same', targetItemId: RISK, changes: {} });
+      expect(row.flags).toEqual([]); // cosine 0.95 ≥ 0.92: confident
+      expect(itemCommitAction({ kind: 'risk', dedup: row.payload.dedup as never })).toEqual({ action: 'attach_evidence', targetItemId: RISK });
+    });
+
+    it('a different threat to the same subject stays new', async () => {
+      const statement = 'Pilot users report slow responses.';
+      const { db, stage } = build({
+        candidates: { [statement]: [riskCandidate(0.81)] },
+        verdicts: (pairs) => new Map(pairs.map((p) => [p.pairId, v('new')])),
+      });
+      db.add('item', riskPayload('i1', statement, { title: 'Slow responses' }));
+      await stage.run(db.ctx());
+      expect(db.byRef('i1').payload.dedup).toMatchObject({ verdict: 'new', targetItemId: null });
+      expect(itemCommitAction({ kind: 'risk', dedup: db.byRef('i1').payload.dedup as never })).toEqual({ action: 'insert' });
+    });
+
+    it('a risk that became a blocker supersedes the earlier one', async () => {
+      const statement = 'The licence budget is now blocking the whole second wave.';
+      const { db, stage } = build({
+        candidates: { [statement]: [riskCandidate(0.85)] },
+        verdicts: (pairs) => new Map(pairs.map((p) => [p.pairId, v('supersedes')])),
+      });
+      db.add('item', riskPayload('i1', statement));
+      await stage.run(db.ctx());
+      expect(db.byRef('i1').flags).toEqual(['supersedes']);
+      expect(itemCommitAction({ kind: 'risk', dedup: db.byRef('i1').payload.dedup as never })).toEqual({
+        action: 'insert_and_supersede',
+        targetItemId: RISK,
+      });
     });
   });
 });
