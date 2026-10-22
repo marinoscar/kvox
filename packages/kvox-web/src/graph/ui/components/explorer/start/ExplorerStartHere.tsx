@@ -17,8 +17,8 @@
  * 3 on an expanded one (the window class comes from the page; this reads no
  * media query). Every card is a real button with a 44px target.
  *
- * "Connect two things" (path mode, GIC-13) is not here: the page passes
- * `onConnect` only when that capability exists.
+ * "Connect two things" (path mode, GIC-13) is drawn only when the page
+ * passes `onConnect`, which opens the path picker.
  */
 
 import SearchIcon from '@mui/icons-material/Search';

@@ -551,9 +551,15 @@ jobs:
 
       # NODE_ENV=test matches what these specs assume when they build their own
       # connection string from the POSTGRES_* vars above.
+      #
+      # NODE_OPTIONS raises the V8 heap above its ~4 GB default: the suites run
+      # `--runInBand` in ONE process, so the heap only grows, and the suite
+      # passed all its tests and then died at teardown with "JavaScript heap out
+      # of memory" (exit 134) on several PRs. The runner has 16 GB.
       - run: npm run test:db --workspace=api -- --shard=${{ matrix.shard }}/2
         env:
           NODE_ENV: test
+          NODE_OPTIONS: --max-old-space-size=8192
 
       # The kvox-db package applies the platform history and then the domain
       # history (installed under `stable` names) to a database of its own, then runs

@@ -1106,7 +1106,7 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent(/\d+ results?/));
   });
 
-  it('runs actions, and offers no Connect or Lens entry before those capabilities exist', async () => {
+  it('runs actions, and offers no Lens entry before that capability exists', async () => {
     const user = userEvent.setup();
     renderExplorer();
     await canvasReady();
@@ -1118,7 +1118,8 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     expect(names.join('|')).toMatch(/Hide selection/);
     expect(names.join('|')).toMatch(/Re-layout/);
     expect(names.join('|')).toMatch(/Switch to list/);
-    expect(names.join('|')).not.toMatch(/Connect|Lens/);
+    expect(names.join('|')).toMatch(/Connect A/);
+    expect(names.join('|')).not.toMatch(/Lens/);
     // No selection yet: Expand is disabled.
     expect(within(actions).getByRole('option', { name: /Expand selection/ })).toHaveAttribute('aria-disabled', 'true');
 
