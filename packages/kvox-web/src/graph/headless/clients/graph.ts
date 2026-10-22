@@ -1013,6 +1013,101 @@ export function expandGraph(host: KvoxWebHost, params: GraphExpandParams, signal
 }
 
 /**
+ * The most paths one {@link getGraphPaths} call may ask for.
+ *
+ * @stability experimental
+ */
+export const GRAPH_PATHS_MAX_K = 5;
+/**
+ * The longest path, in edges, one {@link getGraphPaths} call may ask for.
+ *
+ * @stability experimental
+ */
+export const GRAPH_PATHS_MAX_HOPS = 5;
+
+/**
+ * Options for {@link getGraphPaths}.
+ *
+ * @stability experimental
+ */
+export interface GraphPathsParams {
+  /** Id of the entity (or item) the paths start at. */
+  from: string;
+  /** Id of the entity (or item) the paths end at; must differ from `from`. */
+  to: string;
+  /** How many distinct paths to return, 1 to {@link GRAPH_PATHS_MAX_K}. The API default is 3. */
+  k?: number;
+  /** The longest path to look for, in edges, 1 to {@link GRAPH_PATHS_MAX_HOPS}. The API default is 4. */
+  maxHops?: number;
+  /** Entity types and item kinds a path may pass through. The endpoints are always kept. Omitted means no restriction. */
+  types?: readonly string[];
+  /** Relation types a path may follow. Omitted means all. */
+  relationTypes?: readonly string[];
+  /** Evaluate the graph as of this date (`YYYY-MM-DD`) or ISO 8601 instant. Omitted means now. */
+  asOf?: string;
+}
+
+/**
+ * One path between two nodes, as ids into {@link GraphPathsResponse.slice}.
+ *
+ * @stability experimental
+ */
+export interface GraphPath {
+  /** The nodes in walking order, `from` first and `to` last. */
+  nodeIds: string[];
+  /** The edge between each consecutive pair of nodes, by id in the slice. An edge keeps its stored direction. */
+  edgeIds: string[];
+  /** Number of edges; `edgeIds.length`. */
+  hops: number;
+  /** Mean `log(1 + evidenceCount)` over the edges, discounted for passing through high-degree hubs. Higher is stronger. */
+  score: number;
+}
+
+/**
+ * The answer of {@link getGraphPaths}.
+ *
+ * @stability experimental
+ */
+export interface GraphPathsResponse {
+  /** The start node, as requested. */
+  from: string;
+  /** The end node, as requested. */
+  to: string;
+  /** The `as_of` instant that was applied, or `null` when the request had none (now). */
+  asOf: string | null;
+  /** The best paths first. Empty when nothing connects the two within `maxHops`. */
+  paths: GraphPath[];
+  /** The union of the nodes and edges of every returned path; the two endpoints are always in it. */
+  slice: GraphSlice;
+  /** `true` when a per-hop cap was hit, so a stronger path than those returned may exist. */
+  truncated: boolean;
+}
+
+/**
+ * Fetches the top evidence-weighted paths between two nodes (`GET /api/graph/paths`).
+ * `asOf` is sent as the API's `as_of`; an absent option is omitted so the API default applies.
+ * A node the caller cannot read rejects with a 404; a search that takes too long, with a 503 `graph_query_timeout`.
+ *
+ * @stability experimental
+ */
+export function getGraphPaths(
+  host: KvoxWebHost,
+  params: GraphPathsParams,
+  signal?: AbortSignal,
+): Promise<GraphPathsResponse> {
+  const query = buildGraphQuery({
+    from: params.from,
+    to: params.to,
+    k: params.k,
+    maxHops: params.maxHops,
+    types: params.types,
+    relationTypes: params.relationTypes,
+    as_of: params.asOf,
+  });
+  return kvoxGet<GraphPathsResponse>(host, `/graph/paths${query}`, { signal });
+}
+
+/**
  * Fetches one citation resolved to a link (`GET /api/graph/evidence/:id`).
  *
  * @stability experimental
