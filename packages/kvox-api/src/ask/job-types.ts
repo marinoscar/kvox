@@ -37,6 +37,18 @@ const askRespondPayloadSchema = z.object({
 });
 
 /**
+ * The graph selection a question starts from, as the job carries it: ids only.
+ *
+ * @stability experimental
+ */
+export interface AskRespondScope {
+  /** Entities the question is about. */
+  entityIds?: string[];
+  /** Evidence ids of the selected edge or path. */
+  evidenceIds?: string[];
+}
+
+/**
  * The payload of an `ask.respond` job: identifiers and the model choice made at request time.
  *
  * @stability experimental
@@ -55,7 +67,7 @@ export interface AskRespondPayload {
   /** The reasoning effort chosen at request time, when any. */
   reasoningEffort?: string | null;
   /** The graph selection the question starts from (GIC-17): ids only, re-checked when the job runs. */
-  scope?: { entityIds?: string[]; evidenceIds?: string[] };
+  scope?: AskRespondScope;
 }
 
 /**

@@ -30,7 +30,7 @@ export {
   ASK_WALL_CLOCK_SOFT_MS,
 } from './ask-limits.js';
 export { ASK_MESSAGE_SUBJECT, ASK_RESPOND_JOB_TYPE } from './job-types.js';
-export type { AskRespondPayload } from './job-types.js';
+export type { AskRespondPayload, AskRespondScope } from './job-types.js';
 export {
   ASK_CONVERSATION_NOT_FOUND,
   ASK_MESSAGE_NOT_FOUND,

@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { KvoxApiError, useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
 import { isAbortError, useAbortControllers } from '../../../graph/headless/index.js';
-import { getAskConversation, isAskNotFound, postAskMessage } from '../clients/ask.js';
+import { getAskConversation, isAskNotFound, postAskMessage, type PostAskMessageScope } from '../clients/ask.js';
 import type { AskConversationDetail, AskMessage, PostAskMessageResponse } from '../clients/ask.js';
 import { isRunningAssistantMessage, useAskStream } from './useAskStream.js';
 import type { AskStreamState } from './useAskStream.js';
@@ -45,6 +45,8 @@ export interface UseAskConversationOptions {
   seed?: AskConversationDetail | null;
   /** A turn finished (answered or failed). The list refreshes on this. */
   onTurnSettled?: (conversationId: string) => void;
+  /** The graph selection every question sent through `send` starts from (GIC-17). */
+  scope?: PostAskMessageScope;
 }
 
 /**
@@ -145,6 +147,8 @@ export function useAskConversation(
   const nextController = useAbortControllers();
   const onTurnSettledRef = useRef(options.onTurnSettled);
   onTurnSettledRef.current = options.onTurnSettled;
+  const scopeRef = useRef(options.scope);
+  scopeRef.current = options.scope;
   const seedRef = useRef(seed);
   seedRef.current = seed;
 
@@ -267,7 +271,7 @@ export function useAskConversation(
   const send = useCallback(
     async (content: string, model?: string) => {
       if (!id) throw new Error('No conversation to send to');
-      const result = await postAskMessage(host, id, { content, model });
+      const result = await postAskMessage(host, id, { content, model, scope: scopeRef.current });
       if (isMounted()) {
         setConversation((held) => {
           if (!held || held.id !== id) return held;

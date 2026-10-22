@@ -27,6 +27,11 @@
  *   - `setAsOf` rebuilds from scratch from the seeds and every expanded node
  *     (≤ 50), keeping the positions of nodes that survive.
  *   - A newer request aborts the one in flight.
+ *   - HISTORY (GIC-17, #678): every step that changes what is shown (a load, an expand,
+ *     a hide, a new seed, a filter or `as of` change) first pushes a snapshot of the
+ *     explorer; `undo` / `redo` walk a stack of at most 50 (`history/snapshot.ts`).
+ *     A step that fails or changes nothing pushes nothing, and nothing is pushed while
+ *     the graph is still empty (the first load is not an undoable step).
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -49,6 +54,17 @@ import {
   type ExplorerPalette,
   type ExplorerState,
 } from '../components/explorer/explorerModel.js';
+import {
+  emptyHistory,
+  pushStep,
+  restoreSnapshot,
+  stepBack,
+  stepForward,
+  takeSnapshot,
+  type ExplorerSnapshot,
+  type HistoryStacks,
+  type RestoredView,
+} from '../components/explorer/history/snapshot.js';
 import type { ExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
 import { expandGraph } from '../../headless/clients/graph.js';
 import type { GraphSlice } from '../../headless/clients/graph.js';
@@ -129,6 +145,16 @@ export interface UseGraphExplorerResult {
   retry: () => Promise<void>;
   /** Aborts anything in flight and clears the graph, keeping the filters and `as of` date. */
   reset: () => void;
+  /** Steps back one change (graph, seeds, filters, `as of`). Returns what the URL must now say, or `null` when there is nothing to undo. */
+  undo: () => RestoredView | null;
+  /** Re-applies the change Undo took back. Returns what the URL must now say, or `null`. */
+  redo: () => RestoredView | null;
+  /** There is a change to undo. */
+  canUndo: boolean;
+  /** There is a change to redo. */
+  canRedo: boolean;
+  /** How many changes can be undone right now; read it after an await to learn whether a step landed. */
+  undoDepth: () => number;
 }
 
 /** `wanted` limited to what `allowed` permits; `allowed` itself when nothing is wanted; `undefined` for no restriction at all. */
@@ -170,6 +196,28 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
   optionsRef.current = { nodeTypes, relationTypes, palette };
 
   const bump = useCallback(() => setVersion((v) => v + 1), []);
+
+  // --- History (GIC-17) ---------------------------------------------------------------
+  const historyRef = useRef<HistoryStacks>(emptyHistory());
+  const [historyDepth, setHistoryDepth] = useState({ past: 0, future: 0 });
+  const syncHistory = useCallback(
+    () => setHistoryDepth({ past: historyRef.current.past.length, future: historyRef.current.future.length }),
+    [],
+  );
+  /** The explorer as it is now, or `null` while there is nothing yet to go back to. */
+  const captureBefore = useCallback((): ExplorerSnapshot | null => {
+    const state = stateRef.current;
+    return state.graph.order > 0 ? takeSnapshot(state) : null;
+  }, []);
+  /** Records a step whose "before" was captured. */
+  const recordStep = useCallback(
+    (before: ExplorerSnapshot | null) => {
+      if (!before) return;
+      historyRef.current = pushStep(historyRef.current, before);
+      syncHistory();
+    },
+    [syncHistory],
+  );
 
   useEffect(
     () => () => {
@@ -213,7 +261,9 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
       base: ExplorerState,
       expandFrom: readonly string[],
       carryPositions: boolean,
+      capturedBefore?: ExplorerSnapshot | null,
     ) => {
+      const before = capturedBefore === undefined ? captureBefore() : capturedBefore;
       const controller = nextController();
       setIsLoading(true);
       setError(null);
@@ -237,6 +287,7 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
         next.seedIds = [...new Set(seedIds)].filter((id) => next.graph.hasNode(id));
         syncSeedFlags(next);
         for (const id of requested) if (next.graph.hasNode(id)) next.expanded.add(id);
+        recordStep(before);
         stateRef.current = next;
         setCapped(wasCapped);
         setTruncated(slice.truncated);
@@ -248,7 +299,7 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
         if (isMounted() && controllerRef.current === controller) setIsLoading(false);
       }
     },
-    [bump, fail, filtersFor, isMounted, nextController],
+    [bump, captureBefore, recordStep, fail, filtersFor, isMounted, nextController],
   );
 
   const load = useCallback(
@@ -349,6 +400,7 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
           controller.signal,
         );
         if (!isMounted() || controller.signal.aborted || stateRef.current !== state) return;
+        recordStep(captureBefore());
         if (isStub) dropStub(state, nodeId);
         const { capped: wasCapped } = mergeSlice(state, slice, {
           parentId: targetId,
@@ -368,13 +420,14 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
         if (isMounted() && controllerRef.current === controller) setExpandingId(null);
       }
     },
-    [bump, filtersFor, isMounted, nextController],
+    [bump, captureBefore, recordStep, filtersFor, isMounted, nextController],
   );
 
   const setAsOf = useCallback(
     async (date: string | null) => {
       const current = stateRef.current;
       if ((current.asOf ?? null) === date) return;
+      const before = captureBefore();
       current.asOf = date;
       if (current.seedIds.length === 0) {
         bump();
@@ -382,11 +435,11 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
       }
       const seeds = [...current.seedIds];
       const from = [...seeds, ...[...current.expanded].filter((id) => !seeds.includes(id))];
-      const action = () => rebuild(seeds, current, from, true);
+      const action = () => rebuild(seeds, current, from, true, before);
       lastActionRef.current = action;
       await action();
     },
-    [bump, rebuild],
+    [bump, captureBefore, rebuild],
   );
 
   const refilter = useCallback(() => {
@@ -443,40 +496,48 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
     (types: Iterable<string>) => {
       const previous = stateRef.current.hiddenTypes;
       const next = new Set(types);
+      if (!sameSet(previous, next)) recordStep(captureBefore());
       stateRef.current.hiddenTypes = next;
       refilter();
       if ([...previous].some((key) => !next.has(key))) void refetchRemoved();
     },
-    [refetchRemoved, refilter],
+    [captureBefore, recordStep, refetchRemoved, refilter],
   );
 
   const setHiddenRelationTypes = useCallback(
     (types: Iterable<string>) => {
       const previous = stateRef.current.hiddenRelationTypes;
       const next = new Set(types);
+      if (!sameSet(previous, next)) recordStep(captureBefore());
       stateRef.current.hiddenRelationTypes = next;
       refilter();
       if ([...previous].some((key) => !next.has(key))) void refetchRemoved();
     },
-    [refetchRemoved, refilter],
+    [captureBefore, recordStep, refetchRemoved, refilter],
   );
 
   const hide = useCallback(
     (nodeId: string) => {
+      const before = captureBefore();
       if (removeNode(stateRef.current, nodeId)) {
+        recordStep(before);
         // Room again: the refusal no longer applies.
         if (remainingCapacity(stateRef.current) > 0) setCapped(false);
         bump();
       }
     },
-    [bump],
+    [bump, captureBefore, recordStep],
   );
 
   const makeSeed = useCallback(
     (nodeId: string) => {
-      if (makeSeedInModel(stateRef.current, nodeId)) bump();
+      const before = captureBefore();
+      if (makeSeedInModel(stateRef.current, nodeId)) {
+        recordStep(before);
+        bump();
+      }
     },
-    [bump],
+    [bump, captureBefore, recordStep],
   );
 
   const dismissCap = useCallback(() => {
@@ -505,6 +566,32 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
     bump();
   }, [bump]);
 
+  const travel = useCallback(
+    (direction: 'back' | 'forward'): RestoredView | null => {
+      const state = stateRef.current;
+      const current = takeSnapshot(state);
+      const step = (direction === 'back' ? stepBack : stepForward)(historyRef.current, current);
+      if (!step) return null;
+      // Whatever was in flight answers a question the restored view no longer asks.
+      controllerRef.current?.abort();
+      historyRef.current = step.history;
+      const view = restoreSnapshot(state, step.restore);
+      setIsLoading(false);
+      setExpandingId(null);
+      setError(null);
+      setNotFound(false);
+      setCapped(remainingCapacity(state) === 0);
+      setTruncated(state.truncated);
+      syncHistory();
+      bump();
+      return view;
+    },
+    [bump, syncHistory],
+  );
+  const undo = useCallback(() => travel('back'), [travel]);
+  const redo = useCallback(() => travel('forward'), [travel]);
+  const undoDepth = useCallback(() => historyRef.current.past.length, []);
+
   return {
     state: stateRef.current,
     version,
@@ -525,7 +612,18 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
     dismissCap,
     retry,
     reset,
+    undo,
+    redo,
+    canUndo: historyDepth.past > 0,
+    canRedo: historyDepth.future > 0,
+    undoDepth,
   };
+}
+
+function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const value of a) if (!b.has(value)) return false;
+  return true;
 }
 
 /** The API returns seeds at depth 0; make sure the slice's own seed list names ours. */

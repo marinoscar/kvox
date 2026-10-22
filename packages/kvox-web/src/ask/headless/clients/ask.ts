@@ -200,6 +200,18 @@ export interface CreateAskConversationInput {
 }
 
 /**
+ * The graph selection a question starts from (the explorer's "Ask about this selection").
+ *
+ * @stability experimental
+ */
+export interface PostAskMessageScope {
+  /** Entities the question is about, at most 50. */
+  entityIds?: string[];
+  /** Evidence ids of the selected edge or path, at most 50. */
+  evidenceIds?: string[];
+}
+
+/**
  * Body of {@link postAskMessage}.
  *
  * @stability experimental
@@ -209,6 +221,8 @@ export interface PostAskMessageInput {
   content: string;
   /** A user override from the allow-list; omitted to use the admin's `graph.agent` model. */
   model?: string;
+  /** The graph selection the question starts from (the explorer's "Ask about this selection"): starting handles, never evidence. An id the user cannot read answers 404. */
+  scope?: PostAskMessageScope;
 }
 
 /**
@@ -378,6 +392,9 @@ export function postAskMessage(
 ): Promise<PostAskMessageResponse> {
   const payload: PostAskMessageInput = { content: body.content };
   if (body.model) payload.model = body.model;
+  if (body.scope && ((body.scope.entityIds?.length ?? 0) > 0 || (body.scope.evidenceIds?.length ?? 0) > 0)) {
+    payload.scope = body.scope;
+  }
   return kvoxPost<PostAskMessageResponse>(host, `/ask/conversations/${enc(id)}/messages`, payload);
 }
 

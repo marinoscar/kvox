@@ -64,6 +64,10 @@ export interface ExplorerToolbarProps {
   onClearMarked: () => void;
   /** The layout control (GIC-07): inline when roomy, inside the overflow menu on a phone. Omitted: none. */
   layoutControl?: Omit<LayoutMenuProps, 'disabled'>;
+  /** Controls other stories add beside the layout control (history arrows, the lens button, GIC-17); drawn inline on every window class. */
+  extraControls?: ReactNode;
+  /** Rows other stories add to the phone's overflow menu (Undo, Redo, Lenses, Shortcuts), after the layout choices. Each row calls `close` itself. */
+  overflowItems?: (close: () => void) => ReactNode[];
   disabled?: boolean;
 }
 
@@ -89,6 +93,8 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
     markedCount,
     onClearMarked,
     layoutControl,
+    extraControls,
+    overflowItems,
     disabled,
   } = props;
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -138,6 +144,7 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
       {selectToggle}
       {compact ? (
         <>
+          {extraControls}
           {count}
           <IconButton
             aria-label="More actions"
@@ -190,10 +197,12 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
               <Divider key="layout-top" />,
               ...layoutMenuItems(layoutControl, () => setMenuAnchor(null)),
             ]}
+            {overflowItems && [<Divider key="extra-top" />, ...overflowItems(() => setMenuAnchor(null))]}
           </Menu>
         </>
       ) : (
         <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+          {extraControls}
           {layoutControl && <LayoutMenu {...layoutControl} disabled={listView} />}
           <Button size="small" startIcon={<CenterFocusStrongIcon />} onClick={onFit} disabled={listView}>
             Fit
