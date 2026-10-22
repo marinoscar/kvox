@@ -6671,13 +6671,22 @@ counted).
       "mentions": 4,
       "evidence": 11,
       "items": { "commitment": 2, "decision": 0, "claim": 3, "person_fact": 1 },
-      "openCommitments": 1
+      "openCommitments": 1,
+      "relationsByType": { "WORKS_FOR": 1, "REPORTS_TO": 2, "ATTENDED": 3 },
+      "relationsByNeighborType": { "Organization": 1, "Person": 2, "Meeting": 3 }
     },
     "createdAt": "2026-01-10T09:00:00.000Z",
     "updatedAt": "2026-09-20T10:00:00.000Z"
   }
 }
 ```
+
+`counts.relationsByType` and `counts.relationsByNeighborType` split the same
+readable, currently valid relations that `counts.relations` counts, by
+relation type and by the type of the entity at the other end (both
+directions); each sums to `relations`. They feed the explorer inspector's
+Expand menu ("Works for 3", "Person 2"): choosing one sends `types` or
+`relationTypes` to `POST /graph/explore/expand`. An older API omits them.
 
 **Errors:** `401` · `403` without `graph:read` · `404` no such entity, not
 yours, or merged.
@@ -6945,6 +6954,26 @@ says more were reachable.
 `graph:read` · `404` **all-or-nothing**: if even one `nodeIds` entry is not
 one of your readable entities or items, the whole request is a 404 that
 does not say which · `503` `graph_query_timeout`.
+
+##### GET /graph/evidence/by-subject
+
+The citations that support one entity, relation or item, **newest source
+first** and at most 50, resolved to links exactly as `GET /graph/evidence`
+does. It is what the explorer inspector shows under a selected edge or node.
+
+**Query:** `kind` (`entity`, `relation` or `item`, required) and `id` (the
+subject's uuid, required).
+
+**Response:** `200` `{ "data": { "items": [ /* EvidenceLink, as below */ ] } }`.
+
+The subject is authorised first, like every graph read: a subject that is not
+yours, is not in your reviewed graph, or does not exist answers one identical
+`404` per kind. An item holding a `sensitive` person fact answers the item
+`404` too: its evidence is never returned, and the explorer never asks for a
+person fact's evidence at all.
+
+**Errors:** `400` missing or malformed `kind` or `id` · `401` · `403` without
+`graph:read` · `404` no such subject, or not yours.
 
 ##### GET /graph/evidence/{id}
 

@@ -12,6 +12,7 @@ import {
   mentionsQuerySchema,
   mentionsResponseSchema,
   evidenceBatchQuerySchema,
+  evidenceBySubjectQuerySchema,
   evidenceLinkSchema,
   evidenceBatchResponseSchema,
 } from '@marinoscar/kvox-contract/graph';
@@ -53,6 +54,8 @@ export {
   type MentionsResponse,
   evidenceBatchQuerySchema,
   type EvidenceBatchQuery,
+  evidenceBySubjectQuerySchema,
+  type EvidenceBySubjectQuery,
   evidenceLinkSchema,
   type EvidenceLink,
   evidenceBatchResponseSchema,
