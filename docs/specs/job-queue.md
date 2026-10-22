@@ -2319,7 +2319,7 @@ Forty-two type strings are pinned. A type string is permanent once rows exist.
 | `note.source.extract` | notes | Node-eligible |
 | `note.export`, `note.purge` | notes | Server-only |
 | `notes.housekeeping` | notes | Enqueued by a cron; `orgId` null |
-| `kg.purge`, `kg.resolve`, `kg.embed`, `kg.speaker_link`, `kg.export`, `kg.import`, `kg.graph_layout`, `kg.migrate`, `kg.topics_promote` | graph | Server-only |
+| `kg.purge`, `kg.resolve`, `kg.embed`, `kg.speaker_link`, `kg.export`, `kg.import`, `kg.graph_layout`, `kg.migrate`, `kg.topics_promote` | graph | Server-only. `kg.graph_layout` computes clusters, positions and the insight connectors; `kg.topics_promote` turns past meeting topics into draft Topic proposals |
 | `kg.extract`, `kg.entity_digest` | graph | AI jobs, the requesting user's own key; server-only |
 | `ask.respond` | ask | AI job; server-only |
 | `search.index` | search | Server-only |
