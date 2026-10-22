@@ -20,6 +20,7 @@ export * from './hooks/useGraphExtractEstimate.js';
 export * from './hooks/useGraphImport.js';
 export * from './hooks/useGraphMentions.js';
 export * from './hooks/useGraphOntology.js';
+export * from './hooks/useGraphInsights.js';
 export * from './hooks/useGraphOverview.js';
 export * from './hooks/useGraphPreferences.js';
 export * from './hooks/useGraphProposal.js';
