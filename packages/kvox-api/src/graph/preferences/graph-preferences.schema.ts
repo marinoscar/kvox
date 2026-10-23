@@ -89,6 +89,17 @@ const graphResolutionSchema = z
     path: ['newThreshold'],
   });
 
+const graphMinConfidenceSchema = z.number().min(0).max(1);
+
+const graphReviewSchema = z
+  .object({
+    /**
+     * The lowest confidence at which the safe policy accepts a row on its own (#717, ADR-0007).
+     */
+    minConfidence: graphMinConfidenceSchema,
+  })
+  .strict();
+
 const graphDomainsSchema = z
   .object({
     /**
@@ -167,6 +178,10 @@ export const graphPreferencesSchema = z
      */
     domains: graphDomainsSchema.optional(),
     /**
+     * The review: how the safe policy of a batch commit behaves (#717).
+     */
+    review: graphReviewSchema.optional(),
+    /**
      * The explorer's saved lenses (GIC-17).
      */
     explorer: graphExplorerSchema.optional(),
@@ -215,6 +230,11 @@ export const graphPreferencesPatchSchema = z
         work: z.boolean().nullable().optional(),
         personal: z.boolean().nullable().optional(),
       })
+      .strict()
+      .nullable()
+      .optional(),
+    review: z
+      .object({ minConfidence: graphMinConfidenceSchema.nullable().optional() })
       .strict()
       .nullable()
       .optional(),

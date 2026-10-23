@@ -659,6 +659,56 @@ export interface KvoxGraphDelegates {
   note: Pick<RowDelegate<NoteRow>, 'findUnique' | 'findFirst' | 'findMany'>;
   /** `note_versions` (reads only). */
   noteVersion: Pick<RowDelegate<NoteVersionRow>, 'findUnique' | 'findFirst' | 'findMany'>;
+  /** `note_import_batches` (reads only: the review queue's grouping, #717). */
+  noteImportBatch: Pick<RowDelegate<GraphImportBatchRow>, 'findUnique' | 'findFirst' | 'findMany'>;
+  /** `note_import_batch_items` (reads only: which batch produced a note version, #717). */
+  noteImportBatchItem: Pick<RowDelegate<GraphImportBatchItemRow>, 'findUnique' | 'findFirst' | 'findMany'>;
+  /** `note_libraries` (reads only: a group's label, #717). */
+  noteLibrary: Pick<RowDelegate<GraphLibraryRow>, 'findUnique' | 'findFirst' | 'findMany'>;
+}
+
+/**
+ * The columns of `note_import_batches` the review queue reads (#717).
+ *
+ * @stability experimental
+ */
+export interface GraphImportBatchRow {
+  /** The `id` column. */
+  id: string;
+  /** The `owner_id` column. */
+  ownerId: string;
+  /** The `library_id` column. */
+  libraryId: string | null;
+  /** The `created_at` column. */
+  createdAt: Date;
+}
+
+/**
+ * The columns of `note_import_batch_items` the review queue reads (#717).
+ *
+ * @stability experimental
+ */
+export interface GraphImportBatchItemRow {
+  /** The `batch_id` column. */
+  batchId: string;
+  /** The `note_id` column. */
+  noteId: string | null;
+  /** The `note_version` column. */
+  noteVersion: number | null;
+}
+
+/**
+ * The columns of `note_libraries` the review queue reads (#717).
+ *
+ * @stability experimental
+ */
+export interface GraphLibraryRow {
+  /** The `id` column. */
+  id: string;
+  /** The `owner_id` column. */
+  ownerId: string;
+  /** The `name` column. */
+  name: string;
 }
 
 /**

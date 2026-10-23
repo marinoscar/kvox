@@ -112,6 +112,15 @@ export function mergeGraphPreferences(
     merged.resolution = next;
   }
 
+  if (patch.review === null) {
+    delete merged.review;
+  } else if (patch.review !== undefined) {
+    const base = merged.review ?? { ...defaults.review };
+    merged.review = {
+      minConfidence: pick(patch.review.minConfidence, base.minConfidence, defaults.review.minConfidence),
+    };
+  }
+
   if (patch.domains === null) {
     delete merged.domains;
   } else if (patch.domains !== undefined) {
