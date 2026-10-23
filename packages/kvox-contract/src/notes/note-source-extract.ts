@@ -24,6 +24,13 @@ export const EXTRACTION_FAILURE_REASONS = [
   'no_text_layer',
   'corrupt_file',
   'empty_document',
+  // Append only (stored strings). Added for Office import (epic #708):
+  // a legacy .doc/.ppt or a password-protected Office file (both are OLE/CFB containers,
+  // which this reader never opens).
+  'unsupported_office_format',
+  // A .docx/.pptx whose ZIP exceeds the reader's caps (entry count, inflated size,
+  // compression ratio): refused rather than inflated (zip-bomb guard).
+  'archive_too_large',
 ] as const;
 
 /** One extraction failure reason. @stability experimental */
@@ -41,6 +48,8 @@ export const EXTRACTION_ENCODINGS = [
   'utf-16be',
   'windows-1252',
   'pdf-text',
+  // Text read from the XML parts of a .docx or .pptx (appended for epic #708).
+  'ooxml',
 ] as const;
 
 /** One extraction encoding. @stability experimental */

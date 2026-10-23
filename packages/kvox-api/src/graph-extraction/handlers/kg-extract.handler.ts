@@ -42,6 +42,7 @@ import { z } from 'zod';
 import { assertWithinBudget } from '../../core/index.js';
 import type { GraphAiRun, KvoxGraphDb } from '../../graph/index.js';
 import { GraphAiRunResolver, rethrowRateLimit, KG_EXTRACT_JOB_TYPE, GraphPreferencesService } from '../../graph/index.js';
+import { ProposalDraftedHook } from '../extraction/proposal-drafted.hook.js';
 import { buildExtractionContext } from '../extraction/extraction-context.js';
 import { ExtractionInputLoader } from '../extraction/extraction-input.loader.js';
 import {
@@ -175,6 +176,7 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
     private readonly writer: ProposalWriter,
     private readonly stages: ProposalStageRegistry,
     private readonly preferences: GraphPreferencesService,
+    private readonly drafted: ProposalDraftedHook,
   ) {}
 
   /**
@@ -318,6 +320,9 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
       this.logger.log(`${KG_EXTRACT_JOB_TYPE} proposal=${proposalId} left 'extracting' while running; not finalized`);
       return;
     }
+
+    // After the draft committed, never inside it: stamp `extracted_version`, announce the draft.
+    await this.drafted.afterDraft({ proposalId, ownerId: userId, noteId, noteVersion: payload.noteVersion });
 
     this.logger.log(
       `${KG_EXTRACT_JOB_TYPE} proposal=${proposalId} note=${noteId} model=${resolution.model} ` +

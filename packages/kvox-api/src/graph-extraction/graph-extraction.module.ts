@@ -21,10 +21,20 @@ import {
 import { KgEmbedHandler } from './handlers/kg-embed.handler.js';
 import { KgExtractHandler } from './handlers/kg-extract.handler.js';
 import { KgResolveHandler } from './handlers/kg-resolve.handler.js';
+import { KgAutocommitHandler } from './handlers/kg-autocommit.handler.js';
+import { KgLibraryReconcileHandler } from './handlers/kg-library-reconcile.handler.js';
+import { ProposalDraftedHook } from './extraction/proposal-drafted.hook.js';
+import { ProposalDraftedSubscriber } from './extraction/proposal-drafted.subscriber.js';
+import { ExtractionRetryService } from './library/extraction-retry.service.js';
+import { GraphImportBatchesController } from './library/graph-import-batches.controller.js';
+import { GraphReconcileEnqueuer } from './library/graph-reconcile.enqueuer.js';
+import { ImportBatchSettledSubscriber } from './library/import-batch-settled.subscriber.js';
 import { KgTopicsPromoteHandler } from './handlers/kg-topics-promote.handler.js';
 import { GraphProposalsController } from './proposals/graph-proposals.controller.js';
 import { GraphTopicsPromoteController } from './topics/graph-topics-promote.controller.js';
 import { TopicsPromoteService } from './topics/topics-promote.service.js';
+import { GraphReviewQueueController } from './proposals/graph-review-queue.controller.js';
+import { ProposalBatchCommitService } from './proposals/proposal-batch-commit.service.js';
 import { ProposalCommitService } from './proposals/proposal-commit.service.js';
 import { ProposalRevertService } from './proposals/proposal-revert.service.js';
 import { ProposalsService } from './proposals/proposals.service.js';
@@ -81,7 +91,7 @@ export class GraphExtractionModule {
    */
   static forRoot(options: GraphExtractionModuleOptions = {}): DynamicModule {
     const resolved = resolveGraphExtractionOptions(options);
-    const controllers = [GraphExtractionController, GraphResolutionController, GraphProposalsController, GraphTopicsPromoteController];
+    const controllers = [GraphExtractionController, GraphResolutionController, GraphProposalsController, GraphReviewQueueController, GraphTopicsPromoteController, GraphImportBatchesController];
 
     const providers: Provider[] = [
       { provide: GRAPH_EXTRACTION_OPTIONS, useValue: resolved },
@@ -118,9 +128,17 @@ export class GraphExtractionModule {
       ProposalsService,
       ProposalCommitService,
       ProposalRevertService,
+      ProposalBatchCommitService,
+      // Library bulk extraction and opt-in auto-commit (#716, #718; ADR-0007).
+      ProposalDraftedHook,
+      ProposalDraftedSubscriber,
+      GraphReconcileEnqueuer,
+      KgLibraryReconcileHandler,
+      KgAutocommitHandler,
+      ExtractionRetryService,
     ];
 
-    if (resolved.autoExtract) providers.push(NoteReadyExtractionSubscriber);
+    if (resolved.autoExtract) providers.push(NoteReadyExtractionSubscriber, ImportBatchSettledSubscriber);
 
     // Now that the routes are known, describe them in the API document the way the host chose.
     documentKvoxAuth(controllers);
@@ -145,6 +163,7 @@ export class GraphExtractionModule {
         ProposalsService,
         ProposalCommitService,
         ProposalRevertService,
+        ProposalBatchCommitService,
         ResolutionService,
         MergeService,
         DistinctPairService,

@@ -20,6 +20,10 @@ const UserNoteTemplatesPageWithAi = lazy(() =>
  * slots or AI access swapped for this app's wrappers. Same paths, same
  * permissions, same order; `/notes/:id/history` takes neither. Issue #502,
  * epic #498.
+ *
+ * The note library routes (#720, epic #708: `/notes/libraries`,
+ * `/notes/libraries/:libraryId`, `/notes/import-batches/:batchId`) take no slots
+ * and pass through as the package declares them, gated on `notes:read`.
  */
 export const appNotesRoutes: readonly KvoxRouteDef[] = kvoxNotesRoutes.map((route) => {
   if (route.path === '/notes') return { ...route, Component: NotesLibraryWithSlots };

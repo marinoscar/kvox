@@ -34,7 +34,12 @@
 // the two from spelling the key differently.
 // =============================================================================
 
-import type { NoteSourceDocumentStatusResponse } from '@marinoscar/kvox-contract/notes';
+import {
+  DOCX_MIME_TYPE,
+  PPTX_MIME_TYPE,
+  type NoteDocumentMimeType,
+  type NoteSourceDocumentStatusResponse,
+} from '@marinoscar/kvox-contract/notes';
 
 import type {
   ExtractionEncoding,
@@ -230,12 +235,14 @@ export function sourceDocumentStorageKey(uploadId: string, extension: string): s
 }
 
 /** The file extension this application stores one accepted document type as. */
-export function documentExtension(
-  mimeType: 'application/pdf' | 'text/plain' | 'text/markdown',
-): string {
+export function documentExtension(mimeType: NoteDocumentMimeType): string {
   switch (mimeType) {
     case 'application/pdf':
       return '.pdf';
+    case DOCX_MIME_TYPE:
+      return '.docx';
+    case PPTX_MIME_TYPE:
+      return '.pptx';
     case 'text/markdown':
       return '.md';
     default:

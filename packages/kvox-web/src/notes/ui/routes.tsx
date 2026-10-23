@@ -41,6 +41,30 @@ export const kvoxNotesRoutes: readonly KvoxRouteDef[] = [
     ),
   },
   {
+    // #720 (epic #708): the folders of existing notes kept in sync. Before `/notes/:id`
+    // in the list for the reader; react-router ranks the static segment first anyway.
+    path: '/notes/libraries',
+    permission: 'notes:read',
+    Component: lazy(() =>
+      import('./pages/NoteLibrariesPage.js').then((module) => ({ default: module.NoteLibrariesPage })),
+    ),
+  },
+  {
+    path: '/notes/libraries/:libraryId',
+    permission: 'notes:read',
+    Component: lazy(() =>
+      import('./pages/NoteLibraryPage.js').then((module) => ({ default: module.NoteLibraryPage })),
+    ),
+  },
+  {
+    // One import's live progress (a library scan or files dropped on a page).
+    path: '/notes/import-batches/:batchId',
+    permission: 'notes:read',
+    Component: lazy(() =>
+      import('./pages/NoteImportBatchPage.js').then((module) => ({ default: module.NoteImportBatchPage })),
+    ),
+  },
+  {
     path: '/notes/new',
     permission: 'notes:write',
     redirectTo: '/notes',

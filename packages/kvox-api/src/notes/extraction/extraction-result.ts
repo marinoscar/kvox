@@ -127,8 +127,19 @@ export function describeExtractionFailure(reason: ExtractionFailureReason): stri
       );
     case 'corrupt_file':
       return (
-        'This file could not be read as a PDF. It is damaged, incomplete, or was not a PDF ' +
-        'to begin with. Try exporting it again from whatever produced it.'
+        'This file could not be read. It is damaged, incomplete, or not the kind of file its ' +
+        'name says. Try exporting it again.'
+      );
+    case 'unsupported_office_format':
+      return (
+        'This is an older Word or PowerPoint file (.doc or .ppt), or an Office file protected ' +
+        'by a password, so it cannot be read. Save it as .docx or .pptx without a password ' +
+        'and import it again.'
+      );
+    case 'archive_too_large':
+      return (
+        'This document is too large to read safely: once unpacked it exceeds the size limits. ' +
+        'Split it into smaller files or remove large embedded media, then import it again.'
       );
     case 'empty_document':
       return 'This document contains no text at all, so there is nothing to write a note from.';

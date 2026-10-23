@@ -40,6 +40,8 @@ const MUST_BE_SERVER_ONLY = [
   'kg.graph_layout',
   'kg.entity_digest',
   'kg.migrate',
+  'kg.library_reconcile',
+  'kg.autocommit',
   // transcription provider types carry the provider key
   'transcription.submit',
   'transcription.poll',

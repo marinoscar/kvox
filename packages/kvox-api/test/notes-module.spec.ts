@@ -126,7 +126,7 @@ describe('NotesModule.forRoot', () => {
       };
 
       expect(resolved.appUrl()).toBe('https://app.example.test');
-      expect(resolved).toMatchObject({ documentPdf: true, documentText: true });
+      expect(resolved).toMatchObject({ documentPdf: true, documentText: true, documentOffice: true, maxDocumentImportBytes: 25 * 1024 * 1024 });
     });
 
     it('registers the three built-in exporters, and drops the ones switched off', async () => {

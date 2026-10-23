@@ -17,7 +17,9 @@
 // =============================================================================
 
 import {
+  DOCX_MIME_TYPE,
   NOTE_DOCUMENT_MIME_TYPES,
+  PPTX_MIME_TYPE,
   type NoteDocumentMimeType,
 } from '@marinoscar/kvox-contract/notes';
 // The wire schemas of this file moved to `@marinoscar/kvox-contract/notes` (issue #488, file `notes/document-format.ts`); they are re-exported below so no importer changes.
@@ -49,6 +51,8 @@ const MIME_ALIASES: Readonly<Record<string, NoteDocumentMimeType>> = {
   'text/markdown': 'text/markdown',
   'text/x-markdown': 'text/markdown',
   'text/md': 'text/markdown',
+  [DOCX_MIME_TYPE]: DOCX_MIME_TYPE,
+  [PPTX_MIME_TYPE]: PPTX_MIME_TYPE,
 };
 
 /**

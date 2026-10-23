@@ -127,6 +127,21 @@ export const KVOX_USER_OWNED_MODELS: readonly Def[] = [
     export: 'exclude',
     rationale: 'A rendered export the user requested; transient and re-creatable, deleted with the requester.',
   },
+  {
+    model: 'NoteLibrary',
+    ownerField: 'ownerId',
+    purge: 'delete',
+    export: 'include',
+    rationale:
+      'The owner’s watched note library (its name and import policy); deleted with the user and exported to them. Its file rows and batches hang off it and are re-derivable from the folder.',
+  },
+  {
+    model: 'NoteImportBatch',
+    ownerField: 'ownerId',
+    purge: 'delete',
+    export: 'exclude',
+    rationale: 'Bookkeeping of one scan-and-import run; transient and re-creatable, deleted with the owner.',
+  },
 
   // -------------------------------------------------------------------------
   // Search

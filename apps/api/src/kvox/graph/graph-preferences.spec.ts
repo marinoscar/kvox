@@ -34,6 +34,7 @@ describe('resolveGraphPreferences', () => {
         adjudication: 'llm',
       },
       domains: { core: true, work: true, personal: false },
+      review: { minConfidence: 0.7 },
     });
   });
 

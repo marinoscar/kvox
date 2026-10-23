@@ -14,11 +14,16 @@
  * waiting is the empty state "Nothing to review". A `resolution` proposal has
  * no review page of its own, so it is not listed.
  *
+ * The header links to the Review Queue (`/graph/review-queue`, #721): the same
+ * drafts grouped by library and import, with a batch commit of the safe rows.
+ * This page stays the one-by-one list.
+ *
  * Owned by the `knowledge` destination (its `/graph` prefix). Gated on
  * `graph:read` like the other read routes; the pages it links to gate the
  * writes.
  */
 
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -29,6 +34,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
+import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -100,9 +106,26 @@ export function GraphReviewPage() {
 
   return (
     <Box sx={{ maxWidth: 960, mx: 'auto', py: { xs: 2, sm: 3 }, minWidth: 0 }}>
-      <Typography variant="h5" component="h1" sx={{ fontWeight: 600, mb: 2 }}>
-        Review
-      </Typography>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2 }}
+      >
+        <Typography variant="h5" component="h1" sx={{ fontWeight: 600 }}>
+          Review
+        </Typography>
+        {/* #721: the grouped queue with the safe-policy batch commit, for the
+            hundreds of drafts a bulk import produces. */}
+        <Button
+          variant="contained"
+          component={RouterLink}
+          to="/graph/review-queue"
+          startIcon={<PlaylistAddCheckIcon />}
+          sx={{ minHeight: 44 }}
+        >
+          Review Queue
+        </Button>
+      </Stack>
 
       {queue.error && (
         <Alert

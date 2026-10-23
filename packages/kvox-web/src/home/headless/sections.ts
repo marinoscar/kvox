@@ -21,6 +21,20 @@
  *   organizations (also gated on `graph:read`).
  * - `sharedWithMe`: transcripts others shared.
  *
+ * The knowledge-first cards (#721, epic #708), drawn as one responsive grid under
+ * the hero, before everything else. None is in {@link KVOX_HOME_SECTIONS}; a host
+ * lists them (or passes {@link KVOX_KNOWLEDGE_HOME_SECTIONS}):
+ *
+ * - `ask`: a question box; sending it opens Ask with the question asked
+ *   (`graph:read` and connected knowledge on).
+ * - `reviewQueue`: drafts waiting and safe rows, a way into `/graph/review-queue`
+ *   (`graph:read` and connected knowledge on).
+ * - `libraries`: how many note libraries, files imported, failures, last sync, or
+ *   "Add your notes folder" when there is none (`notes:read`).
+ * - `graphStats`: entity and relation counts and the recently changed entities
+ *   (`graph:read` and connected knowledge on).
+ * - `recentImports`: the latest import batches with their status (`notes:read`).
+ *
  * @stability experimental
  */
 export type KvoxHomeSection =
@@ -32,10 +46,17 @@ export type KvoxHomeSection =
   | 'recentTranscripts'
   | 'recentNotes'
   | 'knowledge'
-  | 'sharedWithMe';
+  | 'sharedWithMe'
+  | 'ask'
+  | 'reviewQueue'
+  | 'libraries'
+  | 'graphStats'
+  | 'recentImports';
 
 /**
- * Every section, in page order: the default of `KvoxHomePage`'s `sections`.
+ * The classic sections, in page order: the default of `KvoxHomePage`'s `sections`
+ * (KVox web). The knowledge-first cards are not among them; see
+ * {@link KVOX_KNOWLEDGE_HOME_SECTIONS}.
  *
  * @stability experimental
  */
@@ -94,3 +115,24 @@ export function isNewAccount(facts: NewAccountFacts): boolean {
     facts.notes === 0
   );
 }
+
+/**
+ * The knowledge-first Home (#721, epic #708): the hero, then Ask, the Review Queue,
+ * the note libraries, the graph and the recent imports, then the first-run journey,
+ * what is moving, what failed and the recent notes. No transcripts: the home of a
+ * host whose content is imported notes (KVox Desktop). What `kvoxHomeRoutes` draws.
+ *
+ * @stability experimental
+ */
+export const KVOX_KNOWLEDGE_HOME_SECTIONS: readonly KvoxHomeSection[] = [
+  'hero',
+  'ask',
+  'reviewQueue',
+  'libraries',
+  'graphStats',
+  'recentImports',
+  'journey',
+  'inProgress',
+  'needsAttention',
+  'recentNotes',
+];

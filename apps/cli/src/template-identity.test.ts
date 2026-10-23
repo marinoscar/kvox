@@ -376,6 +376,7 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'docs/decisions/0004-desktop-data-local-only.md',
   'docs/decisions/0005-ai-architecture-shared-harness.md',
   'docs/decisions/0006-desktop-inputs-no-transcription.md',
+  'docs/decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md',
   'docs/desktop/README.md',
   'LICENSE',
 

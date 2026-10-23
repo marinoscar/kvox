@@ -14,9 +14,15 @@
  * product produces, and the navigation now says so.
  */
 
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import FolderCopyIcon from '@mui/icons-material/FolderCopy';
 import type { ReactNode } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 
 import { LibraryPageFrame } from '../../../core/ui/index.js';
+import { ImportNotesButton } from '../components/ImportNotesButton.js';
+import { NotesDropZone } from '../components/NotesDropZone.js';
 import { NotesLibraryView } from '../components/NotesLibraryView.js';
 import type { NotesLibrarySlots } from '../slots.js';
 
@@ -30,9 +36,35 @@ export interface NotesPageProps {
   slots?: NotesLibrarySlots;
   /**
    * A control beside "New note" in the header (#585: KVox Desktop's "Import…"). Rendered
-   * as given at every width; it gates itself.
+   * as given at every width; it gates itself. Default {@link NotesImportActions}
+   * ("Import notes" and "Libraries", #720); `null` shows none.
    */
   secondaryAction?: ReactNode;
+}
+
+/**
+ * The default secondary actions of `/notes` (#720): "Import notes" (files, gated on
+ * `notes:write` by the button itself) and "Libraries" (the folders kept in sync).
+ *
+ * @returns The two controls.
+ *
+ * @stability experimental
+ */
+export function NotesImportActions() {
+  return (
+    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      <ImportNotesButton />
+      <Button
+        variant="outlined"
+        component={RouterLink}
+        to="/notes/libraries"
+        startIcon={<FolderCopyIcon />}
+        sx={{ whiteSpace: 'nowrap' }}
+      >
+        Libraries
+      </Button>
+    </Box>
+  );
 }
 
 /**
@@ -45,15 +77,17 @@ export interface NotesPageProps {
  */
 export function NotesPage({ slots, secondaryAction }: NotesPageProps = {}) {
   return (
+    <NotesDropZone>
     <LibraryPageFrame
       title="Notes"
       // `notes:write` — what `notes.controller.ts` enforces on create. The
       // route above already required `notes:read` to reach this page at all.
       action={{ label: 'New note', path: '/notes/new', permission: 'notes:write' }}
-      secondaryAction={secondaryAction}
+      secondaryAction={secondaryAction === undefined ? <NotesImportActions /> : secondaryAction}
     >
       <NotesLibraryView slots={slots} />
     </LibraryPageFrame>
+    </NotesDropZone>
   );
 }
 

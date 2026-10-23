@@ -65,7 +65,7 @@
 // read, patch, version, restore and delete.
 // =============================================================================
 
-import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 
 import {
   KVOX_AUDIT,
@@ -85,6 +85,7 @@ import type { InputJsonObject, JsonValue } from './data/prisma.js';
 import type { NotesActor as RequestUser } from './notes-actor.js';
 import { SEARCH_DOC_NOTE, SearchIndexService } from '../search/index.js';
 import { NoteAccessService } from './access/note-access.service.js';
+import { NoteVersionWriter } from './note-version-writer.js';
 import { NoteOriginService, type NoteOriginTranscript } from './note-origin.service.js';
 import { NoteSourceNameService, noteSourceNameKey } from './note-source-name.service.js';
 import { NoteTemplateAccessService } from './access/note-template-access.service.js';
@@ -213,7 +214,14 @@ export class NotesService {
     private readonly sources: NoteSourceService,
     private readonly searchIndex: SearchIndexService,
     private readonly origins: NoteOriginService,
-  ) {}
+    // Optional so a hand-built service (tests, the test factory) keeps its
+    // nine-argument shape; the fallback is the same writer over the same client.
+    @Optional() versionWriter?: NoteVersionWriter,
+  ) {
+    this.versionWriter = versionWriter ?? new NoteVersionWriter(prisma);
+  }
+
+  private readonly versionWriter: NoteVersionWriter;
 
   // ===========================================================================
   // Create
@@ -1114,7 +1122,7 @@ export class NotesService {
     }
   }
 
-  private async commitVersion(input: {
+  private commitVersion(input: {
     note: Note;
     body: string;
     title?: string;
@@ -1126,64 +1134,13 @@ export class NotesService {
     restoredFromVersion?: number;
     clientBatchId: string | null;
   }): Promise<Note> {
-    const nextVersion = input.note.currentVersion + 1;
+    const { note, ...rest } = input;
 
-    return this.prisma.$transaction(async (tx) => {
-      const claimed = await tx.note.updateMany({
-        where: {
-          id: input.note.id,
-          currentVersion: input.note.currentVersion,
-          deletedAt: null,
-        },
-        data: {
-          currentVersion: nextVersion,
-          body: input.body,
-          bodyFormat: input.bodyFormat,
-          // ⚠ `titleSource` MOVES ONLY WITH THE TITLE. A body-only save (and a
-          // restore, which supplies none) must leave the provenance exactly as
-          // it was — otherwise every edit would quietly claim the user named a
-          // note the AI or the template named, and the titling path would stop
-          // renaming notes nobody ever titled.
-          ...(input.title !== undefined
-            ? { title: input.title, titleSource: 'user' as const }
-            : {}),
-          // A note whose body a human just wrote is no longer `failed`: the
-          // failure was the generation's, and there is content now.
-          ...(input.note.status === 'failed' ? { status: 'ready' as const, failureReason: null } : {}),
-        },
-      });
-
-      if (claimed.count === 0) {
-        throw this.staleVersion(
-          (await tx.note.findUnique({ where: { id: input.note.id } }))?.currentVersion ??
-            input.note.currentVersion,
-          input.note.currentVersion,
-        );
-      }
-
-      await tx.noteVersion.create({
-        data: {
-          noteId: input.note.id,
-          version: nextVersion,
-          kind: input.kind,
-          body: input.body,
-          bodyFormat: input.bodyFormat,
-          summary: input.summary,
-          // ⚠ A REAL AUTHOR ID HERE, ALWAYS. `null` means the AI (spec §4.5) —
-          // a convention, not a missing value — so a human edit recorded with a
-          // null author would claim the model wrote it.
-          authorId: input.authorId,
-          restoredFromVersion: input.restoredFromVersion ?? null,
-          clientBatchId: input.clientBatchId,
-        },
-      });
-
-      const updated = await tx.note.findUnique({ where: { id: input.note.id } });
-
-      // Unreachable — the guarded update above already proved the row is there.
-      if (!updated) throw new NotFoundException('Note not found');
-
-      return updated;
+    return this.versionWriter.commit({
+      ...rest,
+      noteId: note.id,
+      baseVersion: note.currentVersion,
+      noteStatus: note.status,
     });
   }
 

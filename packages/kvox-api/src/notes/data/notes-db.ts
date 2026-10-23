@@ -323,6 +323,142 @@ export interface NoteExportRow {
 }
 
 /**
+ * A row of `note_libraries`.
+ *
+ * @stability experimental
+ */
+export interface NoteLibraryRow {
+  /** The `id` column. */
+  id: string;
+  /** The `owner_id` column. */
+  ownerId: string;
+  /** The `name` column. */
+  name: string;
+  /** The `auto_extract` column. */
+  autoExtract: boolean;
+  /** The `auto_commit` column. */
+  autoCommit: boolean;
+  /** The `last_scan_at` column. */
+  lastScanAt: Date | null;
+  /** The `created_at` column. */
+  createdAt: Date;
+  /** The `updated_at` column. */
+  updatedAt: Date;
+}
+
+/**
+ * A row of `note_library_files`.
+ *
+ * @stability experimental
+ */
+export interface NoteLibraryFileRow {
+  /** The `id` column. */
+  id: string;
+  /** The `library_id` column. */
+  libraryId: string;
+  /** The `relative_path` column. */
+  relativePath: string;
+  /** The `size` column (BigInt in the database). */
+  size: bigint | number;
+  /** The `mtime` column. */
+  mtime: Date;
+  /** The `content_hash` column. */
+  contentHash: string | null;
+  /** The `note_id` column. */
+  noteId: string | null;
+  /** The `imported_version` column. */
+  importedVersion: number | null;
+  /** The `extracted_version` column. */
+  extractedVersion: number | null;
+  /** The `status` column. */
+  status: 'pending' | 'importing' | 'imported' | 'failed' | 'missing' | 'unsupported' | 'diverged';
+  /** The `failure_reason` column. */
+  failureReason: string | null;
+  /** The `last_seen_at` column. */
+  lastSeenAt: Date;
+  /** The `created_at` column. */
+  createdAt: Date;
+  /** The `updated_at` column. */
+  updatedAt: Date;
+}
+
+/**
+ * A row of `note_import_batches`.
+ *
+ * @stability experimental
+ */
+export interface NoteImportBatchRow {
+  /** The `id` column. */
+  id: string;
+  /** The `owner_id` column. */
+  ownerId: string;
+  /** The `library_id` column. */
+  libraryId: string | null;
+  /** The `status` column. */
+  status: 'scanning' | 'running' | 'completed' | 'completed_with_errors' | 'cancelled';
+  /** The `created_at` column. */
+  createdAt: Date;
+  /** The `finished_at` column. */
+  finishedAt: Date | null;
+}
+
+/**
+ * A row of `note_import_batch_items`.
+ *
+ * @stability experimental
+ */
+export interface NoteImportBatchItemRow {
+  /** The `id` column. */
+  id: string;
+  /** The `batch_id` column. */
+  batchId: string;
+  /** The `file_id` column. */
+  fileId: string | null;
+  /** The `filename` column. */
+  filename: string;
+  /** The `path` column. */
+  path: string | null;
+  /** The `action` column. */
+  action: 'new' | 'changed' | 'missing';
+  /** The `source_object_id` column. */
+  sourceObjectId: string | null;
+  /** The `note_id` column. */
+  noteId: string | null;
+  /** The `note_version` column. */
+  noteVersion: number | null;
+  /** The `diverged` column. */
+  diverged: boolean;
+  /** The `status` column. */
+  status: 'queued' | 'importing' | 'imported' | 'failed' | 'missing' | 'skipped';
+  /** The `failure_reason` column. */
+  failureReason: string | null;
+  /** The `job_id` column. */
+  jobId: string | null;
+  /** The `created_at` column. */
+  createdAt: Date;
+  /** The `updated_at` column. */
+  updatedAt: Date;
+}
+
+/**
+ * The columns of `kg_proposals` the import batch view reads (the graph slice owns the table).
+ *
+ * @stability experimental
+ */
+export interface NoteProposalRef {
+  /** The `id` column. */
+  id: string;
+  /** The `note_id` column. */
+  noteId: string | null;
+  /** The `note_version` column. */
+  noteVersion: number | null;
+  /** The `status` column. */
+  status: string;
+  /** The `created_at` column. */
+  createdAt: Date;
+}
+
+/**
  * The delegates the slice works with, shared by the client and a transaction.
  *
  * @stability experimental
@@ -350,6 +486,22 @@ export interface KvoxNotesDelegates {
   transcript: Pick<RowDelegate<TranscriptRow>, 'findUnique' | 'findFirst' | 'findMany'>;
   /** `transcript_versions` (reads only). */
   transcriptVersion: Pick<RowDelegate<TranscriptVersionRow>, 'findUnique'>;
+  /** `note_libraries` (#714). */
+  noteLibrary: RowDelegate<NoteLibraryRow>;
+  /** `note_library_files` (#714). */
+  noteLibraryFile: RowDelegate<NoteLibraryFileRow> & {
+    /** Counts files grouped by a column. */
+    groupBy(args: any): Promise<any[]>;
+  };
+  /** `note_import_batches` (#714). */
+  noteImportBatch: RowDelegate<NoteImportBatchRow>;
+  /** `note_import_batch_items` (#714). */
+  noteImportBatchItem: RowDelegate<NoteImportBatchItemRow> & {
+    /** Counts items grouped by a column. */
+    groupBy(args: any): Promise<any[]>;
+  };
+  /** `kg_proposals` (reads only: the stage of an imported note). */
+  kgProposal: Pick<RowDelegate<NoteProposalRef>, 'findMany'>;
 }
 
 /**
