@@ -59,10 +59,11 @@ export interface NotesConformanceTarget {
   handlers: readonly KvoxJobHandler[];
 }
 
-/** The job types the slice registers. */
+/** The job types the slice registers (`note.library.import`, #715, is server-only). */
 const PINNED_JOB_TYPES = [
   'note.export',
   'note.generate',
+  'note.library.import',
   'note.purge',
   'note.retitle',
   'note.source.extract',
@@ -260,7 +261,7 @@ export function describeNotesConformance(
     const handlersOf = async (): Promise<Map<string, KvoxJobHandler>> =>
       new Map((await targetOf()).handlers.filter(owned).map((handler) => [handler.type, handler]));
 
-    it('registers exactly the six pinned job types', async () => {
+    it('registers exactly the pinned job types', async () => {
       const byType = await handlersOf();
 
       expect([...byType.keys()].sort()).toEqual([...PINNED_JOB_TYPES].sort());

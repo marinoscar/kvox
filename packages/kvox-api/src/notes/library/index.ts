@@ -18,3 +18,10 @@ export {
   recomputeBatchStatus,
   type ProposalStatusValue,
 } from './note-import-stage.js';
+export { NoteLibraryUploadController } from './note-library-upload.controller.js';
+export {
+  NOTE_IMPORT_ITEM_SUBJECT_TYPE,
+  NoteLibraryUploadService,
+  type NoteLibraryUploadInput,
+  type NoteLibraryUploadResult,
+} from './note-library-upload.service.js';

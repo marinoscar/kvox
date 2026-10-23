@@ -39,6 +39,7 @@ export {
   NOTE_EXPORT_JOB_TYPE,
   NOTE_GENERATE_JOB_TYPE,
   NOTE_JOB_TYPES,
+  NOTE_LIBRARY_IMPORT_JOB_TYPE,
   NOTE_PURGE_JOB_TYPE,
   NOTE_RETITLE_JOB_TYPE,
   NOTE_SOURCE_EXTRACT_JOB_TYPE,
@@ -143,6 +144,7 @@ export { NoteExportHandler } from './handlers/note-export.handler.js';
 export { NoteGenerateHandler, NOTE_GENERATE_MAX_RUNTIME_MS } from './handlers/note-generate.handler.js';
 export { NotePurgeHandler } from './handlers/note-purge.handler.js';
 export { NoteRetitleHandler } from './handlers/note-retitle.handler.js';
+export { NoteLibraryImportHandler } from './handlers/note-library-import.handler.js';
 export { NoteSourceExtractHandler } from './handlers/note-source-extract.handler.js';
 export { NotesHousekeepingHandler } from './handlers/notes-housekeeping.handler.js';
 export { NotesHousekeepingEnqueuer } from './tasks/notes-housekeeping.enqueuer.js';

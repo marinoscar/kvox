@@ -1,12 +1,14 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 
 import {
+  NOTE_IMPORT_BATCH_SETTLED_EVENT,
   NOTE_IMPORT_ITEM_STAGES,
   NOTE_IMPORT_ITEM_STATUSES,
   normalizeLibraryPath,
   type CreateNoteImportBatchResponse,
   type NoteImportBatch,
   type NoteImportBatchItem,
+  type NoteImportBatchSettledEvent,
   type NoteImportBatchItemsPage,
   type NoteImportBatchStatus,
   type NoteImportItemStage,
@@ -17,7 +19,7 @@ import {
   type UpdateNoteLibraryRequest,
 } from '@marinoscar/kvox-contract/notes';
 
-import { KVOX_PRISMA } from '../../ports/index.js';
+import { KVOX_EVENTS, KVOX_PRISMA, type KvoxEventsPort } from '../../ports/index.js';
 import type {
   KvoxNotesDb,
   KvoxNotesDelegates,
@@ -87,7 +89,10 @@ function decodeItemCursor(cursor: string): string | null {
  */
 @Injectable()
 export class NoteLibrariesService {
-  constructor(@Inject(KVOX_PRISMA) private readonly prisma: KvoxNotesDb) {}
+  constructor(
+    @Inject(KVOX_PRISMA) private readonly prisma: KvoxNotesDb,
+    @Optional() @Inject(KVOX_EVENTS) private readonly events?: KvoxEventsPort
+  ) {}
 
   // ---------------------------------------------------------------------------
   // Libraries
@@ -262,6 +267,10 @@ export class NoteLibrariesService {
       return createdBatchId;
     });
 
+    if (batchId !== null && diff.upload.length === 0) {
+      this.emitSettled({ id: batchId, ownerId: actor.id, libraryId: id });
+    }
+
     return {
       batchId,
       upload: diff.upload,
@@ -364,9 +373,26 @@ export class NoteLibrariesService {
         where: { id: batchId },
         data: { status: next, finishedAt: next === 'running' ? null : new Date() },
       });
+      // Only outside a caller's transaction: the event must follow the commit.
+      if ((next === 'completed' || next === 'completed_with_errors') && db === this.prisma) {
+        this.emitSettled(batch);
+      }
     }
 
     return next;
+  }
+
+  /** Tells listeners (the graph's reconcile) that a batch settled. Never throws. */
+  private emitSettled(batch: { id: string; ownerId: string; libraryId: string | null }): void {
+    try {
+      this.events?.emit(NOTE_IMPORT_BATCH_SETTLED_EVENT, {
+        batchId: batch.id,
+        ownerId: batch.ownerId,
+        libraryId: batch.libraryId,
+      } satisfies NoteImportBatchSettledEvent);
+    } catch {
+      // A listener's failure is never the import's.
+    }
   }
 
   // ---------------------------------------------------------------------------
