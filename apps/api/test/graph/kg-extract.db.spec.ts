@@ -130,6 +130,8 @@ describeWithDb('kg.extract (real Postgres)', () => {
       writer,
       new ProposalStageRegistry(),
       preferences,
+      // The drafted hook queues kg.autocommit (#718); this spec pins extraction alone.
+      { afterDraft: async () => undefined } as never,
     );
   });
 
