@@ -150,6 +150,15 @@
       "requiresHostTables": [],
       "sha256": "48a6940b0b6ef29012a8178dc54d5ca4447c47ac7b1abfa1e01e197a48be2380",
       "slice": "graph"
+    },
+    {
+      "id": "20261023033028_add_note_libraries",
+      "requiresHostTables": [
+        "users",
+        "storage_objects"
+      ],
+      "sha256": "9b2273964e46d13b62abf769e892a65a7e4a515bbdf99b8f4b4253d0d2d59847",
+      "slice": "notes"
     }
   ]
 }

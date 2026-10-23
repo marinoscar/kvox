@@ -46,6 +46,10 @@ export const KVOX_MODEL_OWNERSHIP: readonly Def[] = [
   user('NoteGeneration', 'A generation belongs to its note, and so to the note’s owner.'),
   user('NoteVersion', 'A snapshot belongs to its note, and so to the note’s owner.'),
   user('NoteExport', 'An export is requested by, and served to, one user.'),
+  user('NoteLibrary', 'A library belongs to the user who chose the folder.'),
+  user('NoteLibraryFile', 'A file row belongs to its library, and so to the library’s owner.'),
+  user('NoteImportBatch', 'An import batch belongs to the user who started it.'),
+  user('NoteImportBatchItem', 'An item belongs to its batch, and so to the batch’s owner.'),
 
   // Search
   user('SearchChunk', 'Indexed text derived from one user’s documents.'),
