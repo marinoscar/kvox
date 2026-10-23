@@ -1,5 +1,13 @@
 # @marinoscar/kvox-contract
 
+## 0.1.0-next.15
+
+### Minor Changes
+
+- 434b8bd: Bulk graph extraction and opt-in auto-commit for note libraries (#716, #718; ADR-0007). Library imports queue `kg.extract` at the new `KG_EXTRACT_BULK_PRIORITY` (50) and stamp `note_library_files.extracted_version` when a draft lands. New server-only job `kg.library_reconcile` (queued by `GraphReconcileEnqueuer` and on `kvox.notes.import_batch_settled`) re-queues library notes the graph has not read at their current version. New route `POST /api/graph/import-batches/:batchId/retry-extractions`. New event `kvox.graph.proposal_drafted` and server-only job `kg.autocommit`, which commits the safe rows of a draft when the library's `auto_commit` is on. The contract adds `NOTE_IMPORT_BATCH_SETTLED_EVENT` and `retryExtractionsResponseSchema`.
+- 22adaf9: Contract for note libraries (#710, epic #708). `@marinoscar/kvox-contract/notes` adds `DOCX_MIME_TYPE` and `PPTX_MIME_TYPE` (both now in `NOTE_DOCUMENT_MIME_TYPES`); the extraction reasons `unsupported_office_format` and `archive_too_large` and the encoding `ooxml` (appended); a new `note_document` kind and `/notes/import-batches` route in `detectKvoxImport` / `KVOX_IMPORT_ROUTES`, which now recognises .docx and .pptx by ZIP entry names, PDFs, legacy Office (CFB) files, and routes Markdown and text that is not a KVox note export to `note_document` (the `document_pdf` and `document_text` kinds stay in the union, deprecated, and are no longer returned); `note-library.ts` with the importable extensions and `accept` string, the library, batch, item and stage tuples, `normalizeLibraryPath`, `NOTE_LIBRARY_MAX_MANIFEST_ENTRIES` and the library, manifest, scan and import-batch schemas; and optional `origin` and `bulk` on `NoteReadyEvent`.
+- a214947: Add the cross-proposal Review Queue (`GET /api/graph/review-queue`) and the safe batch commit (`POST /api/graph/proposals/commit-batch`, #717). A pure safe policy never accepts a sensitive person fact, a closing, an ambiguous or merge row, a row below the new `graph.review.minConfidence` preference (default 0.7), or a stale proposal; rows left waiting move to a new draft. `ProposalBatchCommitService.commitSafe` is reusable by the upcoming `kg.autocommit` job.
+
 ## 0.1.0-next.14
 
 ## 0.1.0-next.13
