@@ -9,6 +9,15 @@ export { kvoxHomeDestination, kvoxHomeDestinationRoutes } from './navigation.js'
 export { kvoxHomeRoutes } from './routes.js';
 
 export { CountsStrip, countsEntries } from './components/CountsStrip.js';
+export {
+  GraphStatsHomeCard,
+  HOME_GRAPH_RECENT_LIMIT,
+  HomeAskCard,
+  KnowledgeHomeGrid,
+  LibrariesHomeCard,
+  RecentImportsHomeCard,
+  ReviewQueueHomeCard,
+} from './components/KnowledgeCards.js';
 export type { CountsEntry, CountsStripProps } from './components/CountsStrip.js';
 export {
   GRAPH_REVIEW_LIMIT,

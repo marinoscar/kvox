@@ -23,6 +23,9 @@ export { GraphOverviewPage } from './pages/GraphOverviewPage.js';
 export { GraphImportPage } from './pages/GraphImportPage.js';
 export { GraphReviewPage, reviewTarget } from './pages/GraphReviewPage.js';
 export type { ReviewTarget } from './pages/GraphReviewPage.js';
+export { GraphReviewQueuePage } from './pages/GraphReviewQueuePage.js';
+export { ReviewQueueGroupCard, reviewGroupTarget } from './components/review/ReviewQueueGroupCard.js';
+export type { ReviewQueueGroupCardProps } from './components/review/ReviewQueueGroupCard.js';
 export { UserKnowledgeGraphPage } from './pages/UserKnowledgeGraphPage.js';
 
 export { EvidenceChip, EvidenceChips } from './components/EvidenceChip.js';

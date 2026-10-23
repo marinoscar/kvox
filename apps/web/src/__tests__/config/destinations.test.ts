@@ -120,6 +120,9 @@ describe('destinations — route ownership', () => {
         '/graph/overview',
         // #387 — one RDF import, likewise.
         '/graph/imports/:proposalId',
+        // The draft list and #721's grouped Review Queue, likewise.
+        '/graph/review',
+        '/graph/review-queue',
         // #380 — Ask, `/ask` and `/ask/:id` as one optional-segment route.
         '/ask/:conversationId?',
         '/admin',
@@ -200,6 +203,8 @@ describe('destinations — the knowledge graph (#373, #438)', () => {
     expect(resolveActiveDestination('/graph/explore')).toBe('knowledge');
     expect(resolveActiveDestination('/graph/overview')).toBe('knowledge');
     expect(resolveActiveDestination('/graph/imports/abc')).toBe('knowledge');
+    // #721 — the Review Queue is reached from the Knowledge pages on web.
+    expect(resolveActiveDestination('/graph/review-queue')).toBe('knowledge');
     expect(resolveActiveDestination('/graphs')).toBeNull();
     expect(resolveActiveDestination('/ask')).toBe('knowledge');
     expect(resolveActiveDestination('/ask/abc-123')).toBe('knowledge');

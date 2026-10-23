@@ -61,6 +61,8 @@ import {
   AUTO_LINK_MIN,
   maxNewThreshold,
   NEW_MIN,
+  REVIEW_MIN_CONFIDENCE_MAX,
+  REVIEW_MIN_CONFIDENCE_MIN,
   SAFE_AUTO_LINK,
   useGraphPreferences,
   type GraphSaveState,
@@ -131,6 +133,7 @@ export function UserKnowledgeGraphPage() {
   // Slider values while dragging; committed on release.
   const [autoLink, setAutoLink] = useState(preferences.resolution.autoLinkThreshold);
   const [newBelow, setNewBelow] = useState(preferences.resolution.newThreshold);
+  const [minConfidence, setMinConfidence] = useState(preferences.review.minConfidence);
   const [confirmWorkOff, setConfirmWorkOff] = useState(false);
   const [confirmPersonalOn, setConfirmPersonalOn] = useState(false);
 
@@ -138,6 +141,10 @@ export function UserKnowledgeGraphPage() {
     setAutoLink(preferences.resolution.autoLinkThreshold);
     setNewBelow(preferences.resolution.newThreshold);
   }, [preferences.resolution.autoLinkThreshold, preferences.resolution.newThreshold]);
+
+  useEffect(() => {
+    setMinConfidence(preferences.review.minConfidence);
+  }, [preferences.review.minConfidence]);
 
   if (isLoading) return <KvoxLoadingSpinner />;
 
@@ -342,6 +349,29 @@ export function UserKnowledgeGraphPage() {
             </Button>
           </Box>
         </Stack>
+      </Section>
+
+      {/* 3b. Batch review (#721): the safe policy's confidence floor. */}
+      <Section title="Batch review" id="kg-review-heading">
+        <Typography id="kg-min-confidence-label" gutterBottom>
+          Accept in a batch only at {percent(minConfidence)} confidence or more
+        </Typography>
+        <Slider
+          aria-labelledby="kg-min-confidence-label"
+          min={REVIEW_MIN_CONFIDENCE_MIN}
+          max={REVIEW_MIN_CONFIDENCE_MAX}
+          step={0.05}
+          value={minConfidence}
+          valueLabelDisplay="auto"
+          valueLabelFormat={percent}
+          getAriaValueText={percent}
+          onChange={(_, value) => setMinConfidence(value as number)}
+          onChangeCommitted={(_, value) => void update({ review: { minConfidence: value as number } })}
+        />
+        <FormHelperText sx={{ mt: 0 }}>
+          &quot;Accept &amp; commit safe rows&quot; in the Review Queue leaves anything the AI was less sure
+          of for you to decide.
+        </FormHelperText>
       </Section>
 
       {/* 4. Domains */}
