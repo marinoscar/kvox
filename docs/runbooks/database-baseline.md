@@ -217,7 +217,7 @@ Platform `0024_split_system_org_roles` changes who holds `contributor` and `view
 6. **Migrate.** `docker compose exec api npm run prisma:migrate` applies 23 migrations. From here on, run the baseline tool without `--through 14` (section 6).
 7. **Seed.** `docker compose exec api npm run prisma:seed`.
 8. **Check.** `docker compose exec api npm run db:check:database`.
-9. **Deploy the 1.1 to 1.4 train** in order with `kvox deploy update`. Its migrate step finds nothing pending. Its seed step is idempotent.
+9. **Deploy the 1.1 to 1.4 train** in order with `kvox deploy update`, after updating the server's CLI ([CLI first, then the app](../deployment/vps.md#updating-a-server-cli-first-then-the-app)). Its migrate step finds nothing pending. Its seed step is idempotent.
 10. **Verify** with the smoke test and a login as an admin and as a contributor.
 11. **Close the window.**
 

@@ -251,6 +251,7 @@ tokens stay per-user regardless of where the code was unpacked.
 
 ### Troubleshooting the install
 
+- **`deploy update` fails at Build images with `required variable STACK_AGENT_TOKEN is missing a value`** — this CLI is older than the revision it pulled. Update the CLI, then `kvox deploy update --force`: [`docs/deployment/vps.md`, "Troubleshooting"](../../docs/deployment/vps.md#13-troubleshooting).
 - **`kvox: command not found`** — the shim directory isn't on `$PATH`.
   Add the `export PATH="$PATH:$HOME/.local/bin"` line above (substituting
   your `KVOX_BIN_DIR` if you set one) to your shell config and reload the
@@ -502,6 +503,25 @@ exactly what a fresh server would see (it probes nothing, assumes nothing is
 installed, and never reads `$HOME` or the hostname), which is also how the
 script is tested: `apps/cli/src/bootstrap-vps.test.ts` compares its output
 to a committed fixture.
+
+### Updating a server: CLI first, then the app
+
+`kvox deploy update` updates the deployed app under `<deployRoot>/repo`; it never
+updates the CLI. The CLI is updated with `--update` above. Do the CLI first, so the
+CLI that pulls a revision is at least as new as that revision:
+
+```bash
+git -C /opt/infra/cli/<repo> pull --ff-only
+bash /opt/infra/cli/<repo>/apps/cli/bootstrap-vps.sh --repo <owner>/<repo> --update
+kvox --version
+kvox deploy update
+```
+
+An older CLI fails at **Build images** with `required variable STACK_AGENT_TOKEN is
+missing a value`; recovery is in
+[`docs/deployment/vps.md`, "Troubleshooting"](../../docs/deployment/vps.md#13-troubleshooting)
+and the order in
+[Updating a server](../../docs/deployment/vps.md#updating-a-server-cli-first-then-the-app).
 
 ### Where an app lives
 
