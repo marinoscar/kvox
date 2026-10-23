@@ -1,5 +1,19 @@
 # @marinoscar/kvox-api
 
+## 0.1.0-next.15
+
+### Minor Changes
+
+- 7e37b6f: Note libraries and import batches API (#714): `POST/GET /api/notes/libraries`, `GET/PATCH/DELETE /api/notes/libraries/:id`, `POST /api/notes/libraries/:id/scan` (manifest diff), `POST/GET /api/notes/import-batches`, `GET /api/notes/import-batches/:id` and `/items`. New exports `NoteLibrariesService`, `NoteLibraryPolicy` (`forNote`), `diffLibraryManifest`, `deriveItemStage`, `recomputeBatchStatus`. `KvoxNotesDb` gains the `noteLibrary`, `noteLibraryFile`, `noteImportBatch`, `noteImportBatchItem` and read-only `kgProposal` delegates.
+- 434b8bd: Bulk graph extraction and opt-in auto-commit for note libraries (#716, #718; ADR-0007). Library imports queue `kg.extract` at the new `KG_EXTRACT_BULK_PRIORITY` (50) and stamp `note_library_files.extracted_version` when a draft lands. New server-only job `kg.library_reconcile` (queued by `GraphReconcileEnqueuer` and on `kvox.notes.import_batch_settled`) re-queues library notes the graph has not read at their current version. New route `POST /api/graph/import-batches/:batchId/retry-extractions`. New event `kvox.graph.proposal_drafted` and server-only job `kg.autocommit`, which commits the safe rows of a draft when the library's `auto_commit` is on. The contract adds `NOTE_IMPORT_BATCH_SETTLED_EVENT` and `retryExtractionsResponseSchema`.
+- 36cb91e: Note libraries import (#715, epic #708). `POST /api/notes/import-batches/:id/files` uploads one document into a batch (multipart `file`, optional `path` and `mtime`; bounded by `maxDocumentImportBytes`; a file whose bytes the library already imported answers `skipped`) and queues the new server-only `note.library.import` job, which turns it into a note (a new file) or a new version of the note an earlier import made (a changed file, flagged `diverged` when the note was edited since). `POST /api/notes/import-batches/:id/retry` re-queues failed items. Exports `NoteLibraryImportHandler`, `NoteLibraryUploadService`, `NoteLibraryUploadController` and `NOTE_LIBRARY_IMPORT_JOB_TYPE`; `kvox.notes.note_ready` is published with `origin: 'library'` and `bulk: true` when the library's `autoExtract` is on.
+- 6b4c78a: Notes: read Word (.docx) and PowerPoint (.pptx) documents into Markdown (`extractDocumentText`, `documentToNoteBody`), with zip-bomb limits and the bundled `fflate`; new options `documentSources.office` and `maxDocumentImportBytes`.
+- a214947: Add the cross-proposal Review Queue (`GET /api/graph/review-queue`) and the safe batch commit (`POST /api/graph/proposals/commit-batch`, #717). A pure safe policy never accepts a sensitive person fact, a closing, an ambiguous or merge row, a row below the new `graph.review.minConfidence` preference (default 0.7), or a stale proposal; rows left waiting move to a new draft. `ProposalBatchCommitService.commitSafe` is reusable by the upcoming `kg.autocommit` job.
+
+### Patch Changes
+
+- fdd11e4: Close import batches that never got an item. New `POST /api/notes/import-batches/:id/close` (cancels an empty batch, settles a finished one, leaves an importing one running); `GET /import-batches/:id` also reads an empty batch older than 30 minutes as cancelled. The library sync and the ad-hoc import now call `closeImportBatch` for every batch they opened, after the uploads, on a cancelled confirm and on abort.
+
 ## 0.1.0-next.14
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @marinoscar/kvox-web
 
+## 0.1.0-next.15
+
+### Minor Changes
+
+- 85e1abd: Folder access for note libraries (#719, epic #708). `@marinoscar/kvox-web/core/headless` gains the `KvoxFileAccessPort` host capability (opaque `KvoxFolderRef`s, folder-relative `KvoxFileEntry` paths, `pickFolder`, `listFolders`, `forgetFolder`, `enumerate`, `hash`, `read`, an optional `watch`, and the per-device `getLibraryFolder`/`setLibraryFolder` binding), the optional `KvoxWebHost.files` that KVox Desktop implements, `useKvoxFileAccess()` (the host's port or a shared browser one), `createBrowserFileAccess()` (File System Access with handles kept in IndexedDB, or an `<input webkitdirectory>` fallback held in memory; hidden entries and `node_modules` skipped; paths normalised with `normalizeLibraryPath`; SHA-256 through WebCrypto on the main thread because the CSP allows no `blob:` worker), `scanFolder()` with progress, `filesFromDirectoryInput`, `sha256Hex` and `KvoxFileAccessError`.
+- 7e76848: Note libraries in the web UI (#720, epic #708). `notes/headless` adds the typed clients of the library and import-batch routes (`createNoteLibrary`, `scanNoteLibrary`, `uploadNoteImportFile`, `retryNoteImportBatch`, ...), the hooks `useNoteLibraries`, `useNoteLibrary`, `useImportBatches`, `useImportBatch` (polled every 2 s while the batch works) and `useImportBatchItems`, `describeNoteImportFailure` (friendly sentences for `failureReason` codes), and the orchestration both hosts share: `runLibrarySync` (enumerate, scan, hash what the server asks for, confirm, upload with bounded concurrency or `sequential`) and `importFilesAdHoc`. `notes/ui` adds `NoteLibrariesPage` (`/notes/libraries`), `NoteLibraryPage` (`/notes/libraries/:libraryId`) and `NoteImportBatchPage` (`/notes/import-batches/:batchId`), all in `kvoxNotesRoutes` under `notes:read`, plus `ImportNotesButton`, `NotesDropZone`, `ScanConfirmDialog` and the batch list and funnel components. `NotesPage` now shows "Import notes" and "Libraries" by default when no `secondaryAction` is given, and accepts dropped files.
+- 4fb08c4: Add the Review Queue and a knowledge-first Home (#721, epic #708). `/graph/review-queue` (`GraphReviewQueuePage`, `graph:read`) lists draft proposals grouped by library and import batch with safe and waiting row counts, explains the safe policy ("What is safe?"), and commits a group's safe rows in one action for `graph:write` (`useReviewQueue`, `useCommitBatch`, client `getReviewQueue`/`commitBatch`, helpers `summarizeCommitBatch`, `reviewGroupLabel`, `waitReasonCopy`); the Review page links to it and the Review destination owns it. The graph preferences gain `review.minConfidence` (default 0.7), editable under "Batch review" in the Knowledge graph settings. Home gains the sections `ask`, `reviewQueue`, `libraries`, `graphStats` and `recentImports` and the preset `KVOX_KNOWLEDGE_HOME_SECTIONS`, which `kvoxHomeRoutes` now draws; `KVOX_HOME_SECTIONS` is unchanged.
+
+### Patch Changes
+
+- fdd11e4: Close import batches that never got an item. New `POST /api/notes/import-batches/:id/close` (cancels an empty batch, settles a finished one, leaves an importing one running); `GET /import-batches/:id` also reads an empty batch older than 30 minutes as cancelled. The library sync and the ad-hoc import now call `closeImportBatch` for every batch they opened, after the uploads, on a cancelled confirm and on abort.
+
 ## 0.1.0-next.14
 
 ### Patch Changes
