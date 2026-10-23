@@ -251,7 +251,7 @@ tokens stay per-user regardless of where the code was unpacked.
 
 ### Troubleshooting the install
 
-- **`deploy update` fails at Build images with `required variable STACK_AGENT_TOKEN is missing a value`** — this CLI is older than the revision it pulled. Update the CLI, then `kvox deploy update --force`: [`docs/deployment/vps.md`, "Troubleshooting"](../../docs/deployment/vps.md#13-troubleshooting).
+- **`deploy update` fails at Build images with `required variable STACK_AGENT_TOKEN is missing a value`** — this CLI is older than the revision it pulled. Update the CLI, then `kvox deploy update --force` (once: the failed run left no record of the last good revision; a CLI of 1.10.2 or newer prints this hint itself and retries a failed update with a plain `kvox deploy update`): [`docs/deployment/vps.md`, "Troubleshooting"](../../docs/deployment/vps.md#13-troubleshooting).
 - **`kvox: command not found`** — the shim directory isn't on `$PATH`.
   Add the `export PATH="$PATH:$HOME/.local/bin"` line above (substituting
   your `KVOX_BIN_DIR` if you set one) to your shell config and reload the
