@@ -83,6 +83,26 @@ function decodeItemCursor(cursor: string): string | null {
 }
 
 /**
+ * The caller's libraries.
+ *
+ * @stability experimental
+ */
+export interface NoteLibraryList {
+  /** The libraries, newest first. */
+  items: NoteLibrary[];
+}
+
+/**
+ * The caller's import batches.
+ *
+ * @stability experimental
+ */
+export interface NoteImportBatchList {
+  /** The batches, newest first. */
+  items: NoteImportBatch[];
+}
+
+/**
  * Libraries, scans and import batches.
  *
  * @stability experimental
@@ -105,7 +125,7 @@ export class NoteLibrariesService {
   }
 
   /** The caller's libraries, newest first, with file counts. */
-  async list(actor: NotesActor): Promise<{ items: NoteLibrary[] }> {
+  async list(actor: NotesActor): Promise<NoteLibraryList> {
     const rows = await this.prisma.noteLibrary.findMany({
       where: { ownerId: actor.id },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -301,7 +321,7 @@ export class NoteLibrariesService {
   async listBatches(
     actor: NotesActor,
     query: { libraryId?: string | undefined; limit: number }
-  ): Promise<{ items: NoteImportBatch[] }> {
+  ): Promise<NoteImportBatchList> {
     const rows = await this.prisma.noteImportBatch.findMany({
       where: { ownerId: actor.id, ...(query.libraryId ? { libraryId: query.libraryId } : {}) },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

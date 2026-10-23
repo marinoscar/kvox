@@ -42,10 +42,13 @@ export class NoteReadyExtractionSubscriber implements OnModuleInit {
   /** Subscribes to `kvox.notes.note_ready` on the event port when the module starts. */
   onModuleInit(): void {
     this.events.subscribe(NOTE_READY_EVENT, async (payload) => {
-      const { noteId, ownerId } = payload as NoteReadyEvent;
+      const { noteId, ownerId, bulk, origin } = payload as NoteReadyEvent;
 
       try {
-        await this.extraction.enqueueForReadyNote(noteId, ownerId);
+        await this.extraction.enqueueForReadyNote(noteId, ownerId, {
+          ...(bulk !== undefined ? { bulk } : {}),
+          ...(origin !== undefined ? { origin } : {}),
+        });
       } catch (error) {
         this.logger.warn(
           `Could not queue a graph extraction of note ${noteId}: ${error instanceof Error ? error.message : String(error)}`,

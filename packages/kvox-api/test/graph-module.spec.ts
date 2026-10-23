@@ -106,6 +106,8 @@ describe('the graph modules over the fake ports', () => {
       'kg.extract',
       'kg.resolve',
       'kg.topics_promote',
+      'kg.library_reconcile',
+      'kg.autocommit',
       'kg.embed',
       'kg.export',
       'kg.import',

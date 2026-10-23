@@ -1,4 +1,4 @@
-import { KG_EMBED_JOB_TYPE, KG_EXTRACT_JOB_TYPE, KG_RESOLVE_JOB_TYPE, KG_TOPICS_PROMOTE_JOB_TYPE, rethrowRateLimit } from '../../graph/index.js';
+import { KG_EMBED_JOB_TYPE, KG_EXTRACT_JOB_TYPE, KG_RESOLVE_JOB_TYPE, KG_TOPICS_PROMOTE_JOB_TYPE, KG_LIBRARY_RECONCILE_JOB_TYPE, KG_AUTOCOMMIT_JOB_TYPE, rethrowRateLimit } from '../../graph/index.js';
 import { NOTE_READY_EVENT } from '../../notes/index.js';
 import { KvoxAiError, KvoxRateLimitError, type KvoxJob, type KvoxJobHandler } from '../../ports/index.js';
 import { createInMemoryKvoxEvents } from '../../testing/index.js';
@@ -54,6 +54,9 @@ const PINNED_TYPES = [
   { type: KG_EMBED_JOB_TYPE, maxRuntimeMs: 5 * 60_000, maxAttempts: 3 },
   // #666 — every proposal is written whole, so a retry only skips what is already proposed.
   { type: KG_TOPICS_PROMOTE_JOB_TYPE, maxRuntimeMs: 30 * 60_000, maxAttempts: 3 },
+  // #716, #718 — enqueue-only and commit-safe jobs; both are server-only.
+  { type: KG_LIBRARY_RECONCILE_JOB_TYPE, maxRuntimeMs: 2 * 60_000, maxAttempts: 2, usesAi: false },
+  { type: KG_AUTOCOMMIT_JOB_TYPE, maxRuntimeMs: 5 * 60_000, maxAttempts: 2, usesAi: false },
 ] as const;
 
 const USER = '11111111-1111-4111-8111-111111111111';
@@ -131,11 +134,11 @@ export function describeGraphExtractionConformance(
       });
 
       for (const pinned of PINNED_TYPES) {
-        it(`${pinned.type} is registered, server-only, spends the owner's key, with its pinned profile`, () => {
+        it(`${pinned.type} is registered, server-only, with its pinned profile`, () => {
           const handler = handlers.find((candidate) => candidate.type === pinned.type);
 
           expect(handler).toBeDefined();
-          expect(handler?.usesAi).toBe(true);
+          expect(handler?.usesAi ?? false).toBe('usesAi' in pinned ? pinned.usesAi : true);
           expect(handler?.nodeResultSchema).toBeUndefined();
           expect(handler?.persistNodeResult).toBeUndefined();
           expect(handler?.profile).toEqual({ maxRuntimeMs: pinned.maxRuntimeMs, maxAttempts: pinned.maxAttempts });

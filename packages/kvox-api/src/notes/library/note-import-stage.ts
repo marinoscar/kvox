@@ -74,6 +74,18 @@ export function recomputeBatchStatus(
 }
 
 /**
+ * What {@link pickProposal} reads of a proposal.
+ *
+ * @stability experimental
+ */
+export interface PickableProposal {
+  /** The note version the proposal covers. */
+  noteVersion: number | null;
+  /** When the proposal was created. */
+  createdAt: Date;
+}
+
+/**
  * The proposal that speaks for an item: the newest one made from the item's note version,
  * else the newest one for the note.
  *
@@ -82,7 +94,7 @@ export function recomputeBatchStatus(
  * @returns the chosen proposal, or `null` when there is none.
  * @stability experimental
  */
-export function pickProposal<T extends { noteVersion: number | null; createdAt: Date }>(
+export function pickProposal<T extends PickableProposal>(
   proposals: readonly T[],
   noteVersion: number | null
 ): T | null {
