@@ -1,5 +1,11 @@
 # @marinoscar/kvox-eval
 
+## 0.1.0-next.13
+
+### Patch Changes
+
+- b2d260a: Dependency and peer ranges on the platform packages move from 0.1.0-next.9 to 0.1.0-next.10, the release that fixes the deploy update retry after a failed run. No code in these packages changes.
+
 ## 0.1.0-next.12
 
 ### Minor Changes
