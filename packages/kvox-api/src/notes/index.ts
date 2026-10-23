@@ -135,6 +135,9 @@ export { NoteSourcesController } from './note-sources.controller.js';
 export { NoteImportController } from './import/note-import.controller.js';
 export { NoteGenerationStreamController } from './note-generation-stream.controller.js';
 
+// Note libraries and import batches (#714).
+export * from './library/index.js';
+
 // Handlers.
 export { NoteExportHandler } from './handlers/note-export.handler.js';
 export { NoteGenerateHandler, NOTE_GENERATE_MAX_RUNTIME_MS } from './handlers/note-generate.handler.js';
@@ -203,6 +206,11 @@ export type {
   NoteExportRow,
   NoteGenerationRow,
   NoteRow,
+  NoteLibraryRow,
+  NoteLibraryFileRow,
+  NoteImportBatchRow,
+  NoteImportBatchItemRow,
+  NoteProposalRef,
   NoteTemplateRow,
   NoteVersionRow,
   UserHiddenNoteTemplateRow,
