@@ -206,6 +206,23 @@ export class NoteLibrariesController {
     return this.libraries.getBatch(user, id);
   }
 
+  @Post('import-batches/:id/close')
+  @HttpCode(200)
+  @KvoxAuth(NOTES_WRITE_PERMISSION)
+  @ApiOperation({
+    summary: 'Close an import batch',
+    description:
+      'Called by the client when it has finished uploading (or gave up). A batch with no items ' +
+      'becomes `cancelled`; one whose items have all settled is settled; one still importing is ' +
+      'left running. Idempotent. Requires `notes:write`.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiDataResponse(NoteImportBatchDto, { description: 'The batch' })
+  @ApiResponse(NOT_FOUND)
+  closeBatch(@Param('id', ParseUUIDPipe) id: string, @CurrentActor() user: NotesActor) {
+    return this.libraries.closeBatch(user, id);
+  }
+
   @Get('import-batches/:id/items')
   @KvoxAuth(NOTES_READ_PERMISSION)
   @ApiOperation({

@@ -35,6 +35,7 @@ import type { NoteLibraryManifestEntry } from '@marinoscar/kvox-contract/notes';
 import { isKvoxApiError, scanFolder } from '../../../core/headless/index.js';
 import type { KvoxFileAccessPort, KvoxFileEntry, KvoxFolderRef, KvoxWebHost } from '../../../core/headless/index.js';
 import {
+  closeImportBatch,
   createNoteImportBatch,
   scanNoteLibrary,
   uploadNoteImportFile,
@@ -295,6 +296,29 @@ interface UploadJob {
  * @stability experimental
  */
 export async function runLibrarySync(options: RunLibrarySyncOptions): Promise<LibrarySyncResult> {
+  const batchIds: string[] = [];
+  try {
+    return await runLibrarySyncInner(options, batchIds);
+  } finally {
+    await closeBatches(options.host, batchIds);
+  }
+}
+
+/** Closes every batch a run opened, best effort: an empty one must not stay `running`. */
+async function closeBatches(host: KvoxWebHost, batchIds: readonly string[]): Promise<void> {
+  for (const id of new Set(batchIds)) {
+    try {
+      await closeImportBatch(host, id);
+    } catch {
+      // Best effort; the server also reads an abandoned empty batch as cancelled.
+    }
+  }
+}
+
+async function runLibrarySyncInner(
+  options: RunLibrarySyncOptions,
+  batchIds: string[],
+): Promise<LibrarySyncResult> {
   const { host, port, library, ref, signal, onProgress, confirm } = options;
   const failed: LibrarySyncFailure[] = [];
   const report = (progress: Omit<LibrarySyncProgress, 'failed'>) =>
@@ -319,7 +343,6 @@ export async function runLibrarySync(options: RunLibrarySyncOptions): Promise<Li
   const chunks = chunk(manifest, NOTE_LIBRARY_MAX_MANIFEST_ENTRIES);
   const complete = chunks.length === 1;
   const jobs: UploadJob[] = [];
-  const batchIds: string[] = [];
   const hashNeeded: string[] = [];
   let missingCount = 0;
   let unchangedCount = 0;
@@ -505,6 +528,15 @@ export async function importFilesAdHoc(options: ImportFilesAdHocOptions): Promis
   const { host, files, signal, onProgress } = options;
   throwIfAborted(signal);
   const batchId = await createNoteImportBatch(host);
+  try {
+    return await importIntoBatch(options, batchId);
+  } finally {
+    await closeBatches(host, [batchId]);
+  }
+}
+
+async function importIntoBatch(options: ImportFilesAdHocOptions, batchId: string): Promise<ImportFilesAdHocResult> {
+  const { host, files, signal, onProgress } = options;
   const failed: LibrarySyncFailure[] = [];
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
   const counts = { done: 0, bytes: 0, uploaded: 0, skipped: 0 };

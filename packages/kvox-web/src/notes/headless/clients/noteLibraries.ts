@@ -337,6 +337,21 @@ export async function uploadNoteImportFile(
 }
 
 /**
+ * `POST /notes/import-batches/:id/close`: tell the server no more files are coming. A batch
+ * with no items becomes `cancelled`; one whose items settled is settled; one still
+ * importing is left running. Idempotent.
+ *
+ * @param host - The host.
+ * @param batchId - The batch.
+ * @returns The batch.
+ *
+ * @stability experimental
+ */
+export async function closeImportBatch(host: KvoxWebHost, batchId: string): Promise<NoteImportBatch> {
+  return lenient(noteImportBatchSchema, await kvoxPost<unknown>(host, `/notes/import-batches/${enc(batchId)}/close`));
+}
+
+/**
  * `POST /notes/import-batches/:id/retry`: re-queue the failed items.
  *
  * @param host - The host.

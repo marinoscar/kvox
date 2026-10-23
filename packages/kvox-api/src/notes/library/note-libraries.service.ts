@@ -52,6 +52,9 @@ export const NOTE_IMPORT_BATCH_NOT_FOUND_MESSAGE = 'Import batch not found';
 /** Ids per `IN (...)` statement, well under the driver's bind-parameter limit. */
 const ID_CHUNK = 5000;
 
+/** A running batch with no items after this long is abandoned (read as cancelled). */
+const EMPTY_BATCH_TTL_MS = 30 * 60 * 1000;
+
 /** The most `approxInputTokens` an estimate reports. */
 const MAX_APPROX_TOKENS = 1_000_000_000_000;
 
@@ -333,9 +336,53 @@ export class NoteLibrariesService {
 
   /** One batch with its counts. @throws NotFoundException when not the caller's. */
   async getBatch(actor: NotesActor, id: string): Promise<NoteImportBatch> {
-    const row = await this.ownedBatch(actor, id);
+    let row = await this.ownedBatch(actor, id);
+    // Safety net: a batch opened by a scan whose client never uploaded anything.
+    if (row.status === 'running' && Date.now() - row.createdAt.getTime() > EMPTY_BATCH_TTL_MS) {
+      row = await this.cancelIfEmpty(row);
+    }
     const [batch] = await this.toBatches([row]);
     return batch!;
+  }
+
+  /**
+   * Closes a batch the client is done uploading into (idempotent). No items: cancelled. No
+   * queued or importing items: settled from its items. Otherwise left running; the last item
+   * settles it.
+   *
+   * @throws NotFoundException when not the caller's.
+   */
+  async closeBatch(actor: NotesActor, id: string): Promise<NoteImportBatch> {
+    const row = await this.ownedBatch(actor, id);
+
+    if (row.status === 'running') {
+      const settled = await this.prisma.$transaction(async (tx) => {
+        const items = await tx.noteImportBatchItem.count({ where: { batchId: id } });
+        if (items === 0) {
+          await tx.noteImportBatch.update({
+            where: { id },
+            data: { status: 'cancelled', finishedAt: new Date() },
+          });
+          return null;
+        }
+        return this.refreshBatchStatus(id, tx);
+      });
+      // After the commit, as refreshBatchStatus requires of its event.
+      if (settled === 'completed' || settled === 'completed_with_errors') this.emitSettled(row);
+    }
+
+    return this.getBatch(actor, id);
+  }
+
+  private async cancelIfEmpty(row: NoteImportBatchRow): Promise<NoteImportBatchRow> {
+    const items = await this.prisma.noteImportBatchItem.count({ where: { batchId: row.id } });
+    if (items > 0) return row;
+    const finishedAt = new Date();
+    await this.prisma.noteImportBatch.update({
+      where: { id: row.id },
+      data: { status: 'cancelled', finishedAt },
+    });
+    return { ...row, status: 'cancelled', finishedAt };
   }
 
   /** A page of a batch's items, oldest first. */

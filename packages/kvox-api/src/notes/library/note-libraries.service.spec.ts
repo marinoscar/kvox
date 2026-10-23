@@ -29,7 +29,7 @@ function build() {
     create: fn(),
     update: fn(),
   };
-  const noteImportBatchItem = { findMany: fn(), createMany: fn(), groupBy: fn() };
+  const noteImportBatchItem = { findMany: fn(), createMany: fn(), groupBy: fn(), count: fn() };
   const kgProposal = { findMany: fn() };
   const db = {
     noteLibrary,
@@ -280,6 +280,65 @@ describe('NoteLibrariesService', () => {
     expect(noteImportBatch.update).toHaveBeenCalledWith({
       where: { id: 'b1' },
       data: { status: 'completed_with_errors', finishedAt: expect.any(Date) },
+    });
+  });
+
+  describe('closeBatch', () => {
+    const BATCH = { id: 'b1', ownerId: 'user-1', libraryId: null, status: 'running', createdAt: new Date() };
+
+    it('cancels a batch with no items', async () => {
+      const { service, noteImportBatch, noteImportBatchItem } = build();
+      noteImportBatch.findFirst.mockResolvedValue(BATCH);
+      noteImportBatchItem.count.mockResolvedValue(0);
+      noteImportBatchItem.groupBy.mockResolvedValue([]);
+      noteImportBatchItem.findMany.mockResolvedValue([]);
+
+      await service.closeBatch(ACTOR, 'b1');
+
+      expect(noteImportBatch.update).toHaveBeenCalledWith({
+        where: { id: 'b1' },
+        data: { status: 'cancelled', finishedAt: expect.any(Date) },
+      });
+    });
+
+    it('settles a batch whose items are all done', async () => {
+      const { service, noteImportBatch, noteImportBatchItem } = build();
+      noteImportBatch.findFirst.mockResolvedValue(BATCH);
+      noteImportBatch.findUnique.mockResolvedValue(BATCH);
+      noteImportBatchItem.count.mockResolvedValue(2);
+      noteImportBatchItem.findMany.mockResolvedValue([]);
+      noteImportBatchItem.groupBy.mockResolvedValue([{ status: 'imported', _count: { _all: 2 } }]);
+
+      await service.closeBatch(ACTOR, 'b1');
+
+      expect(noteImportBatch.update).toHaveBeenCalledWith({
+        where: { id: 'b1' },
+        data: { status: 'completed', finishedAt: expect.any(Date) },
+      });
+    });
+
+    it('leaves a batch that is still importing', async () => {
+      const { service, noteImportBatch, noteImportBatchItem } = build();
+      noteImportBatch.findFirst.mockResolvedValue(BATCH);
+      noteImportBatch.findUnique.mockResolvedValue(BATCH);
+      noteImportBatchItem.count.mockResolvedValue(2);
+      noteImportBatchItem.findMany.mockResolvedValue([]);
+      noteImportBatchItem.groupBy.mockResolvedValue([
+        { status: 'imported', _count: { _all: 1 } },
+        { status: 'importing', _count: { _all: 1 } },
+      ]);
+
+      await service.closeBatch(ACTOR, 'b1');
+
+      expect(noteImportBatch.update).not.toHaveBeenCalled();
+    });
+
+    it('answers 404 for a foreign batch', async () => {
+      const { service, noteImportBatch } = build();
+      noteImportBatch.findFirst.mockResolvedValue(null);
+
+      await expect(service.closeBatch(ACTOR, 'b1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(noteImportBatch.update).not.toHaveBeenCalled();
     });
   });
 
