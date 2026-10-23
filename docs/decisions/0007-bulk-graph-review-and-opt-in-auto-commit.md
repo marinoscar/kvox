@@ -19,18 +19,23 @@ Two ways to commit many proposals. Both go through `ProposalCommitService` and `
 
 **The safe policy** never accepts:
 
-- a `sensitive` PersonFact (it is never bulk-accepted, bulk-imported or exported);
+- a `sensitive` PersonFact (it is never bulk-accepted, bulk-imported or exported), or a row of a review-only type such as the personal domain;
 - a closing;
-- an ambiguous resolution or a new merge;
-- a row below the user's `graphPreferences.review.minConfidence`;
+- an ambiguous resolution or a merge into an existing entity;
+- a row below the user's `graphPreferences.review.minConfidence` (default 0.7);
+- a row the pre-check flagged;
+- a relation, item or closing whose endpoint entity is not itself accepted;
 - a row of a stale proposal.
 
-Those rows stay in the draft for a person.
+Each row that waits carries one reason: `sensitive`, `closing`, `merge`, `ambiguous`, `low_confidence`, `flagged` or `blocked_endpoint` (`SAFE_POLICY_WAIT_REASONS`). A stale proposal is skipped whole.
+
+Those rows stay available for a person. `ProposalCommitService.commit` ignores undecided rows and marks the whole proposal `committed`, so after each successful commit the batch commit moves the rows that wait into a new draft of the same note (`remainderProposalId`; the rows keep their ids and evidence). Auto-commit does the same. [../specs/ontology.md §19.2](../specs/ontology.md#192-row-level-overrides-in-the-review-panel) has the detail.
 
 Other rules:
 
-- Bulk extraction is queued at the lower priority `KG_EXTRACT_BULK_PRIORITY = 50`, so imports and search indexing run first. A reconcile re-emits `note_ready` when `extracted_version < current_version`.
-- The audit action `graph:autocommit` records ids and counts only, never statements or evidence text.
+- Bulk extraction is queued at the lower priority `KG_EXTRACT_BULK_PRIORITY = 50`, so imports and search indexing run first. The reconcile job `kg.library_reconcile` queues extraction again when `extracted_version < current_version`.
+- Audit actions: `graph:autocommit` (the job) and `graph.proposals_batch_committed` (`commit-batch`) record ids and counts only, never statements or evidence text. The import itself is audited as `note:library_import`.
+- The notes slice publishes `kvox.notes.import_batch_settled` when a batch settles; the graph slice answers with `kg.library_reconcile`, a job that only enqueues extraction for library notes whose `extracted_version` is behind. `kvox.graph.proposal_drafted` is raised by `kg.extract` after the draft commits.
 - Auto-commit is a per-library switch, off for every library until a person turns it on.
 
 ## Consequences
@@ -39,6 +44,7 @@ Other rules:
 - The no-orphans invariant holds: the deferred `kg_assert_has_evidence` trigger still refuses an accepted row without evidence at `COMMIT`.
 - The review gate is skippable for safe rows in a library whose owner opted in. This is a deliberate, bounded departure from the ontology spec's original stance; its edges are the safe policy and the per-library switch.
 - A partially failed batch leaves some proposals committed and others open. Each is independent, and the response reports per-proposal outcomes.
+- A committed proposal can leave a remainder draft behind: the review queue then shows the same note again with only the rows that need a person.
 - The safe policy lives in a package ([ADR-0001](0001-packages-first.md)); a host cannot widen it.
 
 ## Alternatives considered
@@ -55,7 +61,8 @@ Other rules:
 
 - Safe-policy tests in the graph slice: each excluded row kind stays in the draft after `commit-batch` and after `kg.autocommit`.
 - A sensitive-PersonFact invariant test: a sensitive row is never accepted by either path, even when its id is passed explicitly.
-- `kg.autocommit` no-ops when `auto_commit` is false, `graph:write` is missing, the graph is disabled or the proposal is stale.
+- `kg.autocommit` no-ops when `auto_commit` is false, the note has no library, `graph:write` is missing, the graph is disabled or the proposal is stale.
+- Remainder-draft test (`proposal-batch-commit.service.spec.ts`): the rows that wait are reported as a new draft (`remainderProposalId`) after the commit.
 - The `cron-enqueue-only` and `on-event-no-io` conformance suites (`apps/api/test/conformance.spec.ts`) prove the `proposal_drafted` subscriber only enqueues.
 - Graph-write tests prove both paths commit through `GraphWriteService`.
 - Review item: no new write path into `kg_entities`, `kg_relations` or `kg_items`.

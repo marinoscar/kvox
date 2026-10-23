@@ -705,7 +705,7 @@ Build `SearchModule.forRoot()` once and share it. `autoExtract` (default `true`)
 | `transcription` | `providers: { assemblyai: false }`, `extraProviders: [YourLocalProvider]` | No AssemblyAI unless the user opts in to uploading audio to a third party. |
 | `transcripts` | `schedules: false`, `media: { transcode: false }` or `media.ffmpegPath` / `media.ffprobePath`, `exporters: { pdf, json, markdown, extra }`, `pdf.fontDir`, `playbackUrlTtlSeconds`, `sharing` | Ship ffmpeg or turn transcode off. The default `sharing` (`OwnerOnlyTranscriptSharing`) fits a single user. |
 | `search` | `semantic: { enabled, provider, onSemanticOff }`, `transcriptVisibility` (default: the owner's own), `typePermissions` | Leave semantic on; it switches itself off when the embeddings model is missing or not 1536 wide. |
-| `notes` | `schedules`, `exporters: { markdown, pdf, docx, extra }`, `documentSources: { pdf, text }`, `stream`, `appUrl`, `maxImportBytes` | Same switches as the bare host. Keep `documentSources.pdf` on (install `unpdf`) for PDF transcripts. |
+| `notes` | `schedules`, `exporters: { markdown, pdf, docx, extra }`, `documentSources: { pdf, text, office }`, `stream`, `appUrl`, `maxImportBytes`, `maxDocumentImportBytes` | Same switches as the bare host. Keep `documentSources.pdf` on (install `unpdf`) for PDF transcripts. `office` (Word and PowerPoint, bundled `fflate`) and `maxDocumentImportBytes` (25 MiB) serve [note libraries](#note-libraries-on-desktop). |
 | `graph`, `graph-rdf`, `ask` | `schedules`, `layout`, `export` / `import` / `maxImportBytes`, `limits` (may only be lowered) | See [Jobs offline](#jobs-offline). |
 
 **Permission strings.** The slices export their permission sets as data; the single local user holds all of them, and the defaults are right, so pass nothing:
@@ -737,6 +737,7 @@ The renderer mounts one `KvoxWebHostProvider` above the router outlet. Every sli
 | `upload?.putPart(url, body, signal?)` | Optional. How one part reaches its URL; resolves `{ etag }`, rejects with a `status`. Without it the engine uses `XMLHttpRequest`, which reports byte-level progress; with it progress moves per part. | left out |
 | `viewer()` | `{ userId, permissions: ReadonlySet<string> }` or `null`; read per render. | the signed-in user |
 | `links.{transcript,note,entity,conversation}(id)` | A path your router serves. | `/transcripts/:id`, `/notes/:id`, `/graph/entities/:id`, `/ask/:id` |
+| `files?` | Optional. The `KvoxFileAccessPort` that reads folders on the device; Desktop sets it, see [Note libraries on Desktop](#note-libraries-on-desktop). The web edition leaves it out and the pages use the browser implementation. | none (`createBrowserFileAccess`) |
 | `features()` | `{ graphEnabled: boolean \| undefined }`; `undefined` while unknown keeps the graph UI hidden. | the connected-knowledge switch |
 
 A Desktop host over the local server is small. This sketch is illustrative; the symbols it imports (`KvoxWebHost`, `buildKvoxUrl`, `createFetchSseConnect`, `KvoxApiError`) exist in `@marinoscar/kvox-web/core/headless`:
@@ -801,6 +802,76 @@ A card's `permission` is the exact string the API enforces, so the Desktop setti
 **Tests.** `@marinoscar/kvox-web/core/testing` gives `createFakeKvoxWebHost({ routes, sse, ssePost, viewer, features, links, upload })` (route keys `"METHOD /path"`, `:param`, trailing `/*`), `renderWithKvoxHost(ui, host)` and `describeKvoxWebConformance`.
 
 **The explorer's layout worker.** The explorer lays the graph out in a same-origin module worker (`new Worker(new URL('./layout.worker.js', import.meta.url), { type: 'module' })` inside the package), never a `blob:` worker. electron-vite and Vite emit it as its own file next to the renderer bundle, so a renderer CSP of `worker-src 'self'` allows it and **no CSP change is needed**. A host whose bundler does not emit worker files, or that has no `Worker`, falls back to the same layout on the main thread, a little slower. The pictograms are `data:` images, covered by `img-src 'self' data:`.
+
+## Note libraries on Desktop
+
+A **note library** is a folder of Markdown, text, PDF, Word and PowerPoint files that KVox imports as notes and rescans (epic #708; design: [notes spec §8.8](../specs/notes.md#88-note-libraries-and-import-batches-epic-708), graph review: [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)). The server half is in `@marinoscar/kvox-api/notes` and the graph slice; the pages and the sync orchestration are in `@marinoscar/kvox-web`. The only thing a Desktop host adds is the **file access**: the local server never reads the folder, it receives a manifest and the bytes it asks for. Nothing leaves the device ([ADR-0004](../decisions/0004-desktop-data-local-only.md)).
+
+**Server side (main process).** Mount `NotesModule.forRoot` as for any notes host; the library routes come with it (`/api/notes/libraries`, `/api/notes/import-batches`). The upload route reads multipart, so `@fastify/multipart` must be registered (a host duty, see [Wiring the API](#wiring-the-api)). The jobs `note.library.import`, `kg.library_reconcile` and `kg.autocommit` register themselves on `KVOX_JOBS` like every other handler; none is node-eligible, so a local job runner runs them. Set `documentSources.office` (default on) and `maxDocumentImportBytes` (default 25 MiB) as the product wants. With the graph mounted, bulk extraction is queued at the low priority `KG_EXTRACT_BULK_PRIORITY = 50`, so imports and search indexing run first.
+
+**Renderer side: implement `KvoxFileAccessPort`** (`@marinoscar/kvox-web/core/headless`) over IPC and set it as `KvoxWebHost.files`. Folders cross the port as opaque `KvoxFolderRef` ids, never absolute paths; every path is POSIX and relative to its folder (`normalizeLibraryPath` of the contract is the rule). The main process owns the real paths.
+
+| Member | What the main process does |
+|---|---|
+| `capabilities` | `{ persistentFolders: true, watch: true, hashInHost: true }` |
+| `pickFolder()` | Shows the native folder dialog; stores the path in the Desktop settings under a new id; resolves `{ id, name }`, or `null` on cancel. |
+| `listFolders()` / `forgetFolder(ref)` | Lists and removes the remembered folders (forgetting also removes the library bindings that point at it). |
+| `enumerate(ref, { extensions, signal })` | Walks the folder recursively and yields `{ path, size, mtime }` for the files with those extensions; skips hidden entries (a name starting with `.`) and `node_modules`. Stream it in batches over IPC. |
+| `hash(ref, path, signal?)` | Lower-case hex SHA-256, computed in the main process so the renderer thread stays free. |
+| `read(ref, path)` | Resolves the file as a `Blob`. Reject with `KvoxFileAccessError('not_found' \| 'unknown_folder' \| 'permission_denied', …)` for an expected failure. |
+| `watch(ref, onChange)` | A file watcher (for example `chokidar` or `fs.watch`) that calls `onChange` with the relative paths that changed; returns the unsubscribe function. Debounce it. |
+| `getLibraryFolder(libraryId)` / `setLibraryFolder(libraryId, ref \| null)` | The library-to-folder binding is per device, so store it in the Desktop settings, not on the server. |
+
+```ts
+// Illustrative — not compiled
+import type { KvoxFileAccessPort } from '@marinoscar/kvox-web/core/headless';
+
+export const desktopFiles: KvoxFileAccessPort = {
+  capabilities: { persistentFolders: true, watch: true, hashInHost: true },
+  pickFolder: () => window.kvoxDesktop.files.pickFolder(),            // preload bridge over ipcRenderer.invoke
+  listFolders: () => window.kvoxDesktop.files.listFolders(),
+  forgetFolder: (ref) => window.kvoxDesktop.files.forgetFolder(ref.id),
+  enumerate: (ref, options) => window.kvoxDesktop.files.enumerate(ref.id, options.extensions, options.signal),
+  hash: (ref, path, signal) => window.kvoxDesktop.files.hash(ref.id, path, signal),
+  read: async (ref, path) => new Blob([await window.kvoxDesktop.files.read(ref.id, path)]),
+  watch: (ref, onChange) => window.kvoxDesktop.files.watch(ref.id, onChange),
+  getLibraryFolder: (libraryId) => window.kvoxDesktop.files.getLibraryFolder(libraryId),
+  setLibraryFolder: (libraryId, ref) => window.kvoxDesktop.files.setLibraryFolder(libraryId, ref?.id ?? null),
+};
+// then: const desktopHost: KvoxWebHost = { …, files: desktopFiles };
+```
+
+**Syncing.** `runLibrarySync` and `importFilesAdHoc` (`@marinoscar/kvox-web/notes/headless`) are the orchestration both hosts share; the packaged library pages call them with the port from `useKvoxFileAccess()`. Desktop calls `runLibrarySync` itself for the work the pages do not trigger, always with `{ sequential: true }` so uploads go one at a time to the local server and never compete with the database and the job runner:
+
+```ts
+// Illustrative — not compiled
+import { runLibrarySync } from '@marinoscar/kvox-web/notes/headless';
+
+async function syncLibrary(libraryId: string): Promise<void> {
+  const ref = await desktopFiles.getLibraryFolder(libraryId);
+  if (!ref) return;                                                    // not bound on this device
+  await runLibrarySync({ host: desktopHost, port: desktopFiles, library: { id: libraryId }, ref, sequential: true });
+}
+```
+
+- **On launch**, rescan every library that has a bound folder (the changes made while KVox was closed). The scan diff makes this cheap: unchanged files cost no upload, and a file touched without changing is only re-hashed.
+- **While running**, `watch` each bound folder and, on a change, rescan after a short debounce. A partial manifest (`complete: false`) is how a watcher reports a few paths; nothing absent from it is marked missing.
+- **The client closes the batch** when it has finished uploading (the sync does this for you); the server also cancels an empty batch it never heard about after 30 minutes.
+- A loose-file drop uses `importFilesAdHoc` with `files` from the OS and needs no folder.
+
+**Navigation: Home first.** Put Home first in the rail and mount `kvoxHomeRoutes` (`@marinoscar/kvox-web/home/ui`) at `/`: the knowledge-first Home draws Ask, the Review Queue, the note libraries, the graph and recent imports, then the journey, what is moving, what failed and the recent notes (no transcripts, which Desktop does not offer). The libraries pages (`/notes/libraries`, `/notes/libraries/:libraryId`, `/notes/import-batches/:batchId`) come with `kvoxNotesRoutes`, and `/graph/review-queue` with `kvoxGraphRoutes`:
+
+```ts
+// Illustrative — not compiled
+createKvoxNavigation({ include: ['home', 'notes', 'graph', 'review', 'ask', 'templates'], settingsPath: '/settings', settingsSections });
+renderKvoxRoutes([...kvoxHomeRoutes, ...kvoxNotesRoutes, ...kvoxGraphRoutes, ...kvoxAskRoutes]);
+```
+
+The `notes` destination owns `/notes`, so the libraries pages light it up; the `review` destination owns `/graph/review` and `/graph/review-queue` (`kvoxReviewDestinationRoutes`).
+
+**Graph review of an import.** An import is reviewed in one sitting at `/graph/review-queue`: one confirmation commits the **safe** rows of every draft of a batch or library; sensitive facts, closings, merges, ambiguous rows and rows under `graph.review.minConfidence` (default 0.7) wait in a new draft for a person. A library whose owner turned on `auto_commit` does the same after each extraction, without asking. Everything runs through the ordinary commit, on the owner's own AI key, and a host cannot widen the policy.
+
+**Offline.** Reading, indexing, scanning and importing need no network. Extraction into the graph needs `KVOX_AI` ([Offline constraints](#offline-constraints-feature-by-feature)); offline, imported notes stay searchable by words, and the person retries the batch's graph extractions (`POST /api/graph/import-batches/:batchId/retry-extractions`, the batch page's retry) or the next reconcile picks the notes up when the model is back.
 
 ## Look and feel
 

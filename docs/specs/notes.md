@@ -1962,62 +1962,129 @@ extractable to the graph.
 
 ### 8.8 Note libraries and import batches (epic #708)
 
+> **Code:** `packages/kvox-api/src/notes/library/`, `notes/handlers/note-library-import.handler.ts` · **Contract:** `packages/kvox-contract/src/notes/note-library.ts`, `note-events.ts` · **API:** `/api/notes/libraries/*`, `/api/notes/import-batches/*` (see `/api/docs`) · **Web:** `/notes/libraries`, `/notes/libraries/:libraryId`, `/notes/import-batches/:batchId` · **Graph review:** [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)
+
 A person imports existing note files as notes (no AI generation), singly or as
-a **note library**: a folder that is rescanned, and on Desktop watched. Each new
-or changed file is imported by a per-file queue job. Graph review of the result:
-[ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md).
+a **note library**: a folder on their own device that is rescanned, and on
+Desktop watched. The server never sees the folder. The client walks it and
+sends a manifest; the server answers which files to upload; each uploaded
+file is imported by a per-file queue job.
+
+**Formats.** `md`, `markdown`, `txt`, `text`, `pdf`, `docx`, `pptx`
+(`NOTE_IMPORT_EXTENSIONS`). The text comes from the same extraction as a
+document source (§4.7), then `documentToNoteBody` turns it into the Markdown
+body. Slice options: `documentSources.office` (default on; `false` turns Word and
+PowerPoint off) and
+`maxDocumentImportBytes` (25 MiB by default).
 
 **Data model.**
 
 | Table | Holds |
 |---|---|
-| `note_libraries` | One library per root folder, owned by a user; carries the opt-in `auto_commit` flag (default false). |
-| `note_library_files` | One row per file in a library; unique `(library_id, relative_path)`; status, size, mtime, content hash, the note it became. |
-| `note_import_batches` | One batch per scan or drop; `library_id` is nullable for an ad-hoc drop. |
-| `note_import_batch_items` | One row per file in a batch, with its outcome (including `diverged`). |
+| `note_libraries` | One library per root folder, owned by a user (`owner_id` cascades); the policy flags `auto_extract` (default true) and `auto_commit` (default false, the opt-in of ADR-0007); `last_scan_at`. |
+| `note_library_files` | One row per file in a library; unique `(library_id, relative_path)`; status, size, mtime, content hash, the note it became, `imported_version` and `extracted_version`. |
+| `note_import_batches` | One batch per scan or drop; `library_id` is nullable (an ad-hoc drop) and `SET NULL` when the library is deleted. |
+| `note_import_batch_items` | One row per file in a batch: action, status, failure reason, the note and version it wrote, `diverged`. The `job_id` is a plain uuid with no foreign key (the queue purges finished jobs). |
 
-Batch counts are `GROUP BY` aggregates over the items, never stored columns.
+Batch counts and per-stage counts are `GROUP BY` aggregates over the items,
+never stored columns. The stage of an item (`uploaded`, `parsed`, `indexed`,
+`extracting`, `extracted`, `in_graph`, `failed`) is derived from the item, its
+note, the search index and the graph proposal.
 
-**The scan diff.** The client sends a manifest (at most 20,000 entries) of
-relative paths, sizes and mtimes. Paths are POSIX-normalised and may not contain
-`..`. The server classifies each entry against `note_library_files`:
+**Routes.** Details in `/api/docs` and [API.md](../API.md#note-libraries-and-import-batches).
+
+| Route | Permission | Purpose |
+|---|---|---|
+| `POST /api/notes/libraries`, `GET /api/notes/libraries`, `GET`/`PATCH`/`DELETE /api/notes/libraries/:id` | `notes:write` (`notes:read` for the reads) | Library CRUD; `PATCH` takes `name`, `autoExtract`, `autoCommit`. Deleting keeps the notes. |
+| `POST /api/notes/libraries/:id/scan` | `notes:write` | Diff a manifest; answers `batchId`, `upload`, `hashNeeded`, `missing`, `unchanged`, `estimate`. |
+| `POST /api/notes/import-batches` | `notes:write` | Open an ad-hoc batch (loose files). |
+| `GET /api/notes/import-batches?libraryId=&limit=`, `GET /api/notes/import-batches/:id`, `GET /api/notes/import-batches/:id/items?status=&cursor=&limit=` | `notes:read` | Batches, counts, items. |
+| `POST /api/notes/import-batches/:id/files` | `notes:write` | Multipart upload of one file (`path`, `mtime`, `file`). |
+| `POST /api/notes/import-batches/:id/retry` | `notes:write` | Re-queue the failed items. |
+| `POST /api/notes/import-batches/:id/close` | `notes:write` | The client is done uploading. |
+
+Everything is owner-only: another user's library or batch answers `404`.
+The host must register `@fastify/multipart` (the upload route answers 500
+naming it otherwise).
+
+**The scan diff.** The client sends a manifest (at most 20,000 entries per
+request) of relative paths, sizes and mtimes. Paths are POSIX-normalised
+(`normalizeLibraryPath`) and may not be absolute or contain `..`. The server
+classifies each entry against `note_library_files`:
 
 - *unchanged*: same size and mtime, nothing to do;
-- *hashNeeded*: the client must hash the file to decide;
+- *hashNeeded*: size or mtime moved, so the client must hash the file and send
+  it again with `sha256`;
 - *touched*: mtime changed, hash equal, only the stored mtime updates;
 - *upload*: new or changed, the client uploads it;
-- *missing*: in the library, absent from the manifest.
+- *missing*: in the library, absent from a `complete` manifest. A
+  `complete: false` manifest (a watcher reporting a few paths, or one chunk of
+  a huge library) never marks anything missing.
 
 **Upload.** `POST /api/notes/import-batches/:id/files` stores the object, upserts
 the file row, adds the item and enqueues the job with `enqueueWithin`, all in
 one transaction. The server re-hashes the bytes with sha256 and trusts only its
-own hash. The size cap is `maxDocumentImportBytes` (25 MiB by default).
+own hash; a file whose bytes the library already imported answers
+`skipped: true` and queues nothing. The size cap is `maxDocumentImportBytes`
+(413 over it). A batch that had completed is re-opened.
 
-**The job.** `note.library.import` runs once per file. It extracts the text
-(§4.7), creates a `ready` note with `titleSource: user`, or adds a new version
-to the existing note, then indexes it for search and emits
-`kvox.notes.note_ready` with `{ origin: 'library', bulk: true }`.
+**The job.** `note.library.import` (permanent type string) runs once per
+item. It is server-only: it declares neither `nodeResultSchema` nor
+`persistNodeResult`. Profile: five minutes, three attempts. It extracts the
+text (§4.7), creates a `ready` note with `titleSource: user`, or adds a new
+version to the existing note, then, after the transaction, audits
+(`note:library_import`, ids and counts only), indexes the note for search and
+emits `kvox.notes.note_ready` with `{ origin: 'library', bulk: true }`, only
+when the library's `autoExtract` is on. A file the parser refuses is a domain
+outcome, not a crash: the item is `failed` with a reason and the job returns
+normally (reasons `unsupported_office_format` and `unsupported_document`
+also mark the library file `unsupported`). An unexpected throw retries, and on
+the last attempt the item is marked `internal_error`.
 
 **Version rule.** A changed file adds a version of kind `edit` and switches
 `notes.source_object_id` to the new object in the same transaction.
 
-**Diverged.** If the note was edited in KVox and the file also changed on disk,
-the item is flagged `diverged`; the file still lands as a new version, so
-nothing is lost and the earlier version stays restorable.
+**Diverged.** If the note was edited in KVox since the import and the file
+also changed on disk, the item is flagged `diverged` and the library file gets
+status `diverged`; the file still lands as a new version, so nothing is lost
+and the earlier version stays restorable.
 
-**Missing.** A file absent from a later manifest gets status `missing`. The note
-shows "source missing". Nothing is deleted.
+**Missing.** A file absent from a later complete manifest gets status
+`missing`. The note shows "source missing". Nothing is deleted.
+
+**Batch lifecycle.** A scan that finds work opens a batch (`scanning`, then
+`running`). The batch settles to `completed` or `completed_with_errors` when
+its last item does, and the notes slice then publishes
+`kvox.notes.import_batch_settled` (`{ batchId, ownerId, libraryId }`). The
+client calls `POST .../close` when it has finished uploading: a batch with no
+items becomes `cancelled`, one whose items have all settled is settled, one
+still importing is left running. **Safety net for empty batches:** a scan
+whose client never uploads anything would leave a `running` batch with no
+items, so a read of such a batch older than 30 minutes marks it `cancelled`.
 
 **Priorities and reconcile.** Imports and search indexing run before graph
-extraction: bulk extraction is queued at `KG_EXTRACT_BULK_PRIORITY = 50`. A
-reconcile re-emits `note_ready` for a note whose `extracted_version` is below
-its `current_version`.
+extraction: bulk extraction is queued at `KG_EXTRACT_BULK_PRIORITY = 50`
+(a higher number runs later than the default `kg.extract` priority). The
+graph slice answers `import_batch_settled` with a subscriber that only
+enqueues `kg.library_reconcile` ([ontology §11](ontology.md#11-job-types)),
+which re-queues extraction for library notes whose `extracted_version` is
+below the note's `current_version`.
 
-**Retry.** Failed items are retried through the batch's retry routes (a whole
-batch, or one item); a retry re-enqueues the job and leaves other items alone.
+**Retry.** `POST /api/notes/import-batches/:id/retry` re-queues every failed
+item of the batch whose stored file still exists and leaves the rest alone.
+Retrying the graph side of a batch is
+`POST /api/graph/import-batches/:batchId/retry-extractions`.
 
 **Single file.** A single-file import runs as a batch of one through the same
-path.
+path (an ad-hoc batch).
+
+**Web.** `@marinoscar/kvox-web/notes` mounts `/notes/libraries` (the list),
+`/notes/libraries/:libraryId` (files, policy, "Sync now") and
+`/notes/import-batches/:batchId` (per-file progress and retry).
+`runLibrarySync` and `importFilesAdHoc` hold the orchestration both hosts
+share; the folder is read through `KvoxFileAccessPort` (`KvoxWebHost.files`),
+with `createBrowserFileAccess` as the browser implementation. Desktop: see
+[the Desktop guide](../guides/kvox-desktop.md#note-libraries-on-desktop).
 
 ## 9. Privacy — what leaves this deployment, to whose account
 
