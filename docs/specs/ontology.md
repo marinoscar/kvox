@@ -314,6 +314,10 @@ not a permission check that a future flag could disable — it is the only
 write path into `kg_entities`/`kg_relations`/`kg_items` that exists at all,
 with two narrow, explicitly named exceptions (the speaker-naming write and a
 manual edit on an entity page, §8).
+Commit has two initiators besides the per-note review: `commit-batch`, run by
+a person over many drafts, and `kg.autocommit`, an opt-in, default-off
+per-library job; both commit each proposal through the same commit service
+([ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)).
 A design that made auto-commit *possible* and merely defaulted it off would
 be one config change away from silently reintroducing the exact
 unsupported-assertion failure §3.3 rules out; a design where the write path
@@ -1354,7 +1358,10 @@ does not re-present everything the first pass already committed as if it
 were new.
 
 **Nothing else writes to the graph.** The commit above is the only general
-write path, with exactly two named exceptions: the **speaker-naming write**
+write path (initiated per note by a person, by `commit-batch` over many drafts
+by a person, or by the opt-in `kg.autocommit` job; each of these commits
+proposals, none is a new write path, [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)),
+with exactly two named exceptions: the **speaker-naming write**
 (`IDENTIFIED_AS` plus a `Person` row, because the user typing a name against
 "Speaker A" *is itself* the review — there is no separate confirmation step
 that act could sensibly wait for), enqueued as **`kg.speaker_link`** (§11)
@@ -3137,6 +3144,16 @@ already describes, each recorded as the item's `decision`/`edited_payload`/
   §8's `PersonFact` pre-check exclusion — a `PersonFact` row is never swept
   into a bulk accept, even when explicitly selected, without a distinct
   confirmation naming that it is about to expose a personal fact.
+- **Cross-proposal Review Queue** — `GET /api/graph/review-queue` lists open
+  drafts across notes, and `POST /api/graph/proposals/commit-batch`
+  (`{ batchId | libraryId | proposalIds, policy: 'safe' }`) lets a person accept
+  the **safe** rows of every draft in one action, for a note library import.
+  Each proposal commits in its own Serializable transaction through
+  `ProposalCommitService`. The safe policy never accepts a `sensitive`
+  `PersonFact`, a closing, an ambiguous resolution or new merge, a row below
+  the user's `graphPreferences.review.minConfidence`, or a stale proposal; those
+  rows stay in the draft
+  ([ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)).
 - **Add a missing item from a text selection** — §19.3, below.
 
 ### 19.3 "Add to graph" from a text selection
@@ -4272,7 +4289,12 @@ printed in a brief).
   narrowly-scoped, per-type, opt-in, default-off auto-commit setting is not
   ruled out as a future addition once §6's extraction metrics support it —
   but the write path that makes review skippable does not exist in this
-  design at all, which is the point.
+  design at all, which is the point. That narrow door is now taken by
+  [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md):
+  an opt-in, default-off, per-library `kg.autocommit` job that applies only the
+  safe policy (never a sensitive `PersonFact`, closing, ambiguous resolution or
+  merge, low-confidence row or stale proposal) through the ordinary commit
+  service. Full auto-commit stays rejected.
 - **Bidirectional relation storage** — storing `EMPLOYS` beside `WORKS_FOR`,
   and similarly for every pair. Rejected per §5.2: Postgres joins are
   symmetric, so the only effect of storing both directions is a second row

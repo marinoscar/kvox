@@ -658,7 +658,8 @@ that fixed order**:
   already plain markdown, no conversion needed.
 - **`document`**: the extracted plain text `note.source.extract` produced
   (§4's storage discussion) — never the raw uploaded bytes; `note.generate`
-  has no PDF parser of its own and is not meant to grow one.
+  has no PDF parser of its own and is not meant to grow one. A document is a
+  PDF, TXT, MD, DOCX or PPTX (§4.7).
 
 ### 3.3 The token budget, and refusing early with a number
 
@@ -1247,7 +1248,7 @@ applied to notes (§8 covers the export path in full).
 ### 4.7 Document sources: no sixth table
 
 `note.source.extract` (#51) needs to persist the plain text it pulls out of
-an uploaded PDF/TXT/MD **without** a sixth table. It reuses machinery
+an uploaded PDF/TXT/MD/DOCX/PPTX **without** a sixth table. It reuses machinery
 `storage_objects` already has: the raw upload (`storage_objects`, owned by notes in `kvox_object_ownership` since #469 (formerly `managed_by:
 'notes'`), the object a `notes.source_object_id` eventually points at) and a
 **second**, node-eligible-written `storage_objects` row holding the extracted
@@ -1265,6 +1266,12 @@ exactly as `job-handler.interface.ts` requires, following
 `media.audio.transcode`'s rendition-key precedent for the same reason: the
 extracted text is a durable, externally-referenced artifact, not scratch
 output nothing outside the job will ever name again.
+
+DOCX and PPTX are converted to Markdown by pure OOXML extractors in the notes
+slice (no parser in a host), which read the zip with `fflate` under zip-bomb
+caps (entry count, per-entry and total inflated size). A legacy binary Office
+file (a CFB container, `.doc` or `.ppt`) is refused as `unsupported_office_format`;
+an archive over the caps is refused as `archive_too_large`.
 
 The client reads extraction progress from the notes route
 `GET /api/notes/sources/documents/:objectId` (`notes:read`, owner-scoped, 404
@@ -1949,6 +1956,68 @@ extractable to the graph.
 - **Synchronous** and bounded by the slice option `maxImportBytes` (5 MiB by
   default; over it is a 413 before the file is buffered): one parse, one object
   put and one transaction, nothing that outlives the request.
+- **Other files.** Importing md, txt, pdf, docx and pptx files as notes, singly
+  or as libraries, is §8.8. The single-file import runs there as a batch of one;
+  this route remains for compatibility.
+
+### 8.8 Note libraries and import batches (epic #708)
+
+A person imports existing note files as notes (no AI generation), singly or as
+a **note library**: a folder that is rescanned, and on Desktop watched. Each new
+or changed file is imported by a per-file queue job. Graph review of the result:
+[ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md).
+
+**Data model.**
+
+| Table | Holds |
+|---|---|
+| `note_libraries` | One library per root folder, owned by a user; carries the opt-in `auto_commit` flag (default false). |
+| `note_library_files` | One row per file in a library; unique `(library_id, relative_path)`; status, size, mtime, content hash, the note it became. |
+| `note_import_batches` | One batch per scan or drop; `library_id` is nullable for an ad-hoc drop. |
+| `note_import_batch_items` | One row per file in a batch, with its outcome (including `diverged`). |
+
+Batch counts are `GROUP BY` aggregates over the items, never stored columns.
+
+**The scan diff.** The client sends a manifest (at most 20,000 entries) of
+relative paths, sizes and mtimes. Paths are POSIX-normalised and may not contain
+`..`. The server classifies each entry against `note_library_files`:
+
+- *unchanged*: same size and mtime, nothing to do;
+- *hashNeeded*: the client must hash the file to decide;
+- *touched*: mtime changed, hash equal, only the stored mtime updates;
+- *upload*: new or changed, the client uploads it;
+- *missing*: in the library, absent from the manifest.
+
+**Upload.** `POST /api/notes/import-batches/:id/files` stores the object, upserts
+the file row, adds the item and enqueues the job with `enqueueWithin`, all in
+one transaction. The server re-hashes the bytes with sha256 and trusts only its
+own hash. The size cap is `maxDocumentImportBytes` (25 MiB by default).
+
+**The job.** `note.library.import` runs once per file. It extracts the text
+(§4.7), creates a `ready` note with `titleSource: user`, or adds a new version
+to the existing note, then indexes it for search and emits
+`kvox.notes.note_ready` with `{ origin: 'library', bulk: true }`.
+
+**Version rule.** A changed file adds a version of kind `edit` and switches
+`notes.source_object_id` to the new object in the same transaction.
+
+**Diverged.** If the note was edited in KVox and the file also changed on disk,
+the item is flagged `diverged`; the file still lands as a new version, so
+nothing is lost and the earlier version stays restorable.
+
+**Missing.** A file absent from a later manifest gets status `missing`. The note
+shows "source missing". Nothing is deleted.
+
+**Priorities and reconcile.** Imports and search indexing run before graph
+extraction: bulk extraction is queued at `KG_EXTRACT_BULK_PRIORITY = 50`. A
+reconcile re-emits `note_ready` for a note whose `extracted_version` is below
+its `current_version`.
+
+**Retry.** Failed items are retried through the batch's retry routes (a whole
+batch, or one item); a retry re-enqueues the job and leaves other items alone.
+
+**Single file.** A single-file import runs as a batch of one through the same
+path.
 
 ## 9. Privacy — what leaves this deployment, to whose account
 
