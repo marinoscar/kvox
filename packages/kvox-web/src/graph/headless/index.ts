@@ -5,6 +5,7 @@
 
 // The API client. Each call takes the `KvoxWebHost` first.
 export * from './clients/graph.js';
+export * from './clients/reviewQueue.js';
 
 // The hooks.
 export * from './hooks/graphHookUtils.js';
@@ -26,6 +27,7 @@ export * from './hooks/useGraphOverview.js';
 export * from './hooks/useGraphPreferences.js';
 export * from './hooks/useGraphProposal.js';
 export * from './hooks/useGraphReviewQueue.js';
+export * from './hooks/useReviewQueue.js';
 export * from './hooks/useGraphTimeline.js';
 export * from './hooks/useGraphTranscriptPeople.js';
 export * from './hooks/useTopicsPromote.js';
@@ -40,4 +42,5 @@ export * from './utils/graphSpans.js';
 export * from './utils/guidance.js';
 export * from './utils/noteSpanHighlight.js';
 export * from './utils/proposalGrouping.js';
+export * from './utils/reviewQueue.js';
 export * from './utils/resolvers.js';

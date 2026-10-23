@@ -64,6 +64,11 @@ export interface GraphPreferencesSettings {
     /** Whether the `personal` domain is on; off by default. */
     personal: boolean;
   };
+  /** How the safe policy of a batch commit behaves (#717). */
+  review?: {
+    /** Rows the AI is less sure of than this (0 to 1) wait for a person. */
+    minConfidence: number;
+  };
 }
 
 /**
@@ -95,6 +100,11 @@ export interface GraphPreferencesPatch {
     work?: boolean | null;
     /** Whether the `personal` domain is on; `null` resets it. */
     personal?: boolean | null;
+  } | null;
+  /** Batch-review preferences, or `null` to reset them. */
+  review?: {
+    /** The safe policy's confidence floor (0 to 1); `null` resets it. */
+    minConfidence?: number | null;
   } | null;
 }
 
@@ -129,6 +139,11 @@ export interface ResolvedGraphPreferences {
     /** Whether the `personal` domain is on. */
     personal: boolean;
   };
+  /** How the safe policy of a batch commit behaves. */
+  review: {
+    /** Rows the AI is less sure of than this (0 to 1) wait for a person. */
+    minConfidence: number;
+  };
 }
 
 /**
@@ -145,7 +160,21 @@ export const GRAPH_PREFERENCE_DEFAULTS: ResolvedGraphPreferences = {
     adjudication: 'llm',
   },
   domains: { core: true, work: true, personal: false },
+  review: { minConfidence: 0.7 },
 };
+
+/**
+ * Lowest review confidence floor the API accepts.
+ *
+ * @stability experimental
+ */
+export const REVIEW_MIN_CONFIDENCE_MIN = 0;
+/**
+ * Highest review confidence floor the API accepts.
+ *
+ * @stability experimental
+ */
+export const REVIEW_MIN_CONFIDENCE_MAX = 1;
 
 /**
  * Bounds the API enforces (`graphPreferencesSchema`).
@@ -215,6 +244,7 @@ export function resolveGraphPreferences(
       work: value?.domains?.work ?? d.domains.work,
       personal: value?.domains?.personal ?? d.domains.personal,
     },
+    review: { minConfidence: value?.review?.minConfidence ?? d.review.minConfidence },
   };
 }
 

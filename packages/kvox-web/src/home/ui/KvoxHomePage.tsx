@@ -21,6 +21,13 @@
  *   7. Who and what do my notes mention?    → `KnowledgeSection`
  *   8. What did somebody send me?           → `SharedWithMe`
  *
+ * The knowledge-first Home (#721, `KVOX_KNOWLEDGE_HOME_SECTIONS`, what
+ * `kvoxHomeRoutes` draws) puts a grid right under the hero: Ask, the Review
+ * Queue, the note libraries, the graph and the recent imports
+ * (`KnowledgeCards.tsx`). None of them is in the default `KVOX_HOME_SECTIONS`,
+ * so KVox web's Home is unchanged. The libraries and the batches are one
+ * request each (`useHomeImports`), shared by their two cards.
+ *
  * An account with nothing yet sees `JourneyEmptyState` instead of everything under
  * the counts: a product explanation in place of a shrug.
  *
@@ -96,8 +103,10 @@ import { useNoteSummary } from '../../notes/headless/index.js';
 import { useTranscriptSummary } from '../../transcripts/headless/index.js';
 import {
   KVOX_HOME_SECTIONS,
+  KVOX_KNOWLEDGE_HOME_SECTIONS,
   isNewAccount,
   resolveJourneySteps,
+  useHomeImports,
 } from '../headless/index.js';
 import type { KvoxHomeSection, KvoxJourneyStep } from '../headless/index.js';
 import { CountsStrip } from './components/CountsStrip.js';
@@ -107,6 +116,14 @@ import { HomeSkeleton } from './components/HomeSkeleton.js';
 import { InProgressSection } from './components/InProgressSection.js';
 import { JourneyEmptyState } from './components/JourneyEmptyState.js';
 import type { JourneyStage } from './components/JourneyEmptyState.js';
+import {
+  GraphStatsHomeCard,
+  HomeAskCard,
+  KnowledgeHomeGrid,
+  LibrariesHomeCard,
+  RecentImportsHomeCard,
+  ReviewQueueHomeCard,
+} from './components/KnowledgeCards.js';
 import { KnowledgeSection } from './components/KnowledgeSection.js';
 import { NeedsAttention } from './components/NeedsAttention.js';
 import { RecentNotes } from './components/RecentNotes.js';
@@ -136,7 +153,8 @@ export interface KvoxHomePageProps {
   heroActions?: ReactNode;
   /**
    * The sections to draw; the page keeps its own order. Default every section
-   * ({@link KVOX_HOME_SECTIONS}). Leaving out `recentTranscripts` is how a host
+   * ({@link KVOX_HOME_SECTIONS}); {@link KVOX_KNOWLEDGE_HOME_SECTIONS} is the
+   * knowledge-first preset. Leaving out `recentTranscripts` is how a host
    * without transcripts avoids the transcript summary request altogether.
    */
   sections?: readonly KvoxHomeSection[];
@@ -206,6 +224,19 @@ export function KvoxHomePage(props: KvoxHomePageProps = {}) {
   const canWriteTranscripts = hasPermission('transcripts:write');
   const notes = useNoteSummary({ enabled: canReadNotes });
 
+  // #721 — the knowledge-first cards. The graph ones need `graph:read` AND the
+  // host's `graph` switch on (unknown counts as off, the navigation's rule); the
+  // library ones need `notes:read` only, because importing notes works with
+  // connected knowledge off. Both library cards share one read of each list.
+  const graphOn = host.features().graphEnabled === true && hasPermission('graph:read');
+  const showAsk = shown.has('ask') && graphOn;
+  const showReviewQueue = shown.has('reviewQueue') && graphOn;
+  const showGraphStats = shown.has('graphStats') && graphOn;
+  const showLibraries = shown.has('libraries') && canReadNotes;
+  const showRecentImports = shown.has('recentImports') && canReadNotes;
+  const imports = useHomeImports({ enabled: showLibraries || showRecentImports });
+  const showKnowledgeGrid = showAsk || showReviewQueue || showGraphStats || showLibraries || showRecentImports;
+
   // The skeleton waits on the first answer of the page's leading content type.
   const isLoading = transcriptsOn ? transcripts.isLoading : notes.isLoading;
   if (isLoading) {
@@ -253,6 +284,19 @@ export function KvoxHomePage(props: KvoxHomePageProps = {}) {
             actions={heroActions}
             canCreateNote={canWriteNotes}
           />
+        )}
+
+        {/* #721 — knowledge first: Ask, the Review Queue, the libraries, the graph
+            and the recent imports, above everything else and drawn for a new
+            account too (the libraries card is how one gets started). */}
+        {showKnowledgeGrid && (
+          <KnowledgeHomeGrid>
+            {showAsk && <HomeAskCard />}
+            {showReviewQueue && <ReviewQueueHomeCard />}
+            {showLibraries && <LibrariesHomeCard imports={imports} />}
+            {showGraphStats && <GraphStatsHomeCard />}
+            {showRecentImports && <RecentImportsHomeCard imports={imports} />}
+          </KnowledgeHomeGrid>
         )}
 
         {/* A stale page, not a blank one: the summary that is already on screen

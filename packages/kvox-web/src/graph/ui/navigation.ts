@@ -43,8 +43,8 @@ export const kvoxGraphDestinations: readonly KvoxDestination<'knowledge', 'graph
  *
  * @remarks
  * `/graph` covers the index, `/graph/entities/:id`, `/graph/explore`,
- * `/graph/overview`, `/graph/imports/:id` and `/graph/review` (#373 to #375,
- * #387); `/ask`
+ * `/graph/overview`, `/graph/imports/:id`, `/graph/review` and
+ * `/graph/review-queue` (#373 to #375, #387, #721); `/ask`
  * covers `/ask` and `/ask/:conversationId` (#380). Owned whether or not the tab
  * is DRAWN: with connected knowledge off the row is hidden, and a user who
  * reaches one of these pages anyway simply sees no highlighted row. The ask
@@ -87,11 +87,13 @@ export const kvoxReviewDestinations: readonly KvoxDestination<'review', 'graph'>
 ];
 
 /**
- * The route prefix the Review destination owns, keyed by destination key.
+ * The route prefixes the Review destination owns, keyed by destination key:
+ * the one-by-one list (`/graph/review`) and the grouped Review Queue
+ * (`/graph/review-queue`, #721), which the list's header links to.
  *
  * @stability experimental
  * @extensionPoint destination
  */
 export const kvoxReviewDestinationRoutes: KvoxDestinationRoutes<'review'> = {
-  review: ['/graph/review'],
+  review: ['/graph/review', '/graph/review-queue'],
 };
