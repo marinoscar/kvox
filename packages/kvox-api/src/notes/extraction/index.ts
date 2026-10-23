@@ -10,13 +10,17 @@
 // user-readable reason" a two-line test rather than an integration fixture.
 //
 // It is also what leaves room for the format this epic deliberately does NOT
-// support: adding OCR later, or `.docx`, is a new file beside these two plus a
+// support: adding OCR later, or another format, is a new file beside these two plus a
 // line in the switch below — not a change to the job, the upload endpoint, or
 // the storage layout.
 // =============================================================================
 
+import { DOCX_MIME_TYPE, PPTX_MIME_TYPE } from '@marinoscar/kvox-contract/notes';
+
 import type { NoteDocumentMimeType } from './document-format.js';
+import { extractDocxText } from './extract-docx.js';
 import { extractPdfText } from './extract-pdf.js';
+import { extractPptxText } from './extract-pptx.js';
 import { extractPlainText } from './extract-text.js';
 import type { ExtractionOutcome } from './extraction-result.js';
 
@@ -28,6 +32,15 @@ export {
 } from './document-format.js';
 export { decodeTextBytes, extractPlainText } from './extract-text.js';
 export { extractPdfText } from './extract-pdf.js';
+export {
+  extractDocxMarkdown,
+  extractDocxText,
+  type OoxmlExtractedDocument,
+  type OoxmlExtractionOutcome,
+} from './extract-docx.js';
+export { extractPptxMarkdown, extractPptxText } from './extract-pptx.js';
+export { documentToNoteBody, type DocumentToNoteResult } from './document-to-note.js';
+export { OOXML_LIMITS } from './ooxml-zip.js';
 export {
   EXTRACTION_ENCODINGS,
   EXTRACTION_FAILURE_REASONS,
@@ -59,11 +72,10 @@ export function extractDocumentText(
     case 'text/plain':
     case 'text/markdown':
       return Promise.resolve(extractPlainText(bytes));
-    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-    case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
-      // The contract accepts the types (epic #708); the OOXML extractor is a later slice
-      // and the upload door does not admit them yet, so this is unreachable today.
-      return Promise.reject(new Error(`No extractor for document type "${mimeType}" yet`));
+    case DOCX_MIME_TYPE:
+      return extractDocxText(bytes);
+    case PPTX_MIME_TYPE:
+      return extractPptxText(bytes);
     default: {
       // Unreachable through the union; reachable through a `mime_type` column
       // written by a build that accepted a fourth type.

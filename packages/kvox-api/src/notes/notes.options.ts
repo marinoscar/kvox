@@ -39,6 +39,8 @@ export interface NoteDocumentSourceOptions {
   pdf?: boolean;
   /** Read plain text and Markdown files. Default on. */
   text?: boolean;
+  /** Read Word (.docx) and PowerPoint (.pptx) files (bundled `fflate`; no optional peer). Default on. */
+  office?: boolean;
 }
 
 /**
@@ -124,10 +126,21 @@ export interface NotesModuleOptions {
    * import stays bounded by it (it runs inside the request, not as a job).
    */
   maxImportBytes?: number;
+
+  /**
+   * The largest document `POST /api/notes/import-batches` (and a source upload) accepts, in
+   * bytes (default 25 MiB: a PDF or Office file is larger than the text of a note). The
+   * multipart read stops at this many bytes and answers 413. The Office reader additionally
+   * caps what a .docx/.pptx may inflate to, independently of this number.
+   */
+  maxDocumentImportBytes?: number;
 }
 
 /** The default of {@link NotesModuleOptions.maxImportBytes}: 5 MiB. */
 const DEFAULT_MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+
+/** The default of {@link NotesModuleOptions.maxDocumentImportBytes}: 25 MiB. */
+const DEFAULT_MAX_DOCUMENT_IMPORT_BYTES = 25 * 1024 * 1024;
 
 /**
  * The options with defaults applied, as the providers read them.
@@ -143,10 +156,14 @@ export interface ResolvedNotesOptions {
   documentPdf: boolean;
   /** Whether text and Markdown documents can be a source. */
   documentText: boolean;
+  /** Whether Word and PowerPoint documents can be a source. */
+  documentOffice: boolean;
   /** The stream's tuning; absent fields keep the stream service's defaults. */
   stream: NoteStreamOptions;
   /** The largest note file an import accepts, in bytes. */
   maxImportBytes: number;
+  /** The largest document an import or source upload accepts, in bytes. */
+  maxDocumentImportBytes: number;
 }
 
 /**
@@ -169,7 +186,9 @@ export function resolveNotesOptions(options: NotesModuleOptions): ResolvedNotesO
     appUrl: options.appUrl,
     documentPdf: options.documentSources?.pdf !== false,
     documentText: options.documentSources?.text !== false,
+    documentOffice: options.documentSources?.office !== false,
     stream: { ...(options.stream ?? {}) },
     maxImportBytes: options.maxImportBytes ?? DEFAULT_MAX_IMPORT_BYTES,
+    maxDocumentImportBytes: options.maxDocumentImportBytes ?? DEFAULT_MAX_DOCUMENT_IMPORT_BYTES,
   };
 }

@@ -80,7 +80,7 @@ No access answers 404, never 403, on every route (`NOTE_NOT_FOUND_MESSAGE`). A s
 | Option | Default | What it does |
 |---|---|---|
 | `exporters` | markdown, pdf and docx on | `{ markdown, pdf, docx }` switch a built-in exporter off; `extra` adds exporter classes (a new format is one class). |
-| `documentSources` | pdf and text on | `{ pdf, text }` choose which uploaded document formats can be a source. |
+| `documentSources` | pdf, text and office on | `{ pdf, text, office }` choose which uploaded document formats can be a source (`office` = Word `.docx` and PowerPoint `.pptx`, read with the bundled `fflate`; legacy `.doc`/`.ppt` and password-protected files are refused as `unsupported_office_format`). |
 | `pdf.fontDir` | the package's `assets/fonts` | Where the PDF exporter loads its fonts. |
 | `stream` | the slice's defaults | `{ flushIntervalMs, flushChars, maxDurationMs }` tune the stream flusher and the connection cap. |
 | `schedules` | `true` | `false` registers no `@nestjs/schedule` task; the host calls `NotesHousekeepingEnqueuer.enqueue()` on its own timer. |
@@ -88,6 +88,7 @@ No access answers 404, never 403, on every route (`NOTE_NOT_FOUND_MESSAGE`). A s
 | `peers` | a fresh `TranscriptsModule.forRoot()` and `SearchIndexingModule.forRoot()` | The very module objects the host imports, so the container sees one module and registers each handler once. |
 | `appUrl` | none | Returns the application's base URL for the links in the ready and failed notifications. |
 | `maxImportBytes` | 5 MiB | The largest file `POST /api/notes/import` accepts; the multipart read stops there and answers 413. |
+| `maxDocumentImportBytes` | 25 MiB | The largest PDF, Office or text document an import or source upload accepts (resolved for the upload route). |
 
 The routes document themselves through `documentKvoxAuth` (called by `forRoot`).
 

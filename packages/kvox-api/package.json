@@ -222,5 +222,8 @@
     "ts-jest": "^29.4.12",
     "typescript": "^6.0.3",
     "zod": "^4.4.3"
+  },
+  "dependencies": {
+    "fflate": "0.8.3"
   }
 }
