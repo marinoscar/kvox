@@ -22,7 +22,7 @@
     "@marinoscar/kvox-api": "*",
     "@marinoscar/kvox-contract": "*",
     "@marinoscar/kvox-db": "*",
-    "@marinoscar/platform-db": "0.1.0-next.10",
+    "@marinoscar/platform-db": "0.1.0-next.11",
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",
     "@nestjs/platform-fastify": "^11.1.12",
