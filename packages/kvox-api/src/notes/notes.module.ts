@@ -43,6 +43,9 @@ import { NoteSourcesService } from './note-sources.service.js';
 import { NoteImportController } from './import/note-import.controller.js';
 import { NoteImportService } from './import/note-import.service.js';
 import { NoteLibrariesController } from './library/note-libraries.controller.js';
+import { NoteLibraryUploadController } from './library/note-library-upload.controller.js';
+import { NoteLibraryUploadService } from './library/note-library-upload.service.js';
+import { NoteLibraryImportHandler } from './handlers/note-library-import.handler.js';
 import { NoteLibrariesService } from './library/note-libraries.service.js';
 import { NoteLibraryPolicy } from './library/note-library-policy.js';
 import { NoteTemplatePreviewService } from './note-template-preview.service.js';
@@ -166,6 +169,8 @@ export class NotesModule {
     const controllers = [
       // Libraries and import batches (#714): static `libraries` / `import-batches` paths.
       NoteLibrariesController,
+      // Upload into a batch and retry (#715).
+      NoteLibraryUploadController,
       NotesController,
       // `POST /api/notes/import` (#585). Its own controller, so its static path is
       // registered beside the `:id` routes without depending on their order.
@@ -213,6 +218,9 @@ export class NotesModule {
       // Libraries, scans and import batches (#714), and the policy the graph reads.
       NoteLibrariesService,
       NoteLibraryPolicy,
+      // Upload into a batch, retry, and the `note.library.import` job (#715).
+      NoteLibraryUploadService,
+      NoteLibraryImportHandler,
       NoteSourceExtractHandler,
       // Note templates (#50). `NoteTemplateAccessService` is the ONE place that decides
       // 403-for-a-built-in vs 404-for-somebody-else's.

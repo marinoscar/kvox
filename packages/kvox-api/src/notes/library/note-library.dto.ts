@@ -50,3 +50,15 @@ export class NoteImportBatchItemsPageDto extends createZodDto(noteImportBatchIte
 export class CreateNoteImportBatchResultDto extends createZodDto(
   createNoteImportBatchResponseSchema
 ) {}
+
+/** `POST /notes/import-batches/:id/files` answer (#715). @stability experimental */
+export const noteLibraryUploadResultSchema = z.object({
+  itemId: z.string().uuid().nullable(),
+  action: z.enum(['new', 'changed']).nullable(),
+  skipped: z.boolean(),
+});
+export class NoteLibraryUploadResultDto extends createZodDto(noteLibraryUploadResultSchema) {}
+
+/** `POST /notes/import-batches/:id/retry` answer (#715). @stability experimental */
+export const noteLibraryRetryResultSchema = z.object({ requeued: z.number().int().min(0) });
+export class NoteLibraryRetryResultDto extends createZodDto(noteLibraryRetryResultSchema) {}

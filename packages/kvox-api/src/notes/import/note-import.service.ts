@@ -96,8 +96,8 @@ export function noteImportException(failure: Pick<NoteImportFailure, 'reason' | 
   });
 }
 
-/** A display name that is safe to store and echo back. */
-function safeFilename(raw: string): string {
+/** A display name that is safe to store and echo back (also used by the library upload, #715). */
+export function safeFilename(raw: string): string {
   const stripped = (raw ?? '').replace(/[\\/]+/g, '_').replace(CONTROL_CHARACTERS, '').trim();
   return stripped.length > 0 ? stripped.slice(0, MAX_FILENAME_LENGTH) : 'note.md';
 }

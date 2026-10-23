@@ -74,6 +74,7 @@ import {
   NoteExportHandler,
   NoteExporterRegistry,
   NoteGenerateHandler,
+  NoteLibraryImportHandler,
   NotePurgeHandler,
   NoteRetitleHandler,
   NoteSourceExtractHandler,
@@ -593,6 +594,7 @@ describeNotesConformance(
       handlers: [
         NoteExportHandler,
         NoteGenerateHandler,
+        NoteLibraryImportHandler,
         NotePurgeHandler,
         NoteRetitleHandler,
         NoteSourceExtractHandler,
@@ -699,6 +701,7 @@ describe('kvox-guarded routes', () => {
       'NoteGenerationStreamController',
       'NoteImportController',
       'NoteLibrariesController',
+      'NoteLibraryUploadController',
       'NoteSourcesController',
       'NoteTemplatesController',
       'NotesController',
