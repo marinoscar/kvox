@@ -58,13 +58,17 @@ export const NOTES_USER_DATA_SCOPE = {
  * The model hints of the notes tables.
  *
  * @param ownerDelegate - builds the delegate (the job type and the owner-level payload) for a job type.
- * @returns the hints for `Note`, `NoteTemplate` and `UserHiddenNoteTemplate`.
+ * @returns the hints for `Note`, `NoteLibrary`, `NoteImportBatch`, `NoteTemplate` and `UserHiddenNoteTemplate`.
  */
 export function notesUserDataModels(
   ownerDelegate: (jobType: string) => NonNullable<UserDataModelHint<Prisma.ModelName>['delegate']>,
 ): Array<UserDataModelHint<Prisma.ModelName>> {
   return [
     { model: 'Note', category: 'notes', delegate: ownerDelegate(NOTE_PURGE_DELEGATE) },
+    // Note libraries and their import history (#713) go with the notes they produced; their
+    // file and batch-item rows cascade from these two.
+    { model: 'NoteLibrary', category: 'notes' },
+    { model: 'NoteImportBatch', category: 'notes' },
 
     { model: 'NoteTemplate', category: 'noteTemplates', keepWhenReferenced: true },
     { model: 'UserHiddenNoteTemplate', category: 'noteTemplates' },
