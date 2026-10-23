@@ -125,7 +125,7 @@
   },
   "peerDependencies": {
     "@marinoscar/kvox-contract": ">=0.0.0-0 || >=0.1.0-0",
-    "@marinoscar/platform-api": "0.1.0-next.9",
+    "@marinoscar/platform-api": "0.1.0-next.10",
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",
     "@nestjs/event-emitter": "^3.0.1",
@@ -203,7 +203,7 @@
   },
   "devDependencies": {
     "@marinoscar/kvox-db": "0.1.0-next.12",
-    "@marinoscar/platform-db": "0.1.0-next.9",
+    "@marinoscar/platform-db": "0.1.0-next.10",
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",
     "@nestjs/testing": "^11.1.12",
