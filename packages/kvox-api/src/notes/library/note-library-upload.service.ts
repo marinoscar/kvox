@@ -40,10 +40,18 @@ import { NOTE_IMPORT_BATCH_NOT_FOUND_MESSAGE } from './note-libraries.service.js
 // A failed transaction deletes the object again.
 // =============================================================================
 
-/** The `subject_type` of a job about one batch item. */
+/**
+ * The `subject_type` of a job about one batch item.
+ *
+ * @stability experimental
+ */
 export const NOTE_IMPORT_ITEM_SUBJECT_TYPE = 'note_import_batch_item';
 
-/** What the upload route reads off the multipart body. */
+/**
+ * What the upload route reads off the multipart body.
+ *
+ * @stability experimental
+ */
 export interface NoteLibraryUploadInput {
   /** The client's file name (display only). */
   filename: string;
@@ -55,7 +63,11 @@ export interface NoteLibraryUploadInput {
   mtimeMs?: number | undefined;
 }
 
-/** What an upload answers. */
+/**
+ * What an upload answers.
+ *
+ * @stability experimental
+ */
 export interface NoteLibraryUploadResult {
   /** The batch item, or `null` when the upload was a no-op. */
   itemId: string | null;

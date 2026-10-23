@@ -56,7 +56,11 @@ export const KG_EXTRACT_PRIORITY = -5;
  */
 export const KG_EXTRACT_BULK_PRIORITY = 50;
 
-/** How a ready note reached the graph hook. */
+/**
+ * How a ready note reached the graph hook.
+ *
+ * @stability experimental
+ */
 export interface EnqueueForReadyNoteOptions {
   /** One of many created by a bulk import: queued at {@link KG_EXTRACT_BULK_PRIORITY}. */
   bulk?: boolean;

@@ -44,9 +44,17 @@ import { deriveItemStage, pickProposal, recomputeBatchStatus } from './note-impo
 // missing; the upload route (#715) creates the items and enqueues the job.
 // =============================================================================
 
-/** Message of the 404 for a library the caller does not own. */
+/**
+ * Message of the 404 for a library the caller does not own.
+ *
+ * @stability experimental
+ */
 export const NOTE_LIBRARY_NOT_FOUND_MESSAGE = 'Note library not found';
-/** Message of the 404 for a batch the caller does not own. */
+/**
+ * Message of the 404 for a batch the caller does not own.
+ *
+ * @stability experimental
+ */
 export const NOTE_IMPORT_BATCH_NOT_FOUND_MESSAGE = 'Import batch not found';
 
 /** Ids per `IN (...)` statement, well under the driver's bind-parameter limit. */
