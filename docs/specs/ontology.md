@@ -1812,6 +1812,7 @@ graph?: {
                  newThreshold: number;       /* 0.30–0.94, ≥ 0.05 below auto-link */ // default 0.55
                  adjudication: 'llm' | 'off' };                   // default llm
   domains?: { work: boolean; personal: boolean };                 // core is never stored (always on); personal default false
+  review?: { minConfidence: number };                             // 0–1, default 0.7: the lowest confidence the safe policy accepts (§19.2)
 }
 ```
 
@@ -1830,7 +1831,7 @@ epic's foundation phase (§16, P1) actually needs to enable.
 
 ## 11. Job types
 
-Twelve types, all under `packages/kvox-api/src/graph/handlers/` (planned) except
+These types, all under `packages/kvox-api/src/graph/handlers/` (planned) except
 `ask.respond`, which lives under `packages/kvox-api/src/ask/handlers/` (built, issue #378; moved into the package by #497) —
 Ask is its own module (§21), reusing the graph's job-queue conventions
 rather than being folded into a handler directory it does not belong in.
@@ -1853,6 +1854,8 @@ directory:
 | `kg.topics_promote` | `{ maxRuntimeMs: 30m, maxAttempts: 3 }` | **No** | #666 (GIC-05, epic #661) — turns the free-text `props.topics` of a user's past Meeting entities into DRAFT Topic proposals (`kind: 'import'`, no note), one per Topic, each a Topic row (new or linked) plus a `Meeting DISCUSSED Topic` row per meeting cited by the meeting's own evidence. Server-only: embeddings and adjudication spend the user's own key. Resolution goes through the ordinary pipeline; an exact label or alias match to an existing Topic links to it even when adjudication is off. Idempotent: pairs with a live `DISCUSSED` edge or a pending topics-promote proposal are skipped, so a re-run creates nothing. Subject `user`/userId, payload `{ userId }`, enqueued only by `POST /api/graph/topics/promote` (the "Find topics in past meetings" button on `/settings/knowledge-graph`; never a cron, never automatic). Never writes the graph; `GET /api/graph/topics/promote` reports the run and the proposals waiting |
 | `kg.export` | `{ maxRuntimeMs: 10m, maxAttempts: 3 }` | **No** | §18.2 — server-only for the identical "the renderers live in the API" reason `note.export` gives (`docs/specs/notes.md`): the RDF/JSON-LD serializers live in `apps/api`, and a second copy anywhere else would mean one export request producing byte-for-byte different files depending on which codebase rendered it |
 | `kg.import` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | §18.3 — server-only, one attempt: a half-applied import must surface as a failed job a person looks at, never silently resume minutes later, the identical reasoning `user.data.purge` gives for its own `maxAttempts: 1` |
+| `kg.library_reconcile` | `{ maxRuntimeMs: 2m, maxAttempts: 2 }` | **No** | Note libraries ([notes §8.8](notes.md#88-note-libraries-and-import-batches-epic-708), [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)). Queues `kg.extract` again for library notes the graph has not read at their current version: a note edited in the product, an import that finished after `note_ready` was missed or declined, a model that was not configured at the time. Selection is pure (`selectReconcileNotes`): the owner's library files whose note is `ready` with `current_version > coalesce(extracted_version, 0)`, whose library has `auto_extract` on, with no extraction in flight and no proposal already covering that version. Each is queued through `GraphExtractionService.enqueueForReadyNote(…, { bulk: true })`, which holds the gates (graph enabled, `graph:write`, the `autoExtract` preference, a resolvable model). At most 500 per run; a longer tail is a continuation run 30 s later. Subject `user`/ownerId (one pending run per owner), payload `{ ownerId, libraryId?, batchId? }`. Triggered by `kvox.notes.import_batch_settled` (a subscriber that only enqueues), the retry route and its own continuation. It only enqueues; it makes no AI call itself |
+| `kg.autocommit` | `{ maxRuntimeMs: 5m, maxAttempts: 2 }` | **No** | The opt-in auto-commit of [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md). Commits the **safe** rows of one freshly drafted extraction proposal through `ProposalBatchCommitService.commitSafe` (the safe policy, then `ProposalCommitService` and `GraphWriteService`): no new write path. Subject `kg_proposal`/proposalId, payload `{ proposalId, ownerId }`. Triggered by `kvox.graph.proposal_drafted`, raised by `kg.extract` after the draft committed; its only listener enqueues this job. It no-ops (returns normally, nothing retried) when the proposal is not an `extraction` draft of the owner, the note moved on (stale), the note has no library or the library's `auto_commit` is off, the graph is disabled, or the owner no longer holds `graph:write`. Audit `graph:autocommit` carries ids and counts, never a statement or evidence text. Server-only: no AI key is involved here, and the job writes the graph |
 | `ask.respond` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §21.3 — identical reasoning to `kg.extract`: the user's own AI key, `maxAttempts: 1` because a retried agent turn would silently re-spend the user's provider credit to produce a different, non-deterministic answer to a question the user already saw partway through. Throttled on `aiProviderThrottleKey(userId)` exactly like every other AI-calling type in this table. **Built, issue #378** (`apps/api/src/ask/handlers/ask-respond.handler.ts`), enqueued at priority −10 with the assistant message as its subject (`ask_message`) |
 
 **Priorities.** `kg.extract` runs at priority **−5** — someone is plausibly
@@ -1864,8 +1867,12 @@ moment. `ask.respond` runs at priority **−10**, the identical download-and-
 wait urgency `note.export`/`transcript.export` state for themselves — a
 person is watching the agent's own answer stream in real time. `kg.graph_layout`
 and `kg.speaker_link` run at the deployment default: neither is watched
-synchronously the way an extraction proposal or an agent answer is. Every
-other type in this table runs at the deployment default;
+synchronously the way an extraction proposal or an agent answer is. Bulk
+extraction of an imported library (`kg.extract` queued with `bulk: true`, by
+`note_ready` events with `bulk: true` and by `kg.library_reconcile`) runs at
+`KG_EXTRACT_BULK_PRIORITY = 50`, after imports and search indexing, so a person
+who asks for one note's extraction is never queued behind a folder of hundreds.
+Every other type in this table runs at the deployment default;
 `kg.entity_digest` is specifically enqueued **after** a commit settles, never
 before, so it always summarizes the post-commit state rather than racing it.
 
@@ -1977,11 +1984,17 @@ caller's own graph even though it is a `POST`, because the node-id list it
 accepts does not fit a query string). `graph:write` also gates every
 proposal decision — `PATCH .../items/:itemId`, `POST .../items` (add-missing
 from a selection, §19.3), `POST .../items/bulk` (§19.2's group actions),
-`POST .../commit`, `POST .../discard`, and `POST .../revert` (§19.4) —
+`POST .../commit`, `POST .../discard`, and `POST .../revert` (§19.4),
+`POST /api/graph/proposals/commit-batch` (§19.2) and
+`POST /api/graph/import-batches/:batchId/retry-extractions` (202, queues
+extraction again for the failed or never-extracted notes of one of the
+caller's import batches, at the bulk priority) —
 `POST /api/graph/notes/:noteId/extract` (§6, taking §20.3's optional model
 override), entity `merge`/`merges/:id/reverse`/`distinct-pairs` (§7),
 `entities/:id/forget` (§15), and `POST /api/graph/overview/refresh` (§22.3, a
 manual re-cluster).
+
+`GET /api/graph/review-queue` (`graph:read`, §19.2) lists the caller's open drafts across notes, grouped by library or import batch.
 
 **Insight Canvas routes, all `graph:read` and owner-only (a node
 the caller cannot read is the same 404; a query over its 3 s budget is a 503
@@ -3144,16 +3157,49 @@ already describes, each recorded as the item's `decision`/`edited_payload`/
   §8's `PersonFact` pre-check exclusion — a `PersonFact` row is never swept
   into a bulk accept, even when explicitly selected, without a distinct
   confirmation naming that it is about to expose a personal fact.
-- **Cross-proposal Review Queue** — `GET /api/graph/review-queue` lists open
-  drafts across notes, and `POST /api/graph/proposals/commit-batch`
-  (`{ batchId | libraryId | proposalIds, policy: 'safe' }`) lets a person accept
-  the **safe** rows of every draft in one action, for a note library import.
-  Each proposal commits in its own Serializable transaction through
-  `ProposalCommitService`. The safe policy never accepts a `sensitive`
-  `PersonFact`, a closing, an ambiguous resolution or new merge, a row below
-  the user's `graphPreferences.review.minConfidence`, or a stale proposal; those
-  rows stay in the draft
+- **Cross-proposal Review Queue** — `GET /api/graph/review-queue` lists the
+  caller's open drafts across notes, grouped by library, import batch or
+  `other` (a note imported on its own), with for each draft how many rows the
+  safe policy would accept (`safe`) and how many wait (`waiting`);
+  `POST /api/graph/proposals/commit-batch` (`{ batchId | libraryId |
+  proposalIds, policy: 'safe' }`) accepts the **safe** rows of every draft in
+  one action, for a note library import
   ([ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)).
+  Web: `/graph/review-queue` (`GraphReviewQueuePage`), owned by the Review
+  destination and linked from the one-by-one list's header and from a Home
+  card.
+  - **The safe policy** (`packages/kvox-api/src/graph-extraction/proposals/safe-policy.ts`,
+    pure) returns the rows to add to the accepted set. It keeps every decision
+    a person already made: a rejected row stays rejected, an accepted, edited
+    or merged row counts as accepted. A row **waits**, with one reason, when it
+    is: `sensitive` (a PersonFact that is not `business`, one flagged
+    sensitive, or a row of a review-only type such as the personal domain, §15;
+    no option or id list can make the function accept one),
+    `closing`, `merge` (an entity row that would link to or merge into an
+    existing entity), `ambiguous` (an `ambiguous`, `possible_duplicate` or
+    `model_claimed_match` flag, or an `uncertain` adjudication),
+    `low_confidence` (below `graph.review.minConfidence`, default 0.7),
+    `flagged` (another pre-check flag, or a relation another pending closing
+    names as its closer), or `blocked_endpoint` (a relation, item or closing
+    whose endpoint entity is not itself accepted). A stale proposal (the note
+    changed since extraction) is skipped whole.
+  - **One commit per proposal.** Each draft is committed on its own, in order,
+    through `ProposalCommitService` (its own Serializable transaction); a
+    failure is reported for that proposal and never stops the others. The
+    audit action is `graph.proposals_batch_committed`.
+  - **The remainder draft.** `ProposalCommitService.commit` ignores `pending`
+    rows and marks the whole proposal `committed`, after which the rows can no
+    longer be decided. So after a successful commit,
+    `ProposalBatchCommitService` moves the still-pending rows into a **new
+    draft of the same note** (`remainderProposalId` in the result): the rows
+    keep their ids, so their evidence follows, and a `{ ref }` endpoint that
+    pointed at an entity the commit just wrote becomes `{ entityId }`. When the
+    note already has another draft (one draft per note) the rows stay where
+    they are and `remainderProposalId` is `null`. The waiting rows therefore
+    stay available for a person, as ADR-0007 requires.
+  - **Auto-commit** is the same safe commit run by the `kg.autocommit` job
+    (§11) for a library whose owner turned `auto_commit` on; the audit action is
+    `graph:autocommit`. Bulk extraction and reconcile of library notes: §11.
 - **Add a missing item from a text selection** — §19.3, below.
 
 ### 19.3 "Add to graph" from a text selection

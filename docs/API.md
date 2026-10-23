@@ -4997,6 +4997,169 @@ readable text; `message` carries the reason). `message` and `characters` are
 
 ---
 
+#### Note libraries and import batches
+
+A note library is a folder the client reads on its own device; the server only
+ever sees a manifest and the bytes it asks for. Libraries and batches are
+owner-only: another user's answers `404`, never `403`. Spec:
+`docs/specs/notes.md` §8.8; graph review of the result:
+[ADR-0007](decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md).
+
+##### POST /notes/libraries
+
+Creates a library. Body `{ "name": "Work notes" }` (1 to 120 characters).
+`autoExtract` starts `true`, `autoCommit` starts `false`.
+
+**Requires:** `notes:write`
+
+**Response:** `201` — the library `{ id, name, autoExtract, autoCommit,
+createdAt, updatedAt, lastScanAt, counts: { total, imported, failed, missing,
+diverged, unsupported, pending } }`.
+
+##### GET /notes/libraries
+
+Your libraries, newest first, each with its file counts by status.
+
+**Requires:** `notes:read`
+
+**Response:** `200` `{ items: [library] }`
+
+##### GET /notes/libraries/{id}
+
+**Requires:** `notes:read`. **Response:** `200` — the library. **Error Cases:**
+`404` - No such library, or not yours.
+
+##### PATCH /notes/libraries/{id}
+
+Any of `name`, `autoExtract` (extract graph proposals from each imported
+note), `autoCommit` (let the safe policy commit those proposals without a
+person, the opt-in of ADR-0007); at least one is required.
+
+**Requires:** `notes:write`. **Response:** `200` — the library. **Error
+Cases:** `400` - No field sent · `404` - No such library, or not yours.
+
+##### DELETE /notes/libraries/{id}
+
+Deletes the library and its file rows. The notes made from its files are
+kept; its import batches stay with no library.
+
+**Requires:** `notes:write`. **Response:** `204`. **Error Cases:** `404`.
+
+##### POST /notes/libraries/{id}/scan
+
+Diffs a manifest against the library. Body `{ "entries": [{ "path", "size",
+"mtime", "sha256"? }], "complete": true }` with at most 20,000 entries (a
+larger library is sent in several `complete: false` chunks). Paths are
+POSIX-normalised; an absolute path, a drive letter or a `..` segment is
+refused. `complete: false` never marks a file missing.
+
+**Requires:** `notes:write`
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "batchId": "…",
+    "upload": ["notes/a.md"],
+    "hashNeeded": ["notes/b.md"],
+    "missing": ["old.docx"],
+    "unchanged": 41,
+    "estimate": { "files": 1, "bytes": 2048, "approxInputTokens": 512 }
+  }
+}
+```
+
+`upload` are the new or changed paths to send; `hashNeeded` are known files
+whose size or mtime moved (send them again with `sha256`; a file whose hash is
+unchanged only has its mtime stored). `batchId` is the batch the uploads
+belong to, `null` when there is nothing to do.
+
+**Error Cases:**
+- `400` - Invalid body
+- `404` - No such library, or not yours
+
+##### POST /notes/import-batches
+
+Opens an ad-hoc batch that belongs to no library, for files dropped on the
+page. No body.
+
+**Requires:** `notes:write`. **Response:** `201` `{ batchId }`.
+
+##### GET /notes/import-batches
+
+Recent batches, newest first. Query: `libraryId` (uuid, optional), `limit`
+(default 20).
+
+**Requires:** `notes:read`
+
+**Response:** `200` `{ items: [batch] }`. A batch is `{ id, libraryId, status,
+createdAt, finishedAt, counts, stageCounts }`. `status` is `scanning`,
+`running`, `completed`, `completed_with_errors` or `cancelled`. `counts` is
+the number of items per status (`queued`, `importing`, `imported`, `failed`,
+`missing`, `skipped`); `stageCounts` is the number per derived pipeline stage
+(`uploaded`, `parsed`, `indexed`, `extracting`, `extracted`, `in_graph`,
+`failed`). Both are aggregates over the items, never stored columns.
+
+##### GET /notes/import-batches/{id}
+
+**Requires:** `notes:read`. **Response:** `200` — the batch. A running batch
+that has no items after 30 minutes is read as `cancelled`. **Error Cases:**
+`404`.
+
+##### GET /notes/import-batches/{id}/items
+
+Items oldest first, cursor-paginated. Query: `status` (an item status),
+`cursor`, `limit` (default 50).
+
+**Requires:** `notes:read`
+
+**Response:** `200` `{ items, nextCursor }`. An item is `{ id, filename, path,
+action (new|changed|missing), status, stage, failureReason, failureMessage,
+noteId, noteVersion, proposalId, proposalStatus, diverged, updatedAt }`.
+
+##### POST /notes/import-batches/{id}/files
+
+Uploads one file into a batch. Multipart with a `file` part and optional
+`path` (library-relative; defaults to the file name) and `mtime` (ms since the
+epoch) fields. The server stores the file, adds the item and queues a
+`note.library.import` job in one transaction; the note is made by the job. It
+re-hashes the bytes and trusts only its own hash: a file the library already
+imported byte for byte answers `skipped: true` and queues nothing. A
+completed batch is re-opened.
+
+**Requires:** `notes:write`. Size limit: the notes slice option
+`maxDocumentImportBytes` (25 MiB by default). Formats: `md`, `markdown`, `txt`,
+`text`, `pdf`, `docx`, `pptx`.
+
+**Response:** `201` `{ data: { itemId, action, skipped } }`
+
+**Error Cases:**
+- `400` - No file or invalid multipart body; or `details.reason`:
+  `invalid_path`, `unsupported_document`, `unsupported_office_format`
+- `404` - No such batch, or not yours
+- `409` - The batch was cancelled
+- `413` - The file is over `maxDocumentImportBytes`
+
+##### POST /notes/import-batches/{id}/retry
+
+Re-queues every failed item whose stored file still exists. No body.
+
+**Requires:** `notes:write`. **Response:** `200` `{ requeued }`. **Error
+Cases:** `404`.
+
+##### POST /notes/import-batches/{id}/close
+
+Called by the client when it has finished uploading, or gave up. A batch with
+no items becomes `cancelled`; one whose items have all settled is settled
+(`completed` or `completed_with_errors`, and `kvox.notes.import_batch_settled`
+is published); one still importing stays running and its last item settles it.
+Idempotent.
+
+**Requires:** `notes:write`. **Response:** `200` — the batch. **Error Cases:**
+`404`.
+
+---
+
 ### Note Templates
 
 CRUD over the reusable "recipe" (instructions, output format, body format,
@@ -6519,6 +6682,70 @@ becomes `reverted`; its rows keep their decisions. Audited
 **Response:** `200` `{ proposal: Summary, result: { reverted, kept } }`.
 **Errors:** `404` · `409` `proposal_not_committed` (not, or no longer,
 committed), `revert_conflict`.
+
+##### GET /graph/review-queue
+
+Your open draft proposals across notes, grouped by library, import batch
+(`type: batch`) or `other` (notes imported on their own). Query: `limit` (1 to
+500, default 500). For each draft: how many rows the safe policy would accept
+(`safe`, which includes rows already accepted) and how many wait for a person
+(`waiting`). A stale proposal (the note changed since extraction) counts no
+safe rows. Counts use your `graph.review.minConfidence` preference (default
+0.7), echoed as `minConfidence`.
+
+**Requires:** `graph:read`
+
+**Response:** `200` `{ groups: [{ key: { type, id, label }, proposals: [{
+proposalId, noteId, noteTitle, noteVersion, stale, counts: { total, safe,
+waiting }, createdAt }], totals }], totals: { proposals, stale, total, safe,
+waiting }, minConfidence, truncated }`. `truncated` is `true` when more drafts
+exist than `limit`; the newest are listed.
+
+##### POST /graph/proposals/commit-batch
+
+Commits the safe rows of many of your drafts. Body: exactly one of `batchId`,
+`libraryId` or `proposalIds` (1 to 500 ids), and `policy: "safe"`. For each
+draft in scope, in order: a stale one is skipped; the rows the safe policy
+accepts are accepted; the proposal is committed on its own through the
+ordinary commit (its own Serializable transaction); one proposal failing never
+stops the others.
+
+The safe policy never accepts a `sensitive` PersonFact, a closing, an
+ambiguous resolution or a new merge, a row below `graph.review.minConfidence`,
+a row flagged by the pre-check, or a row whose endpoint entity is not itself
+accepted. Those rows **wait**, with one of the reasons `sensitive`, `closing`,
+`ambiguous`, `merge`, `low_confidence`, `flagged`, `blocked_endpoint`.
+
+A commit marks the whole proposal `committed` and leaves `pending` rows
+undecided, so the waiting rows are moved into a new draft of the same note
+(`remainderProposalId`; their ids and evidence follow). When the note already
+has another draft, the rows stay where they are and `remainderProposalId` is
+`null`. Audited `graph.proposals_batch_committed` (ids and counts only).
+
+**Requires:** `graph:write`
+
+**Response:** `200` `{ results: [{ proposalId, status (committed|skipped|failed),
+accepted, waiting, reason?, remainderProposalId? }] }`. `reason` is `stale`,
+`not_draft` or `nothing_to_commit` for a skip, and an error code for a failure.
+
+**Error Cases:**
+- `400` - Not exactly one selector, or a policy other than `safe`
+- `404` - No such batch or library, or not yours
+
+##### POST /graph/import-batches/{batchId}/retry-extractions
+
+Queues graph extraction again for the notes of one of your import batches
+whose latest attempt at the current version failed, or that were never
+extracted. Runs at the low bulk priority (`KG_EXTRACT_BULK_PRIORITY = 50`) on
+your own AI key. Nothing is queued for a note that is being extracted or
+already has a draft.
+
+**Requires:** `graph:write`
+
+**Response:** `202` `{ requeued }` — how many notes were queued.
+
+**Error Cases:**
+- `404` - No such batch, or not yours
 
 #### Attribute definitions
 

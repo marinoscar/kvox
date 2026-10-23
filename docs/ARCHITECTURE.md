@@ -988,6 +988,17 @@ The domain tables below (transcripts, notes, search, the `kg_*` graph tables, As
   `note_templates.is_archived` (that column is shared by every viewer; hiding is per-user and
   must never affect anyone else's picker, built-in included). Hiding is a listing preference
   only — it never gates create/regenerate/preview reading the template by id.
+- `note_libraries`, `note_library_files`, `note_import_batches`, `note_import_batch_items` - Note libraries
+  (epic #708, `docs/specs/notes.md` §8.8). A library is a folder the client reads on its own
+  device (`owner_id` cascades; `auto_extract` default true, `auto_commit` default false, the
+  opt-in of [ADR-0007](decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)).
+  `note_library_files` has one row per file, unique `(library_id, relative_path)`, with size,
+  mtime, content hash, the note it became (`SetNull`) and `imported_version` /
+  `extracted_version`. `note_import_batches` is one scan or drop (`library_id` nullable,
+  `SetNull` on library delete); `note_import_batch_items` is one file of a batch with its action,
+  status, failure reason, the note and version it wrote and `diverged`. An item's `job_id` has
+  no foreign key (the queue purges finished jobs). Batch counts are `GROUP BY` aggregates, never
+  columns. No raw-SQL index: the one uniqueness rule is a plain composite `@@unique`.
 - `kg_entities` - The Connected Knowledge graph foundation's node table — Person, Organization,
   Project, Meeting (issue #351, epic #344), plus Topic and Product (ontology 1.3.0), `type` a plain ontology key (#350), never a Prisma
   enum, so a new type costs zero migrations. `embedding vector(1536)` reuses `SearchEmbedding`'s
@@ -1913,7 +1924,8 @@ below.
 gated on `graph:read` *and* `GET /api/ai-tasks/config`'s `graphEnabled`.** It
 owns `DESTINATION_ROUTES` prefixes `['/graph', '/ask']`, so `/graph`,
 `/graph/explore`, `/graph/overview`, `/graph/entities/:id`,
-`/graph/imports/:proposalId` (issue #387) and `/ask`/`/ask/:conversationId`
+`/graph/imports/:proposalId` (issue #387), the grouped Review Queue
+`/graph/review-queue` (epic #708) and `/ask`/`/ask/:conversationId`
 (issue #380, epic #348) are all reached through it. `home` owns only `['/']`
 now. While `graphEnabled` is unknown or still loading, the item is hidden
 rather than shown-then-removed — a runtime flag is not a permission check
@@ -1923,6 +1935,16 @@ issue #438 the graph and Ask were reached through `home`'s own `DESTINATION_ROUT
 entry instead (issue #373 for the graph, #380 for Ask) — see
 `docs/specs/ontology.md` §13 and §21.5 for that history and the reasoning
 behind promoting it to its own destination.
+
+**Note libraries (epic #708) add routes, not destinations.** `/notes/libraries`,
+`/notes/libraries/:libraryId` and `/notes/import-batches/:batchId` sit under the
+`notes` destination's `/notes` prefix, and `/graph/review-queue` under `knowledge`'s
+`/graph` (a host with a separate Review row, such as Desktop, owns it through
+`kvoxReviewDestinationRoutes`). The packaged Home (`kvoxHomeRoutes`,
+`KVOX_KNOWLEDGE_HOME_SECTIONS` of `@marinoscar/kvox-web/home/ui`) is knowledge-first:
+Ask, the Review Queue, the note libraries, the graph and recent imports, then the
+journey, what is moving, what failed and recent notes. Routes: `docs/specs/notes.md`
+§8.8, `docs/specs/ontology.md` §19.2.
 
 **Four bottom-bar tabs, and that is the ceiling.** `BOTTOM_BAR_DESTINATIONS`
 is `DESTINATIONS.filter((d) => !d.pinned)`, so the bar's four-tab limit is now
@@ -2142,7 +2164,7 @@ holds no queue or fleet code: `apps/api/src/jobs` and `apps/api/src/nodes` are
 gone. KVox's part is the composition and host ports in
 `apps/api/src/platform/jobs/` (`jobs.config.ts`, `jobs-host.module.ts`, the
 `NODE_JOB_INPUTS` adapter, and `NODE_OBJECT_STORE` bound with the platform's `nodeObjectStoreBinding`), the handlers that live
-beside their features, and the 43 pinned job type strings (`kg.topics_promote`, which turns past meeting topics into draft Topic proposals, is the newest; `kg.graph_layout` also computes the insight connectors)
+beside their features, and the 52 pinned job type strings (`note.library.import`, `kg.library_reconcile` and `kg.autocommit` belong to note libraries; `kg.graph_layout` also computes the insight connectors)
 (`apps/api/test/jobs/job-type-snapshot.spec.ts`; table in
 [`job-queue.md`](specs/job-queue.md#the-job-types)). Jobs carry `org_id`, the
 Jobs, Job Insights and Worker Nodes admin pages are the platform's, and the
