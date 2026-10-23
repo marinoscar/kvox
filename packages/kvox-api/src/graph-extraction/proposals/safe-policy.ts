@@ -141,7 +141,11 @@ const FLAGGED: ReadonlySet<string> = new Set([
 ]);
 const DECIDED_ACCEPT: ReadonlySet<string> = new Set(['accept', 'edit', 'merge_into']);
 
-/** True for a person fact that must never be bulk-accepted (§5.6, §15). */
+/**
+ * True for a person fact that must never be bulk-accepted (§5.6, §15).
+ *
+ * @stability experimental
+ */
 export function isSensitivePersonFact(item: Pick<SafePolicyItem, 'kind' | 'itemKind' | 'sensitivity' | 'flags'>): boolean {
   if (item.kind !== 'item' || item.itemKind !== 'person_fact') return false;
   return item.sensitivity !== 'business' || item.flags.includes('sensitive');
@@ -168,7 +172,11 @@ function ownReason(item: SafePolicyItem, minConfidence: number): SafePolicyWaitR
   return null;
 }
 
-/** Applies the safe policy to one proposal's rows. */
+/**
+ * Applies the safe policy to one proposal's rows.
+ *
+ * @stability experimental
+ */
 export function applySafePolicy(items: readonly SafePolicyItem[], options: SafePolicyOptions): SafePolicyResult {
   const result: SafePolicyResult = { accept: [], waiting: [], alreadyAccepted: [], rejected: [] };
   const acceptedRefs = new Set<string>();

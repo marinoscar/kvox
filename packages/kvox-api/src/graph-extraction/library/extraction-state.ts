@@ -35,6 +35,8 @@ export type ExtractionState = 'running' | 'handled' | 'failed' | 'up_to_date' | 
  * @param note - the note's current version and the file's `extracted_version`.
  * @param proposals - the note's extraction proposals (any version, any status).
  * @returns the note's state.
+ *
+ * @stability experimental
  */
 export function extractionStateOf(
   note: { currentVersion: number; extractedVersion: number | null },
@@ -82,6 +84,8 @@ export interface ReconcileSelection {
  * @param proposalsByNote - the extraction proposals by note id.
  * @param cap - the most notes to return.
  * @returns the note ids, and whether more remained beyond the cap.
+ *
+ * @stability experimental
  */
 export function selectReconcileNotes(
   files: readonly ReconcileFile[],

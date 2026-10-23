@@ -12,7 +12,11 @@ import type {
 // from the note's version. `indexed` is not derived: the search index is not read here.
 // =============================================================================
 
-/** The `kg_proposals.status` values the stage reads. */
+/**
+ * The `kg_proposals.status` values the stage reads.
+ *
+ * @stability experimental
+ */
 export type ProposalStatusValue =
   | 'draft'
   | 'extracting'

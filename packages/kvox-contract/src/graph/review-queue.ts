@@ -14,7 +14,11 @@ import { z } from 'zod';
 // `graph.review.minConfidence`, or any row of a stale proposal.
 // =============================================================================
 
-/** Most proposals one request names or one queue page returns. */
+/**
+ * Most proposals one request names or one queue page returns.
+ *
+ * @stability experimental
+ */
 export const REVIEW_QUEUE_MAX_PROPOSALS = 500;
 
 /**

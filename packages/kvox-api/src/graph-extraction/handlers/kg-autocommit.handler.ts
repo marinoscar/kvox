@@ -41,7 +41,11 @@ import {
 } from '../../ports/index.js';
 import { ProposalBatchCommitService } from '../proposals/proposal-batch-commit.service.js';
 
-/** The audit action of one auto-commit (permanent). */
+/**
+ * The audit action of one auto-commit (permanent).
+ *
+ * @stability experimental
+ */
 export const GRAPH_AUTOCOMMIT_ACTION = 'graph:autocommit';
 
 const payloadSchema = z.object({ proposalId: z.guid(), ownerId: z.guid() });

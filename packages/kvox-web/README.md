@@ -108,6 +108,7 @@ None at the package level. The host object is the whole configuration; the optio
 
 - `KvoxWebHost` (`core/headless`): the one port every slice reads. Its parts are `KvoxHttpPort`, `KvoxSsePort` and the optional `KvoxUploadPort`, plus `viewer`, `links` and `features`.
 - `KvoxHttpPort`, `KvoxSsePort`, `KvoxUploadPort`: the transports a host implements.
+- `KvoxFileAccessPort` (`core/headless`): the optional `files` member of `KvoxWebHost`, how note library pages read a folder on the device (epic #708). Desktop implements it over IPC; without it the pages use `createBrowserFileAccess()`. Listed in the [core README](src/core/README.md).
 - `KvoxSettingsCard`, `KvoxDestination`, `KvoxRouteDef` (`core/ui`): the types of the data a slice exports and the app spreads into `ADMIN_SECTIONS`, `USER_SETTINGS_SECTIONS`, `DESTINATIONS` and its routes.
 - `kvoxTranscriptionAdminSections`, `kvoxTranscriptionRoutes` and the `renderSecretField` slot of `TranscriptionSettingsPage` (`transcription/ui`).
 - `kvoxSearchUserSettingsSections` and `kvoxSearchRoutes` (`search/ui`): the Search Indexing card (no permission, by design) and its route.
