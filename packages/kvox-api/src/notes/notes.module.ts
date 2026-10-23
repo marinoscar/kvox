@@ -42,6 +42,9 @@ import { NoteSourcesController } from './note-sources.controller.js';
 import { NoteSourcesService } from './note-sources.service.js';
 import { NoteImportController } from './import/note-import.controller.js';
 import { NoteImportService } from './import/note-import.service.js';
+import { NoteLibrariesController } from './library/note-libraries.controller.js';
+import { NoteLibrariesService } from './library/note-libraries.service.js';
+import { NoteLibraryPolicy } from './library/note-library-policy.js';
 import { NoteTemplatePreviewService } from './note-template-preview.service.js';
 import { NoteTemplatesController } from './note-templates.controller.js';
 import { NoteTemplatesService } from './note-templates.service.js';
@@ -161,6 +164,8 @@ export class NotesModule {
   static forRoot(options: NotesModuleOptions = {}): DynamicModule {
     const resolved = resolveNotesOptions(options);
     const controllers = [
+      // Libraries and import batches (#714): static `libraries` / `import-batches` paths.
+      NoteLibrariesController,
       NotesController,
       // `POST /api/notes/import` (#585). Its own controller, so its static path is
       // registered beside the `:id` routes without depending on their order.
@@ -205,6 +210,9 @@ export class NotesModule {
       NoteSourcesService,
       // Note import (#585): a Markdown note export back into a note.
       NoteImportService,
+      // Libraries, scans and import batches (#714), and the policy the graph reads.
+      NoteLibrariesService,
+      NoteLibraryPolicy,
       NoteSourceExtractHandler,
       // Note templates (#50). `NoteTemplateAccessService` is the ONE place that decides
       // 403-for-a-built-in vs 404-for-somebody-else's.
@@ -255,6 +263,8 @@ export class NotesModule {
       exports: [
         NotesService,
         NoteVersionWriter,
+        NoteLibrariesService,
+        NoteLibraryPolicy,
         NoteAccessService,
         NoteOriginService,
         NoteSourceNameService,
