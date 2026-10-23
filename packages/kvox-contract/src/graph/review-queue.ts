@@ -241,3 +241,20 @@ export const commitBatchResponseSchema = z.object({
  * @stability experimental
  */
 export type CommitBatchResponse = z.infer<typeof commitBatchResponseSchema>;
+
+/**
+ * The response of `POST /api/graph/import-batches/:batchId/retry-extractions`: how many notes
+ * of the batch were queued for graph extraction again (#716).
+ *
+ * @stability experimental
+ */
+export const retryExtractionsResponseSchema = z.object({
+  requeued: z.number().int().min(0),
+});
+
+/**
+ * The parsed shape of {@link retryExtractionsResponseSchema}.
+ *
+ * @stability experimental
+ */
+export type RetryExtractionsResponse = z.infer<typeof retryExtractionsResponseSchema>;

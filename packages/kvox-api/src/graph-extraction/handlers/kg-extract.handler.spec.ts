@@ -97,6 +97,7 @@ function harness(options: { answer?: unknown; stages?: ProposalStage[] } = {}) {
   const stages = new ProposalStageRegistry();
   for (const stage of options.stages ?? []) stages.register(stage);
   const preferences = { get: jest.fn(async () => GRAPH_PREFERENCE_DEFAULTS) };
+  const drafted = { afterDraft: jest.fn(async () => undefined) };
 
   const handler = new KgExtractHandler(
     jobs as never,
@@ -107,8 +108,9 @@ function harness(options: { answer?: unknown; stages?: ProposalStage[] } = {}) {
     writer as never,
     stages,
     preferences as never,
+    drafted as never,
   );
-  return { handler, calls, writer, prisma, resolver, ai, loader, jobs };
+  return { handler, calls, writer, prisma, resolver, ai, loader, jobs, drafted };
 }
 
 describe('KgExtractHandler (#363)', () => {

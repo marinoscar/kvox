@@ -17,11 +17,11 @@
 // before it. The proposal and its job are written in one transaction.
 // =============================================================================
 
-import { BadRequestException, ConflictException, HttpException, Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, Injectable, Logger, NotFoundException, Inject, Optional } from '@nestjs/common';
 
 import { GraphAiRunResolver, isUniqueViolation, GRAPH_CONFLICT_REASONS, KG_EXTRACT_JOB_TYPE, KG_SUBJECT_NOTE, GraphOntologyService, GraphPreferencesService, GRAPH_WRITE_PERMISSION } from '../../graph/index.js';
 import type { GraphAiRun, KvoxGraphDb, GraphActor, InputJsonValue } from '../../graph/index.js';
-import { NOTE_NOT_FOUND_MESSAGE, NoteAccessService, type NoteRow as Note } from '../../notes/index.js';
+import { NOTE_NOT_FOUND_MESSAGE, NoteAccessService, NoteLibraryPolicy, type NoteRow as Note } from '../../notes/index.js';
 import { budgetRefusalMessage, computeTokenBudget, outputTokensForPrompt, type TokenBudget, Prisma } from '../../core/index.js';
 import type { ExtractionStats } from '../proposals/proposal-payload.schema.js';
 import type {
@@ -47,6 +47,24 @@ import {
 
 /** Queue priority (§11): ahead of housekeeping, behind a watched export. */
 export const KG_EXTRACT_PRIORITY = -5;
+
+/**
+ * Queue priority of a bulk (library import / reconcile) extraction: behind imports and search
+ * indexing, which run first (ADR-0007). Ascending is more urgent.
+ *
+ * @stability experimental
+ */
+export const KG_EXTRACT_BULK_PRIORITY = 50;
+
+/** How a ready note reached the graph hook. */
+export interface EnqueueForReadyNoteOptions {
+  /** One of many created by a bulk import: queued at {@link KG_EXTRACT_BULK_PRIORITY}. */
+  bulk?: boolean;
+  /** Where the note came from (`NoteReadyEvent.origin`). */
+  origin?: 'generation' | 'import' | 'library';
+  /** A person asked (retry): skip the auto-extract preference and the library switch. */
+  explicit?: boolean;
+}
 
 export type ExtractionReason = 'note_ready' | 'user_request';
 
@@ -178,6 +196,7 @@ export class GraphExtractionService {
     @Inject(KVOX_JOBS) private readonly jobs: KvoxJobsPort,
     @Inject(KVOX_AUDIT) private readonly auditPort: KvoxAuditPort,
     @Inject(KVOX_IDENTITY) private readonly identity: KvoxIdentityPort,
+    @Optional() private readonly libraryPolicy?: NoteLibraryPolicy,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -264,16 +283,15 @@ export class GraphExtractionService {
    * for them (a 409/400 there is swallowed at `debug`), and no extraction for
    * this note is already running. Returns the proposal id, or null.
    */
-  async enqueueForReadyNote(noteId: string, ownerId: string): Promise<string | null> {
-    if (!(await this.resolver.graphEnabled())) return null;
+  async enqueueForReadyNote(noteId: string, ownerId: string, options: EnqueueForReadyNoteOptions = {}): Promise<string | null> {
+    if (!(await this.canExtractFor(ownerId, options.explicit === true))) return null;
 
-    // The owner's EFFECTIVE permissions, through the host's identity port: a Contributor or
-    // Viewer holds `graph:write` through the membership, not through a system role (#465).
-    const holder = await this.identity.hasPermission(ownerId, GRAPH_WRITE_PERMISSION);
-    if (!holder) return null;
-
-    const prefs = await this.preferences.get(ownerId);
-    if (!prefs.extraction.autoExtract) return null;
+    // A library note follows its library's switch (ADR-0007). A library file whose note link is
+    // not stored yet is left to the reconcile job, which only runs for `auto_extract` libraries.
+    if (options.explicit !== true && this.libraryPolicy && (options.bulk === true || options.origin === 'library')) {
+      const policy = await this.libraryPolicy.forNote(noteId);
+      if (policy ? !policy.autoExtract : options.origin === 'library') return null;
+    }
 
     let resolution: GraphAiRun;
     try {
@@ -292,12 +310,37 @@ export class GraphExtractionService {
     }
 
     try {
-      const proposal = await this.createProposal({ userId: ownerId, note, resolution, guidance: null, reason: 'note_ready' });
+      const proposal = await this.createProposal({
+        userId: ownerId,
+        note,
+        resolution,
+        guidance: null,
+        reason: 'note_ready',
+        bulk: options.bulk === true,
+      });
       return proposal.id;
     } catch (error) {
       if (error instanceof ConflictException) return null; // already running
       throw error;
     }
+  }
+
+  /**
+   * The gate every automatic extraction passes for an owner: the deployment's graph switch, their
+   * `graph:write` and (unless a person asked) their `extraction.autoExtract` preference. The reconcile
+   * job asks it once before looping over notes.
+   */
+  async canExtractFor(ownerId: string, explicit = false): Promise<boolean> {
+    if (!(await this.resolver.graphEnabled())) return false;
+
+    // The owner's EFFECTIVE permissions, through the host's identity port: a Contributor or
+    // Viewer holds `graph:write` through the membership, not through a system role (#465).
+    const holder = await this.identity.hasPermission(ownerId, GRAPH_WRITE_PERMISSION);
+    if (!holder) return false;
+    if (explicit) return true;
+
+    const prefs = await this.preferences.get(ownerId);
+    return prefs.extraction.autoExtract;
   }
 
   // ---------------------------------------------------------------------------
@@ -374,6 +417,7 @@ export class GraphExtractionService {
     resolution: GraphAiRun;
     guidance: UserGuidance | null;
     reason: ExtractionReason;
+    bulk?: boolean;
   }) {
     const { userId, note, resolution, guidance, reason } = args;
     let proposal;
@@ -405,7 +449,7 @@ export class GraphExtractionService {
           reason: reason === 'note_ready' ? 'upload' : 'rerun',
           subjectType: KG_SUBJECT_NOTE,
           subjectId: note.id,
-          priority: KG_EXTRACT_PRIORITY,
+          priority: args.bulk === true ? KG_EXTRACT_BULK_PRIORITY : KG_EXTRACT_PRIORITY,
           payload: payload as unknown as Record<string, unknown>,
         });
         return tx.kgProposal.update({ where: { id: created.id }, data: { jobId: job.id } });

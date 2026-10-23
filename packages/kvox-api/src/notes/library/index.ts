@@ -3,6 +3,8 @@ export {
   NOTE_IMPORT_BATCH_NOT_FOUND_MESSAGE,
   NOTE_LIBRARY_NOT_FOUND_MESSAGE,
   NoteLibrariesService,
+  type NoteImportBatchList,
+  type NoteLibraryList,
 } from './note-libraries.service.js';
 export { NoteLibraryPolicy, type NoteLibraryPolicyView } from './note-library-policy.js';
 export {
@@ -15,6 +17,7 @@ export {
 export {
   deriveItemStage,
   pickProposal,
+  type PickableProposal,
   recomputeBatchStatus,
   type ProposalStatusValue,
 } from './note-import-stage.js';

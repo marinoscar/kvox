@@ -110,7 +110,7 @@ import { closeTestApp, createTestApp, type TestContext } from './helpers/test-ap
 import { describeGraphConformance } from '@marinoscar/kvox-api/graph/testing';
 import { describeGraphExtractionConformance } from '@marinoscar/kvox-api/graph-extraction/testing';
 import { describeGraphRdfConformance } from '@marinoscar/kvox-api/graph-rdf/testing';
-import { KgExtractHandler, KgResolveHandler, KgEmbedHandler, KgTopicsPromoteHandler } from '@marinoscar/kvox-api/graph-extraction';
+import { KgExtractHandler, KgResolveHandler, KgEmbedHandler, KgTopicsPromoteHandler, KgLibraryReconcileHandler, KgAutocommitHandler } from '@marinoscar/kvox-api/graph-extraction';
 import { KgExportHandler, KgImportHandler } from '@marinoscar/kvox-api/graph-rdf';
 import { KgSpeakerLinkHandler, KgPurgeHandler, KgGraphLayoutHandler, KgMigrateHandler, EntityDigestHandler } from './graph/package-internals';
 
@@ -652,7 +652,7 @@ async function graphHandlers() {
     core: [KgSpeakerLinkHandler, KgPurgeHandler, KgGraphLayoutHandler, KgMigrateHandler, EntityDigestHandler].map((handler) =>
       app.get(handler, { strict: false }),
     ),
-    extraction: [KgExtractHandler, KgResolveHandler, KgEmbedHandler, KgTopicsPromoteHandler].map((handler) => app.get(handler, { strict: false })),
+    extraction: [KgExtractHandler, KgResolveHandler, KgEmbedHandler, KgTopicsPromoteHandler, KgLibraryReconcileHandler, KgAutocommitHandler].map((handler) => app.get(handler, { strict: false })),
     rdf: [KgExportHandler, KgImportHandler].map((handler) => app.get(handler, { strict: false })),
   };
 }
@@ -689,6 +689,7 @@ describe('kvox-guarded routes', () => {
       'GraphEntitiesController',
       'GraphExportController',
       'GraphExtractionController',
+      'GraphImportBatchesController',
       'GraphImportController',
       'GraphInsightsController',
       'GraphOverviewController',

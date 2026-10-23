@@ -23,6 +23,11 @@
 // accepted. This function returns the rows to ADD to the accepted set.
 // =============================================================================
 
+/**
+ * Why the safe policy leaves a row for a person.
+ *
+ * @stability experimental
+ */
 export type SafePolicyWaitReason =
   | 'sensitive'
   | 'closing'
@@ -32,10 +37,41 @@ export type SafePolicyWaitReason =
   | 'flagged'
   | 'blocked_endpoint';
 
-/** One proposal row, reduced to what the policy reads. */
+/**
+ * The adjudicator's verdict on a resolution.
+ *
+ * @stability experimental
+ */
+export interface SafePolicyAdjudication {
+  /** The verdict. */
+  verdict: 'same' | 'different' | 'uncertain';
+}
+
+/**
+ * A row's resolution, reduced to what the policy reads.
+ *
+ * @stability experimental
+ */
+export interface SafePolicyResolution {
+  /** The entity the row links to, or `null` for a new entity. */
+  ref: string | null;
+  /** The resolution score, or `null`. */
+  score: number | null;
+  /** The adjudicator's verdict, when one ran. */
+  adjudication?: SafePolicyAdjudication | null;
+}
+
+/**
+ * One proposal row, reduced to what the policy reads.
+ *
+ * @stability experimental
+ */
 export interface SafePolicyItem {
+  /** The row id. */
   id: string;
+  /** The row kind. */
   kind: 'entity' | 'relation' | 'item' | 'closing';
+  /** The decision so far. */
   decision: 'pending' | 'accept' | 'edit' | 'reject' | 'merge_into';
   /** `payload.ref` of the row (what other rows point to). */
   ref: string | null;
@@ -47,27 +83,41 @@ export interface SafePolicyItem {
   sensitivity: string | null;
   /** The effective type is review-only (`reviewOnlyTypes`), e.g. a personal-domain type. */
   reviewOnly: boolean;
+  /** The row's flags. */
   flags: readonly string[];
   /** The row's resolution (entity rows). */
-  resolution: {
-    ref: string | null;
-    score: number | null;
-    adjudication?: { verdict: 'same' | 'different' | 'uncertain' } | null;
-  } | null;
+  resolution: SafePolicyResolution | null;
   /** Proposal refs this row's endpoints point to (`{ ref }` endpoints). */
   endpointRefs: readonly string[];
 }
 
+/**
+ * What the safe policy is told.
+ *
+ * @stability experimental
+ */
 export interface SafePolicyOptions {
   /** 0..1, from `graph.review.minConfidence`. */
   minConfidence: number;
 }
 
+/**
+ * A row that stays for a person, and why.
+ *
+ * @stability experimental
+ */
 export interface SafePolicyWaiting {
+  /** The row id. */
   itemId: string;
+  /** Why it waits. */
   reason: SafePolicyWaitReason;
 }
 
+/**
+ * What the safe policy decided for one proposal.
+ *
+ * @stability experimental
+ */
 export interface SafePolicyResult {
   /** Pending rows the policy accepts now. */
   accept: string[];

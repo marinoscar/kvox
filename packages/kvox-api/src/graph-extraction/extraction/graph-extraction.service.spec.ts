@@ -5,7 +5,7 @@ import { GRAPH_PREFERENCE_DEFAULTS } from '../../graph/index.js';
 import { auditPortOver } from '../__fixtures__/audit-port.js';
 import { NoteAccessService } from '../../notes/index.js';
 import { IDS, makeInput, schemaFor } from '../testing/extraction-fixtures.js';
-import { GraphExtractionService, KG_EXTRACT_PRIORITY } from './graph-extraction.service.js';
+import { GraphExtractionService, KG_EXTRACT_BULK_PRIORITY, KG_EXTRACT_PRIORITY } from './graph-extraction.service.js';
 
 const USER = { id: IDS.owner, email: 'o@example.test', roles: ['Viewer'], permissions: ['graph:write', 'graph:read'], isActive: true };
 
@@ -295,5 +295,69 @@ describe('GraphExtractionService.enqueueForReadyNote (#363)', () => {
     const { service, resolver } = harness();
     resolver.resolve.mockRejectedValueOnce(new Error('db down'));
     await expect(service.enqueueForReadyNote(IDS.note, IDS.owner)).rejects.toThrow('db down');
+  });
+});
+
+describe('bulk extraction priority and the library gate (#716, ADR-0007)', () => {
+  it('queues a bulk note at KG_EXTRACT_BULK_PRIORITY (50)', async () => {
+    const { service, jobs, tx } = harness();
+    expect(KG_EXTRACT_BULK_PRIORITY).toBe(50);
+    await service.enqueueForReadyNote(IDS.note, IDS.owner, { bulk: true, origin: 'library' });
+    expect(jobs.enqueueWithin).toHaveBeenCalledWith(tx, expect.objectContaining({ priority: 50 }));
+  });
+
+  it('keeps the interactive and generated-note path at -5', async () => {
+    const { service, jobs, tx } = harness();
+    await service.enqueueForReadyNote(IDS.note, IDS.owner);
+    expect(jobs.enqueueWithin).toHaveBeenCalledWith(tx, expect.objectContaining({ priority: KG_EXTRACT_PRIORITY }));
+    expect(KG_EXTRACT_PRIORITY).toBe(-5);
+  });
+
+  it('a manual extraction request stays at -5', async () => {
+    const { service, jobs, tx } = harness();
+    await service.request(USER, IDS.note, {} as never);
+    expect(jobs.enqueueWithin).toHaveBeenCalledWith(tx, expect.objectContaining({ priority: -5 }));
+  });
+
+  function withPolicy(policy: { libraryId: string; autoExtract: boolean; autoCommit: boolean } | null) {
+    const h = harness();
+    const forNote = jest.fn(async () => policy);
+    const service = new GraphExtractionService(
+      h.prisma as never,
+      new NoteAccessService(h.prisma as never),
+      h.resolver as never,
+      h.preferences as never,
+      { effectiveSchemaFor: jest.fn() } as never,
+      h.loader as never,
+      h.jobs as never,
+      auditPortOver(h.prisma),
+      h.identity as never,
+      { forNote } as never,
+    );
+    return { ...h, service, forNote };
+  }
+
+  it('skips a bulk note whose library has auto-extract off', async () => {
+    const h = withPolicy({ libraryId: 'l1', autoExtract: false, autoCommit: false });
+    await expect(h.service.enqueueForReadyNote(IDS.note, IDS.owner, { bulk: true, origin: 'library' })).resolves.toBeNull();
+    expect(h.jobs.enqueueWithin).not.toHaveBeenCalled();
+  });
+
+  it('leaves a library note with no stored file link to the reconcile job', async () => {
+    const h = withPolicy(null);
+    await expect(h.service.enqueueForReadyNote(IDS.note, IDS.owner, { bulk: true, origin: 'library' })).resolves.toBeNull();
+  });
+
+  it('queues a bulk note whose library has auto-extract on', async () => {
+    const h = withPolicy({ libraryId: 'l1', autoExtract: true, autoCommit: false });
+    await expect(h.service.enqueueForReadyNote(IDS.note, IDS.owner, { bulk: true, origin: 'library' })).resolves.toBe('proposal-1');
+  });
+
+  it('an explicit retry ignores the library switch and the auto-extract preference', async () => {
+    const h = withPolicy({ libraryId: 'l1', autoExtract: false, autoCommit: false });
+    h.preferences.get.mockResolvedValue({ ...GRAPH_PREFERENCE_DEFAULTS, extraction: { autoExtract: false } });
+    await expect(
+      h.service.enqueueForReadyNote(IDS.note, IDS.owner, { bulk: true, origin: 'library', explicit: true }),
+    ).resolves.toBe('proposal-1');
   });
 });

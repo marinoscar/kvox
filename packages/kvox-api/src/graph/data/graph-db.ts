@@ -665,6 +665,24 @@ export interface KvoxGraphDelegates {
   noteImportBatchItem: Pick<RowDelegate<GraphImportBatchItemRow>, 'findUnique' | 'findFirst' | 'findMany'>;
   /** `note_libraries` (reads only: a group's label, #717). */
   noteLibrary: Pick<RowDelegate<GraphLibraryRow>, 'findUnique' | 'findFirst' | 'findMany'>;
+  /** `note_library_files` (reads, and the one `extracted_version` write of #716). */
+  noteLibraryFile: Pick<RowDelegate<GraphLibraryFileRow>, 'findFirst' | 'findMany' | 'updateMany'>;
+}
+
+/**
+ * The columns of `note_library_files` the graph reads and stamps (#716).
+ *
+ * @stability experimental
+ */
+export interface GraphLibraryFileRow {
+  /** The `id` column. */
+  id: string;
+  /** The `library_id` column. */
+  libraryId: string;
+  /** The `note_id` column. */
+  noteId: string | null;
+  /** The highest note version the graph extraction covered. */
+  extractedVersion: number | null;
 }
 
 /**

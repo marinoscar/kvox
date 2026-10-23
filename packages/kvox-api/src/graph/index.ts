@@ -19,7 +19,13 @@ export {
 export { GRAPH_PERMISSIONS, GRAPH_READ_PERMISSION, GRAPH_WRITE_PERMISSION } from './graph.permissions.js';
 export { CurrentGraphActor, graphActorOf, type GraphActor } from './graph-actor.js';
 export { ApiDataResponse } from './api-data-response.js';
-export { GRAPH_CHANGED_EVENT, type GraphChangedEvent, type GraphChangedReason } from './graph-events.js';
+export {
+  GRAPH_CHANGED_EVENT,
+  GRAPH_PROPOSAL_DRAFTED_EVENT,
+  type GraphChangedEvent,
+  type GraphChangedReason,
+  type GraphProposalDraftedEvent,
+} from './graph-events.js';
 export {
   GRAPH_MANAGED_BY,
   KG_EMBED_JOB_TYPE,
@@ -40,6 +46,8 @@ export {
   KG_SUBJECT_TRANSCRIPT,
   KG_SUBJECT_USER,
   KG_TOPICS_PROMOTE_JOB_TYPE,
+  KG_LIBRARY_RECONCILE_JOB_TYPE,
+  KG_AUTOCOMMIT_JOB_TYPE,
 } from './job-types.js';
 export { GRAPH_CONFLICT_REASONS, type GraphConflictReason } from './graph-conflict-reasons.js';
 export { graphImportStoragePrefix } from './graph-storage-keys.js';
@@ -62,6 +70,10 @@ export { GraphAiRunResolver, type ResolveGraphAiOptions } from './graph-ai-run.s
 export type {
   KvoxGraphDb,
   KvoxGraphDelegates,
+  GraphImportBatchRow,
+  GraphImportBatchItemRow,
+  GraphLibraryRow,
+  GraphLibraryFileRow,
   KvoxGraphTx,
   KgAliasSourceValue,
   KgAttributeDefRow,
