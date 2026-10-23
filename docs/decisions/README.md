@@ -33,5 +33,6 @@ Every ADR is a file `NNNN-<slug>.md` with these sections, in this order:
 | [0004](0004-desktop-data-local-only.md) | Desktop data stays on the device; AI is the only cloud egress | Accepted |
 | [0005](0005-ai-architecture-shared-harness.md) | AI architecture: one shared harness, pluggable providers | Accepted (implementation #579) |
 | [0006](0006-desktop-inputs-no-transcription.md) | Desktop inputs: text transcripts and notes only, no transcription | Accepted |
+| [0007](0007-bulk-graph-review-and-opt-in-auto-commit.md) | Bulk graph review and opt-in auto-commit for note libraries | Accepted |
 
-ADR-0001 to ADR-0006 belong to epic #574 (KVox Desktop). See also [../desktop/README.md](../desktop/README.md) and [../guides/kvox-desktop.md](../guides/kvox-desktop.md).
+ADR-0001 to ADR-0006 belong to epic #574 (KVox Desktop); ADR-0007 belongs to epic #708 (note libraries). See also [../desktop/README.md](../desktop/README.md) and [../guides/kvox-desktop.md](../guides/kvox-desktop.md).
