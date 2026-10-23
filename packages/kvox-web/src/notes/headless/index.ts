@@ -8,12 +8,18 @@ export * from './clients/notes.js';
 export * from './clients/noteTemplates.js';
 export * from './clients/noteExports.js';
 export * from './clients/noteGenerationStream.js';
+export * from './clients/noteLibraries.js';
 
 // The hooks.
 export * from './hooks/useNotes.js';
 export * from './hooks/useNoteTemplates.js';
 export * from './hooks/useNoteGenerationContext.js';
 export * from './hooks/useTemplatePreview.js';
+export * from './hooks/useNoteLibraries.js';
+
+// Library sync and ad-hoc import: the orchestration KVox Desktop calls too.
+export * from './sync/librarySync.js';
 
 // Pure helpers other screens use.
 export * from './utils/noteSource.js';
+export * from './utils/noteImportFailure.js';

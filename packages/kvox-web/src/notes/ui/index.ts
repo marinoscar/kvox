@@ -9,7 +9,46 @@ export { NewNotePage } from './pages/NewNotePage.js';
 export type { NewNotePageProps } from './pages/NewNotePage.js';
 export { NotePage } from './pages/NotePage.js';
 export type { NotePageProps } from './pages/NotePage.js';
-export { NotesPage } from './pages/NotesPage.js';
+export { NotesImportActions, NotesPage } from './pages/NotesPage.js';
+export { NOTE_IMPORT_FORMATS_TEXT, NoteLibrariesPage } from './pages/NoteLibrariesPage.js';
+export type { NoteLibrariesPageProps } from './pages/NoteLibrariesPage.js';
+export { AUTO_COMMIT_SAFE_POLICY_TEXT, NoteLibraryPage } from './pages/NoteLibraryPage.js';
+export type { NoteLibraryPageProps } from './pages/NoteLibraryPage.js';
+export {
+  NoteImportBatchPage,
+  defaultReviewQueuePath,
+  importCompletionSentence,
+} from './pages/NoteImportBatchPage.js';
+export type { NoteImportBatchPageProps } from './pages/NoteImportBatchPage.js';
+export { ImportNotesButton } from './components/ImportNotesButton.js';
+export type { ImportNotesButtonProps } from './components/ImportNotesButton.js';
+export { NotesDropZone } from './components/NotesDropZone.js';
+export type { NotesDropZoneProps } from './components/NotesDropZone.js';
+export { ScanConfirmDialog, scanPlanSummary } from './components/ScanConfirmDialog.js';
+export type { ScanConfirmDialogProps } from './components/ScanConfirmDialog.js';
+export { ImportBatchItemList, importStageLabel } from './components/ImportBatchItemList.js';
+export type { ImportBatchItemListProps } from './components/ImportBatchItemList.js';
+export { ImportStageFunnel, importFunnelSteps } from './components/ImportStageFunnel.js';
+export type { ImportFunnelStep, ImportStageFunnelProps } from './components/ImportStageFunnel.js';
+export { NoteLibraryCard, noteLibraryPath } from './components/NoteLibraryCard.js';
+export type { NoteLibraryCardProps } from './components/NoteLibraryCard.js';
+export {
+  noteImportBatchPath,
+  summarizeImportFailures,
+  useAdHocNoteImport,
+} from './library/useAdHocNoteImport.js';
+export type { AdHocNoteImport, NoteImportNavigationState } from './library/useAdHocNoteImport.js';
+export { useLibrarySyncRunner, syncErrorMessage } from './library/useLibrarySyncRunner.js';
+export type { LibrarySyncRunner, LibrarySyncRunnerOptions } from './library/useLibrarySyncRunner.js';
+export { useLibraryFolders } from './library/useLibraryFolders.js';
+export type { LibraryFolders } from './library/useLibraryFolders.js';
+export {
+  describeSyncProgress,
+  formatImportBytes,
+  formatTokenEstimate,
+  pluralize,
+  syncProgressPercent,
+} from './library/format.js';
 export type { NotesPageProps } from './pages/NotesPage.js';
 export { UserNoteTemplatesPage } from './pages/UserNoteTemplatesPage.js';
 export type { UserNoteTemplatesPageProps } from './pages/UserNoteTemplatesPage.js';
