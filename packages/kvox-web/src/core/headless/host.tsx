@@ -13,6 +13,8 @@
 import { createContext, createElement, useContext } from 'react';
 import type { ReactNode } from 'react';
 
+import type { KvoxFileAccessPort } from './files/types.js';
+
 /**
  * The HTTP verbs the host transport carries.
  *
@@ -274,6 +276,17 @@ export interface KvoxWebHost {
    * {@link useKvoxLatestEventId}.
    */
   useLatestEventId?: (prefix: string) => string | null;
+  /**
+   * Access to folders on the user's device (note libraries, epic #708).
+   *
+   * Optional, and a host capability rather than a transport: KVox Desktop
+   * implements it over IPC to its main process (real paths, a watcher, hashing
+   * off the renderer); the web edition leaves it out and the pages fall back to
+   * `createBrowserFileAccess()` (File System Access, or an
+   * `<input webkitdirectory>`). Read it through `useKvoxFileAccess()`, never
+   * directly, so the fallback applies.
+   */
+  files?: KvoxFileAccessPort;
 }
 
 /**

@@ -60,6 +60,8 @@ export type {
 
 export * from './upload/index.js';
 
+export * from './files/index.js';
+
 export { useVisiblePolling } from './polling.js';
 
 export { useCopyToClipboard } from './hooks/useCopyToClipboard.js';
