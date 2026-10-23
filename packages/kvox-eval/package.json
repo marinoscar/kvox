@@ -76,13 +76,13 @@
     "@marinoscar/platform-ai-providers": "0.1.0-next.11",
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
-    "openai": "^7.23.0",
-    "pg": "^8.23.0",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "openai": "^7.39.0",
+    "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.10",
@@ -96,19 +96,19 @@
     "@marinoscar/platform-db": "0.1.0-next.11",
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "@prisma/config": "^7.8.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.15.32",
-    "jest": "^30.4.2",
-    "openai": "^7.23.0",
-    "pg": "^8.23.0",
-    "prisma": "^7.8.0",
+    "jest": "^30.5.2",
+    "openai": "^7.39.0",
+    "pg": "^8.23.1",
+    "prisma": "^7.10.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "ts-jest": "^29.4.12",
+    "ts-jest": "^29.4.15",
     "typescript": "^6.0.3",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   }
 }
