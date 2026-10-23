@@ -37,6 +37,7 @@ import {
   PayloadTooLargeException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { DOCX_MIME_TYPE, PPTX_MIME_TYPE } from '@marinoscar/kvox-contract/notes';
 import { randomUUID } from 'node:crypto';
 
 
@@ -158,13 +159,19 @@ export class NoteSourcesService {
     // A host may turn a format off (`documentSources`); that type is then "a document this
     // application cannot read", exactly as an unknown one is.
     const mimeType =
-      normalized === 'application/pdf'
-        ? this.options.documentPdf
-          ? normalized
-          : null
-        : normalized !== null && this.options.documentText
-          ? normalized
-          : null;
+      normalized === null
+        ? null
+        : normalized === 'application/pdf'
+          ? this.options.documentPdf
+            ? normalized
+            : null
+          : normalized === DOCX_MIME_TYPE || normalized === PPTX_MIME_TYPE
+            ? this.options.documentOffice
+              ? normalized
+              : null
+            : this.options.documentText
+              ? normalized
+              : null;
 
     if (!mimeType) {
       throw new BadRequestException(

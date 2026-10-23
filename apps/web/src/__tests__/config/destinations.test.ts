@@ -107,6 +107,10 @@ describe('destinations — route ownership', () => {
         '/notes/new',
         '/notes/:id',
         '/notes/:id/history',
+        // #720, epic #708 — note libraries and the live progress of one import.
+        '/notes/libraries',
+        '/notes/libraries/:libraryId',
+        '/notes/import-batches/:batchId',
         // #373, epic #347 — the knowledge graph, owned by `knowledge` since #438.
         '/graph',
         '/graph/entities/:id',
@@ -116,6 +120,9 @@ describe('destinations — route ownership', () => {
         '/graph/overview',
         // #387 — one RDF import, likewise.
         '/graph/imports/:proposalId',
+        // The draft list and #721's grouped Review Queue, likewise.
+        '/graph/review',
+        '/graph/review-queue',
         // #380 — Ask, `/ask` and `/ask/:id` as one optional-segment route.
         '/ask/:conversationId?',
         '/admin',
@@ -196,6 +203,8 @@ describe('destinations — the knowledge graph (#373, #438)', () => {
     expect(resolveActiveDestination('/graph/explore')).toBe('knowledge');
     expect(resolveActiveDestination('/graph/overview')).toBe('knowledge');
     expect(resolveActiveDestination('/graph/imports/abc')).toBe('knowledge');
+    // #721 — the Review Queue is reached from the Knowledge pages on web.
+    expect(resolveActiveDestination('/graph/review-queue')).toBe('knowledge');
     expect(resolveActiveDestination('/graphs')).toBeNull();
     expect(resolveActiveDestination('/ask')).toBe('knowledge');
     expect(resolveActiveDestination('/ask/abc-123')).toBe('knowledge');
@@ -453,6 +462,10 @@ describe('destinations — the table itself', () => {
     expect(resolveActiveDestination('/notes/new')).toBe('notes');
     expect(resolveActiveDestination('/notes/abc-123')).toBe('notes');
     expect(resolveActiveDestination('/notes/abc-123/history')).toBe('notes');
+    // #720: the library pages and an import's progress page stay on Notes.
+    expect(resolveActiveDestination('/notes/libraries')).toBe('notes');
+    expect(resolveActiveDestination('/notes/libraries/lib-1')).toBe('notes');
+    expect(resolveActiveDestination('/notes/import-batches/batch-1')).toBe('notes');
     // …and stops at the segment boundary, like every other prefix here.
     expect(resolveActiveDestination('/notesfoo')).toBeNull();
     expect(resolveActiveDestination('/notes-archive')).toBeNull();
@@ -731,6 +744,10 @@ describe('destinations — route gate matches the console anyPermission (#92)', 
     for (const [path, destination] of [
       ['/transcripts', byKey.transcripts],
       ['/notes', byKey.notes],
+      // #720: the library pages and an import's progress page are read surfaces of Notes.
+      ['/notes/libraries', byKey.notes],
+      ['/notes/libraries/:libraryId', byKey.notes],
+      ['/notes/import-batches/:batchId', byKey.notes],
     ] as const) {
       const gates = declaredRoutePermissions(path);
       // Guards the parser: an empty array would compare equal to an undefined

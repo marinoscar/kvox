@@ -1,0 +1,5 @@
+---
+'@marinoscar/kvox-web': minor
+---
+
+Note libraries in the web UI (#720, epic #708). `notes/headless` adds the typed clients of the library and import-batch routes (`createNoteLibrary`, `scanNoteLibrary`, `uploadNoteImportFile`, `retryNoteImportBatch`, ...), the hooks `useNoteLibraries`, `useNoteLibrary`, `useImportBatches`, `useImportBatch` (polled every 2 s while the batch works) and `useImportBatchItems`, `describeNoteImportFailure` (friendly sentences for `failureReason` codes), and the orchestration both hosts share: `runLibrarySync` (enumerate, scan, hash what the server asks for, confirm, upload with bounded concurrency or `sequential`) and `importFilesAdHoc`. `notes/ui` adds `NoteLibrariesPage` (`/notes/libraries`), `NoteLibraryPage` (`/notes/libraries/:libraryId`) and `NoteImportBatchPage` (`/notes/import-batches/:batchId`), all in `kvoxNotesRoutes` under `notes:read`, plus `ImportNotesButton`, `NotesDropZone`, `ScanConfirmDialog` and the batch list and funnel components. `NotesPage` now shows "Import notes" and "Libraries" by default when no `secondaryAction` is given, and accepts dropped files.

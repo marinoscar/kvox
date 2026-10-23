@@ -71,6 +71,15 @@ export interface GraphPreferences {
      */
     readonly adjudication: GraphAdjudication;
   };
+  /** The review preferences (#717). */
+  readonly review: {
+    /**
+     * Rows below this confidence are never accepted by the safe policy of a batch
+     * commit or an auto-commit. 0.7 sits between `newThreshold` (0.55) and
+     * `autoLinkThreshold` (0.9): a link a person would still glance at waits.
+     */
+    readonly minConfidence: number;
+  };
   /** `core` is always on and never stored; it is here so callers need no special case. */
   readonly domains: {
     /**
@@ -101,6 +110,7 @@ export const GRAPH_PREFERENCE_DEFAULTS: GraphPreferences = Object.freeze({
     newThreshold: 0.55,
     adjudication: 'llm' as const,
   }),
+  review: Object.freeze({ minConfidence: 0.7 }),
   domains: Object.freeze({ core: true as const, work: true, personal: false }),
 });
 
@@ -113,6 +123,7 @@ export const GRAPH_PREFERENCE_DEFAULTS: GraphPreferences = Object.freeze({
 export const GRAPH_PREFERENCE_SECTIONS = [
   'extraction',
   'resolution',
+  'review',
   'domains',
 ] as const;
 /**
@@ -142,6 +153,9 @@ export function resolveGraphPreferences(
         value?.resolution?.autoLinkThreshold ?? d.resolution.autoLinkThreshold,
       newThreshold: value?.resolution?.newThreshold ?? d.resolution.newThreshold,
       adjudication: value?.resolution?.adjudication ?? d.resolution.adjudication,
+    },
+    review: {
+      minConfidence: value?.review?.minConfidence ?? d.review.minConfidence,
     },
     domains: {
       core: true,

@@ -60,6 +60,7 @@ const KVOX_JOB_TYPES = [
   // notes
   'note.generate',
   'note.source.extract',
+  'note.library.import',
   'note.export',
   'note.purge',
   'note.retitle',
@@ -76,6 +77,8 @@ const KVOX_JOB_TYPES = [
   'kg.entity_digest',
   'kg.migrate',
   'kg.topics_promote',
+  'kg.library_reconcile',
+  'kg.autocommit',
   // ask, search, user data
   'ask.respond',
   'search.index',

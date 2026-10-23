@@ -24,7 +24,7 @@
     "brand": [],
     "copilot": [],
     "shell": ["core", "brand", "transcripts", "notes", "graph", "ask", "home"],
-    "home": ["core", "transcripts", "notes", "graph"]
+    "home": ["core", "transcripts", "notes", "graph", "ask"]
   },
   "kvox-contract": {
     "errors": [],

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import { http, HttpResponse } from './msw-compat.js';
@@ -92,7 +92,9 @@ describe('GraphReviewPage', () => {
       'href',
       `/graph/imports/${gid(850)}`
     );
-    expect(screen.getAllByRole('link')).toHaveLength(2);
+    expect(within(screen.getByRole('list', { name: 'Waiting for review' })).getAllByRole('link')).toHaveLength(2);
+    // #721: the header reaches the grouped Review Queue.
+    expect(screen.getByRole('link', { name: 'Review Queue' })).toHaveAttribute('href', '/graph/review-queue');
     expect(requests[0].searchParams.get('status')).toBe('draft');
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });

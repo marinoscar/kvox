@@ -129,6 +129,7 @@ describe('the export policy of the user-owned registry', () => {
         'KgEntityAlias',
         'KgRelation',
         'Note',
+        'NoteLibrary',
         'NoteTemplate',
         'Transcript',
         'UserHiddenNoteTemplate',

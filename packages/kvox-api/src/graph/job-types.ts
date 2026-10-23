@@ -136,6 +136,24 @@ export const KG_SUBJECT_PROPOSAL = 'kg_proposal';
  */
 export const KG_TOPICS_PROMOTE_JOB_TYPE = 'kg.topics_promote';
 
+// #716 (epic #708) — re-queue graph extraction for library notes whose extracted version
+// lags the note (bulk priority, one run per owner at a time). Subject: the user.
+/**
+ * The kg library reconcile job type: queues extraction for library notes the graph has not yet read at their current version.
+ *
+ * @stability experimental
+ */
+export const KG_LIBRARY_RECONCILE_JOB_TYPE = 'kg.library_reconcile';
+
+// #718 (epic #708, ADR-0007) — commit the safe rows of a freshly drafted proposal when its
+// library opted into auto-commit. Subject: the proposal.
+/**
+ * The kg autocommit job type: applies the safe commit policy to one draft of an auto-commit library.
+ *
+ * @stability experimental
+ */
+export const KG_AUTOCOMMIT_JOB_TYPE = 'kg.autocommit';
+
 /** `storage_objects.managed_by` for every file the graph module writes (#386). */
 /**
  * GRAPH_MANAGED_BY.

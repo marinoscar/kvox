@@ -169,6 +169,11 @@ model User {
   // join table rather than a `user_settings` namespace.
   hiddenNoteTemplates  UserHiddenNoteTemplate[]
 
+  // Note libraries (issue #713, epic #708). CASCADE on both: a library and an
+  // import batch have no meaning once their owner is gone.
+  noteLibraries        NoteLibrary[]            @relation("NoteLibraryOwner")
+  noteImportBatches    NoteImportBatch[]        @relation("NoteImportBatchOwner")
+
   // composed from app:kvox.search.prisma
   // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
   // Semantic search index state (issue #181, epic #165). ONE relation, and

@@ -39,6 +39,7 @@ export {
   NOTE_EXPORT_JOB_TYPE,
   NOTE_GENERATE_JOB_TYPE,
   NOTE_JOB_TYPES,
+  NOTE_LIBRARY_IMPORT_JOB_TYPE,
   NOTE_PURGE_JOB_TYPE,
   NOTE_RETITLE_JOB_TYPE,
   NOTE_SOURCE_EXTRACT_JOB_TYPE,
@@ -52,6 +53,7 @@ export { actorOf, CurrentActor, type NotesActor } from './notes-actor.js';
 // Services other slices and hosts use.
 export { NotesService, SUMMARY_LIST_SIZE, DELETABLE_STATUSES, encodeCursor } from './notes.service.js';
 export type { QueuedGeneration, QueuedRetitle, RetitleSweep } from './notes.service.js';
+export { NoteVersionWriter, type NoteVersionCommitInput } from './note-version-writer.js';
 export { NoteTemplatesService, assertInstructionsFit } from './note-templates.service.js';
 export { NoteTemplatePreviewService } from './note-template-preview.service.js';
 export {
@@ -134,11 +136,15 @@ export { NoteSourcesController } from './note-sources.controller.js';
 export { NoteImportController } from './import/note-import.controller.js';
 export { NoteGenerationStreamController } from './note-generation-stream.controller.js';
 
+// Note libraries and import batches (#714).
+export * from './library/index.js';
+
 // Handlers.
 export { NoteExportHandler } from './handlers/note-export.handler.js';
 export { NoteGenerateHandler, NOTE_GENERATE_MAX_RUNTIME_MS } from './handlers/note-generate.handler.js';
 export { NotePurgeHandler } from './handlers/note-purge.handler.js';
 export { NoteRetitleHandler } from './handlers/note-retitle.handler.js';
+export { NoteLibraryImportHandler } from './handlers/note-library-import.handler.js';
 export { NoteSourceExtractHandler } from './handlers/note-source-extract.handler.js';
 export { NotesHousekeepingHandler } from './handlers/notes-housekeeping.handler.js';
 export { NotesHousekeepingEnqueuer } from './tasks/notes-housekeeping.enqueuer.js';
@@ -202,6 +208,11 @@ export type {
   NoteExportRow,
   NoteGenerationRow,
   NoteRow,
+  NoteLibraryRow,
+  NoteLibraryFileRow,
+  NoteImportBatchRow,
+  NoteImportBatchItemRow,
+  NoteProposalRef,
   NoteTemplateRow,
   NoteVersionRow,
   UserHiddenNoteTemplateRow,

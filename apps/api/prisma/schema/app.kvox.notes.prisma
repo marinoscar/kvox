@@ -197,6 +197,58 @@ enum NoteTitleSource {
   template
 }
 
+// -----------------------------------------------------------------------------
+// Note libraries (issue #713, epic #708): a library is a user-chosen folder of
+// documents the product watches and imports as notes. These enums are closed,
+// finite state machines owned by the import worker, so they are Prisma enums
+// like every other state column in this fragment (`NoteStatus`,
+// `NoteExportStatus`); a new member is a migration, which is the point.
+// -----------------------------------------------------------------------------
+
+// Lifecycle of one file inside a library. `pending` = seen, not imported yet;
+// `importing` = a batch item is in flight; `imported` = a note exists for the
+// current bytes; `failed` = the last import attempt failed (`failureReason`
+// carries a short machine code); `missing` = no longer present on disk at the
+// last scan (the note survives); `unsupported` = a file type no importer
+// handles; `diverged` = the note was edited in the product AND the file
+// changed on disk, so neither side may silently overwrite the other.
+enum NoteLibraryFileStatus {
+  pending
+  importing
+  imported
+  failed
+  missing
+  unsupported
+  diverged
+}
+
+// Lifecycle of one import batch (a scan plus the imports it queued).
+enum NoteImportBatchStatus {
+  scanning
+  running
+  completed
+  completed_with_errors
+  cancelled
+}
+
+// What the scan decided about a file: `new` (never seen), `changed` (content
+// hash differs from the imported one) or `missing` (gone from disk).
+enum NoteImportBatchItemAction {
+  new
+  changed
+  missing
+}
+
+// Lifecycle of one batch item.
+enum NoteImportBatchItemStatus {
+  queued
+  importing
+  imported
+  failed
+  missing
+  skipped
+}
+
 model Note {
   id String @id @default(uuid()) @db.Uuid
 
@@ -334,6 +386,13 @@ model Note {
   generations  NoteGeneration[] @relation("NoteGenerations")
   versions     NoteVersion[]
   exports      NoteExport[]
+
+  // Note libraries (issue #713, epic #708). A note imported from a library
+  // file is pointed at by that file row and by the batch items that imported
+  // it; both are SetNull, so deleting the note never deletes the library's
+  // memory that the file exists (the file goes back to needing an import).
+  libraryFiles     NoteLibraryFile[]
+  importBatchItems NoteImportBatchItem[]
 
   // Connected Knowledge (epic #344, issue #351). `kgEvidence`/`kgProposals`
   // are SetNull (a citation, and an extraction run's own source pointer,
@@ -743,4 +802,193 @@ model NoteExport {
   // identifier limit.
   @@index([noteId, version, format, optionsHash], map: "note_exports_lookup_idx")
   @@map("note_exports")
+}
+
+// -----------------------------------------------------------------------------
+// Note libraries (issue #713, epic #708)
+// -----------------------------------------------------------------------------
+// Four tables: `note_libraries` (a watched folder and its policy),
+// `note_library_files` (one row per file found under it),
+// `note_import_batches` (one scan-and-import run) and
+// `note_import_batch_items` (one file's fate inside a run).
+//
+// Only the schema ships here. The folder itself lives on the user's device
+// (KVox Desktop) or is uploaded (web), so nothing in these rows is a path on
+// the server: `relative_path` is relative to the library root and is data the
+// client reported, never something the API opens.
+//
+// Ownership: `owner_id` CASCADES on every owner-keyed table, identically to
+// `notes.owner_id` and for the same reason (there is deliberately no
+// read-any for notes, so a row whose owner is gone is unreachable). The child
+// tables cascade from their library or batch.
+//
+// The pointers from a library file or batch item to a NOTE, to a library file
+// and to a stored object are all `SetNull`: deleting a note, a file row or a
+// source object must never delete the history of what was imported, and the
+// worker re-derives the link on the next scan. `note_import_batches
+// .library_id` is SetNull for the same reason: a one-off import (no library)
+// is also a batch, and deleting a library keeps its audit trail.
+//
+// `job_id` on a batch item is a plain uuid with NO foreign key, deliberately,
+// the same polymorphic-reference rule as `ai_runs.job_id`: the job queue
+// purges finished jobs on its own schedule (`job.history.purge`), and a batch
+// item must outlive its job row.
+//
+// No raw-SQL index and no partial/unique-by-predicate rule is needed: the one
+// uniqueness rule (a path appears once per library) is a plain composite
+// `@@unique`.
+// -----------------------------------------------------------------------------
+model NoteLibrary {
+  id      String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+  name    String @db.VarChar(120)
+
+  // Policy, snapshotted per library rather than read from user settings so a
+  // later settings change never re-interprets an already-watched folder.
+  // `autoExtract`: queue an import for every new or changed file the scan
+  // finds. `autoCommit`: let an import's graph proposals commit without the
+  // review step; OFF by default because nothing enters the graph except
+  // through a reviewed proposal unless the user explicitly opts in.
+  autoExtract Boolean @default(true) @map("auto_extract")
+  autoCommit  Boolean @default(false) @map("auto_commit")
+
+  // When the last scan completed; null until the first one.
+  lastScanAt DateTime? @map("last_scan_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner   User                  @relation("NoteLibraryOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  files   NoteLibraryFile[]
+  batches NoteImportBatch[]
+
+  // "This owner's libraries, newest first."
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@map("note_libraries")
+}
+
+model NoteLibraryFile {
+  id        String @id @default(uuid()) @db.Uuid
+  libraryId String @map("library_id") @db.Uuid
+
+  // Relative to the library root, `/`-separated. Unique per library below.
+  relativePath String @map("relative_path") @db.VarChar(1024)
+
+  // Size in bytes (BigInt: a file may exceed 2 GiB) and the modification time
+  // as the client reported it, millisecond precision. Together with
+  // `contentHash` they are the change-detection triple: a scan hashes only
+  // when size or mtime moved.
+  size  BigInt
+  mtime DateTime @db.Timestamptz(3)
+
+  // Lowercase hex SHA-256 of the bytes last imported or scanned; null until
+  // the first hash is computed. `char(64)` pins the width.
+  contentHash String? @map("content_hash") @db.Char(64)
+
+  // The note this file was imported as; SetNull so deleting the note leaves
+  // the file row (it simply has no note again).
+  noteId String? @map("note_id") @db.Uuid
+  // The `notes.current_version` that came from this file (`importedVersion`)
+  // and the highest note version the extraction already covered
+  // (`extractedVersion`). Their difference is how the worker tells "the note
+  // was edited in the product" (diverged) from "the file changed on disk".
+  importedVersion  Int? @map("imported_version")
+  extractedVersion Int? @map("extracted_version")
+
+  status NoteLibraryFileStatus @default(pending)
+  // Short machine code for the last failure (not prose, not a stack trace).
+  failureReason String? @map("failure_reason") @db.VarChar(64)
+
+  // Last scan that saw the file; `missing` is derived from it falling behind.
+  lastSeenAt DateTime @map("last_seen_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  library NoteLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  note    Note?       @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  batchItems NoteImportBatchItem[]
+
+  // A path appears once per library. A plain composite unique (no predicate),
+  // so Prisma can express it; the scan upserts on it.
+  @@unique([libraryId, relativePath])
+  // "Which file produced this note" and the SetNull cascade's lookup.
+  @@index([noteId])
+  // "Every pending/failed/diverged file of this library."
+  @@index([libraryId, status])
+  @@map("note_library_files")
+}
+
+model NoteImportBatch {
+  id      String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+
+  // Null for a one-off import that belongs to no library; SetNull so deleting
+  // a library keeps its batches (see the block comment above).
+  libraryId String? @map("library_id") @db.Uuid
+
+  status NoteImportBatchStatus @default(scanning)
+
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz
+
+  owner   User                  @relation("NoteImportBatchOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  library NoteLibrary?          @relation(fields: [libraryId], references: [id], onDelete: SetNull)
+  items   NoteImportBatchItem[]
+
+  // "This owner's batches, newest first."
+  @@index([ownerId, createdAt(sort: Desc)])
+  // "This library's batches, newest first."
+  @@index([libraryId, createdAt(sort: Desc)])
+  @@map("note_import_batches")
+}
+
+model NoteImportBatchItem {
+  id      String @id @default(uuid()) @db.Uuid
+  batchId String @map("batch_id") @db.Uuid
+
+  // The library file this item concerns; null for an item with no library
+  // (a one-off import) and SetNull when the file row is deleted.
+  fileId String? @map("file_id") @db.Uuid
+
+  // What the user sees for the item; `path` is the relative path when the
+  // item came from a library.
+  filename String  @db.VarChar(1024)
+  path     String? @db.VarChar(1024)
+
+  action NoteImportBatchItemAction
+
+  // The uploaded bytes this item imports. A foreign key to `storage_objects`
+  // is permitted for a domain migration; SetNull (unlike `notes
+  // .source_object_id`, which is Restrict) because an item is history: losing
+  // the object marks the item unrepeatable, it does not block deleting it.
+  sourceObjectId String? @map("source_object_id") @db.Uuid
+
+  // The note this item produced or updated, and the version it wrote.
+  noteId      String? @map("note_id") @db.Uuid
+  noteVersion Int?    @map("note_version")
+
+  // The note had been edited in the product when the file changed on disk, so
+  // the import was held back rather than overwriting it.
+  diverged Boolean @default(false)
+
+  status        NoteImportBatchItemStatus @default(queued)
+  failureReason String?                   @map("failure_reason") @db.VarChar(64)
+
+  // The queue job working this item. Plain uuid, NO foreign key (see the
+  // block comment above).
+  jobId String? @map("job_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  batch        NoteImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  file         NoteLibraryFile? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  sourceObject StorageObject?  @relation("NoteImportItemSourceObject", fields: [sourceObjectId], references: [id], onDelete: SetNull)
+  note         Note?           @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  // "Every queued/failed item of this batch."
+  @@index([batchId, status])
+  @@map("note_import_batch_items")
 }

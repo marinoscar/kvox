@@ -48,3 +48,29 @@ export interface GraphChangedEvent {
    */
   reason: GraphChangedReason;
 }
+
+/**
+ * Raised after an extraction proposal has committed to `draft` (#718, ADR-0007). The only
+ * listener enqueues `kg.autocommit`; it never works inline.
+ *
+ * @stability experimental
+ */
+export const GRAPH_PROPOSAL_DRAFTED_EVENT = 'kvox.graph.proposal_drafted';
+
+/**
+ * The payload of {@link GRAPH_PROPOSAL_DRAFTED_EVENT}: identifiers only.
+ *
+ * @stability experimental
+ */
+export interface GraphProposalDraftedEvent {
+  /** The proposal that became a draft. */
+  proposalId: string;
+  /** Its owner. */
+  ownerId: string;
+  /** The note it was extracted from. */
+  noteId: string;
+  /** The note version it covers. */
+  noteVersion: number;
+  /** The proposal kind; only `extraction` is emitted today. */
+  kind: 'extraction';
+}

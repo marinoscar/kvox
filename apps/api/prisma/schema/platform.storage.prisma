@@ -65,6 +65,10 @@ model StorageObject {
   notesAsSourceObject Note[]       @relation("NoteSourceObject")
   noteExportFiles     NoteExport[] @relation("NoteExportObject")
 
+  // Note libraries (issue #713): the bytes an import batch item reads.
+  // SetNull, unlike the two Restrict relations above: an item is history.
+  noteImportItems     NoteImportBatchItem[] @relation("NoteImportItemSourceObject")
+
   // composed from app:kvox.transcripts.prisma
   // Back-relations onto the platform's StorageObject (an `extend model` block holds back-relation fields only).
   // Five back-relations from transcripts (issue #24, epic #19), one per
