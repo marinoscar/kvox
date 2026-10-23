@@ -40,3 +40,27 @@ export interface NoteReadyEvent {
    */
   bulk?: boolean;
 }
+
+/**
+ * The event raised once an import batch has settled: every item reached a final state
+ * (`completed` or `completed_with_errors`), or a scan found nothing to upload. The graph
+ * slice answers by queueing a reconcile of the owner's library files; it is a hint, never
+ * a guarantee, and may be raised more than once for a batch.
+ *
+ * @stability experimental
+ */
+export const NOTE_IMPORT_BATCH_SETTLED_EVENT = 'kvox.notes.import_batch_settled';
+
+/**
+ * The payload of {@link NOTE_IMPORT_BATCH_SETTLED_EVENT}.
+ *
+ * @stability experimental
+ */
+export interface NoteImportBatchSettledEvent {
+  /** The batch that settled. */
+  batchId: string;
+  /** The batch's owner. */
+  ownerId: string;
+  /** The library the batch belongs to; `null` for a one-off import. */
+  libraryId: string | null;
+}
