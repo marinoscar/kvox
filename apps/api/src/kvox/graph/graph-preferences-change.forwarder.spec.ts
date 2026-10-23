@@ -108,11 +108,13 @@ describe('GraphPreferencesChangeForwarder', () => {
           extraction: { autoExtract: true },
           resolution: DEFAULT_RESOLUTION,
           domains: { core: true, work: true, personal: false },
+          review: { minConfidence: 0.7 },
         },
         next: {
           extraction: { autoExtract: true },
           resolution: { ...DEFAULT_RESOLUTION, autoLinkThreshold: 0.93 },
           domains: { core: true, work: false, personal: false },
+          review: { minConfidence: 0.7 },
         },
       });
     });

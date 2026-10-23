@@ -201,9 +201,9 @@ describe('Note source documents (#51)', () => {
         .post(DOCUMENTS)
         .set(authHeader(user.accessToken))
         .attach('file', Buffer.from('PK', 'utf8'), {
-          filename: 'notes.docx',
+          filename: 'notes.xlsx',
           contentType:
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         })
         .expect(400);
 
@@ -212,6 +212,8 @@ describe('Note source documents (#51)', () => {
       expect(body).toContain('application/pdf');
       expect(body).toContain('text/plain');
       expect(body).toContain('text/markdown');
+      expect(body).toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      expect(body).toContain('application/vnd.openxmlformats-officedocument.presentationml.presentation');
 
       // ⚠ NOTHING HALF-STARTED IS LEFT BEHIND. An object created here would be
       // `managed_by: 'notes'` — invisible to the user and undeletable by them.
