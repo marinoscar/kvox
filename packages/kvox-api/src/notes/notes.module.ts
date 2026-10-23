@@ -53,6 +53,7 @@ import {
   type NotesModuleOptions,
 } from './notes.options.js';
 import { NotesService } from './notes.service.js';
+import { NoteVersionWriter } from './note-version-writer.js';
 import { NotesHousekeepingEnqueuer } from './tasks/notes-housekeeping.enqueuer.js';
 import { NotesUserDataService } from './user-data/notes-user-data.service.js';
 
@@ -190,6 +191,8 @@ export class NotesModule {
       // The transcript a note ultimately came from (#309).
       NoteOriginService,
       NotesService,
+      // The optimistic version commit shared by edit, restore and the library import (#712).
+      NoteVersionWriter,
       // What a generation sent to its provider (#307).
       NoteGenerationContextService,
       // `note.purge` and `notes.housekeeping`, plus the enqueuer the ten-minute cron calls.
@@ -251,6 +254,7 @@ export class NotesModule {
       providers,
       exports: [
         NotesService,
+        NoteVersionWriter,
         NoteAccessService,
         NoteOriginService,
         NoteSourceNameService,

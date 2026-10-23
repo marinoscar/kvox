@@ -52,6 +52,7 @@ export { actorOf, CurrentActor, type NotesActor } from './notes-actor.js';
 // Services other slices and hosts use.
 export { NotesService, SUMMARY_LIST_SIZE, DELETABLE_STATUSES, encodeCursor } from './notes.service.js';
 export type { QueuedGeneration, QueuedRetitle, RetitleSweep } from './notes.service.js';
+export { NoteVersionWriter, type NoteVersionCommitInput } from './note-version-writer.js';
 export { NoteTemplatesService, assertInstructionsFit } from './note-templates.service.js';
 export { NoteTemplatePreviewService } from './note-template-preview.service.js';
 export {
