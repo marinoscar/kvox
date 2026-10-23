@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { DOCX_MIME_TYPE, PPTX_MIME_TYPE } from './document-format.js';
 import { noteResponseSchema } from './note.js';
 
 // =============================================================================
@@ -347,28 +348,45 @@ export type NoteImportResponse = z.infer<typeof noteImportResponseSchema>;
 /**
  * What a local file is, as an import: which route takes it and the media type to send it as.
  *
- * - `transcript_json`: JSON (a `kvox.transcript/v1` export, or any JSON, which the
- *   transcript import refuses with its own typed 400).
- * - `note_markdown`: a KVox note Markdown export (front matter with `schema: kvox.note/v1`,
- *   or the exporter's `noteId` and `exportedAt`).
- * - `document_pdf`, `document_text`: a note source document (PDF, Markdown or text).
- * - `unsupported`: anything else (audio, video, an image); sent to the document route
- *   as `application/octet-stream`, which refuses it with the accepted list.
+ * | kind | what it is | route |
+ * |---|---|---|
+ * | `transcript_json` | JSON (a `kvox.transcript/v1` export, or any JSON, which the transcript import refuses with its own typed 400) | `/transcripts/imports` |
+ * | `note_markdown` | a KVox note Markdown export (front matter `schema: kvox.note/v1`, or the exporter's `noteId` and `exportedAt`) | `/notes/import` |
+ * | `note_document` | a PDF, a .docx/.pptx (ZIP magic, `word/` or `ppt/` entry), a legacy Office file (CFB magic, refused by the server as `unsupported_office_format`), or Markdown/text that is NOT a KVox note export | `/notes/import-batches` (see below) |
+ * | `unsupported` | anything else (audio, video, an image) | `/notes/sources/documents`, as `application/octet-stream`, which refuses it with the accepted list |
+ * | `document_pdf`, `document_text` | DEPRECATED, never returned by {@link detectKvoxImport} any more; kept in the union so a host that still names them compiles | `/notes/sources/documents` |
+ *
+ * `note_document` is the one kind whose route is not a single upload endpoint: the client
+ * creates an ad-hoc batch with `POST /notes/import-batches`, then uploads each file to
+ * `${route}/:batchId/files`, because the batch id is dynamic.
  *
  * @stability experimental
  */
-export type KvoxImportKind = 'transcript_json' | 'note_markdown' | 'document_pdf' | 'document_text' | 'unsupported';
+export type KvoxImportKind =
+  | 'transcript_json'
+  | 'note_markdown'
+  | 'note_document'
+  | 'document_pdf'
+  | 'document_text'
+  | 'unsupported';
 
 /**
  * The route each import kind is sent to (relative to `/api`), multipart with one `file`
  * part. No host keeps its own copy of this table.
+ *
+ * `note_document` is the ad-hoc batch creation route: create a batch there, then upload
+ * each file to `${KVOX_IMPORT_ROUTES.note_document}/:batchId/files`.
+ * `document_pdf` and `document_text` are deprecated (see {@link KvoxImportKind}).
  *
  * @stability experimental
  */
 export const KVOX_IMPORT_ROUTES: Readonly<Record<KvoxImportKind, string>> = {
   transcript_json: '/transcripts/imports',
   note_markdown: '/notes/import',
+  note_document: '/notes/import-batches',
+  /** @deprecated Use `note_document`. */
   document_pdf: '/notes/sources/documents',
+  /** @deprecated Use `note_document`. */
   document_text: '/notes/sources/documents',
   unsupported: '/notes/sources/documents',
 };
@@ -393,7 +411,28 @@ export interface KvoxImportTarget {
  */
 export const KVOX_IMPORT_SNIFF_BYTES = 4096;
 
-const TEXT_EXTENSIONS = new Set(['md', 'markdown', 'txt', 'text']);
+const OFFICE_ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04] as const;
+const CFB_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1] as const;
+const LEGACY_OFFICE_MIME: Readonly<Record<string, string>> = {
+  doc: 'application/msword',
+  ppt: 'application/vnd.ms-powerpoint',
+  docx: DOCX_MIME_TYPE,
+  pptx: PPTX_MIME_TYPE,
+};
+
+function startsWith(head: Uint8Array, magic: readonly number[]): boolean {
+  return head.length >= magic.length && magic.every((byte, index) => head[index] === byte);
+}
+
+/** True when the ASCII `needle` occurs anywhere in `head` (entry names sit in plain text in a ZIP). */
+function containsAscii(head: Uint8Array, needle: string): boolean {
+  const bytes = Array.from(needle, (char) => char.charCodeAt(0));
+  outer: for (let i = 0; i + bytes.length <= head.length; i += 1) {
+    for (let j = 0; j < bytes.length; j += 1) if (head[i + j] !== bytes[j]) continue outer;
+    return true;
+  }
+  return false;
+}
 
 /** True when the bytes read as UTF-8 text: no NUL, no invalid sequence except a cut-off last character. */
 function looksLikeText(head: Uint8Array): boolean {
@@ -427,7 +466,21 @@ export function detectKvoxImport(input: { filename: string; head: Uint8Array }):
   const target = (kind: KvoxImportKind, mimeType: string): KvoxImportTarget => ({ kind, route: KVOX_IMPORT_ROUTES[kind], mimeType });
 
   if (head.length >= 5 && String.fromCharCode(...head.subarray(0, 5)) === '%PDF-') {
-    return target('document_pdf', 'application/pdf');
+    return target('note_document', 'application/pdf');
+  }
+  if (startsWith(head, OFFICE_ZIP_MAGIC)) {
+    // The first local-file headers of an OOXML package carry their entry names in clear text.
+    if (containsAscii(head, 'word/')) return target('note_document', DOCX_MIME_TYPE);
+    if (containsAscii(head, 'ppt/')) return target('note_document', PPTX_MIME_TYPE);
+    if (extension === 'docx') return target('note_document', DOCX_MIME_TYPE);
+    if (extension === 'pptx') return target('note_document', PPTX_MIME_TYPE);
+    return target('unsupported', 'application/octet-stream');
+  }
+  if (startsWith(head, CFB_MAGIC)) {
+    // A legacy .doc/.ppt, or a password-protected Office file. The server refuses it with
+    // `unsupported_office_format`, a readable message, rather than the host guessing.
+    const mime = LEGACY_OFFICE_MIME[extension];
+    return mime ? target('note_document', mime) : target('unsupported', 'application/octet-stream');
   }
   if (!looksLikeText(head)) return target('unsupported', 'application/octet-stream');
 
@@ -448,8 +501,7 @@ export function detectKvoxImport(input: { filename: string; head: Uint8Array }):
     }
   }
 
-  if (extension === 'md' || extension === 'markdown') return target('document_text', 'text/markdown');
-  if (TEXT_EXTENSIONS.has(extension) || extension === '') return target('document_text', 'text/plain');
-  // Text with another extension (`.csv`, `.log`, `.vtt`): a plain-text source.
-  return target('document_text', 'text/plain');
+  if (extension === 'md' || extension === 'markdown') return target('note_document', 'text/markdown');
+  // Plain text, no extension, or text with another extension (`.csv`, `.log`, `.vtt`).
+  return target('note_document', 'text/plain');
 }

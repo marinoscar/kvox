@@ -126,3 +126,12 @@ export const NOTE_JOB_TYPES = [
   NOTE_PURGE_JOB_TYPE,
   NOTES_HOUSEKEEPING_JOB_TYPE,
 ] as const;
+
+/**
+ * Import the files of one note library batch as notes (epic #708). The `type` string is
+ * permanent. The contract (`@marinoscar/kvox-contract/notes`, `note-library.ts`) only
+ * documents it.
+ *
+ * @stability experimental
+ */
+export const NOTE_LIBRARY_IMPORT_JOB_TYPE = 'note.library.import';

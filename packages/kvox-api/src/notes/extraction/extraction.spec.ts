@@ -61,7 +61,9 @@ describe('normalizeDocumentMimeType', () => {
 
   it('spells the accepted list the way an error message should', () => {
     expect(acceptedDocumentTypesSentence()).toBe(
-      'application/pdf, text/plain, text/markdown',
+      'application/pdf, text/plain, text/markdown, ' +
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document, ' +
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     );
   });
 });
@@ -219,7 +221,7 @@ describe('extractPdfText', () => {
 describe('the three permanent failures are distinct and user-readable', () => {
   it('gives each reason its own sentence', () => {
     const sentences = (
-      ['encrypted_pdf', 'no_text_layer', 'corrupt_file', 'empty_document'] as const
+      ['encrypted_pdf', 'no_text_layer', 'corrupt_file', 'empty_document', 'unsupported_office_format', 'archive_too_large'] as const
     ).map(describeExtractionFailure);
 
     expect(new Set(sentences).size).toBe(sentences.length);

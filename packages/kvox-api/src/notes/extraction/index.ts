@@ -59,6 +59,11 @@ export function extractDocumentText(
     case 'text/plain':
     case 'text/markdown':
       return Promise.resolve(extractPlainText(bytes));
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+      // The contract accepts the types (epic #708); the OOXML extractor is a later slice
+      // and the upload door does not admit them yet, so this is unreachable today.
+      return Promise.reject(new Error(`No extractor for document type "${mimeType}" yet`));
     default: {
       // Unreachable through the union; reachable through a `mime_type` column
       // written by a build that accepted a fourth type.
