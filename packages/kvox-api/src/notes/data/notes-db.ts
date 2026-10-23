@@ -491,14 +491,14 @@ export interface KvoxNotesDelegates {
   /** `note_library_files` (#714). */
   noteLibraryFile: RowDelegate<NoteLibraryFileRow> & {
     /** Counts files grouped by a column. */
-    groupBy(args: { by: string[]; where?: any; _count?: any }): Promise<Array<Record<string, any>>>;
+    groupBy(args: any): Promise<any[]>;
   };
   /** `note_import_batches` (#714). */
   noteImportBatch: RowDelegate<NoteImportBatchRow>;
   /** `note_import_batch_items` (#714). */
   noteImportBatchItem: RowDelegate<NoteImportBatchItemRow> & {
     /** Counts items grouped by a column. */
-    groupBy(args: { by: string[]; where?: any; _count?: any }): Promise<Array<Record<string, any>>>;
+    groupBy(args: any): Promise<any[]>;
   };
   /** `kg_proposals` (reads only: the stage of an imported note). */
   kgProposal: Pick<RowDelegate<NoteProposalRef>, 'findMany'>;
