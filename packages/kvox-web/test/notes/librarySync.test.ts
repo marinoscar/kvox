@@ -38,6 +38,7 @@ describe('runLibrarySync', () => {
           uploads.push({ batch: request.params.id!, path: formPath(request), mtime: form.get('mtime') as string | null });
           return { itemId: `item-${uploads.length}`, action: 'new', skipped: false };
         },
+        'POST /notes/import-batches/:id/close': { id: 'x' },
       },
     });
     const confirm = vi.fn(async () => true);
@@ -73,6 +74,8 @@ describe('runLibrarySync', () => {
       ]),
     );
     expect(result).toMatchObject({ batchId: 'batch-new', batchIds: ['batch-new', 'batch-changed'], uploaded: 2, cancelled: false });
+    expect(host.callsTo('POST /notes/import-batches/batch-new/close')).toHaveLength(1);
+    expect(host.callsTo('POST /notes/import-batches/batch-changed/close')).toHaveLength(1);
     expect(phases).toEqual(expect.arrayContaining(['enumerating', 'hashing', 'uploading', 'done']));
     expect(phases.at(-1)).toBe('done');
   });
@@ -80,10 +83,14 @@ describe('runLibrarySync', () => {
   it('uploads nothing when confirm says no', async () => {
     const port = fakePort({ 'a.md': 'a' });
     const host = createFakeKvoxWebHost({
-      routes: { 'POST /notes/libraries/:id/scan': scanAnswer({ batchId: 'b1', upload: ['a.md'] }) },
+      routes: {
+        'POST /notes/libraries/:id/scan': scanAnswer({ batchId: 'b1', upload: ['a.md'] }),
+        'POST /notes/import-batches/:id/close': { id: 'b1' },
+      },
     });
 
     const result = await runLibrarySync({ host, port, library: { id: 'lib' }, ref: REF, confirm: () => false });
+    expect(host.callsTo('POST /notes/import-batches/b1/close')).toHaveLength(1);
 
     expect(result.cancelled).toBe(true);
     expect(result.uploaded).toBe(0);
@@ -220,6 +227,7 @@ describe('importFilesAdHoc', () => {
     const host = createFakeKvoxWebHost({
       routes: {
         'POST /notes/import-batches': { batchId: 'adhoc-1' },
+        'POST /notes/import-batches/:id/close': { id: 'adhoc-1' },
         'POST /notes/import-batches/:id/files': (request) => {
           if (formPath(request) === 'bad.pdf') throw fakeApiError(400, 'x', { reason: 'unsupported_document' });
           return { itemId: 'i', action: 'new', skipped: false };
@@ -229,6 +237,7 @@ describe('importFilesAdHoc', () => {
     const result = await importFilesAdHoc({ host, files: [new File(['a'], 'good.md'), new File(['b'], 'bad.pdf')] });
     expect(result.uploaded).toBe(1);
     expect(result.failed).toEqual([expect.objectContaining({ path: 'bad.pdf', reason: 'unsupported_document' })]);
+    expect(host.callsTo('POST /notes/import-batches/adhoc-1/close')).toHaveLength(1);
   });
 });
 
