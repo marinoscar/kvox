@@ -1086,6 +1086,10 @@ Neither sees a **stopped** container that Docker has already promised a host por
    which survives a stop. `.NetworkSettings.Ports` and `docker ps --format
    '{{.Ports}}'` are *runtime* views and are empty when the container is stopped.
 
+The `bind-port-not-promised` check applies source 3 at deploy time and exempts
+containers of the deployment's own compose project (`context.composeProject`,
+the folder name only when absent; a legacy server runs under `compose`).
+
 Every failure of source 3 — no Docker, no socket, a timeout — answers `[]` and
 costs only what it was going to catch.
 
