@@ -92,6 +92,43 @@ describe('the bind-port-not-promised check', () => {
     expect((await check.run(CONTEXT)).status).toBe('pass');
   });
 
+  describe('with the deployment\'s recorded compose project', () => {
+    const LEGACY = { ...CONTEXT, deployRoot: '/opt/infra/apps/kvox', composeProject: 'compose' };
+
+    it('never counts a container of that project even when the folder name differs (legacy "compose")', async () => {
+      const check = createDockerPortsCheck(docker({ ps: 'abc\n', inspect: '/compose-nginx-1|compose|3535 \n' }));
+
+      expect((await check.run(LEGACY)).status).toBe('pass');
+    });
+
+    it('still fails on a container of another project and names it', async () => {
+      const check = createDockerPortsCheck(
+        docker({ ps: 'abc\ndef\n', inspect: '/compose-nginx-1|compose|3535 \n/web|other|3535 \n' }),
+      );
+
+      const result = await check.run(LEGACY);
+
+      expect(result.status).toBe('fail');
+      expect(result.detail).toContain('web');
+      expect(result.detail).not.toContain('compose-nginx-1');
+    });
+
+    it('falls back to the folder name when no project is recorded', async () => {
+      const check = createDockerPortsCheck(docker({ ps: 'abc\n', inspect: '/kvox-nginx-1|kvox|3535 \n' }));
+
+      expect((await check.run({ ...CONTEXT, deployRoot: '/opt/infra/apps/kvox' })).status).toBe('pass');
+    });
+
+    it('does not use the folder name once a project is given', async () => {
+      const check = createDockerPortsCheck(docker({ ps: 'abc\n', inspect: '/kvox-nginx-1|kvox|3535 \n' }));
+
+      const result = await check.run({ ...CONTEXT, deployRoot: '/opt/infra/apps/kvox', composeProject: 'myapp' });
+
+      expect(result.status).toBe('fail');
+      expect(result.detail).toContain('kvox-nginx-1');
+    });
+  });
+
   it('passes when nothing claims the port', async () => {
     const check = createDockerPortsCheck(docker({ ps: 'abc\n', inspect: '/other|tools|8080 \n' }));
 

@@ -22,10 +22,14 @@ import type { DeployCheck } from '@marinoscar/platform-cli/deploy';
 // mapping (`-p 80`, no host port) carries an empty `HostPort` that means
 // "Docker picks one at start" and is not a claim on port 0.
 //
-// A container of THIS deployment (its compose project is the folder name) never
-// counts, so a `--resume` or an update of a stopped stack is not refused by its
-// own containers. Docker being unavailable is a skip, not a failure: it must not
-// cost an install on a host whose socket is briefly unreachable.
+// A container of THIS deployment never counts, so a `--resume` or an update of a
+// stopped stack is not refused by its own containers. "This deployment" is its
+// recorded compose project (`context.composeProject`); the folder name is only
+// the fallback when that is absent. The two differ on a legacy server, whose
+// deployment runs under the project `compose` while its folder carries the app name, and
+// comparing against the folder name there refused an update over the stack's own
+// nginx. Docker being unavailable is a skip, not a failure: it must not cost an
+// install on a host whose socket is briefly unreachable.
 // =============================================================================
 
 /** The compose project label, which is how a container names the app it belongs to. */
@@ -133,7 +137,7 @@ export function createDockerPortsCheck(run: DockerRunner = runDocker): DeployChe
         return { status: 'skip', detail: 'Docker could not be asked which ports its containers publish' };
       }
 
-      const project = basename(context.deployRoot);
+      const project = context.composeProject ?? basename(context.deployRoot);
       const foreign = claims.filter((claim) => claim.port === context.bindPort && claim.project !== project);
 
       if (foreign.length === 0) {
