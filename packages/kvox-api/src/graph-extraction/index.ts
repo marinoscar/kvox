@@ -38,6 +38,8 @@ export { KgTopicsPromoteHandler } from './handlers/kg-topics-promote.handler.js'
 // Proposals.
 export { ProposalsService, lockProposal, notDraft } from './proposals/proposals.service.js';
 export { ProposalCommitService } from './proposals/proposal-commit.service.js';
+export { ProposalBatchCommitService } from './proposals/proposal-batch-commit.service.js';
+export { applySafePolicy, isSensitivePersonFact, type SafePolicyItem, type SafePolicyResult } from './proposals/safe-policy.js';
 export { ProposalRevertService } from './proposals/proposal-revert.service.js';
 export { SpanValidator } from './proposals/span-validator.js';
 export { entityPayloadSchema, itemPayloadSchema, relationPayloadSchema } from './proposals/proposal-payload.schema.js';
@@ -51,6 +53,7 @@ export type {
 // Controllers (a host that composes its own module lists them).
 export { GraphExtractionController } from './extraction/graph-extraction.controller.js';
 export { GraphResolutionController } from './resolution/graph-resolution.controller.js';
+export { GraphReviewQueueController } from './proposals/graph-review-queue.controller.js';
 export { GraphProposalsController } from './proposals/graph-proposals.controller.js';
 export { GraphTopicsPromoteController } from './topics/graph-topics-promote.controller.js';
 

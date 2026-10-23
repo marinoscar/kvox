@@ -25,6 +25,8 @@ import { KgTopicsPromoteHandler } from './handlers/kg-topics-promote.handler.js'
 import { GraphProposalsController } from './proposals/graph-proposals.controller.js';
 import { GraphTopicsPromoteController } from './topics/graph-topics-promote.controller.js';
 import { TopicsPromoteService } from './topics/topics-promote.service.js';
+import { GraphReviewQueueController } from './proposals/graph-review-queue.controller.js';
+import { ProposalBatchCommitService } from './proposals/proposal-batch-commit.service.js';
 import { ProposalCommitService } from './proposals/proposal-commit.service.js';
 import { ProposalRevertService } from './proposals/proposal-revert.service.js';
 import { ProposalsService } from './proposals/proposals.service.js';
@@ -81,7 +83,7 @@ export class GraphExtractionModule {
    */
   static forRoot(options: GraphExtractionModuleOptions = {}): DynamicModule {
     const resolved = resolveGraphExtractionOptions(options);
-    const controllers = [GraphExtractionController, GraphResolutionController, GraphProposalsController, GraphTopicsPromoteController];
+    const controllers = [GraphExtractionController, GraphResolutionController, GraphProposalsController, GraphReviewQueueController, GraphTopicsPromoteController];
 
     const providers: Provider[] = [
       { provide: GRAPH_EXTRACTION_OPTIONS, useValue: resolved },
@@ -118,6 +120,7 @@ export class GraphExtractionModule {
       ProposalsService,
       ProposalCommitService,
       ProposalRevertService,
+      ProposalBatchCommitService,
     ];
 
     if (resolved.autoExtract) providers.push(NoteReadyExtractionSubscriber);
@@ -145,6 +148,7 @@ export class GraphExtractionModule {
         ProposalsService,
         ProposalCommitService,
         ProposalRevertService,
+        ProposalBatchCommitService,
         ResolutionService,
         MergeService,
         DistinctPairService,
