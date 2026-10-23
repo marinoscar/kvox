@@ -107,6 +107,10 @@ describe('destinations — route ownership', () => {
         '/notes/new',
         '/notes/:id',
         '/notes/:id/history',
+        // #720, epic #708 — note libraries and the live progress of one import.
+        '/notes/libraries',
+        '/notes/libraries/:libraryId',
+        '/notes/import-batches/:batchId',
         // #373, epic #347 — the knowledge graph, owned by `knowledge` since #438.
         '/graph',
         '/graph/entities/:id',
@@ -453,6 +457,10 @@ describe('destinations — the table itself', () => {
     expect(resolveActiveDestination('/notes/new')).toBe('notes');
     expect(resolveActiveDestination('/notes/abc-123')).toBe('notes');
     expect(resolveActiveDestination('/notes/abc-123/history')).toBe('notes');
+    // #720: the library pages and an import's progress page stay on Notes.
+    expect(resolveActiveDestination('/notes/libraries')).toBe('notes');
+    expect(resolveActiveDestination('/notes/libraries/lib-1')).toBe('notes');
+    expect(resolveActiveDestination('/notes/import-batches/batch-1')).toBe('notes');
     // …and stops at the segment boundary, like every other prefix here.
     expect(resolveActiveDestination('/notesfoo')).toBeNull();
     expect(resolveActiveDestination('/notes-archive')).toBeNull();
@@ -731,6 +739,10 @@ describe('destinations — route gate matches the console anyPermission (#92)', 
     for (const [path, destination] of [
       ['/transcripts', byKey.transcripts],
       ['/notes', byKey.notes],
+      // #720: the library pages and an import's progress page are read surfaces of Notes.
+      ['/notes/libraries', byKey.notes],
+      ['/notes/libraries/:libraryId', byKey.notes],
+      ['/notes/import-batches/:batchId', byKey.notes],
     ] as const) {
       const gates = declaredRoutePermissions(path);
       // Guards the parser: an empty array would compare equal to an undefined
