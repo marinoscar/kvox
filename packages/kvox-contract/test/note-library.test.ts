@@ -129,7 +129,7 @@ describe('library schemas', () => {
 
   it('validates batches and items', () => {
     const counts = { queued: 0, importing: 0, imported: 1, failed: 0, missing: 0, skipped: 0 };
-    const stageCounts = { uploaded: 0, parsed: 0, indexed: 1, extracting: 0, extracted: 0, in_graph: 0, failed: 0 };
+    const stageCounts = { uploaded: 0, parsed: 0, formatting: 0, indexed: 1, extracting: 0, extracted: 0, in_graph: 0, failed: 0 };
     const batch = { id: 'b1', libraryId: null, status: 'running', createdAt: 'x', finishedAt: null, counts, stageCounts };
     expect(noteImportBatchSchema.safeParse(batch).success).toBe(true);
     expect(noteImportBatchSchema.safeParse({ ...batch, status: 'bogus' }).success).toBe(false);
