@@ -65,6 +65,7 @@ export {
 export { NoteObjectsService, MissingUploadedNoteObjectError } from './note-objects.service.js';
 export type { ManagedObjectRef } from './note-objects.service.js';
 export { NoteSourcesService } from './note-sources.service.js';
+export { NoteSourceDownloadService, noteSourceFilename } from './note-source-download.service.js';
 // The Markdown note import (#585): the service and its typed 400. The parser is the
 // contract's (`parseNoteMarkdownExport` in `@marinoscar/kvox-contract/notes`).
 export { NoteImportService, noteImportException, type NoteImportFile } from './import/note-import.service.js';
