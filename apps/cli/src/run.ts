@@ -2,6 +2,7 @@ import { createCli, EXIT, exitCodeFor, formatError } from '@marinoscar/platform-
 import { CLI_NAME } from '@app/shared';
 
 import { APP_CLI_OPTIONS } from './app.js';
+import { reconcileForArgv } from './extensions/compose-project.js';
 import { DeploymentResolutionError, resolveDeployment } from './extensions/deployment.js';
 import { translateLegacyArgs } from './extensions/legacy-flags.js';
 import { checkForUpdate, renderUpdateCheck, type GitRunner } from './extensions/update-check.js';
@@ -12,11 +13,13 @@ import { checkForUpdate, renderUpdateCheck, type GitRunner } from './extensions/
 //
 // `cli.ts` is the entry point and must stay import-light; the work of one
 // invocation lives here so it can be tested without a process exiting under the
-// test runner. It does three things around the platform CLI:
+// test runner. It does four things around the platform CLI:
 //
 //   1. translates the pre-platform `deploy` flags (extensions/legacy-flags.ts),
-//   2. answers `deploy update --check` itself (extensions/update-check.ts), and
-//   3. otherwise hands the (translated) arguments to `createCli(...).run`.
+//   2. answers `deploy update --check` itself (extensions/update-check.ts),
+//   3. records the compose project a legacy deployment really runs under
+//      (extensions/compose-project.ts, #736), and
+//   4. otherwise hands the (translated) arguments to `createCli(...).run`.
 //
 // It returns the exit code and never calls `process.exit()`: that would end the
 // process before a pipe's pending writes drained.
@@ -102,6 +105,10 @@ export async function runApp(argv: string[], options: RunAppOptions = {}): Promi
       return EXIT.FAILURE;
     }
   }
+
+  // After the legacy steps and before the platform reads the record (#736); it never fails the command.
+  const reconciled = await reconcileForArgv(plan.argv, cwd);
+  if (reconciled !== undefined) stderr.write(`${reconciled}\n`);
 
   return cli.run(plan.argv);
 }
