@@ -92,6 +92,27 @@ describe('NoteProvenance', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
+  it('says "Imported from" the file for a document kept as the note (#730)', () => {
+    // No template and a document source: the file IS the note, so nothing was generated.
+    render(
+      <NoteProvenance
+        note={note({
+          sourceType: 'document',
+          sourceTranscriptId: null,
+          sourceObjectId: 'obj-1',
+          templateId: null,
+          templateName: null,
+          model: null,
+        })}
+        sourceName="board-pack.docx"
+      />,
+    );
+
+    expect(screen.getByTestId('note-provenance')).toHaveTextContent(/^Imported from board-pack\.docx, /);
+    expect(screen.getByTestId('note-provenance')).not.toHaveTextContent('Generated');
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
   it('falls back to the CATEGORY NOUN, never to an id', () => {
     render(<NoteProvenance note={note()} sourceName={null} />);
 

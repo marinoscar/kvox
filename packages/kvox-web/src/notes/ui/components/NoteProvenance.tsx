@@ -42,6 +42,14 @@
  * component names it without linking, rather than inventing a download link
  * that would hand the user back the file they uploaded instead of the evidence
  * they asked for.
+ *
+ * =============================================================================
+ * A KEPT DOCUMENT WAS IMPORTED, NOT GENERATED (#730)
+ * =============================================================================
+ *
+ * A document kept as the note ("Keep it as my note", or a library import) has a
+ * document source and no template: no model wrote its text from a recipe, so
+ * the verb is "Imported from", and the file's name is the source named.
  */
 
 import Link from '@mui/material/Link';
@@ -69,6 +77,8 @@ export function NoteProvenance({ note, sourceName }: NoteProvenanceProps) {
   const ref = noteSourceRef(note);
   const path = noteSourcePath(note);
   const label = ref ? (sourceName ?? noteSourceFallbackLabel(ref.type)) : null;
+  const imported = note.sourceType === 'document' && !note.templateId && !note.templateName;
+  const verb = imported ? 'Imported' : 'Generated';
 
   return (
     <Typography
@@ -82,7 +92,7 @@ export function NoteProvenance({ note, sourceName }: NoteProvenanceProps) {
       {/* The verb is "Generated from", never "Source:" — the sentence has to
           say that a machine wrote this, which a label-and-value pair does
           not. */}
-      {label ? 'Generated from ' : 'Generated '}
+      {label ? `${verb} from ` : `${verb} `}
       {label &&
         (path ? (
           <Link component={RouterLink} to={path}>

@@ -32,9 +32,35 @@ export const NOTE_SOURCE_KINDS: readonly NoteSourceKindOption[] = [
   {
     value: 'document',
     label: 'A document',
-    hint: 'Upload a PDF, plain text or Markdown file to write from.',
+    hint: 'Word, PowerPoint, PDF, Markdown or text.',
   },
 ];
+
+/**
+ * The hint of the transcript choice in a host without transcription (#731): the
+ * only transcripts there are the ones the person imported.
+ */
+export const IMPORTED_TRANSCRIPT_SOURCE_HINT = 'A transcript you imported (KVox transcript JSON).';
+
+/**
+ * The source choices of step 1 for a host, worded for what it can do.
+ *
+ * @remarks
+ * With transcription on (KVox web) this is {@link NOTE_SOURCE_KINDS} unchanged.
+ * With it off (KVox Desktop, ADR-0006) the transcript choice stays, since a
+ * transcript imported as KVox transcript JSON is still a source, but its hint
+ * no longer says the application transcribed it.
+ *
+ * @param transcription - the host's `features().transcription`, read through
+ *   `useKvoxTranscriptionEnabled()`.
+ * @returns the choices, in order.
+ */
+export function noteSourceKindsFor(transcription: boolean): readonly NoteSourceKindOption[] {
+  if (transcription) return NOTE_SOURCE_KINDS;
+  return NOTE_SOURCE_KINDS.map((option) =>
+    option.value === 'transcript' ? { ...option, hint: IMPORTED_TRANSCRIPT_SOURCE_HINT } : option,
+  );
+}
 
 /** What the form holds while it is being filled in. */
 export interface NewNoteDraft {
