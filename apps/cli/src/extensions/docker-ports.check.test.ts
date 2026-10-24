@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   COMPOSE_PROJECT_LABEL,
+  COMPOSE_WORKING_DIR_LABEL,
   createDockerPortsCheck,
   dockerPortClaims,
+  isPathUnder,
   parseDockerPortLines,
   type DockerRunner,
 } from './docker-ports.check.js';
@@ -58,6 +60,64 @@ describe('parseDockerPortLines', () => {
   });
 });
 
+describe('parseDockerPortLines: the compose working directory (fourth field)', () => {
+  it('reads the working directory as the fourth field', () => {
+    expect(parseDockerPortLines('/web|myapp|3535 |/opt/infra/apps/myapp/repo/infra/compose\n')).toEqual([
+      { name: 'web', project: 'myapp', port: 3535, workingDir: '/opt/infra/apps/myapp/repo/infra/compose' },
+    ]);
+  });
+
+  it('keeps the whole remainder of the line, spaces in the path included', () => {
+    expect(parseDockerPortLines('/web|myapp|3535 |/opt/my apps/myapp/repo|x')).toEqual([
+      { name: 'web', project: 'myapp', port: 3535, workingDir: '/opt/my apps/myapp/repo|x' },
+    ]);
+  });
+
+  it('still parses the three-field lines, with no workingDir', () => {
+    expect(parseDockerPortLines('/web|myapp|3535 ')).toEqual([{ name: 'web', project: 'myapp', port: 3535 }]);
+  });
+
+  it('leaves workingDir out when the fourth field is empty', () => {
+    expect(parseDockerPortLines('/handmade||9000 |')).toEqual([{ name: 'handmade', port: 9000 }]);
+  });
+
+  it('gives every port of one container the same working directory', () => {
+    expect(parseDockerPortLines('/web|myapp|80 443 |/srv/myapp')).toEqual([
+      { name: 'web', project: 'myapp', port: 80, workingDir: '/srv/myapp' },
+      { name: 'web', project: 'myapp', port: 443, workingDir: '/srv/myapp' },
+    ]);
+  });
+});
+
+describe('isPathUnder', () => {
+  it('is true for the root itself', () => {
+    expect(isPathUnder('/opt/infra/apps/myapp', '/opt/infra/apps/myapp')).toBe(true);
+  });
+
+  it('is true for a child and a deeper descendant', () => {
+    expect(isPathUnder('/opt/infra/apps/myapp/repo', '/opt/infra/apps/myapp')).toBe(true);
+    expect(isPathUnder('/opt/infra/apps/myapp/repo/infra/compose', '/opt/infra/apps/myapp')).toBe(true);
+  });
+
+  it('ignores a trailing slash on either side', () => {
+    expect(isPathUnder('/opt/infra/apps/myapp/repo/', '/opt/infra/apps/myapp/')).toBe(true);
+  });
+
+  it('is false for a sibling whose name only starts with the root name', () => {
+    expect(isPathUnder('/opt/infra/apps/myapp-2/repo', '/opt/infra/apps/myapp')).toBe(false);
+  });
+
+  it('is false for the parent and for an unrelated path', () => {
+    expect(isPathUnder('/opt/infra/apps', '/opt/infra/apps/myapp')).toBe(false);
+    expect(isPathUnder('/srv/other', '/opt/infra/apps/myapp')).toBe(false);
+  });
+
+  it('resolves `..` before comparing', () => {
+    expect(isPathUnder('/opt/infra/apps/myapp/../other', '/opt/infra/apps/myapp')).toBe(false);
+    expect(isPathUnder('/opt/infra/apps/myapp/repo/..', '/opt/infra/apps/myapp')).toBe(true);
+  });
+});
+
 describe('the inspect format', () => {
   it('reads the create-time bindings and the compose project label', () => {
     let format = '';
@@ -71,6 +131,7 @@ describe('the inspect format', () => {
       expect(format).toContain('.HostConfig.PortBindings');
       expect(format).not.toContain('NetworkSettings');
       expect(format).toContain(COMPOSE_PROJECT_LABEL);
+      expect(format).toContain(COMPOSE_WORKING_DIR_LABEL);
     });
   });
 });
@@ -126,6 +187,64 @@ describe('the bind-port-not-promised check', () => {
 
       expect(result.status).toBe('fail');
       expect(result.detail).toContain('kvox-nginx-1');
+    });
+  });
+
+  describe('with the compose working directory (issue #736)', () => {
+    const SERVER = { ...CONTEXT, deployRoot: '/opt/infra/apps/kvox', composeProject: 'compose' };
+
+    it("passes for the deployment's own nginx started by the pre-platform CLI (the production failure)", async () => {
+      const check = createDockerPortsCheck(
+        docker({ ps: 'abc\n', inspect: '/kvox-nginx-1|kvox|3535 |/opt/infra/apps/kvox/repo/infra/compose\n' }),
+      );
+
+      const result = await check.run(SERVER);
+
+      expect(result.status).toBe('pass');
+    });
+
+    it('still fails for a foreign container whose working directory is elsewhere', async () => {
+      const check = createDockerPortsCheck(
+        docker({ ps: 'abc\n', inspect: '/web|tools|3535 |/opt/infra/apps/tools/repo/infra/compose\n' }),
+      );
+
+      const result = await check.run(SERVER);
+
+      expect(result.status).toBe('fail');
+      expect(result.detail).toContain('web');
+    });
+
+    it('still fails for a sibling folder that merely shares the name prefix', async () => {
+      const check = createDockerPortsCheck(
+        docker({ ps: 'abc\n', inspect: '/kvox-2-nginx-1|kvox-2|3535 |/opt/infra/apps/kvox-2/repo/infra/compose\n' }),
+      );
+
+      const result = await check.run(SERVER);
+
+      expect(result.status).toBe('fail');
+      expect(result.detail).toContain('kvox-2-nginx-1');
+    });
+
+    it('still fails for a foreign container with no working directory label', async () => {
+      const check = createDockerPortsCheck(docker({ ps: 'abc\n', inspect: '/handmade||3535 |\n' }));
+
+      expect((await check.run(SERVER)).status).toBe('fail');
+    });
+
+    it('reports only the foreign container when the own one carries the same port', async () => {
+      const check = createDockerPortsCheck(
+        docker({
+          ps: 'abc\ndef\n',
+          inspect:
+            '/kvox-nginx-1|kvox|3535 |/opt/infra/apps/kvox/repo/infra/compose\n/web|tools|3535 |/srv/tools\n',
+        }),
+      );
+
+      const result = await check.run(SERVER);
+
+      expect(result.status).toBe('fail');
+      expect(result.detail).toContain('web');
+      expect(result.detail).not.toContain('kvox-nginx-1');
     });
   });
 
