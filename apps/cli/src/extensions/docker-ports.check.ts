@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { basename } from 'node:path';
+import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
 
 import type { DeployCheck } from '@marinoscar/platform-cli/deploy';
 
@@ -28,18 +28,28 @@ import type { DeployCheck } from '@marinoscar/platform-cli/deploy';
 // the fallback when that is absent. The two differ on a legacy server, whose
 // deployment runs under the project `compose` while its folder carries the app name, and
 // comparing against the folder name there refused an update over the stack's own
-// nginx. Docker being unavailable is a skip, not a failure: it must not cost an
-// install on a host whose socket is briefly unreachable.
+// nginx. The project name is a record, though, and a record can be wrong (a
+// pre-platform CLI ran compose with an app-named `-p` project and wrote none, issue #736), so a
+// container whose compose WORKING DIR label is inside the deployment's folder is
+// also its own, whatever project it carries: that is Docker's own ground truth
+// for where the stack was started. Docker being unavailable is a skip, not a
+// failure: it must not cost an install on a host whose socket is briefly unreachable.
 // =============================================================================
 
 /** The compose project label, which is how a container names the app it belongs to. */
 export const COMPOSE_PROJECT_LABEL = 'com.docker.compose.project';
 
+/** The directory compose was run from, which is how a container names the checkout it came from. */
+export const COMPOSE_WORKING_DIR_LABEL = 'com.docker.compose.project.working_dir';
+
 /** Short by design: a wedged Docker socket must cost seconds, not the install. */
 export const DOCKER_QUERY_TIMEOUT_MS = 10_000;
 
 /**
- * One line per container: name, compose project, then every published host port.
+ * One line per container: name, compose project, every published host port, then
+ * the compose working directory. The directory comes LAST and is read as the
+ * whole remainder of the line, so a path is never split and a line without it
+ * still parses.
  *
  * `{{if .Config.Labels}}` guards a container created without any labels, whose
  * `Labels` is null rather than an empty map (`index` on nil renders
@@ -48,7 +58,8 @@ export const DOCKER_QUERY_TIMEOUT_MS = 10_000;
 const INSPECT_FORMAT =
   '{{.Name}}|' +
   `{{if .Config.Labels}}{{index .Config.Labels "${COMPOSE_PROJECT_LABEL}"}}{{end}}|` +
-  '{{range $port, $bindings := .HostConfig.PortBindings}}{{range $bindings}}{{.HostPort}} {{end}}{{end}}';
+  '{{range $port, $bindings := .HostConfig.PortBindings}}{{range $bindings}}{{.HostPort}} {{end}}{{end}}|' +
+  `{{if .Config.Labels}}{{index .Config.Labels "${COMPOSE_WORKING_DIR_LABEL}"}}{{end}}`;
 
 /** A host port some container, running or not, has already been given. */
 export interface DockerPortClaim {
@@ -56,18 +67,30 @@ export interface DockerPortClaim {
   port: number;
   /** The compose project, or undefined for a container compose did not start. */
   project?: string | undefined;
+  /** The directory compose was run from, or undefined when the container has no such label. */
+  workingDir?: string | undefined;
 }
 
 /** Runs `docker <args>` and answers stdout; rejects on any failure. */
 export type DockerRunner = (args: readonly string[]) => Promise<string>;
 
-const runDocker: DockerRunner = (args) =>
+export const runDocker: DockerRunner = (args) =>
   new Promise((resolve, reject) => {
     execFile('docker', [...args], { timeout: DOCKER_QUERY_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024 }, (error, stdout) => {
       if (error) reject(error);
       else resolve(String(stdout));
     });
   });
+
+/**
+ * Whether `path` is `root` or inside it, by path segment: `/opt/apps/app2` is
+ * NOT under `/opt/apps/app`. Both are resolved first; nothing touches the disk,
+ * because a container's recorded directory need not exist any more.
+ */
+export function isPathUnder(path: string, root: string): boolean {
+  const relation = relative(resolve(root), resolve(path));
+  return relation === '' || (relation !== '..' && !relation.startsWith(`..${sep}`) && !isAbsolute(relation));
+}
 
 /**
  * Parses the `docker inspect` lines above into claims.
@@ -93,11 +116,22 @@ export function parseDockerPortLines(output: string): DockerPortClaim[] {
     const project = trimmed.slice(separator + 1, second).trim();
     if (name === '') continue;
 
-    for (const token of trimmed.slice(second + 1).split(/\s+/)) {
+    // Ports, then optionally `|<working dir>` (the rest of the line, so a path is never split).
+    const rest = trimmed.slice(second + 1);
+    const third = rest.indexOf('|');
+    const portsField = third === -1 ? rest : rest.slice(0, third);
+    const workingDir = third === -1 ? '' : rest.slice(third + 1).trim();
+
+    for (const token of portsField.split(/\s+/)) {
       if (token === '') continue;
       const port = Number(token);
       if (!Number.isInteger(port) || port < 1 || port > 65535) continue;
-      claims.push({ name, port, ...(project === '' ? {} : { project }) });
+      claims.push({
+        name,
+        port,
+        ...(project === '' ? {} : { project }),
+        ...(workingDir === '' ? {} : { workingDir }),
+      });
     }
   }
 
@@ -138,7 +172,12 @@ export function createDockerPortsCheck(run: DockerRunner = runDocker): DeployChe
       }
 
       const project = context.composeProject ?? basename(context.deployRoot);
-      const foreign = claims.filter((claim) => claim.port === context.bindPort && claim.project !== project);
+      const foreign = claims.filter(
+        (claim) =>
+          claim.port === context.bindPort &&
+          claim.project !== project &&
+          !(claim.workingDir !== undefined && isPathUnder(claim.workingDir, context.deployRoot)),
+      );
 
       if (foreign.length === 0) {
         return { status: 'pass', detail: `no other container is configured to publish ${context.bindPort}` };
