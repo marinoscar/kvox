@@ -1,5 +1,12 @@
 # @marinoscar/kvox-web
 
+## 0.1.0-next.16
+
+### Minor Changes
+
+- d6eae9d: New note → "A document" now asks what to do with the chosen file: "Keep it as my note" (the default) imports the document itself as the note through an ad-hoc import batch, with inline progress, and opens it; "Rewrite it with a template" keeps the AI generation flow. The chooser accepts Word (.docx) and PowerPoint (.pptx) as well as PDF, Markdown and text, and a kept document's provenance reads "Imported from" its file.
+- 7c2f2b5: A host without audio capture or transcription gets a note-first Home (marinoscar/kvox#731). `KvoxFeatures` gains optional `transcription` (absent means `true`, so KVox web is unchanged), read through the new `useKvoxTranscriptionEnabled()` and `isKvoxTranscriptionEnabled()` of `core/headless`. With it `false`, `KvoxHomePage` drops the `counts`, `recentTranscripts` and `sharedWithMe` sections and the transcript search, and its first-run journey becomes `KVOX_NOTE_FIRST_JOURNEY` (Import your notes, Review, Your graph, Ask) with `KVOX_NOTE_FIRST_JOURNEY_INTRO` and `noteFirstJourneySteps()` ("Add your notes folder", then the notes slice's "Import notes"); a journey step's action can now carry a ready-made `element`. `HomeSkeleton` takes a `label`. The notes library empty state, the Home recent-notes prompt, the note template page, preview and editor, the keyword-only search notice, the search indexing page, the forget-person dialog and the review sheet's player word themselves (or hide) around imported notes and transcripts instead of recordings when the switch is off.
+
 ## 0.1.0-next.15
 
 ### Minor Changes
