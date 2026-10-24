@@ -205,7 +205,7 @@ describe('jobs adapter', () => {
 
   it('pins the AI job type strings (they are permanent)', () => {
     expect([...KVOX_AI_JOB_TYPES].sort()).toEqual(
-      ['ask.respond', 'kg.embed', 'kg.entity_digest', 'kg.extract', 'kg.import', 'kg.resolve', 'note.generate', 'note.retitle', 'search.index', 'transcript.name_check'],
+      ['ask.respond', 'kg.embed', 'kg.entity_digest', 'kg.extract', 'kg.import', 'kg.resolve', 'note.generate', 'note.import.format', 'note.retitle', 'search.index', 'transcript.name_check'],
     );
   });
 });

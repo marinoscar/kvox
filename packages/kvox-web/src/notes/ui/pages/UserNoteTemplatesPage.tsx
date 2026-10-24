@@ -64,7 +64,7 @@ import { NoteTemplateList } from '../components/NoteTemplateList.js';
 import { TemplateEditorActions } from '../components/TemplateEditorActions.js';
 import { TemplatePreviewPanel } from '../components/TemplatePreviewPanel.js';
 import type { PreviewSourceOption } from '../components/TemplatePreviewPanel.js';
-import { useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
+import { useIsMounted, useKvoxHost, useKvoxTranscriptionEnabled } from '../../../core/headless/index.js';
 import { useNoteTemplates } from '../../headless/hooks/useNoteTemplates.js';
 import { useTemplatePreview } from '../../headless/hooks/useTemplatePreview.js';
 import { getTranscripts } from '../../../transcripts/headless/index.js';
@@ -81,6 +81,9 @@ import type { NoteTemplate, NoteTemplateDraft } from '../../headless/clients/not
 const PAGE_TITLE = 'Note Templates';
 const PAGE_DESCRIPTION =
   'Describe the notes you want from a recording, and generate a sample to check the result before you rely on it.';
+/** {@link PAGE_DESCRIPTION} in a host without transcription (#731). */
+const PAGE_DESCRIPTION_NOTE_FIRST =
+  'Describe the notes you want from a document or a transcript you imported, and generate a sample to check the result before you rely on it.';
 
 /** How many recordings the source picker offers. Newest first, from the API's own order. */
 const SOURCE_PAGE_SIZE = 20;
@@ -164,6 +167,7 @@ export function UserNoteTemplatesPage({ ai = NO_NOTES_AI_ACCESS }: UserNoteTempl
   const preview = useTemplatePreview();
   const isMounted = useIsMounted();
   const host = useKvoxHost();
+  const transcription = useKvoxTranscriptionEnabled();
 
   const [mode, setMode] = useState<Mode>({ kind: 'list' });
   const [draft, setDraft] = useState<NoteTemplateDraft>(emptyDraft);
@@ -247,13 +251,17 @@ export function UserNoteTemplatesPage({ ai = NO_NOTES_AI_ACCESS }: UserNoteTempl
       );
     } catch {
       if (isMounted()) {
-        setSourcesError('Your recordings could not be loaded, so there is nothing to preview against.');
+        setSourcesError(
+          transcription
+            ? 'Your recordings could not be loaded, so there is nothing to preview against.'
+            : 'Your transcripts could not be loaded, so there is nothing to preview against.',
+        );
         setSources([]);
       }
     } finally {
       if (isMounted()) setIsLoadingSources(false);
     }
-  }, [host, isMounted]);
+  }, [host, isMounted, transcription]);
 
   // ⚠ GATED ON `keyConfigured`. The `AiKeyRequired` branch must issue no
   // generation request, and the source list exists only to feed one — so it is
@@ -380,7 +388,7 @@ export function UserNoteTemplatesPage({ ai = NO_NOTES_AI_ACCESS }: UserNoteTempl
         {PAGE_TITLE}
       </Typography>
       <Typography color="text.secondary" sx={{ mb: 3 }}>
-        {PAGE_DESCRIPTION}
+        {transcription ? PAGE_DESCRIPTION : PAGE_DESCRIPTION_NOTE_FIRST}
       </Typography>
     </>
   );

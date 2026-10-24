@@ -84,6 +84,7 @@ import {
   formatRelativeTime,
   groupFeedByDate,
   useKvoxPermissionCheck,
+  useKvoxTranscriptionEnabled,
   useScrollRestoration,
 } from '../../../core/headless/index.js';
 import type { NoteListItem, NoteStatus } from '../../headless/clients/notes.js';
@@ -390,6 +391,8 @@ export function NotesLibraryView({ slots }: NotesLibraryViewProps = {}) {
   const theme = useTheme();
   const navigate = useNavigate();
   const hasPermission = useKvoxPermissionCheck();
+  // #731 — a host without transcription words the empty state around imports.
+  const transcription = useKvoxTranscriptionEnabled();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
 
   /**
@@ -606,9 +609,9 @@ export function NotesLibraryView({ slots }: NotesLibraryViewProps = {}) {
                   No notes yet
                 </Typography>
                 <Typography color="text.secondary" sx={{ mb: 3 }}>
-                  Turn a transcript, another note or a document into a written note —
-                  minutes, a summary, a brief — using a template you control. It runs on
-                  your own AI key.
+                  {transcription
+                    ? 'Turn a transcript, another note or a document into a written note — minutes, a summary, a brief — using a template you control. It runs on your own AI key.'
+                    : 'Import the notes you already have (Word, PowerPoint, PDF, Markdown or text), or write one from a document, another note or a transcript you imported, using a template you control. It runs on your own AI key.'}
                 </Typography>
                 {canCreate && (
                   <Button

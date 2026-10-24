@@ -134,6 +134,15 @@ export interface NotesModuleOptions {
    * caps what a .docx/.pptx may inflate to, independently of this number.
    */
   maxDocumentImportBytes?: number;
+
+  /**
+   * Format every document kept as a note (single keep, ad-hoc drop, library file) into
+   * note Markdown with the owner's model, as a `note.import.format` job queued after the
+   * import (default true; issue #729). The pass changes structure only and is refused when
+   * it would change the words. False keeps the imported text as it was extracted and
+   * publishes `note_ready` straight from the import.
+   */
+  formatImports?: boolean;
 }
 
 /** The default of {@link NotesModuleOptions.maxImportBytes}: 5 MiB. */
@@ -164,6 +173,8 @@ export interface ResolvedNotesOptions {
   maxImportBytes: number;
   /** The largest document an import or source upload accepts, in bytes. */
   maxDocumentImportBytes: number;
+  /** Whether an imported document is formatted by a `note.import.format` job. */
+  formatImports: boolean;
 }
 
 /**
@@ -190,5 +201,6 @@ export function resolveNotesOptions(options: NotesModuleOptions): ResolvedNotesO
     stream: { ...(options.stream ?? {}) },
     maxImportBytes: options.maxImportBytes ?? DEFAULT_MAX_IMPORT_BYTES,
     maxDocumentImportBytes: options.maxDocumentImportBytes ?? DEFAULT_MAX_DOCUMENT_IMPORT_BYTES,
+    formatImports: options.formatImports !== false,
   };
 }

@@ -66,6 +66,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 export const KVOX_AI_JOB_TYPES: ReadonlySet<string> = new Set([
   'note.generate',
   'note.retitle',
+  'note.import.format',
   'transcript.name_check',
   'search.index',
   'ask.respond',

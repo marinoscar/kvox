@@ -45,6 +45,7 @@ import { NoteImportService } from './import/note-import.service.js';
 import { NoteLibrariesController } from './library/note-libraries.controller.js';
 import { NoteLibraryUploadController } from './library/note-library-upload.controller.js';
 import { NoteLibraryUploadService } from './library/note-library-upload.service.js';
+import { NoteImportFormatHandler } from './handlers/note-import-format.handler.js';
 import { NoteLibraryImportHandler } from './handlers/note-library-import.handler.js';
 import { NoteLibrariesService } from './library/note-libraries.service.js';
 import { NoteLibraryPolicy } from './library/note-library-policy.js';
@@ -221,6 +222,8 @@ export class NotesModule {
       // Upload into a batch, retry, and the `note.library.import` job (#715).
       NoteLibraryUploadService,
       NoteLibraryImportHandler,
+      // Faithful AI formatting of what an import kept as is (#729).
+      NoteImportFormatHandler,
       NoteSourceExtractHandler,
       // Note templates (#50). `NoteTemplateAccessService` is the ONE place that decides
       // 403-for-a-built-in vs 404-for-somebody-else's.

@@ -15,13 +15,23 @@
 // change). An unexpected throw retries; on the last attempt the item is marked
 // `internal_error` so a batch never sits `running` for a job that is gone.
 //
-// ⚠ AFTER-COMMIT STEPS NEVER RUN INSIDE THE TRANSACTION: audit, search index, `note_ready`
-// (`origin: 'library'`, `bulk: true`, only when the library's `autoExtract` is on) and the
-// batch status refresh. Each is its own try/catch: none can undo the committed note.
+// ⚠ AFTER-COMMIT STEPS NEVER RUN INSIDE THE TRANSACTION: audit, search index, the format job
+// (or `note_ready`) and the batch status refresh. Each is its own try/catch: none can undo
+// the committed note.
+//
+// FORMATTING (#729): every imported document is formatted into note Markdown by
+// `note.import.format`, which this handler queues (priority 5, between import 0 and search
+// 10) once the version is committed. THAT JOB PUBLISHES `note_ready` (`origin: 'library'`,
+// `bulk: true`, only when the library's `autoExtract` is on), so the graph reads the
+// formatted text, not the raw extraction. The search index is still queued here for the
+// raw version, so the note is findable at once. With `formatImports: false`, or when the
+// job cannot be queued (or its handler is not registered), this handler publishes
+// `note_ready` itself, exactly as before.
 // =============================================================================
 
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 
+import { aiProviderThrottleKey } from '../../core/index.js';
 import {
   KVOX_AUDIT,
   KVOX_EVENTS,
@@ -38,17 +48,21 @@ import { SEARCH_DOC_NOTE, SearchIndexService } from '../../search/index.js';
 import type { KvoxNotesDb, NoteImportBatchItemRow, NoteRow } from '../data/notes-db.js';
 import { normalizeDocumentMimeType } from '../extraction/document-format.js';
 import { documentToNoteBody } from '../extraction/index.js';
-import { NOTE_LIBRARY_IMPORT_JOB_TYPE } from '../job-types.js';
+import { NOTE_IMPORT_FORMAT_JOB_TYPE, NOTE_LIBRARY_IMPORT_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../job-types.js';
 import { NoteLibrariesService } from '../library/note-libraries.service.js';
 import { NoteObjectsService } from '../note-objects.service.js';
 import { NoteVersionWriter } from '../note-version-writer.js';
 import { NOTE_READY_EVENT, type NoteReadyEvent } from '../notes.events.js';
+import { NOTES_MODULE_OPTIONS, type ResolvedNotesOptions } from '../notes.options.js';
 
 /** One import may run five minutes: a large PDF or Office file, not a pathological one. */
 const LIBRARY_IMPORT_MAX_RUNTIME_MS = 5 * 60 * 1000;
 
 /** Attempts a job gets. */
 const LIBRARY_IMPORT_MAX_ATTEMPTS = 3;
+
+/** Between the import (0) and the search index (10). */
+const FORMAT_JOB_PRIORITY = 5;
 
 /** `failure_reason` is a short code. */
 const MAX_REASON_CHARS = 64;
@@ -96,6 +110,7 @@ export class NoteLibraryImportHandler implements KvoxJobHandler, OnModuleInit {
     private readonly versions: NoteVersionWriter,
     private readonly searchIndex: SearchIndexService,
     private readonly libraries: NoteLibrariesService,
+    @Inject(NOTES_MODULE_OPTIONS) private readonly options: Pick<ResolvedNotesOptions, 'formatImports'>,
   ) {}
 
   /** Self-registration. */
@@ -264,7 +279,34 @@ export class NoteLibraryImportHandler implements KvoxJobHandler, OnModuleInit {
     });
   }
 
-  /** Audit, search, ready event, old-object cleanup, batch status: none can undo the commit. */
+  /**
+   * Queues `note.import.format` for the version just written. Returns whether it is queued
+   * (or already was): only then does the format job own `note_ready`.
+   */
+  private async queueFormat(item: NoteImportBatchItemRow, ownerId: string, written: Written): Promise<boolean> {
+    if (!this.options.formatImports || !this.jobs.isRegistered(NOTE_IMPORT_FORMAT_JOB_TYPE)) return false;
+
+    try {
+      await this.jobs.enqueue({
+        type: NOTE_IMPORT_FORMAT_JOB_TYPE,
+        reason: 'upload',
+        subjectType: NOTE_SUBJECT_TYPE,
+        subjectId: written.noteId,
+        payload: { itemId: item.id, noteId: written.noteId, version: written.version },
+        priority: FORMAT_JOB_PRIORITY,
+        // The format call spends the owner's own provider account: their bucket, nobody else's.
+        throttleKey: aiProviderThrottleKey(ownerId),
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.warn(`Could not queue formatting of imported note ${written.noteId}: ${String(error)}`);
+
+      return false;
+    }
+  }
+
+  /** Audit, search, format job (or ready event), old-object cleanup, batch status: none can undo the commit. */
   private async afterCommit(input: {
     item: NoteImportBatchItemRow;
     ownerId: string;
@@ -301,7 +343,10 @@ export class NoteLibraryImportHandler implements KvoxJobHandler, OnModuleInit {
       this.logger.warn(`Could not queue a search index of imported note ${written.noteId}: ${String(error)}`);
     }
 
-    if (input.autoExtract) {
+    // #729: the format job owns `note_ready` when it is queued.
+    const formatQueued = await this.queueFormat(item, ownerId, written);
+
+    if (input.autoExtract && !formatQueued) {
       try {
         this.events.emit(NOTE_READY_EVENT, {
           noteId: written.noteId,

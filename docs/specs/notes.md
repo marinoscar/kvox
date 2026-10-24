@@ -1890,7 +1890,7 @@ restated. Exports expire after 7 days, swept by `notes.housekeeping` (§8.6).
 
 ### 8.5 Job types
 
-Six job types, all under `packages/kvox-api/src/notes/handlers/` except
+Seven job types, all under `packages/kvox-api/src/notes/handlers/` except
 `note.source.extract`'s node executor counterpart
 (`apps/cli/src/node/executors/note-source-extract.ts`):
 
@@ -1902,6 +1902,7 @@ Six job types, all under `packages/kvox-api/src/notes/handlers/` except
 | `note.purge` | Deployment default | No | Rule 2's "deletes rows/objects across several tables as it goes," mirroring `transcript.purge` (transcription.md §1.5.7) |
 | `notes.housekeeping` | Deployment default | No | Rule 2's "reads/writes across several tables in one sweep," mirroring `transcripts.housekeeping` (transcription.md §1.5.8); enqueued by a ten-minute `@Cron` through the shared `enqueueHousekeepingJob` helper (`docs/specs/job-queue.md` §7.10), which is what keeps `apps/api/test/jobs/cron-enqueue-only.spec.ts` passing once this cron exists |
 | `note.retitle` | `{ maxRuntimeMs: 2m, maxAttempts: 1 }`, sweep priority **100** | **No** | §3.4.1. Same per-user credential reason as `note.generate`, and the same `maxAttempts: 1`; `maxRuntimeMs` is two minutes because `NoteTitleService` already caps its own provider call at ≤30 s and the rest is two indexed row reads — and the lease derives from that number, so a dead worker's job is reclaimable in two minutes rather than ten. The bulk sweep enqueues at `HOUSEKEEPING_PRIORITY`; the single-note route takes the column default, because somebody pressed a button |
+| `note.import.format` | `{ maxRuntimeMs: 10m, maxAttempts: 1 }`, priority **5** | **No** | §8.8. An AI job on the owner's own key, so server-only like `note.generate`; one attempt so a retry cannot bill twice for the same document |
 
 `note.purge`, unlike `transcript.purge`, calls **no provider-side delete** —
 there is no remote copy of anything to clean up (§9.4 explains why a chat
@@ -1987,9 +1988,11 @@ PowerPoint off) and
 | `note_import_batch_items` | One row per file in a batch: action, status, failure reason, the note and version it wrote, `diverged`. The `job_id` is a plain uuid with no foreign key (the queue purges finished jobs). |
 
 Batch counts and per-stage counts are `GROUP BY` aggregates over the items,
-never stored columns. The stage of an item (`uploaded`, `parsed`, `indexed`,
-`extracting`, `extracted`, `in_graph`, `failed`) is derived from the item, its
-note, the search index and the graph proposal.
+never stored columns. The stage of an item (`uploaded`, `parsed`, `formatting`,
+`indexed`, `extracting`, `extracted`, `in_graph`, `failed`) is derived from the
+item, its note, the active jobs, the search index and the graph proposal;
+`formatting` has no column of its own, it means a `note.import.format` job for
+the note is still active.
 
 **Routes.** Details in `/api/docs` and [API.md](../API.md#note-libraries-and-import-batches).
 
@@ -2040,6 +2043,45 @@ outcome, not a crash: the item is `failed` with a reason and the job returns
 normally (reasons `unsupported_office_format` and `unsupported_document`
 also mark the library file `unsupported`). An unexpected throw retries, and on
 the last attempt the item is marked `internal_error`.
+
+**Formatting an imported document.** After a document import (not a
+Markdown or text file the person wrote) creates its note, the handler enqueues
+`note.import.format` (`NotesModuleOptions.formatImports`, default `true`;
+`false` skips it). The job asks the model to reformat the extracted text into
+KVox Markdown, reusing the AI feature `note_generate` (so the same per-task
+model and the owner's own key). It is server-only (no `nodeResultSchema`, no
+`persistNodeResult`), profile ten minutes and one attempt, priority 5.
+
+A **faithfulness guard** (`checkFormattingFaithfulness`,
+`notes/generation/import-format.ts`) compares the rewrite with the source and
+refuses it unless both coverage (nothing dropped) and precision (nothing
+invented) are at least 0.97. Outcomes:
+
+| Outcome | Effect |
+|---|---|
+| `formatted` | Commits version + 1 with summary "Formatted with AI" and `authorId` null |
+| `stale_version` | The note moved on since the import; nothing is written |
+| `empty` | Nothing to format |
+| `unfaithful` | The guard refused the rewrite; the imported text stays |
+| `ai_unavailable` | No usable key or model; the imported text stays |
+| `ai_error` | The provider failed; the imported text stays |
+| `error` | An unexpected failure |
+
+Every outcome is audited as `note:import_format` with ids and the outcome,
+never the text, and `kvox.notes.note_ready` is emitted **after** formatting in
+every outcome, so search indexing and graph extraction always see the final
+text and never wait on a failure.
+
+**New note, "A document".** The New note page accepts `docx`, `pptx`, `pdf`,
+`md` and `txt`. After a file is picked the person chooses:
+
+- **Keep it as my note** (default): an ad-hoc import batch of one runs through
+  the path above, the note is formatted, and the page opens it. The note shows
+  "Imported from <file>".
+- **Rewrite it with a template**: the existing document-source generation flow
+  (§3.2, §4.7).
+
+Downloading the original source file is not yet offered.
 
 **Version rule.** A changed file adds a version of kind `edit` and switches
 `notes.source_object_id` to the new object in the same transaction.

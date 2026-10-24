@@ -13,7 +13,7 @@ import { createLibraryFakeDb } from './library-fake-db.js';
 
 const OWNER = 'owner-1';
 
-function build() {
+function build(options: { formatImports: boolean } = { formatImports: false }) {
   const db = createLibraryFakeDb();
   const store = createInMemoryKvoxObjectStore();
   const jobs = createFakeKvoxJobs();
@@ -34,6 +34,7 @@ function build() {
     new NoteVersionWriter(db as never),
     searchIndex as never,
     new NoteLibrariesService(db as never),
+    options,
   );
 
   async function seed(opts: { text?: string; mime?: string; libraryId?: string | null; autoExtract?: boolean; file?: Record<string, unknown>; action?: string; filename?: string }) {
@@ -91,6 +92,62 @@ describe('NoteLibraryImportHandler', () => {
     expect(t.searchIndex.enqueue).toHaveBeenCalledWith('note', note.id);
     expect(t.audit.recorded).toEqual([expect.objectContaining({ action: 'note:library_import', targetId: note.id })]);
     expect(JSON.stringify(t.audit.recorded)).not.toContain('Hello body');
+  });
+
+  describe('with formatImports on (#729)', () => {
+    const FORMAT = 'note.import.format';
+    const stub = (jobs: ReturnType<typeof build>['jobs']) =>
+      jobs.registerHandler({ type: FORMAT, process: async () => undefined });
+
+    it('queues note.import.format (priority 5) INSTEAD of note_ready, and still queues the search index', async () => {
+      const t = build({ formatImports: true });
+      stub(t.jobs);
+      const { item } = await t.seed({});
+
+      await t.handler.process(t.job(item.id));
+
+      const note = t.db.note.rows[0];
+      const queued = t.jobs.jobs.filter((j: any) => j.input.type === FORMAT);
+      expect(queued).toHaveLength(1);
+      expect((queued[0] as any).input).toMatchObject({
+        subjectType: 'note',
+        subjectId: note.id,
+        priority: 5,
+        payload: { itemId: item.id, noteId: note.id, version: 1 },
+      });
+      expect(t.emitted).toEqual([]);
+      expect(t.searchIndex.enqueue).toHaveBeenCalledWith('note', note.id);
+    });
+
+    it('queues the format job even when the library has autoExtract off (the job decides on note_ready)', async () => {
+      const t = build({ formatImports: true });
+      stub(t.jobs);
+      const { item } = await t.seed({ autoExtract: false });
+      await t.handler.process(t.job(item.id));
+
+      expect(t.jobs.jobs.filter((j: any) => j.input.type === FORMAT)).toHaveLength(1);
+      expect(t.emitted).toEqual([]);
+    });
+
+    it('falls back to note_ready when the format handler is not registered', async () => {
+      const t = build({ formatImports: true });
+      const { item } = await t.seed({});
+      await t.handler.process(t.job(item.id));
+
+      expect(t.jobs.jobs.filter((j: any) => j.input.type === FORMAT)).toHaveLength(0);
+      expect(t.emitted).toHaveLength(1);
+    });
+
+    it('falls back to note_ready when queueing the format job fails', async () => {
+      const t = build({ formatImports: true });
+      stub(t.jobs);
+      const spy = jest.spyOn(t.jobs, 'enqueue').mockRejectedValue(new Error('queue down'));
+      const { item } = await t.seed({});
+      await t.handler.process(t.job(item.id));
+
+      expect(t.emitted).toHaveLength(1);
+      spy.mockRestore();
+    });
   });
 
   it('is idempotent: re-running an imported item does nothing', async () => {

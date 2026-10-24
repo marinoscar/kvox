@@ -518,10 +518,12 @@ describe('NewNotePage — the document source', () => {
     );
   });
 
+  /** Chooses a document and asks for the rewrite (#730: Keep is the default). */
   async function uploadDocument(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole('radio', { name: /A document/ }));
     const file = new File(['hello'], 'brief.pdf', { type: 'application/pdf' });
     await user.upload(screen.getByLabelText('Choose a document'), file);
+    await user.click(screen.getByRole('radio', { name: /Rewrite it with a template/ }));
   }
 
   it('shows extraction progress and BLOCKS Generate until text has been extracted', async () => {
@@ -606,6 +608,264 @@ describe('NewNotePage — the document source', () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
+  });
+});
+
+// =============================================================================
+// #730 — keep the document as the note, or rewrite it with a template
+// =============================================================================
+
+describe('NewNotePage — keep or rewrite a document', () => {
+  /** Every request path the batch routes saw, in order. */
+  let batchCalls: string[];
+  /** Every `POST /api/notes/sources/documents` this test has seen. */
+  let sourceUploads: number;
+  /** The one item `GET /notes/import-batches/:id/items` answers with next. */
+  let item: Record<string, unknown>;
+
+  function itemOf(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'item-1',
+      filename: 'board-pack.docx',
+      path: 'board-pack.docx',
+      action: 'new',
+      status: 'queued',
+      stage: 'uploaded',
+      failureReason: null,
+      failureMessage: null,
+      noteId: null,
+      noteVersion: null,
+      proposalId: null,
+      proposalStatus: null,
+      diverged: false,
+      updatedAt: new Date().toISOString(),
+      ...overrides,
+    };
+  }
+
+  function batch(status: string, formatting = 0) {
+    const zero = { queued: 0, importing: 0, imported: 0, failed: 0, missing: 0, skipped: 0 };
+    const stages = {
+      uploaded: 0,
+      parsed: 0,
+      formatting,
+      indexed: 0,
+      extracting: 0,
+      extracted: 0,
+      in_graph: 0,
+      failed: 0,
+    };
+    return {
+      id: 'batch-1',
+      libraryId: null,
+      status,
+      createdAt: new Date().toISOString(),
+      finishedAt: null,
+      counts: zero,
+      stageCounts: stages,
+    };
+  }
+
+  beforeEach(() => {
+    batchCalls = [];
+    sourceUploads = 0;
+    item = itemOf();
+    server.use(
+      http.post(`${API_BASE}/notes/import-batches`, () => {
+        batchCalls.push('POST /notes/import-batches');
+        return HttpResponse.json({ data: { batchId: 'batch-1' } }, { status: 201 });
+      }),
+      http.post(`${API_BASE}/notes/import-batches/:id/files`, ({ params }) => {
+        batchCalls.push(`POST /notes/import-batches/${String(params.id)}/files`);
+        return HttpResponse.json({ data: { itemId: 'item-1', action: 'new', skipped: false } }, { status: 201 });
+      }),
+      http.post(`${API_BASE}/notes/import-batches/:id/close`, ({ params }) => {
+        batchCalls.push(`POST /notes/import-batches/${String(params.id)}/close`);
+        return HttpResponse.json({ data: batch('running') });
+      }),
+      http.get(`${API_BASE}/notes/import-batches/:id`, () =>
+        // Formatting outlives the batch's own `running`: a completed batch is still polled for it.
+        HttpResponse.json({
+          data: batch(
+            item.status === 'queued' || item.status === 'importing' ? 'running' : 'completed',
+            item.stage === 'formatting' ? 1 : 0,
+          ),
+        }),
+      ),
+      http.get(`${API_BASE}/notes/import-batches/:id/items`, () =>
+        HttpResponse.json({ data: { items: [item], nextCursor: null } }),
+      ),
+      http.post(`${API_BASE}/notes/sources/documents`, () => {
+        sourceUploads += 1;
+        return HttpResponse.json(
+          {
+            data: {
+              objectId: 'obj-1',
+              filename: 'board-pack.docx',
+              mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              size: 1024,
+              jobId: 'job-extract',
+              status: 'extracting',
+            },
+          },
+          { status: 201 },
+        );
+      }),
+      http.get(`${API_BASE}/notes/sources/documents/:objectId`, () =>
+        HttpResponse.json({ data: { objectId: 'obj-1', status: 'extracted', message: null, characters: 99 } }),
+      ),
+    );
+  });
+
+  async function chooseDocument(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('radio', { name: /A document/ }));
+    const file = new File(['PK...'], 'board-pack.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    await user.upload(screen.getByLabelText('Choose a document'), file);
+  }
+
+  it('offers Word and PowerPoint in the subtitle and in the file chooser', async () => {
+    renderPage();
+    await waitForForm();
+
+    expect(screen.getByText('Word, PowerPoint, PDF, Markdown or text.')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('radio', { name: /A document/ }));
+    const accept = screen.getByLabelText('Choose a document').getAttribute('accept') ?? '';
+    for (const extension of ['.docx', '.pptx', '.pdf', '.md', '.txt']) expect(accept).toContain(extension);
+    expect(screen.getByText(/Scanned PDFs are not read/)).toBeInTheDocument();
+  });
+
+  it('asks what to do once a file is chosen, and defaults to Keep', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitForForm();
+
+    await user.click(screen.getByRole('radio', { name: /A document/ }));
+    expect(screen.queryByRole('radiogroup', { name: 'What should KVox do with it?' })).not.toBeInTheDocument();
+
+    await chooseDocument(user);
+
+    const group = screen.getByRole('radiogroup', { name: 'What should KVox do with it?' });
+    expect(within(group).getByRole('radio', { name: /Keep it as my note/ })).toBeChecked();
+    expect(within(group).getByRole('radio', { name: /Rewrite it with a template/ })).not.toBeChecked();
+    expect(screen.getByText(/Your document becomes the note, formatted for KVox/)).toBeInTheDocument();
+    // Keep uploads nothing until Import is pressed.
+    expect(sourceUploads).toBe(0);
+    expect(batchCalls).toHaveLength(0);
+  });
+
+  it('hides the template, model and context under Keep, and offers Import note', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitForForm();
+
+    await chooseDocument(user);
+
+    expect(screen.queryByLabelText('Template')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Context (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Template', level: 2 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Generate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import note' })).toBeEnabled();
+  });
+
+  it('imports the file through the batch routes, shows progress, and opens the note', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitForForm();
+
+    await chooseDocument(user);
+    await user.click(screen.getByRole('button', { name: 'Import note' }));
+
+    await waitFor(() =>
+      expect(batchCalls).toEqual([
+        'POST /notes/import-batches',
+        'POST /notes/import-batches/batch-1/files',
+        'POST /notes/import-batches/batch-1/close',
+      ]),
+    );
+    expect(await screen.findByText('Importing…')).toBeInTheDocument();
+    expect(createdBodies).toHaveLength(0);
+    expect(sourceUploads).toBe(0);
+
+    // It is a note, being formatted: not opened yet.
+    item = itemOf({ status: 'imported', stage: 'formatting', noteId: 'kept-note', noteVersion: 1 });
+    expect(await screen.findByText('Formatting your note…', {}, { timeout: 6000 })).toBeInTheDocument();
+    expect(screen.getByTestId('pathname')).toHaveTextContent('/notes/new');
+
+    // Formatted.
+    item = itemOf({ status: 'imported', stage: 'parsed', noteId: 'kept-note', noteVersion: 1 });
+    await waitFor(() => expect(screen.getByTestId('pathname')).toHaveTextContent('/notes/kept-note'), {
+      timeout: 6000,
+    });
+  });
+
+  it('says why when the import fails', async () => {
+    const user = userEvent.setup();
+    item = itemOf({ status: 'failed', stage: 'failed', failureReason: 'unsupported_office_format' });
+    renderPage();
+    await waitForForm();
+
+    await chooseDocument(user);
+    await user.click(screen.getByRole('button', { name: 'Import note' }));
+
+    expect(await screen.findByText(/older Word or PowerPoint file/)).toBeInTheDocument();
+    expect(screen.getByTestId('pathname')).toHaveTextContent('/notes/new');
+    // The user can try again.
+    expect(screen.getByRole('button', { name: 'Import note' })).toBeEnabled();
+  });
+
+  it('refuses a file of a kind neither route reads, before sending anything', async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    renderPage();
+    await waitForForm();
+
+    await user.click(screen.getByRole('radio', { name: /A document/ }));
+    await user.upload(
+      screen.getByLabelText('Choose a document'),
+      new File(['x'], 'sheet.xlsx', { type: 'application/octet-stream' }),
+    );
+
+    expect(screen.getByText(/This kind of file cannot be imported/)).toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: 'What should KVox do with it?' })).not.toBeInTheDocument();
+    expect(batchCalls).toHaveLength(0);
+    expect(sourceUploads).toBe(0);
+  });
+
+  it('keeps the template flow under Rewrite: upload as a source, then Generate', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitForForm();
+
+    await chooseDocument(user);
+    await user.click(screen.getByRole('radio', { name: /Rewrite it with a template/ }));
+
+    await waitFor(() => expect(sourceUploads).toBe(1));
+    expect(screen.getByLabelText('Template')).toBeInTheDocument();
+    expect(screen.getByLabelText('Context (optional)')).toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled(),
+      { timeout: 6000 },
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    expect(createdBodies[0].source).toEqual({ type: 'document', objectId: 'obj-1' });
+    expect(batchCalls).toHaveLength(0);
+
+    // Back to Keep and to Rewrite again: the same file is not uploaded twice.
+    await user.click(screen.getByRole('radio', { name: /Keep it as my note/ }));
+    await user.click(screen.getByRole('radio', { name: /Rewrite it with a template/ }));
+    expect(sourceUploads).toBe(1);
+  });
+
+  it('offers no Keep choice for a document the host already uploaded (?objectId=)', async () => {
+    renderPage('/notes/new?objectId=obj-1&documentName=minutes.pdf');
+    await waitForForm();
+
+    expect(screen.queryByRole('radiogroup', { name: 'What should KVox do with it?' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument();
   });
 });
 
