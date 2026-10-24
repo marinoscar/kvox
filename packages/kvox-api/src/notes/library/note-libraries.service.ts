@@ -19,7 +19,13 @@ import {
   type UpdateNoteLibraryRequest,
 } from '@marinoscar/kvox-contract/notes';
 
-import { KVOX_EVENTS, KVOX_PRISMA, type KvoxEventsPort } from '../../ports/index.js';
+import {
+  KVOX_EVENTS,
+  KVOX_JOBS,
+  KVOX_PRISMA,
+  type KvoxEventsPort,
+  type KvoxJobsPort,
+} from '../../ports/index.js';
 import type {
   KvoxNotesDb,
   KvoxNotesDelegates,
@@ -29,6 +35,7 @@ import type {
   NoteLibraryRow,
   NoteProposalRef,
 } from '../data/notes-db.js';
+import { NOTE_IMPORT_FORMAT_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../job-types.js';
 import type { NotesActor } from '../notes-actor.js';
 import { diffLibraryManifest, type ExistingLibraryFile } from './note-library-diff.js';
 import { deriveItemStage, pickProposal, recomputeBatchStatus } from './note-import-stage.js';
@@ -122,7 +129,8 @@ export interface NoteImportBatchList {
 export class NoteLibrariesService {
   constructor(
     @Inject(KVOX_PRISMA) private readonly prisma: KvoxNotesDb,
-    @Optional() @Inject(KVOX_EVENTS) private readonly events?: KvoxEventsPort
+    @Optional() @Inject(KVOX_EVENTS) private readonly events?: KvoxEventsPort,
+    @Optional() @Inject(KVOX_JOBS) private readonly jobs?: KvoxJobsPort
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -411,9 +419,10 @@ export class NoteLibrariesService {
 
     const page = rows.slice(0, query.limit);
     const proposals = await this.proposalsFor(page);
+    const formatting = await this.formattingNotes(page);
 
     return {
-      items: page.map((row) => this.toItem(row, proposals)),
+      items: page.map((row) => this.toItem(row, proposals, formatting)),
       nextCursor: rows.length > query.limit ? encodeItemCursor(page[page.length - 1]!.id) : null,
     };
   }
@@ -558,9 +567,36 @@ export class NoteLibrariesService {
     return out;
   }
 
+  /**
+   * The notes among `items` whose `note.import.format` job is pending or running. The stage
+   * `formatting` is DERIVED from the queue, never stored: no column, no migration, and a job
+   * that settles (or is lost) stops reading as formatting by itself.
+   */
+  private async formattingNotes(items: readonly NoteImportBatchItemRow[]): Promise<Set<string>> {
+    const out = new Set<string>();
+    if (!this.jobs) return out;
+    const noteIds = [
+      ...new Set(
+        items.flatMap((item) => (item.status === 'imported' && item.noteId ? [item.noteId] : []))
+      ),
+    ];
+
+    for (const part of chunks(noteIds)) {
+      const active = await this.jobs.findActive({
+        types: [NOTE_IMPORT_FORMAT_JOB_TYPE],
+        subjectType: NOTE_SUBJECT_TYPE,
+        subjectIds: part,
+      });
+      for (const job of active) if (job.subjectId) out.add(job.subjectId);
+    }
+
+    return out;
+  }
+
   private toItem(
     row: NoteImportBatchItemRow,
-    proposals: Map<string, NoteProposalRef[]>
+    proposals: Map<string, NoteProposalRef[]>,
+    formatting: ReadonlySet<string>
   ): NoteImportBatchItem {
     const proposal =
       row.status === 'imported' && row.noteId
@@ -573,7 +609,11 @@ export class NoteLibrariesService {
       path: row.path,
       action: row.action,
       status: row.status,
-      stage: deriveItemStage(row.status, proposal?.status ?? null),
+      stage: deriveItemStage(
+        row.status,
+        proposal?.status ?? null,
+        row.noteId !== null && formatting.has(row.noteId)
+      ),
       failureReason: row.status === 'failed' ? row.failureReason : null,
       failureMessage: null,
       noteId: row.noteId,
@@ -607,6 +647,7 @@ export class NoteLibrariesService {
       select: { batchId: true, status: true, noteId: true, noteVersion: true },
     });
     const proposals = await this.proposalsFor(imported as NoteImportBatchItemRow[]);
+    const formatting = await this.formattingNotes(imported as NoteImportBatchItemRow[]);
     const stages = new Map<string, Record<NoteImportItemStage, number>>();
     const stagesOf = (batchId: string): Record<NoteImportItemStage, number> => {
       let entry = stages.get(batchId);
@@ -628,7 +669,9 @@ export class NoteLibrariesService {
       const proposal = item.noteId
         ? pickProposal(proposals.get(item.noteId) ?? [], item.noteVersion)
         : null;
-      stagesOf(item.batchId)[deriveItemStage('imported', proposal?.status ?? null)] += 1;
+      stagesOf(item.batchId)[
+        deriveItemStage('imported', proposal?.status ?? null, item.noteId !== null && formatting.has(item.noteId))
+      ] += 1;
     }
 
     return rows.map((row) => ({

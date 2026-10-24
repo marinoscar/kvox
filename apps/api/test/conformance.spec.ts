@@ -74,6 +74,7 @@ import {
   NoteExportHandler,
   NoteExporterRegistry,
   NoteGenerateHandler,
+  NoteImportFormatHandler,
   NoteLibraryImportHandler,
   NotePurgeHandler,
   NoteRetitleHandler,
@@ -594,6 +595,7 @@ describeNotesConformance(
       handlers: [
         NoteExportHandler,
         NoteGenerateHandler,
+        NoteImportFormatHandler,
         NoteLibraryImportHandler,
         NotePurgeHandler,
         NoteRetitleHandler,

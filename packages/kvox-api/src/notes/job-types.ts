@@ -135,3 +135,12 @@ export const NOTE_JOB_TYPES = [
  * @stability experimental
  */
 export const NOTE_LIBRARY_IMPORT_JOB_TYPE = 'note.library.import';
+
+/**
+ * Format one imported note into note Markdown with the owner's model, faithfully (structure
+ * only; issue #729, epic #728). Queued by `note.library.import` after it commits version 1.
+ * Server-only (it spends the owner's own key). The `type` string is permanent.
+ *
+ * @stability experimental
+ */
+export const NOTE_IMPORT_FORMAT_JOB_TYPE = 'note.import.format';

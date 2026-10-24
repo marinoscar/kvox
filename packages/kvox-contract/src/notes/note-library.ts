@@ -142,6 +142,7 @@ export type NoteImportItemStatus = (typeof NOTE_IMPORT_ITEM_STATUSES)[number];
 export const NOTE_IMPORT_ITEM_STAGES = [
   'uploaded',
   'parsed',
+  'formatting',
   'indexed',
   'extracting',
   'extracted',

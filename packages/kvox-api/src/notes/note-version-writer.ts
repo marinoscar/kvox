@@ -24,8 +24,8 @@ export interface NoteVersionCommitInput {
   /** A title that rides along; sets `titleSource: 'user'`. Omit to leave title and provenance alone. */
   title?: string;
   kind: 'edit' | 'restore';
-  /** A real author id, always: `null` means the AI on a version row. */
-  authorId: string;
+  /** The author's user id; `null` means the AI (spec §4.5), for a version a model wrote. A human edit passes a real id. */
+  authorId: string | null;
   summary?: string | null;
   restoredFromVersion?: number;
   clientBatchId?: string | null;
@@ -112,9 +112,9 @@ export class NoteVersionWriter {
         body: input.body,
         bodyFormat: input.bodyFormat,
         summary: input.summary ?? null,
-        // ⚠ A REAL AUTHOR ID HERE, ALWAYS. `null` means the AI (spec §4.5) —
+        // ⚠ A HUMAN EDIT PASSES A REAL AUTHOR ID. `null` means the AI (spec §4.5) —
         // a convention, not a missing value — so a human edit recorded with a
-        // null author would claim the model wrote it.
+        // null author would claim the model wrote it; only the format job passes it.
         authorId: input.authorId,
         restoredFromVersion: input.restoredFromVersion ?? null,
         clientBatchId: input.clientBatchId ?? null,

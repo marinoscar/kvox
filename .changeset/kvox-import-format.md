@@ -1,0 +1,6 @@
+---
+'@marinoscar/kvox-api': minor
+'@marinoscar/kvox-contract': minor
+---
+
+Faithful AI formatting of imported documents (#729, epic #728). Every document kept as a note (single keep, ad-hoc drop, note library) is formatted into note Markdown by the owner's model, structure only (headings, lists, tables, re-joined PDF lines, slide sections), never adding, removing, summarising, translating or rewording. New server-only AI job `note.import.format` (`NoteImportFormatHandler`, `NOTE_IMPORT_FORMAT_JOB_TYPE`) queued by `note.library.import` (priority 5) instead of `note_ready`; the job commits the next version as the AI (`authorId: null`, "Formatted with AI") only when the pure guard `checkFormattingFaithfulness` (word-multiset coverage and precision of at least 0.97) passes, skips on a stale version or an unavailable model, and always publishes `note_ready` after the commit. `NotesModule.forRoot({ formatImports })` (default true) turns it off. Exports `IMPORT_FORMAT_SYSTEM_PROMPT`, `chunkMarkdownForFormatting`, `checkFormattingFaithfulness` and the threshold constants. The contract's `NOTE_IMPORT_ITEM_STAGES` gains `formatting` (derived from the active job); `NoteVersionWriter` accepts a `null` author for AI versions.

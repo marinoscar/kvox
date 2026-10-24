@@ -28,23 +28,27 @@ export type ProposalStatusValue =
 /**
  * Where an item stands in the pipeline.
  *
- * `failed` item: `failed`. `queued`/`importing`: `uploaded`. `imported` without a proposal
+ * `failed` item: `failed`. `queued`/`importing`: `uploaded`. `imported` while its note is
+ * being formatted (`note.import.format` pending or running): `formatting`. `imported` without a proposal
  * (or a discarded/failed/reverted one): `parsed`. A proposal `extracting`: `extracting`;
  * `draft`: `extracted`; `committed`: `in_graph`. Statuses `missing` and `skipped` carry no
  * pipeline, so they read `parsed` only when a note exists, else `uploaded`.
  *
  * @param itemStatus - the item's status.
  * @param proposalStatus - the status of the proposal for the item's note version, if any.
+ * @param formatting - whether a `note.import.format` job for the item's note is active.
  * @returns the stage.
  * @stability experimental
  */
 export function deriveItemStage(
   itemStatus: NoteImportItemStatus,
-  proposalStatus: ProposalStatusValue | string | null
+  proposalStatus: ProposalStatusValue | string | null,
+  formatting = false
 ): NoteImportItemStage {
   if (itemStatus === 'failed') return 'failed';
   if (itemStatus === 'queued' || itemStatus === 'importing') return 'uploaded';
   if (itemStatus !== 'imported') return 'uploaded';
+  if (formatting) return 'formatting';
 
   switch (proposalStatus) {
     case 'extracting':
