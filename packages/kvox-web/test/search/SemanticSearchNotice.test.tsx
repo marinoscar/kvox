@@ -52,6 +52,16 @@ describe('SemanticSearchNotice', () => {
     );
   });
 
+  it('speaks of notes, not recordings, in a host without transcription (#731)', () => {
+    const { container } = renderWithKvoxHost(
+      <SemanticSearchNotice semantic={false} semanticReason={null} unindexedCount={0} />,
+      createFakeKvoxWebHost({ features: { graphEnabled: true, transcription: false } }),
+    );
+
+    expect(screen.getByText(/rather than what your notes are about/i)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/recording/i);
+  });
+
   it('is an INFO line, never an error — a keyword answer is still a correct answer', () => {
     render(<SemanticSearchNotice semantic={false} semanticReason={null} unindexedCount={0} />);
 

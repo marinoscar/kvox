@@ -98,7 +98,11 @@ import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import type { ReactNode } from 'react';
 
-import { useKvoxHost, useKvoxPermissionCheck } from '../../core/headless/index.js';
+import {
+  useKvoxHost,
+  useKvoxPermissionCheck,
+  useKvoxTranscriptionEnabled,
+} from '../../core/headless/index.js';
 import { useNoteSummary } from '../../notes/headless/index.js';
 import { useTranscriptSummary } from '../../transcripts/headless/index.js';
 import {
@@ -125,10 +129,22 @@ import {
   ReviewQueueHomeCard,
 } from './components/KnowledgeCards.js';
 import { KnowledgeSection } from './components/KnowledgeSection.js';
+import {
+  KVOX_NOTE_FIRST_JOURNEY,
+  KVOX_NOTE_FIRST_JOURNEY_INTRO,
+  noteFirstJourneySteps,
+} from './components/NoteFirstJourney.js';
 import { NeedsAttention } from './components/NeedsAttention.js';
 import { RecentNotes } from './components/RecentNotes.js';
 import { RecentTranscripts } from './components/RecentTranscripts.js';
 import { SharedWithMe } from './components/SharedWithMe.js';
+
+/** The sections a host without transcription never draws (#731). */
+const TRANSCRIPT_SECTIONS: ReadonlySet<KvoxHomeSection> = new Set<KvoxHomeSection>([
+  'counts',
+  'recentTranscripts',
+  'sharedWithMe',
+]);
 
 /**
  * Props of {@link KvoxHomePage}. Every one is optional: `<KvoxHomePage />` is the
@@ -155,7 +171,9 @@ export interface KvoxHomePageProps {
    * The sections to draw; the page keeps its own order. Default every section
    * ({@link KVOX_HOME_SECTIONS}); {@link KVOX_KNOWLEDGE_HOME_SECTIONS} is the
    * knowledge-first preset. Leaving out `recentTranscripts` is how a host
-   * without transcripts avoids the transcript summary request altogether.
+   * without transcripts avoids the transcript summary request altogether. A host
+   * whose `features().transcription` is `false` never gets `counts`,
+   * `recentTranscripts` or `sharedWithMe`, even when it lists them.
    */
   sections?: readonly KvoxHomeSection[];
   /**
@@ -164,9 +182,15 @@ export interface KvoxHomePageProps {
    * `KVOX_BRAND.tagline`). Not drawn when absent.
    */
   tagline?: string;
-  /** Replaces the four stage cards of the first-run journey. */
+  /**
+   * Replaces the four stage cards of the first-run journey. Default: the classic
+   * stages, or {@link KVOX_NOTE_FIRST_JOURNEY} when the host has no transcription.
+   */
   journeyStages?: readonly JourneyStage[];
-  /** Replaces the sentence under "Start here". */
+  /**
+   * Replaces the sentence under "Start here". Default: the classic sentence, or
+   * {@link KVOX_NOTE_FIRST_JOURNEY_INTRO} when the host has no transcription.
+   */
   journeyIntro?: string;
 }
 
@@ -211,7 +235,14 @@ export function KvoxHomePage(props: KvoxHomePageProps = {}) {
 
   const host = useKvoxHost();
   const hasPermission = useKvoxPermissionCheck();
-  const shown = new Set<KvoxHomeSection>(sections);
+  // #731 — a host without audio capture or transcription (KVox Desktop) never
+  // draws a transcript section, whatever `sections` lists: the recent and shared
+  // transcripts and the transcript-led counts go, and so does the transcript
+  // summary request they lean on. Its first run is the note-first journey.
+  const transcription = useKvoxTranscriptionEnabled();
+  const shown = new Set<KvoxHomeSection>(
+    transcription ? sections : sections.filter((section) => !TRANSCRIPT_SECTIONS.has(section)),
+  );
 
   // The transcript half of the page exists only when the host lists it: a host
   // with no transcription never asks an API that is not there.
@@ -243,7 +274,7 @@ export function KvoxHomePage(props: KvoxHomePageProps = {}) {
     return (
       <Container maxWidth="lg" disableGutters>
         <Box sx={{ py: { xs: 2, sm: 3 } }}>
-          <HomeSkeleton />
+          <HomeSkeleton {...(transcription ? {} : { label: 'Loading your notes' })} />
         </Box>
       </Container>
     );
@@ -267,10 +298,14 @@ export function KvoxHomePage(props: KvoxHomePageProps = {}) {
   });
   const showJourney = isNewUser && shown.has('journey');
 
+  const progress = { notes: notes.summary?.counts.total ?? 0 };
+  const stepsToOffer = journeySteps ?? (transcription ? undefined : noteFirstJourneySteps(progress));
+  const stagesToDraw = journeyStages ?? (transcription ? undefined : KVOX_NOTE_FIRST_JOURNEY);
+  const introToDraw = journeyIntro ?? (transcription ? undefined : KVOX_NOTE_FIRST_JOURNEY_INTRO);
   const steps = resolveJourneySteps({
-    ...(journeySteps === undefined ? {} : { journeySteps }),
+    ...(stepsToOffer === undefined ? {} : { journeySteps: stepsToOffer }),
     ...(extraSteps === undefined ? {} : { extraSteps }),
-    progress: { notes: notes.summary?.counts.total ?? 0 },
+    progress,
     context: { hasPermission, graphEnabled: host.features().graphEnabled === true },
   });
 
@@ -343,8 +378,8 @@ export function KvoxHomePage(props: KvoxHomePageProps = {}) {
         {showJourney ? (
           <JourneyEmptyState
             steps={steps}
-            {...(journeyStages === undefined ? {} : { stages: journeyStages })}
-            {...(journeyIntro === undefined ? {} : { intro: journeyIntro })}
+            {...(stagesToDraw === undefined ? {} : { stages: stagesToDraw })}
+            {...(introToDraw === undefined ? {} : { intro: introToDraw })}
           />
         ) : (
           <>

@@ -90,7 +90,7 @@ import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-d
 import { NOTE_IMPORT_ACCEPT, noteImportMimeTypeForExtension } from '@marinoscar/kvox-contract/notes';
 
 import { ModelSelect } from '../components/ModelSelect.js';
-import { KvoxApiError, useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
+import { KvoxApiError, useIsMounted, useKvoxHost, useKvoxTranscriptionEnabled } from '../../../core/headless/index.js';
 import { useNoteTemplates } from '../../headless/hooks/useNoteTemplates.js';
 import {
   MAX_TITLE_CHARS,
@@ -107,7 +107,7 @@ import type { NoteTemplate } from '../../headless/clients/noteTemplates.js';
 import { getTranscripts } from '../../../transcripts/headless/index.js';
 import type { TranscriptListItem } from '../../../transcripts/headless/index.js';
 import {
-  NOTE_SOURCE_KINDS,
+  noteSourceKindsFor,
   buildNoteSource,
   buildNoteTitle,
   emptyNewNoteDraft,
@@ -205,6 +205,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
   const navigate = useNavigate();
   const isMounted = useIsMounted();
   const host = useKvoxHost();
+  const sourceKinds = noteSourceKindsFor(useKvoxTranscriptionEnabled());
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const [searchParams] = useSearchParams();
 
@@ -680,7 +681,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
             }))
           }
         >
-          {NOTE_SOURCE_KINDS.map((option) => (
+          {sourceKinds.map((option) => (
             <FormControlLabel
               key={option.value}
               value={option.value}

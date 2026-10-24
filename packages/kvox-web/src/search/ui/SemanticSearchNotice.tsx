@@ -46,6 +46,7 @@ import { useState } from 'react';
 import { Alert, Link, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 
+import { useKvoxTranscriptionEnabled } from '../../core/headless/index.js';
 import { describeIndexReason } from '../headless/index.js';
 import type { SemanticReason } from '../headless/index.js';
 
@@ -142,6 +143,8 @@ export function SemanticSearchNotice({
   storageKey = 'semantic-search-notice',
 }: SemanticSearchNoticeProps) {
   const [dismissed, setDismissed] = useState(() => readDismissed(storageKey));
+  // #731 — a host without transcription has no recordings to speak of.
+  const transcription = useKvoxTranscriptionEnabled();
 
   // ⚠ `=== false`, NOT `!semantic`. `null` is "no answer has landed yet" — see
   // the file header — and must render nothing at all.
@@ -160,8 +163,8 @@ export function SemanticSearchNotice({
       }}
     >
       <Typography variant="body2" component="span">
-        These results are keyword-only — they match the words you typed rather than what your
-        recordings are about.{' '}
+        These results are keyword-only — they match the words you typed rather than what your{' '}
+        {transcription ? 'recordings' : 'notes'} are about.{' '}
         {hasUnindexed && (
           <>
             {unindexedCount} of your documents {unindexedCount === 1 ? 'is' : 'are'} not indexed

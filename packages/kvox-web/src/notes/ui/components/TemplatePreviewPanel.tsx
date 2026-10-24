@@ -44,6 +44,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
+import { useKvoxTranscriptionEnabled } from '../../../core/headless/index.js';
 import { MarkdownView } from './MarkdownView.js';
 import { PREVIEW_COST_NOTICE_ID, PreviewCostNotice } from './PreviewCostNotice.js';
 import type { PreviewStatus } from '../../headless/hooks/useTemplatePreview.js';
@@ -107,6 +108,9 @@ export function TemplatePreviewPanel({
   onRun,
 }: TemplatePreviewPanelProps) {
   const hasSources = sources.length > 0;
+  // #731 — a host without transcription previews against an imported transcript.
+  const transcription = useKvoxTranscriptionEnabled();
+  const sourceNoun = transcription ? 'recording' : 'transcript';
 
   return (
     <Paper
@@ -119,7 +123,7 @@ export function TemplatePreviewPanel({
         Preview
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Generate a sample from one of your own recordings, using exactly what is in the
+        Generate a sample from one of your own {sourceNoun}s, using exactly what is in the
         form right now — including changes you have not saved.
       </Typography>
 
@@ -131,22 +135,23 @@ export function TemplatePreviewPanel({
 
       {!isLoadingSources && !hasSources && !sourcesError && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          You have no transcripts yet. A preview runs against one of your own recordings,
-          so there is nothing to try this template on until you have made one.
+          {transcription
+            ? 'You have no transcripts yet. A preview runs against one of your own recordings, so there is nothing to try this template on until you have made one.'
+            : 'You have no transcripts yet. A preview runs against a transcript you imported (KVox transcript JSON), so there is nothing to try this template on until you import one.'}
         </Alert>
       )}
 
       <TextField
         select
         fullWidth
-        label="Source recording"
+        label={`Source ${sourceNoun}`}
         value={hasSources ? selectedSourceId : ''}
         onChange={(event) => onSelectSource(event.target.value)}
         disabled={!hasSources || isRunning}
         helperText={
           isLoadingSources
-            ? 'Loading your recordings…'
-            : 'Defaults to your most recent recording.'
+            ? `Loading your ${sourceNoun}s…`
+            : `Defaults to your most recent ${sourceNoun}.`
         }
         sx={{ mb: 2 }}
       >

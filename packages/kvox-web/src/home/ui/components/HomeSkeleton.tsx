@@ -31,15 +31,29 @@ import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
 
 /**
+ * Props of {@link HomeSkeleton}.
+ *
+ * @stability experimental
+ */
+export interface HomeSkeletonProps {
+  /**
+   * The accessible name of the loading region. Default "Loading your
+   * transcripts"; a host without transcription passes "Loading your notes".
+   */
+  label?: string;
+}
+
+/**
  * The placeholder Home draws until its first read settles.
  *
+ * @param props - see {@link HomeSkeletonProps}.
  * @returns the skeleton.
  *
  * @stability experimental
  */
-export function HomeSkeleton() {
+export function HomeSkeleton({ label = 'Loading your transcripts' }: HomeSkeletonProps = {}) {
   return (
-    <Box role="status" aria-busy="true" aria-label="Loading your transcripts">
+    <Box role="status" aria-busy="true" aria-label={label}>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={2}
