@@ -1,6 +1,6 @@
 {
   "name": "@marinoscar/kvox-contract",
-  "version": "0.1.0-next.17",
+  "version": "0.1.0-next.18",
   "description": "Zod wire schemas, error codes and the ontology of the KVox domain, shared by the API, the web app and any other host. Dual CommonJS + ESM.",
   "license": "MIT",
   "type": "module",
