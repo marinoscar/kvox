@@ -49,6 +49,8 @@ const GUID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0
 const AI_JOB_TYPES = [
   { type: 'note.generate', features: ['note_generate'], drive: 'handler' },
   { type: 'note.retitle', features: ['note_retitle'], drive: 'handler' },
+  // #729: the format pass runs under the note generation feature (the owner's default model).
+  { type: 'note.import.format', features: ['note_generate'], drive: 'handler' },
   { type: 'transcript.name_check', features: ['transcript_name_check'], drive: 'handler' },
   { type: 'kg.extract', features: ['graph_extract'], drive: 'handler' },
   // `kg.resolve` and `kg.import` reach the model through the shared resolution services (the
@@ -256,6 +258,18 @@ describe('kvox AI job types (#477)', () => {
             reason: 'user_request',
           },
         };
+      },
+      'note.import.format': () => {
+        prismaMock.note.findUnique.mockResolvedValue({
+          id: GUID(2),
+          ownerId: USER,
+          deletedAt: null,
+          status: 'ready',
+          body: 'Imported text',
+          bodyFormat: 'markdown',
+          currentVersion: 1,
+        } as never);
+        return { payload: { noteId: GUID(2), version: 1 } };
       },
       'kg.embed': () => ({ payload: { userId: USER, subjectKind: 'entity', ids: [GUID(6)] } }),
       'kg.entity_digest': () => {

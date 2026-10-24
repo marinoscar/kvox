@@ -39,6 +39,7 @@ export {
   NOTE_EXPORT_JOB_TYPE,
   NOTE_GENERATE_JOB_TYPE,
   NOTE_JOB_TYPES,
+  NOTE_IMPORT_FORMAT_JOB_TYPE,
   NOTE_LIBRARY_IMPORT_JOB_TYPE,
   NOTE_PURGE_JOB_TYPE,
   NOTE_RETITLE_JOB_TYPE,
@@ -145,6 +146,25 @@ export { NoteGenerateHandler, NOTE_GENERATE_MAX_RUNTIME_MS } from './handlers/no
 export { NotePurgeHandler } from './handlers/note-purge.handler.js';
 export { NoteRetitleHandler } from './handlers/note-retitle.handler.js';
 export { NoteLibraryImportHandler } from './handlers/note-library-import.handler.js';
+export {
+  NoteImportFormatHandler,
+  NOTE_IMPORT_FORMAT_AI_FEATURE,
+  NOTE_IMPORT_FORMAT_AUDIT_ACTION,
+  NOTE_IMPORT_FORMAT_MAX_RUNTIME_MS,
+  NOTE_IMPORT_FORMAT_SUMMARY,
+} from './handlers/note-import-format.handler.js';
+export type { NoteImportFormatOutcome } from './handlers/note-import-format.handler.js';
+export {
+  FORMAT_FAITHFULNESS_MIN_COVERAGE,
+  FORMAT_FAITHFULNESS_MIN_PRECISION,
+  IMPORT_FORMAT_CHUNK_CHARS,
+  IMPORT_FORMAT_SYSTEM_PROMPT,
+  buildImportFormatUserContent,
+  checkFormattingFaithfulness,
+  chunkMarkdownForFormatting,
+  stripOuterCodeFence,
+} from './generation/import-format.js';
+export type { FormattingFaithfulness } from './generation/import-format.js';
 export { NoteSourceExtractHandler } from './handlers/note-source-extract.handler.js';
 export { NotesHousekeepingHandler } from './handlers/notes-housekeeping.handler.js';
 export { NotesHousekeepingEnqueuer } from './tasks/notes-housekeeping.enqueuer.js';

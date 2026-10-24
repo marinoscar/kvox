@@ -60,6 +60,7 @@ const KVOX_JOB_TYPES = [
   // notes
   'note.generate',
   'note.source.extract',
+  'note.import.format',
   'note.library.import',
   'note.export',
   'note.purge',
