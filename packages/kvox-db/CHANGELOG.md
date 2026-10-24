@@ -1,5 +1,7 @@
 # @marinoscar/kvox-db
 
+## 0.1.0-next.18
+
 ## 0.1.0-next.17
 
 ## 0.1.0-next.16

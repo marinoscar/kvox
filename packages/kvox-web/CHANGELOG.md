@@ -1,5 +1,11 @@
 # @marinoscar/kvox-web
 
+## 0.1.0-next.18
+
+### Patch Changes
+
+- 00e94ec: Dependency and peer ranges on the platform packages move from 0.1.0-next.11 to 0.1.0-next.12, the release whose CLI engine records the deployment's compose project itself. No code in these packages changes.
+
 ## 0.1.0-next.17
 
 ### Minor Changes
