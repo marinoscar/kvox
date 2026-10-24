@@ -239,6 +239,18 @@ describe('NotesPage', () => {
     expect(screen.getByLabelText('Generating Being written')).toBeInTheDocument();
   });
 
+  it('words the empty library around imports in a host without transcription (#731)', async () => {
+    respondWithNotes([]);
+    const { container } = render(<NotesPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/notes' },
+      hostOptions: { features: { graphEnabled: true, transcription: false } },
+    });
+
+    expect(await screen.findByText('No notes yet')).toBeInTheDocument();
+    expect(screen.getByText(/import the notes you already have/i)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/recording|audio|transcrib|microphone/i);
+  });
+
   it('offers a call to action when there are no notes at all', async () => {
     respondWithNotes([]);
     renderNotes();

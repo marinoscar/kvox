@@ -1,0 +1,5 @@
+---
+'@marinoscar/kvox-web': minor
+---
+
+A host without audio capture or transcription gets a note-first Home (marinoscar/kvox#731). `KvoxFeatures` gains optional `transcription` (absent means `true`, so KVox web is unchanged), read through the new `useKvoxTranscriptionEnabled()` and `isKvoxTranscriptionEnabled()` of `core/headless`. With it `false`, `KvoxHomePage` drops the `counts`, `recentTranscripts` and `sharedWithMe` sections and the transcript search, and its first-run journey becomes `KVOX_NOTE_FIRST_JOURNEY` (Import your notes, Review, Your graph, Ask) with `KVOX_NOTE_FIRST_JOURNEY_INTRO` and `noteFirstJourneySteps()` ("Add your notes folder", then the notes slice's "Import notes"); a journey step's action can now carry a ready-made `element`. `HomeSkeleton` takes a `label`. The notes library empty state, the Home recent-notes prompt, the note template page, preview and editor, the keyword-only search notice, the search indexing page, the forget-person dialog and the review sheet's player word themselves (or hide) around imported notes and transcripts instead of recordings when the switch is off.

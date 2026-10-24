@@ -123,7 +123,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useHasPermission } from '../../../core/headless/index.js';
+import { useHasPermission, useKvoxTranscriptionEnabled } from '../../../core/headless/index.js';
 
 /**
  * The submitted term as a path, or `null` when there is nothing to search for.
@@ -153,7 +153,8 @@ export function searchPathFor(term: string): string | null {
 }
 
 /**
- * The transcript search box of the hero. Draws nothing for a viewer without `transcripts:read`.
+ * The transcript search box of the hero. Draws nothing for a viewer without `transcripts:read`,
+ * nor in a host without transcription (#731), which mounts no transcript library to search.
  *
  * @returns the search form, or nothing.
  *
@@ -161,7 +162,9 @@ export function searchPathFor(term: string): string | null {
  */
 export function HomeSearchField() {
   const navigate = useNavigate();
-  const canSearch = useHasPermission('transcripts:read');
+  const canReadTranscripts = useHasPermission('transcripts:read');
+  const transcription = useKvoxTranscriptionEnabled();
+  const canSearch = canReadTranscripts && transcription;
   const [term, setTerm] = useState('');
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {

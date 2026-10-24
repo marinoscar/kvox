@@ -41,6 +41,13 @@ export interface KvoxJourneyStepAction {
    * control is disabled, wired as `aria-describedby`.
    */
   describedBy?: string;
+  /**
+   * A ready-made control drawn in place of the button, for an action that owns
+   * its own flow (the notes slice's `ImportNotesButton`, which opens a file
+   * picker and follows the upload). When set, `to`, `onClick`, `icon` and
+   * `disabled` are ignored; `label` still names the action.
+   */
+  element?: ReactNode;
 }
 
 /**

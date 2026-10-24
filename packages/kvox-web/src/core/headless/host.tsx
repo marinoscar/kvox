@@ -236,6 +236,30 @@ export interface KvoxLinks {
 export interface KvoxFeatures {
   /** Connected knowledge is on. `undefined` while the host does not know yet. */
   graphEnabled: boolean | undefined;
+  /**
+   * The host records and transcribes audio (marinoscar/kvox#731).
+   *
+   * Optional, and absent means `true`: KVox web leaves it out and nothing
+   * changes. A host without audio capture or transcription (KVox Desktop,
+   * ADR-0006) sets it to `false`; the packaged pages then drop the transcript
+   * sections of Home, show the note-first journey, and word their copy around
+   * imported notes and imported transcripts (KVox transcript JSON) instead of
+   * recordings. Read it through {@link useKvoxTranscriptionEnabled} or
+   * {@link isKvoxTranscriptionEnabled}, never directly, so the default applies.
+   */
+  transcription?: boolean;
+}
+
+/**
+ * Whether a host's features say it records and transcribes audio.
+ *
+ * @param features - the host's deployment switches.
+ * @returns `false` only when `features.transcription` is exactly `false`.
+ *
+ * @stability experimental
+ */
+export function isKvoxTranscriptionEnabled(features: KvoxFeatures): boolean {
+  return features.transcription !== false;
 }
 
 /**
@@ -348,6 +372,24 @@ export function useKvoxLatestEventId(prefix: string): string | null {
   const hook = host.useLatestEventId;
   // A host's hook is fixed for its lifetime, so the hook order is stable.
   return hook ? hook(prefix) : null;
+}
+
+/**
+ * Whether the host records and transcribes audio, read on every render.
+ *
+ * @remarks
+ * `true` unless the host's `features().transcription` is exactly `false`. Unlike
+ * the other host hooks it does not throw without a `KvoxWebHostProvider`: a
+ * presentational component that only words its copy with it answers `true`
+ * (the KVox web wording) when it is drawn on its own, as in a story or a test.
+ *
+ * @returns `false` for a host without transcription (KVox Desktop).
+ *
+ * @stability experimental
+ */
+export function useKvoxTranscriptionEnabled(): boolean {
+  const host = useContext(KvoxHostContext);
+  return host === null ? true : isKvoxTranscriptionEnabled(host.features());
 }
 
 /**

@@ -101,6 +101,7 @@ import {
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import { Link as RouterLink } from 'react-router-dom';
 
+import { useKvoxTranscriptionEnabled } from '../../core/headless/index.js';
 import { KvoxLoadingSpinner } from '../../core/ui/index.js';
 import {
   countNeedingIndex,
@@ -150,6 +151,8 @@ export function UserSearchIndexPage() {
     clearIndexError,
     isRunning,
   } = useSearchIndex();
+  // #731 — a host without transcription has notes and imported transcripts, no recordings.
+  const transcription = useKvoxTranscriptionEnabled();
 
   if (isLoading) {
     return <KvoxLoadingSpinner />;
@@ -170,9 +173,11 @@ export function UserSearchIndexPage() {
             Search indexing
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Semantic search finds a recording or a note by what it is about, not only by the
-            words it happens to contain. It works on documents that have been indexed; anything
-            below that is not indexed can still be found by keyword.
+            {transcription
+              ? 'Semantic search finds a recording or a note by what it is about, not only by the words it happens to contain.'
+              : 'Semantic search finds a note or a transcript by what it is about, not only by the words it happens to contain.'}{' '}
+            It works on documents that have been indexed; anything below that is not indexed can
+            still be found by keyword.
           </Typography>
         </Box>
 

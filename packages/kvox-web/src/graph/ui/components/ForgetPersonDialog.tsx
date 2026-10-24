@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { FORGET_CONFIRMATION, forgetGraphEntity } from '../../headless/clients/graph.js';
 import { ConfirmByTypingDialog } from './ConfirmByTypingDialog.js';
 
-import { KvoxApiError, useKvoxHost } from '../../../core/headless/index.js';
+import { KvoxApiError, useKvoxHost, useKvoxTranscriptionEnabled } from '../../../core/headless/index.js';
 export interface ForgetPersonDialogProps {
   open: boolean;
   entityId: string;
@@ -23,6 +23,8 @@ export interface ForgetPersonDialogProps {
 
 export function ForgetPersonDialog({ open, entityId, label, onClose, onForgotten }: ForgetPersonDialogProps) {
   const host = useKvoxHost();
+  // #731 — a host without transcription has no recordings to reassure about.
+  const transcription = useKvoxTranscriptionEnabled();
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +46,9 @@ export function ForgetPersonDialog({ open, entityId, label, onClose, onForgotten
       open={open}
       literal={FORGET_CONFIRMATION}
       title={`Forget ${label}?`}
-      consequence="Removes this person, their aliases, connections and facts from your graph. Your recordings and notes are not changed."
+      consequence={`Removes this person, their aliases, connections and facts from your graph. ${
+        transcription ? 'Your recordings and notes are not changed.' : 'Your notes and transcripts are not changed.'
+      }`}
       confirmLabel="Forget this person"
       isWorking={working}
       error={error}

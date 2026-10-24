@@ -74,7 +74,12 @@ import type { ProposalGroupView } from '../../../headless/utils/proposalGrouping
 import { RelinkDialog } from './RelinkDialog.js';
 import { RevertDialog } from './RevertDialog.js';
 
-import { KvoxApiError, useHasPermission, useKvoxHost } from '../../../../core/headless/index.js';
+import {
+  KvoxApiError,
+  useHasPermission,
+  useKvoxHost,
+  useKvoxTranscriptionEnabled,
+} from '../../../../core/headless/index.js';
 /**
  * Props of {@link ProposalReviewSheet}.
  *
@@ -218,7 +223,11 @@ export function ProposalReviewSheet({
   const ctl = external ?? own;
   const { ontology } = useGraphOntology({ enabled: open });
   const { config: aiConfig } = useGraphAiConfig();
-  const audio = useSourceAudio(originTranscriptId ?? '');
+  // #731 — a host without transcription has no recording behind a transcript (it
+  // was imported as text), so there is nothing to play and no player is drawn.
+  const transcription = useKvoxTranscriptionEnabled();
+  const playableTranscriptId = transcription ? originTranscriptId : undefined;
+  const audio = useSourceAudio(playableTranscriptId ?? '');
 
   const [suspended, setSuspended] = useState(false);
   const [snackbar, setSnackbar] = useState<SnackbarState | null>(null);
@@ -377,12 +386,12 @@ export function ProposalReviewSheet({
     onDecide: decide,
     onEdit: (item: ProposalItem, mode: 'edit' | 'type') => setEditor({ item, mode }),
     onRelink: (item: ProposalItem, field?: RelinkField) => setRelink({ item, field }),
-    onPlay: originTranscriptId ? play : undefined,
+    onPlay: playableTranscriptId ? play : undefined,
     onShowInNote: noteBodyRef ? showInNote : undefined,
   };
 
   const audioBar =
-    originTranscriptId && audio.status !== 'idle' ? (
+    playableTranscriptId && audio.status !== 'idle' ? (
       <Box
         sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.5, borderBottom: 1, borderColor: 'divider' }}
       >
