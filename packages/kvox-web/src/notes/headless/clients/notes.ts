@@ -56,8 +56,10 @@
  * extracted yet".
  */
 
+import { noteSourceDownloadSchema } from '@marinoscar/kvox-contract/notes';
 import type {
   NoteConflictReason as ContractNoteConflictReason,
+  NoteSourceDownload as ContractNoteSourceDownload,
   NoteTitleSource as ContractNoteTitleSource,
 } from '@marinoscar/kvox-contract/notes';
 
@@ -987,4 +989,42 @@ export async function importNoteMarkdown(host: KvoxWebHost, file: File): Promise
   const form = new FormData();
   form.append('file', file);
   return kvoxPostFormData<Note>(host, '/notes/import', form);
+}
+
+/**
+ * A signed link to the original file an imported note came from — the contract's
+ * `NoteSourceDownload` (#732): `url`, `filename`, `mimeType`, `expiresAt`.
+ *
+ * @stability experimental
+ */
+export type NoteSourceDownload = ContractNoteSourceDownload;
+
+/**
+ * `GET /api/notes/{id}/source` (optionally `?version=n`) — a short-lived (15-minute)
+ * signed URL for the original document a note was imported or generated from (#732).
+ *
+ * The URL carries `Content-Disposition: attachment` with the original file name signed
+ * into it, so a caller hands it to the browser (the same way a note export's
+ * `downloadUrl` is opened) rather than fetching the bytes. The answer is parsed with the
+ * contract's `noteSourceDownloadSchema`. A note with no downloadable source — not a
+ * document, the file is gone, someone else's note, an unknown version — is a
+ * `KvoxApiError` with status 404.
+ *
+ * @param host - the host.
+ * @param noteId - the note.
+ * @param version - a version of the note; defaults to the current one.
+ * @returns the signed link.
+ * @stability experimental
+ */
+export async function getNoteSourceDownload(
+  host: KvoxWebHost,
+  noteId: string,
+  version?: number,
+): Promise<NoteSourceDownload> {
+  const suffix = version !== undefined ? `?version=${encodeURIComponent(String(version))}` : '';
+  const answer = await kvoxGet<unknown>(
+    host,
+    `/notes/${encodeURIComponent(noteId)}/source${suffix}`,
+  );
+  return noteSourceDownloadSchema.parse(answer);
 }

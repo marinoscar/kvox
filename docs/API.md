@@ -4630,6 +4630,25 @@ be an N+1. See [`docs/specs/notes.md`](specs/notes.md) §4.8.
 
 ---
 
+#### GET /notes/{id}/source
+A short-lived (15 minute) signed URL that serves the original file a note was
+imported from (docx, pptx, pdf, md, txt) as an attachment under its original
+file name (sanitized), with `Content-Disposition` signed into the URL. Offered
+for a note whose `sourceType` is `document`.
+
+**Requires:** `notes:read`
+
+**Query:** `version` (optional integer) — a version of the note, default the
+current one. Versions do not record their own file: the version must exist and
+the file served is the one the note currently points at.
+
+**Response:** `{ "data": { "url": "…", "filename": "…", "mimeType": "…", "expiresAt": "…" } }`
+
+**Error Cases:**
+- `404` - No such note or version, not the caller's note, the note was not imported from a document, or the stored file is gone (never 403)
+
+---
+
 #### GET /notes/{id}/versions
 Every save, newest first, cursor-paginated. `author: null` means the AI —
 version 1 is always the provider's own output. Nothing in this API ever

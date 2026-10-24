@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { screen } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
 
 import { render } from './helpers.js';
+import { http, HttpResponse, server } from './msw-compat.js';
 import { NoteProvenance } from '../../src/notes/ui/components/NoteProvenance.js';
 import { formatShortDate } from '../../src/core/headless/index.js';
 import type { Note } from '../../src/notes/headless/clients/notes.js';
@@ -78,9 +80,8 @@ describe('NoteProvenance', () => {
   });
 
   it('names a document source but does NOT link it — there is no page to link to', () => {
-    // A `managed_by: 'notes'` storage object has no route in this application,
-    // and a link to a download would hand the user back their own upload
-    // instead of the evidence.
+    // A `managed_by: 'notes'` storage object has no route in this application.
+    // The name is a DOWNLOAD BUTTON (#732), never a link to a page.
     render(
       <NoteProvenance
         note={note({ sourceType: 'document', sourceTranscriptId: null, sourceObjectId: 'obj-1' })}
@@ -129,6 +130,146 @@ describe('NoteProvenance', () => {
   it('has no axe violations', async () => {
     const { container } = render(
       <NoteProvenance note={note()} sourceName="Q3 planning call" />,
+    );
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+const API_BASE = 'http://localhost:3000/api';
+
+const SIGNED = {
+  url: 'https://storage.example/signed/board-pack.pdf?sig=abc',
+  filename: 'board-pack.pdf',
+  mimeType: 'application/pdf',
+  expiresAt: '2026-10-24T10:15:00.000Z',
+};
+
+function importedNote(overrides: Partial<Note> = {}): Note {
+  return note({
+    sourceType: 'document',
+    sourceTranscriptId: null,
+    sourceObjectId: 'obj-1',
+    templateId: null,
+    templateName: null,
+    model: null,
+    ...overrides,
+  });
+}
+
+describe('NoteProvenance — downloading the original file (#732)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('offers "Download <file name>" for a document-sourced note', () => {
+    render(<NoteProvenance note={importedNote()} sourceName="board-pack.docx" />);
+
+    expect(screen.getByRole('button', { name: 'Download board-pack.docx' })).toBeInTheDocument();
+    expect(screen.getByTestId('note-provenance')).toHaveTextContent(/^Imported from board-pack\.docx, /);
+  });
+
+  it('offers it for a document a template generated from, too', () => {
+    render(
+      <NoteProvenance
+        note={note({ sourceType: 'document', sourceTranscriptId: null, sourceObjectId: 'obj-1' })}
+        sourceName="board-pack.pdf"
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Download board-pack.pdf' })).toBeInTheDocument();
+  });
+
+  it('offers no download for a transcript or a note source', () => {
+    const { unmount } = render(<NoteProvenance note={note()} sourceName="Q3 planning call" />);
+    expect(screen.queryByRole('button', { name: /^Download/ })).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <NoteProvenance
+        note={note({ sourceType: 'note', sourceTranscriptId: null, sourceNoteId: 'n0' })}
+        sourceName="Earlier note"
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /^Download/ })).not.toBeInTheDocument();
+  });
+
+  it('offers no download for a document note without a stored object', () => {
+    render(
+      <NoteProvenance
+        note={importedNote({ sourceObjectId: null })}
+        sourceName="board-pack.pdf"
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /^Download/ })).not.toBeInTheDocument();
+  });
+
+  it('asks the API for the signed URL and opens it the way an export download is opened', async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    let requested: string | null = null;
+    server.use(
+      http.get(`${API_BASE}/notes/:id/source`, ({ request }) => {
+        requested = new URL(request.url).pathname;
+        return HttpResponse.json({ data: SIGNED });
+      }),
+    );
+    render(<NoteProvenance note={importedNote()} sourceName="board-pack.pdf" />);
+
+    await user.click(screen.getByRole('button', { name: 'Download board-pack.pdf' }));
+
+    await waitFor(() =>
+      expect(open).toHaveBeenCalledWith(SIGNED.url, '_blank', 'noopener,noreferrer'),
+    );
+    expect(requested).toBe('/api/notes/n1/source');
+    expect(screen.queryByTestId('note-source-download-error')).not.toBeInTheDocument();
+  });
+
+  it('says the original file is gone on a 404, and opens nothing', async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    server.use(
+      http.get(`${API_BASE}/notes/:id/source`, () =>
+        HttpResponse.json(
+          { statusCode: 404, code: 'NOT_FOUND', message: 'Not found' },
+          { status: 404 },
+        ),
+      ),
+    );
+    render(<NoteProvenance note={importedNote()} sourceName="board-pack.pdf" />);
+
+    await user.click(screen.getByRole('button', { name: 'Download board-pack.pdf' }));
+
+    expect(await screen.findByTestId('note-source-download-error')).toHaveTextContent(
+      'The original file is no longer available.',
+    );
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('says so generically when the download fails for another reason', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'open').mockImplementation(() => null);
+    server.use(
+      http.get(`${API_BASE}/notes/:id/source`, () =>
+        HttpResponse.json(
+          { statusCode: 500, code: 'INTERNAL_SERVER_ERROR', message: 'Boom' },
+          { status: 500 },
+        ),
+      ),
+    );
+    render(<NoteProvenance note={importedNote()} sourceName="board-pack.pdf" />);
+
+    await user.click(screen.getByRole('button', { name: 'Download board-pack.pdf' }));
+
+    expect(await screen.findByTestId('note-source-download-error')).toHaveTextContent(
+      'The original file could not be downloaded.',
+    );
+  });
+
+  it('has no axe violations with the download control', async () => {
+    const { container } = render(
+      <NoteProvenance note={importedNote()} sourceName="board-pack.pdf" />,
     );
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
