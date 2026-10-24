@@ -5,7 +5,6 @@ import {
   COMPOSE_WORKING_DIR_LABEL,
   createDockerPortsCheck,
   dockerPortClaims,
-  isPathUnder,
   parseDockerPortLines,
   type DockerRunner,
 } from './docker-ports.check.js';
@@ -89,35 +88,6 @@ describe('parseDockerPortLines: the compose working directory (fourth field)', (
   });
 });
 
-describe('isPathUnder', () => {
-  it('is true for the root itself', () => {
-    expect(isPathUnder('/opt/infra/apps/myapp', '/opt/infra/apps/myapp')).toBe(true);
-  });
-
-  it('is true for a child and a deeper descendant', () => {
-    expect(isPathUnder('/opt/infra/apps/myapp/repo', '/opt/infra/apps/myapp')).toBe(true);
-    expect(isPathUnder('/opt/infra/apps/myapp/repo/infra/compose', '/opt/infra/apps/myapp')).toBe(true);
-  });
-
-  it('ignores a trailing slash on either side', () => {
-    expect(isPathUnder('/opt/infra/apps/myapp/repo/', '/opt/infra/apps/myapp/')).toBe(true);
-  });
-
-  it('is false for a sibling whose name only starts with the root name', () => {
-    expect(isPathUnder('/opt/infra/apps/myapp-2/repo', '/opt/infra/apps/myapp')).toBe(false);
-  });
-
-  it('is false for the parent and for an unrelated path', () => {
-    expect(isPathUnder('/opt/infra/apps', '/opt/infra/apps/myapp')).toBe(false);
-    expect(isPathUnder('/srv/other', '/opt/infra/apps/myapp')).toBe(false);
-  });
-
-  it('resolves `..` before comparing', () => {
-    expect(isPathUnder('/opt/infra/apps/myapp/../other', '/opt/infra/apps/myapp')).toBe(false);
-    expect(isPathUnder('/opt/infra/apps/myapp/repo/..', '/opt/infra/apps/myapp')).toBe(true);
-  });
-});
-
 describe('the inspect format', () => {
   it('reads the create-time bindings and the compose project label', () => {
     let format = '';
@@ -190,7 +160,7 @@ describe('the bind-port-not-promised check', () => {
     });
   });
 
-  describe('with the compose working directory (issue #736)', () => {
+  describe('with the compose working directory (issue #736; the engine records the project, this is the fallback)', () => {
     const SERVER = { ...CONTEXT, deployRoot: '/opt/infra/apps/kvox', composeProject: 'compose' };
 
     it("passes for the deployment's own nginx started by the pre-platform CLI (the production failure)", async () => {
