@@ -65,6 +65,7 @@ interface StagePresentation {
 const STAGES: Readonly<Record<NoteImportItemStage, StagePresentation>> = {
   uploaded: { label: 'Uploaded, waiting to be read', Icon: CloudDoneIcon, color: 'action' },
   parsed: { label: 'Imported as a note', Icon: DescriptionIcon, color: 'primary' },
+  formatting: { label: 'Formatting the note', Icon: AutoAwesomeIcon, color: 'info' },
   indexed: { label: 'Imported and searchable', Icon: DescriptionIcon, color: 'primary' },
   extracting: { label: 'Extracting knowledge', Icon: AutoAwesomeIcon, color: 'info' },
   extracted: { label: 'Waiting for your review', Icon: RateReviewIcon, color: 'warning' },

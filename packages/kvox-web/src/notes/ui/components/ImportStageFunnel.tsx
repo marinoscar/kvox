@@ -46,7 +46,8 @@ export function importFunnelSteps(stageCounts: NoteImportBatch['stageCounts']): 
   const inGraph = c('in_graph');
   const extracted = c('extracted') + inGraph;
   const extracting = c('extracting') + extracted;
-  const parsed = c('parsed') + c('indexed') + extracting;
+  // A note being formatted (#730) has been parsed: it counts here, not as a step of its own.
+  const parsed = c('parsed') + c('formatting') + c('indexed') + extracting;
   const uploaded = c('uploaded') + parsed;
   return [
     { label: 'Uploaded', count: uploaded },

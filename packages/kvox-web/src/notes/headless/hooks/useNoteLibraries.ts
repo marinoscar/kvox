@@ -187,7 +187,8 @@ export function useNoteLibrary(id: string | undefined): UseNoteLibraryResult {
 export function isImportBatchActive(batch: NoteImportBatch | null | undefined): boolean {
   if (!batch) return false;
   if (batch.status === 'scanning' || batch.status === 'running') return true;
-  return (batch.stageCounts?.extracting ?? 0) > 0;
+  // Formatting (#730) and graph extraction both outlive the batch's own `running`.
+  return (batch.stageCounts?.extracting ?? 0) > 0 || (batch.stageCounts?.formatting ?? 0) > 0;
 }
 
 /**
