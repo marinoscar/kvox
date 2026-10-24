@@ -1065,11 +1065,18 @@ The recommended way to run workers is containers, not a per-machine install.
 ```bash
 cd infra/compose
 cp .env.worker.example .env.worker      # fill in the server URL and the token
-docker compose --env-file .env.worker -f worker.compose.yml up -d --scale worker=4
+WORKER_REPLICAS=4 docker compose --env-file .env.worker \
+  -f worker.compose.yml -f app.worker.per-replica-state.compose.yml up -d
 ```
 
-Four replicas, no coordination configured anywhere. Each registers as its own
-node — its name derives from the container hostname, which Docker makes unique
+Four replicas, no coordination configured anywhere. The overlay
+`app.worker.per-replica-state.compose.yml` is required for more than one
+replica: with `worker.compose.yml` alone every replica shares one state volume
+and replicas 2 to N refuse to start. Per-replica CPU and memory limits and
+sizing for a large host:
+[docs/deployment/worker-nodes.md](../../docs/deployment/worker-nodes.md#running-a-fleet-in-containers).
+
+Each replica registers as its own node — its name derives from the container hostname, which Docker makes unique
 — and they load-balance through the server's `FOR UPDATE SKIP LOCKED` claim, so
 two replicas can never receive the same job.
 
