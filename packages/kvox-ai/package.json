@@ -59,7 +59,7 @@
     "@marinoscar/kvox-api": ">=0.0.0-0 || >=0.1.0-0",
     "@marinoscar/platform-ai-providers": "0.1.0-next.12",
     "onnxruntime-web": "1.30.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "peerDependenciesMeta": {
     "@github/copilot-sdk": {
@@ -78,10 +78,10 @@
     "@marinoscar/platform-ai-providers": "0.1.0-next.12",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.15.32",
-    "jest": "^30.4.2",
+    "jest": "^30.5.2",
     "onnxruntime-web": "1.30.0",
-    "ts-jest": "^29.4.12",
+    "ts-jest": "^29.4.15",
     "typescript": "^6.0.3",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   }
 }
