@@ -1,11 +1,19 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { createCli } from '@marinoscar/platform-cli';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { reconcileForArgv } from './extensions/compose-project.js';
+import type { DockerRunner } from './extensions/docker-ports.check.js';
 import { runApp } from './run.js';
+
+// `runApp` has no Docker seam, so the reconcile step is replaced by a spy; a test that needs the
+// real step drives it through the spy with a fake Docker (see "the compose project step").
+vi.mock('./extensions/compose-project.js', () => ({
+  reconcileForArgv: vi.fn(async () => undefined),
+}));
 
 // =============================================================================
 // One invocation  (issue #482, epic #478)
@@ -23,6 +31,7 @@ let appsRoot: string;
 let out: string;
 let err: string;
 let handed: string[][];
+let order: string[];
 
 const io = (): { stdout: { write(t: string): void }; stderr: { write(t: string): void } } => ({
   stdout: { write: (t) => void (out += t) },
@@ -33,6 +42,7 @@ function fakeCreateCli(exitCode = 0): typeof createCli {
   return (() => ({
     program: {} as never,
     run: vi.fn(async (argv: string[]) => {
+      order.push('cli.run');
       handed.push(argv);
       return exitCode;
     }),
@@ -51,6 +61,9 @@ beforeEach(() => {
   out = '';
   err = '';
   handed = [];
+  order = [];
+  vi.mocked(reconcileForArgv).mockReset();
+  vi.mocked(reconcileForArgv).mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -172,5 +185,126 @@ describe('runApp', () => {
 
     expect(code).not.toBe(0);
     expect(err).toContain('registered twice');
+  });
+});
+
+describe('runApp: the compose project step (issue #736)', () => {
+  const STATE = join('myapp', '.appctl-deploy.json');
+
+  /** The real step, with a fake Docker in place of the `docker` on the PATH. */
+  async function realReconcile(run: DockerRunner): Promise<void> {
+    const actual = await vi.importActual<typeof import('./extensions/compose-project.js')>(
+      './extensions/compose-project.js',
+    );
+    vi.mocked(reconcileForArgv).mockImplementation((argv, cwd) => actual.reconcileForArgv(argv, cwd, run));
+  }
+
+  const dockerWith = (project: string): DockerRunner => async (args) =>
+    args[0] === 'ps' ? 'abc\n' : `${project}|${join(appsRoot, 'myapp', 'repo', 'infra', 'compose')}\n`;
+
+  it('runs before the platform CLI, with the translated arguments and the working directory', async () => {
+    vi.mocked(reconcileForArgv).mockImplementation(async () => {
+      order.push('reconcile');
+      return undefined;
+    });
+
+    await runApp(['deploy', 'update', '--apps-root', appsRoot, '--skip-github'], {
+      ...io(),
+      cwd: work,
+      createCli: fakeCreateCli(),
+    });
+
+    expect(order).toEqual(['reconcile', 'cli.run']);
+    expect(reconcileForArgv).toHaveBeenCalledTimes(1);
+    expect(reconcileForArgv).toHaveBeenCalledWith(['deploy', 'update', '--apps-root', appsRoot], work);
+  });
+
+  it('writes its note to stderr, not stdout, and still hands the arguments over', async () => {
+    vi.mocked(reconcileForArgv).mockResolvedValue('myapp: note: recorded compose project myapp');
+
+    const code = await runApp(['deploy', 'status', '--apps-root', appsRoot], {
+      ...io(),
+      cwd: work,
+      createCli: fakeCreateCli(),
+    });
+
+    expect(code).toBe(0);
+    expect(err).toBe('myapp: note: recorded compose project myapp\n');
+    expect(out).toBe('');
+    expect(handed).toEqual([['deploy', 'status', '--apps-root', appsRoot]]);
+  });
+
+  it('prints nothing when the step has nothing to say', async () => {
+    await runApp(['deploy', 'status', '--apps-root', appsRoot], { ...io(), cwd: work, createCli: fakeCreateCli() });
+
+    expect(err).toBe('');
+  });
+
+  it('runs after the legacy translation notes', async () => {
+    vi.mocked(reconcileForArgv).mockResolvedValue('after-notes');
+
+    await runApp(['deploy', 'update', '--apps-root', appsRoot, '--skip-github'], {
+      ...io(),
+      cwd: work,
+      createCli: fakeCreateCli(),
+    });
+
+    expect(err.indexOf('--skip-github is ignored')).toBeGreaterThanOrEqual(0);
+    expect(err.indexOf('--skip-github is ignored')).toBeLessThan(err.indexOf('after-notes'));
+  });
+
+  it('does not run for a flag it refuses, for update --check, or when the CLI cannot be built', async () => {
+    await runApp(['deploy', 'install', '--fresh'], { ...io(), cwd: work, createCli: fakeCreateCli() });
+    await runApp(['deploy', 'update', '--apps-root', appsRoot, '--check'], {
+      ...io(),
+      cwd: work,
+      runGit: async () => '',
+    });
+    await runApp(['deploy', 'update', '--apps-root', appsRoot], {
+      ...io(),
+      cwd: work,
+      createCli: (() => {
+        throw new Error('broken');
+      }) as unknown as typeof createCli,
+    });
+
+    expect(reconcileForArgv).not.toHaveBeenCalled();
+  });
+
+  it('records the project Docker names before the platform reads the state file', async () => {
+    await realReconcile(dockerWith('myapp'));
+    let seenByPlatform: unknown;
+    const reading = (() => ({
+      program: {} as never,
+      run: async () => {
+        order.push('cli.run');
+        seenByPlatform = JSON.parse(readFileSync(join(appsRoot, STATE), 'utf8')).composeProject;
+        return 0;
+      },
+    })) as unknown as typeof createCli;
+
+    const code = await runApp(['deploy', 'status', '--apps-root', appsRoot], { ...io(), cwd: work, createCli: reading });
+
+    expect(code).toBe(0);
+    expect(seenByPlatform).toBe('myapp');
+    expect(err).toContain('recorded compose project myapp');
+  });
+
+  it('never changes the exit code when Docker throws', async () => {
+    await realReconcile(async () => {
+      throw new Error('Cannot connect to the Docker daemon');
+    });
+    const before = readFileSync(join(appsRoot, STATE), 'utf8');
+
+    const code = await runApp(['deploy', 'status', '--apps-root', appsRoot], {
+      ...io(),
+      cwd: work,
+      createCli: fakeCreateCli(3),
+    });
+
+    expect(code).toBe(3);
+    expect(handed).toEqual([['deploy', 'status', '--apps-root', appsRoot]]);
+    expect(err).toBe('');
+    expect(readFileSync(join(appsRoot, STATE), 'utf8')).toBe(before);
   });
 });
