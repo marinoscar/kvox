@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
-import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename } from 'node:path';
 
-import type { DeployCheck } from '@marinoscar/platform-cli/deploy';
+import { isPathUnder, type DeployCheck } from '@marinoscar/platform-cli/deploy';
 
 // =============================================================================
 // Every host port Docker has already promised to somebody  (issue #257, ported by #482)
@@ -29,11 +29,15 @@ import type { DeployCheck } from '@marinoscar/platform-cli/deploy';
 // deployment runs under the project `compose` while its folder carries the app name, and
 // comparing against the folder name there refused an update over the stack's own
 // nginx. The project name is a record, though, and a record can be wrong (a
-// pre-platform CLI ran compose with an app-named `-p` project and wrote none, issue #736), so a
-// container whose compose WORKING DIR label is inside the deployment's folder is
-// also its own, whatever project it carries: that is Docker's own ground truth
-// for where the stack was started. Docker being unavailable is a skip, not a
-// failure: it must not cost an install on a host whose socket is briefly unreachable.
+// pre-platform CLI ran compose with an app-named `-p` project and wrote none,
+// issue #736). The platform engine now derives the project from the running
+// containers and records it before `deploy update|status|doctor`, but only when
+// it can ask Docker; this check is the second line. A container whose compose
+// WORKING DIR label is inside the deployment's folder is also its own, whatever
+// project it carries: that is Docker's own ground truth for where the stack was
+// started (`isPathUnder` is the platform's, shared with its project detection).
+// Docker being unavailable is a skip, not a failure: it must not cost an
+// install on a host whose socket is briefly unreachable.
 // =============================================================================
 
 /** The compose project label, which is how a container names the app it belongs to. */
@@ -74,23 +78,13 @@ export interface DockerPortClaim {
 /** Runs `docker <args>` and answers stdout; rejects on any failure. */
 export type DockerRunner = (args: readonly string[]) => Promise<string>;
 
-export const runDocker: DockerRunner = (args) =>
+const runDocker: DockerRunner = (args) =>
   new Promise((resolve, reject) => {
     execFile('docker', [...args], { timeout: DOCKER_QUERY_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024 }, (error, stdout) => {
       if (error) reject(error);
       else resolve(String(stdout));
     });
   });
-
-/**
- * Whether `path` is `root` or inside it, by path segment: `/opt/apps/app2` is
- * NOT under `/opt/apps/app`. Both are resolved first; nothing touches the disk,
- * because a container's recorded directory need not exist any more.
- */
-export function isPathUnder(path: string, root: string): boolean {
-  const relation = relative(resolve(root), resolve(path));
-  return relation === '' || (relation !== '..' && !relation.startsWith(`..${sep}`) && !isAbsolute(relation));
-}
 
 /**
  * Parses the `docker inspect` lines above into claims.
