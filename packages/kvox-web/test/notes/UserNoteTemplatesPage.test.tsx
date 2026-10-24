@@ -205,9 +205,9 @@ function setup(options: { config?: Partial<NotesAiState>; templates?: NoteTempla
   mockUpdate.mockResolvedValue(template());
 }
 
-async function renderPage() {
+async function renderPage(features: { transcription?: boolean } = {}) {
   const result = render(<UserNoteTemplatesPage ai={testAi(aiState)} />, {
-    hostOptions: { sse: SSE_SCRIPTS },
+    hostOptions: { sse: SSE_SCRIPTS, features: { graphEnabled: true, ...features } },
   });
   await screen.findByRole('heading', { level: 1, name: 'Note Templates' });
   return result;
@@ -242,6 +242,39 @@ describe('UserNoteTemplatesPage', () => {
 
   afterEach(() => {
     localStorage.clear();
+  });
+
+  // ==========================================================================
+  // A host without transcription (#731): no recordings to speak of
+  // ==========================================================================
+
+  describe('in a host without transcription', () => {
+    it('words the page and the preview around documents and imported transcripts', async () => {
+      const user = userEvent.setup();
+      const { container } = await renderPage({ transcription: false });
+
+      expect(
+        screen.getByText(/describe the notes you want from a document or a transcript you imported/i),
+      ).toBeInTheDocument();
+
+      await user.click(await screen.findByRole('button', { name: /^edit$/i }));
+      await screen.findByRole('heading', { level: 2, name: 'Preview' });
+      await waitFor(() =>
+        expect(screen.getByRole('combobox', { name: /source transcript/i })).toHaveTextContent(/weekly sync/i),
+      );
+      expect(screen.getByText(/defaults to your most recent transcript/i)).toBeInTheDocument();
+      expect(screen.getByText(/what the model should do with the source/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^instructions/i)).toHaveAttribute(
+        'placeholder',
+        expect.not.stringMatching(/record/i),
+      );
+      expect(container.textContent).not.toMatch(/recording|audio|transcrib/i);
+    });
+
+    it('keeps the recording wording when the host does not say', async () => {
+      await renderPage();
+      expect(screen.getByText(/describe the notes you want from a recording/i)).toBeInTheDocument();
+    });
   });
 
   // ==========================================================================

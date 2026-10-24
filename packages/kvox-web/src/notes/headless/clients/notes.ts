@@ -571,14 +571,17 @@ export interface NoteDocumentExtraction {
   *
   * @stability experimental
  */
-export const NOTE_DOCUMENT_ACCEPT = '.pdf,.txt,.md,application/pdf,text/plain,text/markdown';
+export const NOTE_DOCUMENT_ACCEPT =
+  '.pdf,.txt,.md,.docx,.pptx,application/pdf,text/plain,text/markdown,' +
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document,' +
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
 /**
  * The same list as a sentence, for the refusal message and the drop zone.
  *
  * @stability experimental
  */
-export const NOTE_DOCUMENT_ACCEPT_LABEL = 'PDF, plain text or Markdown';
+export const NOTE_DOCUMENT_ACCEPT_LABEL = 'Word (.docx), PowerPoint (.pptx), PDF, Markdown or plain text';
 
 // =============================================================================
 // Errors

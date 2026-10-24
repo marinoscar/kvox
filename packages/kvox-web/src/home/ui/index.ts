@@ -28,6 +28,7 @@ export { HomeHero, firstNameOf } from './components/HomeHero.js';
 export type { HomeHeroProps } from './components/HomeHero.js';
 export { HomeSearchField, searchPathFor } from './components/HomeSearchField.js';
 export { HomeSkeleton } from './components/HomeSkeleton.js';
+export type { HomeSkeletonProps } from './components/HomeSkeleton.js';
 export { InProgressSection, dedupeServerItems } from './components/InProgressSection.js';
 export type { InProgressSectionProps } from './components/InProgressSection.js';
 export {
@@ -36,6 +37,11 @@ export {
   JourneyEmptyState,
 } from './components/JourneyEmptyState.js';
 export type { JourneyEmptyStateProps, JourneyStage } from './components/JourneyEmptyState.js';
+export {
+  KVOX_NOTE_FIRST_JOURNEY,
+  KVOX_NOTE_FIRST_JOURNEY_INTRO,
+  noteFirstJourneySteps,
+} from './components/NoteFirstJourney.js';
 export {
   KNOWLEDGE_LIMIT,
   KNOWLEDGE_TYPES,

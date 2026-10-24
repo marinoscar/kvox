@@ -5097,8 +5097,8 @@ createdAt, finishedAt, counts, stageCounts }`. `status` is `scanning`,
 `running`, `completed`, `completed_with_errors` or `cancelled`. `counts` is
 the number of items per status (`queued`, `importing`, `imported`, `failed`,
 `missing`, `skipped`); `stageCounts` is the number per derived pipeline stage
-(`uploaded`, `parsed`, `indexed`, `extracting`, `extracted`, `in_graph`,
-`failed`). Both are aggregates over the items, never stored columns.
+(`uploaded`, `parsed`, `formatting`, `indexed`, `extracting`, `extracted`,
+`in_graph`, `failed`). Both are aggregates over the items, never stored columns.
 
 ##### GET /notes/import-batches/{id}
 

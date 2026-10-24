@@ -59,10 +59,11 @@ export interface NotesConformanceTarget {
   handlers: readonly KvoxJobHandler[];
 }
 
-/** The job types the slice registers (`note.library.import`, #715, is server-only). */
+/** The job types the slice registers (`note.library.import`, #715, and `note.import.format`, #729, are server-only). */
 const PINNED_JOB_TYPES = [
   'note.export',
   'note.generate',
+  'note.import.format',
   'note.library.import',
   'note.purge',
   'note.retitle',

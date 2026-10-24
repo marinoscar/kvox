@@ -41,6 +41,7 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 
+import { useKvoxTranscriptionEnabled } from '../../../core/headless/index.js';
 import { StructureListEditor } from './StructureListEditor.js';
 import {
   MAX_DESCRIPTION_CHARS,
@@ -82,6 +83,24 @@ where no owner was named.
 If something was discussed but left unresolved, say so plainly rather than
 rounding it up to a decision.`;
 
+/**
+ * {@link INSTRUCTIONS_PLACEHOLDER} for a host without transcription (#731): the
+ * same worked example, written for a document or an imported transcript rather
+ * than a recording.
+ */
+const NOTE_FIRST_INSTRUCTIONS_PLACEHOLDER = `Example:
+
+You are writing notes from a meeting document or transcript. Work only from the
+source — never invent a decision, an owner or a date that it does not state.
+
+Open with two or three sentences on what the meeting was for. Then list the
+decisions that were actually made, each with who made it. Then list the follow-up
+actions, each with an owner and a due date when one was given, and mark the ones
+where no owner was named.
+
+If something was discussed but left unresolved, say so plainly rather than
+rounding it up to a decision.`;
+
 /** Tone suggestions. Free text on the wire — these are a starting vocabulary. */
 const TONE_SUGGESTIONS = ['neutral', 'warm', 'formal', 'direct', 'concise'];
 
@@ -112,6 +131,7 @@ export function NoteTemplateEditor({
   disabled = false,
   footer,
 }: NoteTemplateEditorProps) {
+  const transcription = useKvoxTranscriptionEnabled();
   const set = <K extends keyof NoteTemplateDraft>(key: K, value: NoteTemplateDraft[K]) => {
     onChange({ ...draft, [key]: value });
   };
@@ -162,8 +182,8 @@ export function NoteTemplateEditor({
           value={draft.instructions}
           onChange={(event) => set('instructions', event.target.value)}
           disabled={disabled}
-          placeholder={INSTRUCTIONS_PLACEHOLDER}
-          helperText={`What the model should do with the recording. ${draft.instructions.length.toLocaleString()} of ${MAX_INSTRUCTIONS_CHARS.toLocaleString()} characters.`}
+          placeholder={transcription ? INSTRUCTIONS_PLACEHOLDER : NOTE_FIRST_INSTRUCTIONS_PLACEHOLDER}
+          helperText={`What the model should do with the ${transcription ? 'recording' : 'source'}. ${draft.instructions.length.toLocaleString()} of ${MAX_INSTRUCTIONS_CHARS.toLocaleString()} characters.`}
           error={draft.instructions.length > MAX_INSTRUCTIONS_CHARS}
         />
 

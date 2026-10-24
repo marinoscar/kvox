@@ -5,10 +5,12 @@
 export {
   KvoxHostMissingError,
   KvoxWebHostProvider,
+  isKvoxTranscriptionEnabled,
   useHasPermission,
   useKvoxHost,
   useKvoxLatestEventId,
   useKvoxPermissionCheck,
+  useKvoxTranscriptionEnabled,
   useKvoxViewer,
 } from './host.js';
 export type {

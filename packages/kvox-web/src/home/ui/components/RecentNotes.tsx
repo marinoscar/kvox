@@ -55,6 +55,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { NoteSummaryCard } from './NoteSummaryCard.js';
 import type { NoteListItem } from '../../../notes/headless/index.js';
+import { useKvoxTranscriptionEnabled } from '../../../core/headless/index.js';
 
 /**
  * Props of {@link RecentNotes}.
@@ -110,6 +111,8 @@ function SectionHeading({ onViewAll }: { onViewAll: (() => void) | null }) {
  */
 export function RecentNotes({ items, total, canCreate, isLoading }: RecentNotesProps) {
   const navigate = useNavigate();
+  // #731 — a host without transcription words the empty state around imports.
+  const transcription = useKvoxTranscriptionEnabled();
 
   // Resolved for the rows actually on screen, and shared with the library's
   // module-level cache — so opening `/notes` after this renders costs no
@@ -155,11 +158,12 @@ export function RecentNotes({ items, total, canCreate, isLoading }: RecentNotesP
         <SectionHeading onViewAll={null} />
         <Paper variant="outlined" sx={{ p: { xs: 2.5, sm: 3 }, textAlign: 'center' }}>
           <Typography variant="subtitle1" component="h3" gutterBottom sx={{ fontWeight: 600 }}>
-            Turn a transcript into a note
+            {transcription ? 'Turn a transcript into a note' : 'Bring in your notes'}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: canCreate ? 2.5 : 0 }}>
-            Minutes, a summary, a brief — generated from a recording you already have,
-            using a template you control. It runs on your own AI key.
+            {transcription
+              ? 'Minutes, a summary, a brief — generated from a recording you already have, using a template you control. It runs on your own AI key.'
+              : 'Import the documents you already have, or write a note from one — minutes, a summary, a brief — using a template you control. It runs on your own AI key.'}
           </Typography>
           {/* The EXPLANATION is unconditional and only the BUTTON is gated. A
               user without `notes:write` still benefits from knowing what the

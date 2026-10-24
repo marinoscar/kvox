@@ -164,6 +164,8 @@ function StepItem({ step, primary }: { step: KvoxJourneyStep; primary: boolean }
       <CheckCircleIcon fontSize="small" color="success" aria-hidden />
       <Typography variant="body2">{`${step.title} (done)`}</Typography>
     </Stack>
+  ) : action.element !== undefined ? (
+    action.element
   ) : action.to === undefined && action.onClick === undefined ? null : (
     <Button
       variant={primary ? 'contained' : 'outlined'}

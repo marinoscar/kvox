@@ -228,6 +228,34 @@ describe('NoteLibrariesService', () => {
     expect(batch.stageCounts).toMatchObject({ in_graph: 1, parsed: 1, uploaded: 1, failed: 1 });
   });
 
+  it('reads the stage formatting for an imported item whose note has an active note.import.format job (#729)', async () => {
+    const db = build();
+    const jobs = { findActive: jest.fn(async () => [{ id: 'j1', subjectId: 'n1' }]) };
+    const service = new NoteLibrariesService(
+      { noteImportBatch: db.noteImportBatch, noteImportBatchItem: db.noteImportBatchItem, kgProposal: db.kgProposal } as unknown as KvoxNotesDb,
+      undefined,
+      jobs as never
+    );
+    const now = new Date();
+    db.noteImportBatch.findFirst.mockResolvedValue({ id: 'b1' });
+    db.noteImportBatchItem.findMany.mockResolvedValue(
+      ['n1', 'n2'].map((noteId, i) => ({
+        id: `item-${i}`, batchId: 'b1', filename: 'x.md', path: 'x.md', action: 'new', status: 'imported',
+        noteId, noteVersion: 1, diverged: false, failureReason: null, updatedAt: now,
+      }))
+    );
+    db.kgProposal.findMany.mockResolvedValue([]);
+
+    const page = await service.listItems(ACTOR, 'b1', { limit: 5 });
+
+    expect(page.items.map((item) => item.stage)).toEqual(['formatting', 'parsed']);
+    expect(jobs.findActive).toHaveBeenCalledWith({
+      types: ['note.import.format'],
+      subjectType: 'note',
+      subjectIds: ['n1', 'n2'],
+    });
+  });
+
   it('items page: cursor pagination and per-item proposal', async () => {
     const { service, noteImportBatch, noteImportBatchItem, kgProposal } = build();
     const now = new Date();

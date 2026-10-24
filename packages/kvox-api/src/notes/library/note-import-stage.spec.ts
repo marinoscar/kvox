@@ -14,6 +14,13 @@ describe('deriveItemStage', () => {
   ] as const)('%s + %s -> %s', (status, proposal, stage) => {
     expect(deriveItemStage(status, proposal)).toBe(stage);
   });
+
+  it('reads formatting for an imported item whose note is being formatted, and only then', () => {
+    expect(deriveItemStage('imported', null, true)).toBe('formatting');
+    expect(deriveItemStage('failed', null, true)).toBe('failed');
+    expect(deriveItemStage('queued', null, true)).toBe('uploaded');
+    expect(deriveItemStage('imported', null, false)).toBe('parsed');
+  });
 });
 
 describe('pickProposal', () => {

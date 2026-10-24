@@ -40,6 +40,21 @@
  * all (a scanned PDF, a password-protected one) reports the API's own stored
  * sentence rather than a generic failure — that sentence is the whole reason
  * the API stores one.
+ *
+ * =============================================================================
+ * A DOCUMENT IS KEPT AS THE NOTE BY DEFAULT; REWRITING IT IS THE OPTION (#730)
+ * =============================================================================
+ *
+ * Once a file is chosen the form asks what to do with it. "Keep it as my note"
+ * (the default) imports the file itself as the note through the import-batch
+ * routes (`importFilesAdHoc`): the server stores it, keeps the file as the
+ * note's source, formats it, indexes it and adds it to the graph. Nothing is
+ * uploaded until the user presses Import, and the template, model and context
+ * steps are hidden because none of them applies. "Rewrite it with a template"
+ * is the generation flow above, unchanged: the file is uploaded as a source
+ * document only when this choice is made. A document the host already uploaded
+ * (`?objectId=`) has no file in this browser to import, so it starts on
+ * Rewrite and offers no choice.
  */
 
 import Alert from '@mui/material/Alert';
@@ -66,18 +81,19 @@ import Stepper from '@mui/material/Stepper';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
+import { NOTE_IMPORT_ACCEPT, noteImportMimeTypeForExtension } from '@marinoscar/kvox-contract/notes';
 
 import { ModelSelect } from '../components/ModelSelect.js';
-import { KvoxApiError, useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
+import { KvoxApiError, useIsMounted, useKvoxHost, useKvoxTranscriptionEnabled } from '../../../core/headless/index.js';
 import { useNoteTemplates } from '../../headless/hooks/useNoteTemplates.js';
 import {
   MAX_TITLE_CHARS,
-  NOTE_DOCUMENT_ACCEPT,
   NOTE_DOCUMENT_ACCEPT_LABEL,
   createNote,
   getNoteDocumentExtraction,
@@ -91,13 +107,17 @@ import type { NoteTemplate } from '../../headless/clients/noteTemplates.js';
 import { getTranscripts } from '../../../transcripts/headless/index.js';
 import type { TranscriptListItem } from '../../../transcripts/headless/index.js';
 import {
-  NOTE_SOURCE_KINDS,
+  noteSourceKindsFor,
   buildNoteSource,
   buildNoteTitle,
   emptyNewNoteDraft,
   isNewNoteReady,
 } from '../../headless/utils/newNote.js';
 import type { NewNoteDraft } from '../../headless/utils/newNote.js';
+import { useImportBatch, useImportBatchItems } from '../../headless/hooks/useNoteLibraries.js';
+import { checkNoteImportFiles, importFilesAdHoc } from '../../headless/sync/librarySync.js';
+import type { NoteImportRejectedFile } from '../../headless/sync/librarySync.js';
+import { describeNoteImportFailure } from '../../headless/utils/noteImportFailure.js';
 import { NO_NOTES_AI_ACCESS } from '../ai.js';
 import type { NotesAiAccess } from '../ai.js';
 
@@ -116,6 +136,51 @@ const PICKER_LIMIT = 50;
 
 /** The manager #56 builds. Named once so the two links here cannot disagree. */
 const TEMPLATE_MANAGER_PATH = '/settings/note-templates';
+
+/** What the user wants done with a chosen document (#730). */
+type DocumentAction = 'keep' | 'rewrite';
+
+/** The two answers to "What should KVox do with it?", in the order they are offered. */
+const DOCUMENT_ACTIONS: readonly { value: DocumentAction; label: string; hint: string }[] = [
+  {
+    value: 'keep',
+    label: 'Keep it as my note',
+    hint: 'Your document becomes the note, formatted for KVox. The original file stays linked.',
+  },
+  {
+    value: 'rewrite',
+    label: 'Rewrite it with a template',
+    hint: "AI writes a new note from it in a template's shape.",
+  },
+];
+
+/** Where a kept document's import stands, for the inline progress line. */
+type KeepPhase = 'uploading' | 'importing' | 'formatting';
+
+const KEEP_PHASE_LABELS: Readonly<Record<KeepPhase, string>> = {
+  uploading: 'Uploading the document…',
+  importing: 'Importing…',
+  formatting: 'Formatting your note…',
+};
+
+/** The sentence for a file refused before any byte is sent. */
+function rejectionSentence(reason: NoteImportRejectedFile['reason']): string {
+  const code = reason === 'unsupported' ? 'unsupported_document' : reason === 'empty' ? 'empty_note' : 'too_large';
+  return describeNoteImportFailure(code) ?? 'This file cannot be used.';
+}
+
+/**
+ * The file, with a media type when the browser gave it none.
+ *
+ * The source-document route reads the part's media type, and most platforms map
+ * no type to `.md` (and some none to `.docx`), so the extension decides.
+ */
+function withMediaType(file: File): File {
+  if (file.type) return file;
+  const dot = file.name.lastIndexOf('.');
+  const type = dot >= 0 ? noteImportMimeTypeForExtension(file.name.slice(dot + 1)) : null;
+  return type ? new File([file], file.name, { type, lastModified: file.lastModified }) : file;
+}
 
 /**
  * Props of {@link NewNotePage}.
@@ -140,6 +205,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
   const navigate = useNavigate();
   const isMounted = useIsMounted();
   const host = useKvoxHost();
+  const sourceKinds = noteSourceKindsFor(useKvoxTranscriptionEnabled());
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const [searchParams] = useSearchParams();
 
@@ -204,6 +270,25 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
       : null,
   );
   const [documentError, setDocumentError] = useState<string | null>(null);
+
+  /**
+   * Keep or rewrite (#730). Keep by default; a document the host already
+   * uploaded (`?objectId=`) has no file here to import, so it starts on rewrite.
+   */
+  const [documentAction, setDocumentAction] = useState<DocumentAction>(() =>
+    searchParams.get('objectId') ? 'rewrite' : 'keep',
+  );
+  /** The file chosen in this browser, whichever action it is for. */
+  const [chosenFile, setChosenFile] = useState<File | null>(null);
+  /** The file the last source-document upload was for, so it is never sent twice. */
+  const uploadedFileRef = useRef<File | null>(null);
+
+  // Keep: the ad-hoc import batch the file went into, polled until it is a note.
+  const [importBatchId, setImportBatchId] = useState<string | undefined>(undefined);
+  const [isImportUploading, setIsImportUploading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const { batch: importBatch } = useImportBatch(importBatchId);
+  const { items: importItems, refresh: refreshImportItems } = useImportBatchItems(importBatchId, undefined, 1);
 
   /**
    * The model, ONLY when the user has picked one (#109).
@@ -318,12 +403,12 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
   // Document upload and its extraction
   // ---------------------------------------------------------------------------
 
-  const handleFile = useCallback(
-    async (file: File | undefined | null) => {
-      if (!file) return;
+  /** Rewrite: upload the file as a note source document and start its extraction. */
+  const uploadSourceDocument = useCallback(
+    async (file: File) => {
+      uploadedFileRef.current = file;
       setDocumentError(null);
       setExtraction(null);
-      setDocumentName(file.name);
       setIsUploading(true);
       // Cleared so a second upload cannot leave the FIRST document's id in the
       // draft while the new one is still in flight — Generate would otherwise
@@ -331,13 +416,15 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
       setDraft((current) => ({ ...current, objectId: '' }));
 
       try {
-        const uploaded = await uploadNoteSourceDocument(host, file);
-        if (!isMounted()) return;
+        const uploaded = await uploadNoteSourceDocument(host, withMediaType(file));
+        // A later choice replaced this file while it was in flight: its answer is stale.
+        if (!isMounted() || uploadedFileRef.current !== file) return;
         setDraft((current) => ({ ...current, kind: 'document', objectId: uploaded.objectId }));
         setExtraction({ status: 'extracting', message: null, characters: null });
       } catch (err) {
-        if (!isMounted()) return;
-        setDocumentName(null);
+        if (!isMounted() || uploadedFileRef.current !== file) return;
+        // Forgotten, so choosing Rewrite again retries the upload.
+        uploadedFileRef.current = null;
         setDocumentError(
           err instanceof KvoxApiError
             ? err.message
@@ -349,6 +436,99 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
     },
     [host, isMounted],
   );
+
+  /**
+   * A file was chosen. Nothing is uploaded for Keep until Import is pressed; for
+   * Rewrite the source-document upload starts at once, as it always has.
+   */
+  const handleFileChosen = (file: File | undefined | null) => {
+    if (!file) return;
+    // Size is the server's call for each route; the extension and emptiness are not.
+    const rejected = checkNoteImportFiles([file], Number.POSITIVE_INFINITY).rejected[0];
+    setImportBatchId(undefined);
+    setImportError(null);
+    setExtraction(null);
+    setDraft((current) => ({ ...current, objectId: '' }));
+    uploadedFileRef.current = null;
+    if (rejected) {
+      setChosenFile(null);
+      setDocumentName(null);
+      setDocumentError(rejectionSentence(rejected.reason));
+      return;
+    }
+    setDocumentError(null);
+    setChosenFile(file);
+    setDocumentName(file.name);
+    if (documentAction === 'rewrite') void uploadSourceDocument(file);
+  };
+
+  const handleDocumentActionChange = (next: DocumentAction) => {
+    setDocumentAction(next);
+    if (next === 'rewrite' && chosenFile && uploadedFileRef.current !== chosenFile) {
+      void uploadSourceDocument(chosenFile);
+    }
+  };
+
+  /** Keep: import the chosen file as a note through an ad-hoc import batch. */
+  const handleImport = async () => {
+    if (!chosenFile) return;
+    const rejected = checkNoteImportFiles([chosenFile]).rejected[0];
+    if (rejected) {
+      setImportError(rejectionSentence(rejected.reason));
+      return;
+    }
+    setImportError(null);
+    setImportBatchId(undefined);
+    setIsImportUploading(true);
+    try {
+      const result = await importFilesAdHoc({ host, files: [chosenFile] });
+      if (!isMounted()) return;
+      const failed = result.failed[0];
+      if (failed) {
+        setImportError(failed.message);
+        return;
+      }
+      setImportBatchId(result.batchId);
+    } catch (err) {
+      if (!isMounted()) return;
+      setImportError(
+        err instanceof KvoxApiError ? err.message : 'The document could not be imported. Try again.',
+      );
+    } finally {
+      if (isMounted()) setIsImportUploading(false);
+    }
+  };
+
+  // Every new read of the batch re-reads its one item, which carries the note id.
+  useEffect(() => {
+    if (importBatch) void refreshImportItems();
+  }, [importBatch, refreshImportItems]);
+
+  const importItem = importBatchId ? (importItems[0] ?? null) : null;
+  const importFailure =
+    importItem?.status === 'failed' ? describeNoteImportFailure(importItem.failureReason ?? 'internal_error') : null;
+  const keepError = importError ?? importFailure;
+  // Opened once it is a note AND its formatting has finished: the note page then shows
+  // the formatted text, not the raw document it replaces a moment later.
+  const importFormatting = importItem?.status === 'imported' && importItem.stage === 'formatting';
+  const importedNoteId =
+    importItem?.status === 'imported' && importItem.stage !== 'uploaded' && !importFormatting
+      ? importItem.noteId
+      : null;
+
+  useEffect(() => {
+    // `replace: true`, as for Generate: Back returns to the library, not to a finished form.
+    if (importedNoteId) navigate(`/notes/${importedNoteId}`, { replace: true });
+  }, [importedNoteId, navigate]);
+
+  const keepPhase: KeepPhase | null = isImportUploading
+    ? 'uploading'
+    : importBatchId && !importFailure
+      ? importFormatting || importedNoteId
+        ? 'formatting'
+        : 'importing'
+      : null;
+  const keepBusy = keepPhase !== null;
 
   const objectId = draft.objectId;
   const extractionStatus = extraction?.status;
@@ -407,6 +587,9 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
   const model = modelOverride ?? defaultModel;
 
   const ready = useMemo(() => isNewNoteReady(draft, documentReady), [documentReady, draft]);
+
+  /** The document is to be kept as the note: no template, model or context applies. */
+  const keepMode = draft.kind === 'document' && documentAction === 'keep';
 
   const handleGenerate = async () => {
     const source = buildNoteSource(draft);
@@ -498,7 +681,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
             }))
           }
         >
-          {NOTE_SOURCE_KINDS.map((option) => (
+          {sourceKinds.map((option) => (
             <FormControlLabel
               key={option.value}
               value={option.value}
@@ -571,7 +754,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
             variant="outlined"
             startIcon={<UploadFileIcon />}
             onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
+            disabled={isUploading || keepBusy}
           >
             Choose a document
           </Button>
@@ -582,12 +765,18 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
             // input is unreachable by assistive technology and by a test that
             // uploads a file, and the button above is what a pointer user sees.
             aria-label="Choose a document"
-            accept={NOTE_DOCUMENT_ACCEPT}
-            onChange={(event) => void handleFile(event.target.files?.[0])}
+            // The import list: it names .docx and .pptx, and every extension both
+            // routes read, so neither choice can be handed a file the other refuses.
+            accept={NOTE_IMPORT_ACCEPT}
+            onChange={(event) => {
+              handleFileChosen(event.target.files?.[0]);
+              // Cleared so choosing the same file again is still a change.
+              event.target.value = '';
+            }}
             style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
           />
           <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1 }}>
-            {NOTE_DOCUMENT_ACCEPT_LABEL}. Scanned pages are not read — there is no
+            {NOTE_DOCUMENT_ACCEPT_LABEL}. Scanned PDFs are not read — there is no
             optical character recognition.
           </Typography>
 
@@ -597,7 +786,49 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
             </Typography>
           )}
 
-          {isUploading && (
+          {chosenFile && (
+            <FormControl sx={{ mt: 2, display: 'block' }} disabled={keepBusy}>
+              <FormLabel id="note-document-action-label">What should KVox do with it?</FormLabel>
+              <RadioGroup
+                aria-labelledby="note-document-action-label"
+                value={documentAction}
+                onChange={(event) => handleDocumentActionChange(event.target.value as DocumentAction)}
+              >
+                {DOCUMENT_ACTIONS.map((option) => (
+                  <FormControlLabel
+                    key={option.value}
+                    value={option.value}
+                    control={<Radio />}
+                    label={
+                      <Box>
+                        <Typography variant="body2">{option.label}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {option.hint}
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                ))}
+              </RadioGroup>
+            </FormControl>
+          )}
+
+          {keepMode && keepPhase && (
+            <Box sx={{ mt: 1 }} role="status">
+              <LinearProgress aria-label={KEEP_PHASE_LABELS[keepPhase]} />
+              <Typography variant="caption" color="text.secondary">
+                {KEEP_PHASE_LABELS[keepPhase]}
+              </Typography>
+            </Box>
+          )}
+
+          {keepMode && keepError && (
+            <Alert severity="error" sx={{ mt: 1 }}>
+              {keepError}
+            </Alert>
+          )}
+
+          {!keepMode && isUploading && (
             <Box sx={{ mt: 1 }}>
               <LinearProgress aria-label="Uploading the document" />
               <Typography variant="caption" color="text.secondary">
@@ -606,7 +837,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
             </Box>
           )}
 
-          {extraction?.status === 'extracting' && (
+          {!keepMode && extraction?.status === 'extracting' && (
             <Box sx={{ mt: 1 }} role="status">
               <LinearProgress aria-label="Reading the document" />
               <Typography variant="caption" color="text.secondary">
@@ -615,7 +846,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
             </Box>
           )}
 
-          {extraction?.status === 'extracted' && (
+          {!keepMode && extraction?.status === 'extracted' && (
             <Alert severity="success" sx={{ mt: 1 }}>
               Document read
               {extraction.characters !== null
@@ -624,7 +855,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
             </Alert>
           )}
 
-          {extraction?.status === 'unextractable' && (
+          {!keepMode && extraction?.status === 'unextractable' && (
             <Alert severity="warning" sx={{ mt: 1 }}>
               <AlertTitle>No text could be read from this document</AlertTitle>
               {/* The API's OWN stored sentence, not a paraphrase: it is written
@@ -769,11 +1000,15 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
     </Stack>
   );
 
-  const steps = [
-    { label: 'Source', content: sourceStep },
-    { label: 'Template', content: templateStep },
-    { label: 'Context', content: contextStep },
-  ];
+  // Keep (#730): the source is the whole form — no template, model or context applies.
+  const steps = keepMode
+    ? [{ label: 'Source', content: sourceStep }]
+    : [
+        { label: 'Source', content: sourceStep },
+        { label: 'Template', content: templateStep },
+        { label: 'Context', content: contextStep },
+      ];
+  const currentStep = Math.min(activeStep, steps.length - 1);
 
   const generateButton = (
     <Button
@@ -786,13 +1021,26 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
     </Button>
   );
 
+  const primaryButton = keepMode ? (
+    <Button
+      variant="contained"
+      startIcon={<NoteAddIcon />}
+      onClick={() => void handleImport()}
+      disabled={!chosenFile || keepBusy}
+    >
+      Import note
+    </Button>
+  ) : (
+    generateButton
+  );
+
   return (
     <Box sx={{ maxWidth: 720, mx: 'auto' }}>
       <Typography variant="h5" component="h1" sx={{ mb: 2 }}>
         New note
       </Typography>
 
-      {!available && (
+      {!available && !keepMode && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           AI features are not enabled for this deployment right now. You can fill this
           in, but generating will not succeed until an administrator turns them on.
@@ -806,7 +1054,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
       )}
 
       {isPhone ? (
-        <Stepper activeStep={activeStep} orientation="vertical">
+        <Stepper activeStep={currentStep} orientation="vertical">
           {steps.map((step, index) => (
             <Step key={step.label}>
               {/* Clickable labels: the steps are not a sequence with
@@ -832,7 +1080,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
                       Next
                     </Button>
                   ) : (
-                    generateButton
+                    primaryButton
                   )}
                 </Stack>
               </StepContent>
@@ -851,7 +1099,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
           ))}
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
             <Button onClick={() => navigate('/notes')}>Cancel</Button>
-            {generateButton}
+            {primaryButton}
           </Box>
         </Stack>
       )}
