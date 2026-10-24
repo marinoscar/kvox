@@ -80,6 +80,8 @@
     "kvox-note-libraries-web-pages",
     "kvox-note-libraries-web-review",
     "kvox-note-markdown-import",
+    "kvox-note-source-download-web",
+    "kvox-note-source-download",
     "kvox-packages-scaffold",
     "kvox-transcript-json-import",
     "kvox-web-ask",
