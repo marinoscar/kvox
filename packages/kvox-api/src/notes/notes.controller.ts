@@ -104,6 +104,11 @@ import {
   type UpdateNoteDto,
 } from './dto/note.dto.js';
 import {
+  NoteSourceDownloadDto,
+  noteSourceDownloadQuerySchema,
+  type NoteSourceDownloadQuery,
+} from './dto/note-source-download.dto.js';
+import {
   CreateNoteExportBodyDto,
   NoteExportDownloadDto,
   NoteExportDto,
@@ -118,6 +123,7 @@ import { CurrentActor, type NotesActor } from './notes-actor.js';
 import { NOTES_READ_PERMISSION, NOTES_WRITE_PERMISSION } from './notes.permissions.js';
 
 import { NoteExportService } from './export/note-export.service.js';
+import { NoteSourceDownloadService } from './note-source-download.service.js';
 import { NoteGenerationContextService } from './note-generation-context.service.js';
 import { NotesService } from './notes.service.js';
 
@@ -134,6 +140,7 @@ export class NotesController {
     private readonly notes: NotesService,
     private readonly exports: NoteExportService,
     private readonly generationContext: NoteGenerationContextService,
+    private readonly sourceDownload: NoteSourceDownloadService,
   ) {}
 
   // ===========================================================================
@@ -439,6 +446,32 @@ export class NotesController {
     @CurrentActor() user: NotesActor,
   ) {
     return this.notes.getVersion(id, version, user);
+  }
+
+  @Get(':id/source')
+  @KvoxAuth(NOTES_READ_PERMISSION)
+  @ApiOperation({
+    summary: 'Download the source document of an imported note',
+    description:
+      'A short-lived (15 minute) **signed URL** that serves the original file the note was ' +
+      'imported from (docx, pptx, pdf, md, txt) as an attachment under its original file ' +
+      'name. The `Content-Disposition` is signed into the URL.\n\n' +
+      '`?version=<n>` names a version of the note and defaults to the current one. Versions ' +
+      'do not record their own file: the version must exist, and the file served is the one ' +
+      'the note currently points at.\n\n' +
+      '**404, never 403**, when the note is not the caller\'s or does not exist, the version ' +
+      'does not exist, the note was not imported from a document, or the stored file is gone.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiQuery({ name: 'version', required: false, type: Number, description: 'A version of the note (default: current)' })
+  @ApiDataResponse(NoteSourceDownloadDto, { description: 'The signed download' })
+  @ApiResponse({ status: 404, description: 'No such note or version, no source document, or no access' })
+  async source(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query(new ZodValidationPipe(noteSourceDownloadQuerySchema)) query: NoteSourceDownloadQuery,
+    @CurrentActor() user: NotesActor,
+  ) {
+    return this.sourceDownload.download(id, user, query.version);
   }
 
   @Get(':id/context')

@@ -16,6 +16,7 @@ import { NoteAccessService } from './access/note-access.service.js';
 import { NoteGenerationAccessService } from './access/note-generation-access.service.js';
 import { NoteTemplateAccessService } from './access/note-template-access.service.js';
 import { MarkdownNoteExporter } from './export/markdown.exporter.js';
+import { NoteSourceDownloadService } from './note-source-download.service.js';
 import { NoteExportService } from './export/note-export.service.js';
 import { NoteExporterRegistry, type NoteExporter } from './export/note-exporter.registry.js';
 import { PdfNoteExporter } from './export/pdf.exporter.js';
@@ -214,6 +215,8 @@ export class NotesModule {
       // stores an object, and every object it stores is `managed_by: 'notes'`.
       NoteObjectsService,
       NoteSourcesService,
+      // Download of an imported note's original file (#732).
+      NoteSourceDownloadService,
       // Note import (#585): a Markdown note export back into a note.
       NoteImportService,
       // Libraries, scans and import batches (#714), and the policy the graph reads.

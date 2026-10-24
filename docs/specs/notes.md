@@ -2081,7 +2081,14 @@ text and never wait on a failure.
 - **Rewrite it with a template**: the existing document-source generation flow
   (§3.2, §4.7).
 
-Downloading the original source file is not yet offered.
+**Downloading the source (#732).** `GET /api/notes/:id/source` returns a short-lived
+signed URL (15 minutes) for the original file (docx, pptx, pdf, md, txt) under its
+original file name, as an attachment. Owner only (`notes:read`); every "nothing to hand
+back" is a **404**: not the caller's note, unknown note, unknown `?version=<n>`, a note
+with no source object, or an object that is gone. Versions do not record their own file,
+so `?version=` only has to name an existing version and the file served is the one the
+note currently points at (`notes.source_object_id`). The note response already carries
+`sourceType` and `sourceObjectId`, which is all a client needs to offer the action.
 
 **Version rule.** A changed file adds a version of kind `edit` and switches
 `notes.source_object_id` to the new object in the same transaction.
