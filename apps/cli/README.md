@@ -17,7 +17,7 @@ have; everything else is documented in the package's README and in
 | --- | --- |
 | `src/app.ts` | `APP_CLI_OPTIONS`: the identity (from `packages/shared/identity.json`), the version (`package.json`), the node executor, this app's `.env.example` key metadata, one deploy check and the proxy stream paths |
 | `src/executors/media-audio-transcode.executor.ts` | the node executor for `media.audio.transcode` and its `ffmpeg` + `ffprobe` requirement (a node without them refuses to claim the type, naming the missing tool) |
-| `src/extensions/` | the pre-platform `deploy` flags and commands the platform lacks ([the table below](#flags-and-commands-that-changed-in-110)), `deploy update --check`, the `deploy uninstall` name confirmation and `.env` backup, the `bind-port-not-promised` and `docker-network-devnet` checks, the app env-key metadata |
+| `src/extensions/` | the pre-platform `deploy` flags and commands the platform lacks ([the table below](#flags-and-commands-that-changed-in-110)), `deploy update --check`, the `deploy uninstall` name confirmation and `.env` backup, the `bind-port-not-promised` and `docker-network-devnet` checks, the app env-key metadata, and the compose-project reconcile (before `deploy update\|status\|doctor\|about` it records the project the containers really run under as `composeProject` in `.appctl-deploy.json`, keeping a `.bak`; issue #736) |
 | `src/run.ts` | one invocation: translate legacy flags, answer `update --check`, otherwise `createCli(...).run` |
 
 Run with no arguments in an interactive terminal and it opens a full-screen
