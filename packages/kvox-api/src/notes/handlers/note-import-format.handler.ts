@@ -77,13 +77,25 @@ import { NOTE_READY_EVENT, type NoteReadyEvent } from '../notes.events.js';
  */
 export const NOTE_IMPORT_FORMAT_AI_FEATURE = NOTE_GENERATE_AI_FEATURE;
 
-/** Ten minutes: a long document is several sequential model calls. */
+/**
+ * Ten minutes: a long document is several sequential model calls.
+ *
+ * @stability experimental
+ */
 export const NOTE_IMPORT_FORMAT_MAX_RUNTIME_MS = 10 * 60 * 1000;
 
-/** The version summary the AI's commit carries. */
+/**
+ * The version summary the AI's commit carries.
+ *
+ * @stability experimental
+ */
 export const NOTE_IMPORT_FORMAT_SUMMARY = 'Formatted with AI';
 
-/** The audit action of one format pass. */
+/**
+ * The audit action of one format pass.
+ *
+ * @stability experimental
+ */
 export const NOTE_IMPORT_FORMAT_AUDIT_ACTION = 'note:import_format';
 
 /** Output budget per input token: Markdown marks add a little to the text. */
