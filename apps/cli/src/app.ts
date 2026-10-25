@@ -7,7 +7,6 @@ import type { CreateCliOptions } from '@marinoscar/platform-cli';
 
 import { mediaAudioTranscodeExecutor } from './executors/media-audio-transcode.executor.js';
 import { dockerNetworkCheck } from './extensions/docker-network.check.js';
-import { dockerPortsCheck } from './extensions/docker-ports.check.js';
 import { APP_ENV_SPEC } from './extensions/env-spec.js';
 
 // =============================================================================
@@ -24,10 +23,10 @@ import { APP_ENV_SPEC } from './extensions/env-spec.js';
 //   - the shared host proxy's unbuffered, long-timeout locations for this app's
 //     server-sent-event routes (`proxy.streamPaths`);
 //   - the metadata of the `.env.example` keys that are this app's own;
-//   - two deploy checks: `docker-network-devnet` (recommended: the external network
+//   - one deploy check: `docker-network-devnet` (recommended: the external network
 //     `base.compose.yml` needs, which install creates; the deploy end-to-end workflow
-//     asserts it) and `bind-port-not-promised`: a host port Docker has
-//     promised to a STOPPED container is not free;
+//     asserts it). The port guard is the platform's `bind-port-owner` (issue #745);
+//     this app no longer carries its own;
 //   - the pre-platform `deploy` flags the platform dropped are translated in
 //     extensions/legacy-flags.ts before the platform parses them.
 //
@@ -94,6 +93,6 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   version: readVersion(),
   nodeExecutors: [mediaAudioTranscodeExecutor],
   envSpecFragments: [APP_ENV_SPEC],
-  deployChecks: [dockerPortsCheck, dockerNetworkCheck],
+  deployChecks: [dockerNetworkCheck],
   proxy: { streamPaths: APP_STREAM_PATHS },
 };

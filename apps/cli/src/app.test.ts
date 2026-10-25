@@ -122,11 +122,12 @@ describe('the command surface', () => {
 });
 
 describe('the deploy checks this app adds', () => {
-  it('registers the two the deploy end-to-end workflow and the port guard rely on', () => {
-    expect((APP_CLI_OPTIONS.deployChecks ?? []).map((check) => check.id)).toEqual([
-      'bind-port-not-promised',
-      'docker-network-devnet',
-    ]);
+  it('registers only docker-network-devnet, which the deploy end-to-end workflow relies on', () => {
+    expect((APP_CLI_OPTIONS.deployChecks ?? []).map((check) => check.id)).toEqual(['docker-network-devnet']);
+  });
+
+  it('carries no port guard of its own: the platform\'s bind-port-owner decides (issue #745)', () => {
+    expect((APP_CLI_OPTIONS.deployChecks ?? []).map((check) => check.id)).not.toContain('bind-port-not-promised');
   });
 });
 
