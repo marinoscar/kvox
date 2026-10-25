@@ -2,6 +2,11 @@
  * The page side of a library sync (issue #720): runs `runLibrarySync` with the
  * device's file access, shows `ScanConfirmDialog` when the scan has something to
  * upload, and keeps the progress of the one sync in flight for the page to draw.
+ *
+ * Every sync goes through the shared `LibrarySyncCoordinator` (#725) with
+ * `whenRunning: 'join'`: when the library is already syncing (another button, or a
+ * host's watcher), the page joins that run and shows its progress and result instead
+ * of starting a second one.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -15,8 +20,14 @@ import {
   useKvoxHost,
 } from '../../../core/headless/index.js';
 import type { KvoxFolderRef } from '../../../core/headless/index.js';
-import { runLibrarySync } from '../../headless/index.js';
-import type { LibrarySyncPlan, LibrarySyncProgress, LibrarySyncResult, NoteLibrary } from '../../headless/index.js';
+import { getLibrarySyncCoordinator, isLibrarySyncCancelled } from '../../headless/index.js';
+import type {
+  LibrarySyncCoordinator,
+  LibrarySyncPlan,
+  LibrarySyncProgress,
+  LibrarySyncResult,
+  NoteLibrary,
+} from '../../headless/index.js';
 import { ScanConfirmDialog } from '../components/ScanConfirmDialog.js';
 
 /**
@@ -30,7 +41,10 @@ export interface LibrarySyncRunner {
    * was stopped (the failure is in `error`).
    */
   start: (library: Pick<NoteLibrary, 'id' | 'name' | 'autoExtract'>, ref: KvoxFolderRef) => Promise<LibrarySyncResult | null>;
-  /** Stops the sync in flight. */
+  /**
+   * Stops the sync in flight: cancels the library's run in the coordinator, whoever
+   * started it, and drops its queued rerun.
+   */
   stop: () => void;
   /** The library being synced, or `null`. */
   runningLibraryId: string | null;
@@ -83,6 +97,8 @@ export function syncErrorMessage(error: unknown): string {
 export interface LibrarySyncRunnerOptions {
   /** Upload one file at a time. */
   sequential?: boolean;
+  /** The coordinator to sync through. Default `getLibrarySyncCoordinator()`, the one a host's watcher uses. */
+  coordinator?: LibrarySyncCoordinator;
 }
 
 interface PendingConfirm {
@@ -95,7 +111,7 @@ interface PendingConfirm {
 /**
  * Runs library syncs for a page.
  *
- * @param options - `sequential` uploads one file at a time.
+ * @param options - `sequential` uploads one file at a time; `coordinator` replaces the shared one.
  * @returns The runner.
  *
  * @stability experimental
@@ -110,7 +126,9 @@ export function useLibrarySyncRunner(options: LibrarySyncRunnerOptions = {}): Li
   const [errorLibraryId, setErrorLibraryId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingConfirm | null>(null);
   const controller = useRef<AbortController | null>(null);
+  const runningRef = useRef<string | null>(null);
   const { sequential } = options;
+  const coordinator = options.coordinator ?? getLibrarySyncCoordinator();
 
   useEffect(() => () => controller.current?.abort(), []);
 
@@ -119,17 +137,19 @@ export function useLibrarySyncRunner(options: LibrarySyncRunnerOptions = {}): Li
       if (controller.current) return null;
       const abort = new AbortController();
       controller.current = abort;
+      runningRef.current = library.id;
       setRunningLibraryId(library.id);
       setProgress(null);
       setError(null);
       setErrorLibraryId(null);
       try {
-        const result = await runLibrarySync({
+        const { result: outcome } = coordinator.sync({
           host,
           port,
           library,
           ref,
           signal: abort.signal,
+          whenRunning: 'join',
           ...(sequential ? { sequential } : {}),
           onProgress: (next) => {
             if (isMounted()) setProgress(next);
@@ -143,27 +163,30 @@ export function useLibrarySyncRunner(options: LibrarySyncRunnerOptions = {}): Li
               setPending({ plan, libraryName: library.name, autoExtract: library.autoExtract, resolve });
             }),
         });
-        return result;
+        return await outcome;
       } catch (err) {
-        if (!abort.signal.aborted && isMounted()) {
+        if (!abort.signal.aborted && !isLibrarySyncCancelled(err) && isMounted()) {
           setError(syncErrorMessage(err));
           setErrorLibraryId(library.id);
         }
         return null;
       } finally {
         controller.current = null;
+        runningRef.current = null;
         if (isMounted()) {
           setRunningLibraryId(null);
           setPending(null);
         }
       }
     },
-    [host, isMounted, port, sequential],
+    [coordinator, host, isMounted, port, sequential],
   );
 
   const stop = useCallback(() => {
+    const libraryId = runningRef.current;
     controller.current?.abort();
-  }, []);
+    if (libraryId) coordinator.cancel(libraryId);
+  }, [coordinator]);
 
   const answer = (go: boolean) => {
     pending?.resolve(go);

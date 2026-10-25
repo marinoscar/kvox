@@ -28,6 +28,7 @@
 import {
   NOTE_IMPORT_EXTENSIONS,
   NOTE_LIBRARY_MAX_MANIFEST_ENTRIES,
+  normalizeLibraryPath,
   noteImportMimeTypeForExtension,
 } from '@marinoscar/kvox-contract/notes';
 import type { NoteLibraryManifestEntry } from '@marinoscar/kvox-contract/notes';
@@ -86,6 +87,15 @@ export interface LibrarySyncProgress {
   totalBytes: number;
   /** The uploads that failed so far. */
   failed: LibrarySyncFailure[];
+  /**
+   * The batch to show the person, as soon as a scan has opened one (a sync), or the
+   * ad-hoc batch (an import): a host can link to its progress page while the sync
+   * runs. During a sync it may move once, when the follow-up scan of hashed files
+   * answers and the first scan's batch has nothing to upload; from the `uploading`
+   * phase on it is the final `LibrarySyncResult.batchId`. Absent until then, and for
+   * a sync that opened no batch.
+   */
+  batchId?: string;
 }
 
 /**
@@ -201,6 +211,26 @@ function abortReason(signal: AbortSignal): unknown {
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw abortReason(signal);
+}
+
+/** `promise`, or a rejection with the signal's reason as soon as it aborts (a confirmation nobody answers). */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return promise;
+  throwIfAborted(signal);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortReason(signal));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 function isAbort(error: unknown, signal: AbortSignal | undefined): boolean {
@@ -321,8 +351,13 @@ async function runLibrarySyncInner(
 ): Promise<LibrarySyncResult> {
   const { host, port, library, ref, signal, onProgress, confirm } = options;
   const failed: LibrarySyncFailure[] = [];
-  const report = (progress: Omit<LibrarySyncProgress, 'failed'>) =>
-    onProgress?.({ ...progress, failed: [...failed] });
+  const jobs: UploadJob[] = [];
+  // The batch to show: the first that will receive uploads, else the first opened.
+  const shownBatch = (): string | null => (jobs.length > 0 ? jobs[0]!.batchId : batchIds[0]) ?? null;
+  const report = (progress: Omit<LibrarySyncProgress, 'failed' | 'batchId'>) => {
+    const batchId = shownBatch();
+    onProgress?.({ ...progress, failed: [...failed], ...(batchId ? { batchId } : {}) });
+  };
 
   // 1. Enumerate.
   report({ phase: 'enumerating', done: 0, total: 0, bytes: 0, totalBytes: 0 });
@@ -342,7 +377,6 @@ async function runLibrarySyncInner(
   // 2. Scan, in chunks only when the manifest is larger than one request may carry.
   const chunks = chunk(manifest, NOTE_LIBRARY_MAX_MANIFEST_ENTRIES);
   const complete = chunks.length === 1;
-  const jobs: UploadJob[] = [];
   const hashNeeded: string[] = [];
   let missingCount = 0;
   let unchangedCount = 0;
@@ -370,6 +404,9 @@ async function runLibrarySyncInner(
     absorb(answer, 'new');
     hashNeeded.push(...answer.hashNeeded);
   }
+  // The scan answered: say so, with the batch it opened, before hashing or confirming.
+  const foundBytes = found.reduce((sum, entry) => sum + entry.size, 0);
+  report({ phase: 'enumerating', done: found.length, total: found.length, bytes: foundBytes, totalBytes: 0 });
 
   // 3. Hash what the server could not decide on, then scan just those again.
   let changedCount = 0;
@@ -408,7 +445,7 @@ async function runLibrarySyncInner(
     uploadPaths: jobs.map((job) => job.path),
     estimate,
   };
-  const primaryBatch = (jobs.length > 0 ? jobs[0]!.batchId : batchIds[0]) ?? null;
+  const primaryBatch = shownBatch();
   const result = (overrides: Partial<LibrarySyncResult>): LibrarySyncResult => ({
     batchId: primaryBatch,
     batchIds,
@@ -428,7 +465,7 @@ async function runLibrarySyncInner(
 
   // 4. Confirm.
   throwIfAborted(signal);
-  if (confirm && !(await confirm(plan))) {
+  if (confirm && !(await untilAborted(Promise.resolve(confirm(plan)), signal))) {
     report({ phase: 'done', done: 0, total: jobs.length, bytes: 0, totalBytes });
     return result({ cancelled: true });
   }
@@ -541,16 +578,22 @@ async function importIntoBatch(options: ImportFilesAdHocOptions, batchId: string
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
   const counts = { done: 0, bytes: 0, uploaded: 0, skipped: 0 };
   const report = (phase: LibrarySyncPhase) =>
-    onProgress?.({ phase, done: counts.done, total: files.length, bytes: counts.bytes, totalBytes, failed: [...failed] });
+    onProgress?.({ phase, done: counts.done, total: files.length, bytes: counts.bytes, totalBytes, failed: [...failed], batchId });
   report('uploading');
+  // A file from a dropped or picked folder keeps its folder path; a loose file its name.
+  // Two files with the same path in one batch are told apart (`uniqueNoteImportPaths`).
+  const paths = uniqueNoteImportPaths(
+    files.map((file) => {
+      const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+      return relative && relative.length > 0 ? relative : file.name;
+    }),
+  );
 
   await runPool(
     files,
     Math.max(1, options.concurrency ?? DEFAULT_UPLOAD_CONCURRENCY),
-    async (file) => {
-      // A file from a dropped or picked folder keeps its folder path; a loose file its name.
-      const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
-      const path = relative && relative.length > 0 ? relative : file.name;
+    async (file, index) => {
+      const path = paths[index]!;
       try {
         const answer = await uploadNoteImportFile(
           host,
@@ -573,6 +616,61 @@ async function importIntoBatch(options: ImportFilesAdHocOptions, batchId: string
 
   report('done');
   return { batchId, uploaded: counts.uploaded, skipped: counts.skipped, failed };
+}
+
+// =============================================================================
+// Unique paths in an ad-hoc batch
+// =============================================================================
+
+/** `notes (2).md` → `notes` and `.md`; a name with no extension (or a dotfile) has `''`. */
+function splitName(name: string): { stem: string; ext: string } {
+  const at = name.lastIndexOf('.');
+  return at <= 0 ? { stem: name, ext: '' } : { stem: name.slice(0, at), ext: name.slice(at) };
+}
+
+/**
+ * Makes the paths of one ad-hoc import batch unique, the way a file manager names a
+ * copy: the first file keeps its path, and each later file with the same path gets
+ * ` (n)` before the extension of its last segment, with the smallest `n` from 2 that no
+ * other path of the batch uses. A name that already ends in ` (n)` is counted on from
+ * its stem (a second `a (2).md` becomes `a (3).md`); a name with no extension, or a
+ * dotfile, takes the suffix at its end (`README (2)`). Paths are compared after
+ * `normalizeLibraryPath` (as the server stores them), and a valid path is returned
+ * normalised; an invalid one is returned as given, for the server to refuse.
+ *
+ * `importFilesAdHoc` applies it. A host that uploads ad-hoc files into a batch itself
+ * (`createNoteImportBatch` and `uploadNoteImportFile`) applies it to the batch's
+ * paths, so two dropped files named alike from different folders stay two items.
+ *
+ * @param paths - The paths, in upload order.
+ * @returns The paths, one per input and in the same order, all distinct.
+ *
+ * @stability experimental
+ */
+export function uniqueNoteImportPaths(paths: readonly string[]): string[] {
+  const keyed = paths.map((path) => normalizeLibraryPath(path) ?? path);
+  const taken = new Set(keyed);
+  const seen = new Set<string>();
+  return keyed.map((path) => {
+    if (!seen.has(path)) {
+      seen.add(path);
+      return path;
+    }
+    const slash = path.lastIndexOf('/');
+    const dir = path.slice(0, slash + 1);
+    const { stem, ext } = splitName(path.slice(slash + 1));
+    const counted = /^(.*) \((\d+)\)$/.exec(stem);
+    const base = counted && counted[1] ? counted[1] : stem;
+    let n = counted ? Number(counted[2]) + 1 : 2;
+    let candidate = `${dir}${base} (${n})${ext}`;
+    while (taken.has(candidate)) {
+      n += 1;
+      candidate = `${dir}${base} (${n})${ext}`;
+    }
+    taken.add(candidate);
+    seen.add(candidate);
+    return candidate;
+  });
 }
 
 // =============================================================================
