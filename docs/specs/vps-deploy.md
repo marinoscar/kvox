@@ -1265,6 +1265,8 @@ every place a decision governs.
     installing, and the re-check refuses rather than re-picking, because an
     external proxy may already point at the port.
     (`apps/cli/src/deploy/docker-ports.ts`; `apps/cli/src/deploy/install.ts`, `assertBindPortStillFree`)
+    These are the pre-platform files; the preflight half is now the platform's
+    `bind-port-owner` check (issue #745), and this app registers no port check.
 
 ## 19. The `deploy-info/info.json` schema
 
