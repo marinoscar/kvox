@@ -66,6 +66,7 @@
     "kvox-graph-manual-relations",
     "kvox-has-audio-origins",
     "kvox-import-format",
+    "kvox-library-sync-hardening",
     "kvox-new-note-keep",
     "kvox-note-first-home",
     "kvox-note-libraries-api",
@@ -107,6 +108,7 @@
     "ontology-1-3-0-topic-product",
     "platform-next-10-pin",
     "platform-next-11-pin",
+    "platform-next-12-pin",
     "remove-epic-visual-specs",
     "search-model-filter"
   ]
