@@ -19,6 +19,8 @@ export * from './hooks/useNoteLibraries.js';
 
 // Library sync and ad-hoc import: the orchestration KVox Desktop calls too.
 export * from './sync/librarySync.js';
+// The per-library lock both the pages and a host's watcher sync through.
+export * from './sync/librarySyncCoordinator.js';
 
 // Pure helpers other screens use.
 export * from './utils/noteSource.js';

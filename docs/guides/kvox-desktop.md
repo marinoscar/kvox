@@ -841,23 +841,27 @@ export const desktopFiles: KvoxFileAccessPort = {
 // then: const desktopHost: KvoxWebHost = { …, files: desktopFiles };
 ```
 
-**Syncing.** `runLibrarySync` and `importFilesAdHoc` (`@marinoscar/kvox-web/notes/headless`) are the orchestration both hosts share; the packaged library pages call them with the port from `useKvoxFileAccess()`. Desktop calls `runLibrarySync` itself for the work the pages do not trigger, always with `{ sequential: true }` so uploads go one at a time to the local server and never compete with the database and the job runner:
+**Syncing.** `runLibrarySync` and `importFilesAdHoc` (`@marinoscar/kvox-web/notes/headless`) are the orchestration both hosts share; the packaged library pages call them with the port from `useKvoxFileAccess()`. Desktop syncs a library itself for the work the pages do not trigger, always with `{ sequential: true }` so uploads go one at a time to the local server and never compete with the database and the job runner. It goes through `syncLibrary` (the shared `LibrarySyncCoordinator`, #725), never `runLibrarySync` directly: the pages' "Sync now" and "Add folder" use the same coordinator, so a watcher sync and a page sync never run on one library at once, and one library syncs at a time:
 
 ```ts
 // Illustrative — not compiled
-import { runLibrarySync } from '@marinoscar/kvox-web/notes/headless';
+import { syncLibrary } from '@marinoscar/kvox-web/notes/headless';
 
-async function syncLibrary(libraryId: string): Promise<void> {
+async function syncBoundLibrary(libraryId: string, signal: AbortSignal): Promise<void> {
   const ref = await desktopFiles.getLibraryFolder(libraryId);
   if (!ref) return;                                                    // not bound on this device
-  await runLibrarySync({ host: desktopHost, port: desktopFiles, library: { id: libraryId }, ref, sequential: true });
+  // A change seen while this library syncs queues exactly one rerun (`whenRunning: 'rerun'`, the default).
+  const ticket = syncLibrary({ host: desktopHost, port: desktopFiles, library: { id: libraryId }, ref, signal, sequential: true, confirm: () => true });
+  await ticket.result;                                                 // ticket.disposition: 'started' | 'joined' | 'queued'
 }
 ```
+
+Progress events carry `batchId` as soon as the scan has opened a batch, so a status can link to `/notes/import-batches/:batchId` while the sync runs.
 
 - **On launch**, rescan every library that has a bound folder (the changes made while KVox was closed). The scan diff makes this cheap: unchanged files cost no upload, and a file touched without changing is only re-hashed.
 - **While running**, `watch` each bound folder and, on a change, rescan after a short debounce. A partial manifest (`complete: false`) is how a watcher reports a few paths; nothing absent from it is marked missing.
 - **The client closes the batch** when it has finished uploading (the sync does this for you); the server also cancels an empty batch it never heard about after 30 minutes.
-- A loose-file drop uses `importFilesAdHoc` with `files` from the OS and needs no folder.
+- A loose-file drop uses `importFilesAdHoc` with `files` from the OS and needs no folder. Two files with the same name get distinct paths in the batch (`notes.md`, `notes (2).md`; `uniqueNoteImportPaths`).
 
 **Navigation: Home first.** Put Home first in the rail and mount `kvoxHomeRoutes` (`@marinoscar/kvox-web/home/ui`) at `/`: the knowledge-first Home draws Ask, the Review Queue, the note libraries, the graph and recent imports, then the journey, what is moving, what failed and the recent notes (no transcripts, which Desktop does not offer). The libraries pages (`/notes/libraries`, `/notes/libraries/:libraryId`, `/notes/import-batches/:batchId`) come with `kvoxNotesRoutes`, and `/graph/review-queue` with `kvoxGraphRoutes`:
 
