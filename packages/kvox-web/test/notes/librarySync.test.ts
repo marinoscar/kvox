@@ -12,6 +12,7 @@ import {
   checkNoteImportFiles,
   importFilesAdHoc,
   runLibrarySync,
+  uniqueNoteImportPaths,
 } from '../../src/notes/headless/index.js';
 import type { LibrarySyncProgress } from '../../src/notes/headless/index.js';
 
@@ -181,6 +182,51 @@ describe('runLibrarySync', () => {
     expect(result).toMatchObject({ uploaded: 1, skipped: 1 });
   });
 
+  it('carries the batch id in progress as soon as the scan answers', async () => {
+    const port = fakePort({ 'a.md': 'a', 'b.md': 'b' });
+    const host = createFakeKvoxWebHost({
+      routes: {
+        'POST /notes/libraries/:id/scan': (request) =>
+          (request.body as { complete: boolean }).complete
+            ? scanAnswer({ batchId: 'b-missing', missing: ['gone.md'], hashNeeded: ['b.md'] })
+            : scanAnswer({ batchId: 'b-changed', upload: ['b.md'] }),
+        'POST /notes/import-batches/:id/files': { itemId: 'i', action: 'changed', skipped: false },
+      },
+    });
+    const progress: LibrarySyncProgress[] = [];
+    const result = await runLibrarySync({ host, port, library: { id: 'lib' }, ref: REF, onProgress: (p) => progress.push(p) });
+
+    expect(progress[0]!.batchId).toBeUndefined();
+    // Right after the first scan, before hashing: the batch it opened.
+    const firstWithBatch = progress.findIndex((p) => p.batchId !== undefined);
+    expect(progress[firstWithBatch]).toMatchObject({ phase: 'enumerating', batchId: 'b-missing', done: 2, total: 2 });
+    expect(progress.slice(firstWithBatch).some((p) => p.phase === 'hashing')).toBe(true);
+    // Once the follow-up scan lists uploads, the batch to show is the one receiving them.
+    expect(progress.filter((p) => p.phase === 'uploading' || p.phase === 'done').every((p) => p.batchId === 'b-changed')).toBe(true);
+    expect(result.batchId).toBe('b-changed');
+  });
+
+  it('stops while confirm is still unanswered when the signal aborts', async () => {
+    const port = fakePort({ 'a.md': 'a' });
+    const controller = new AbortController();
+    const host = createFakeKvoxWebHost({
+      routes: { 'POST /notes/libraries/:id/scan': scanAnswer({ batchId: 'b1', upload: ['a.md'] }) },
+    });
+    const pending = runLibrarySync({
+      host,
+      port,
+      library: { id: 'lib' },
+      ref: REF,
+      signal: controller.signal,
+      confirm: () => {
+        controller.abort();
+        return new Promise<boolean>(() => undefined);
+      },
+    });
+    await expect(pending).rejects.toBeDefined();
+    expect(host.callsTo('POST /notes/import-batches/b1/close')).toHaveLength(1);
+  });
+
   it('stops when the signal aborts', async () => {
     const port = fakePort({ 'a.md': 'a' });
     const controller = new AbortController();
@@ -223,6 +269,29 @@ describe('importFilesAdHoc', () => {
     expect(progress.at(-1)).toMatchObject({ phase: 'done', done: 2, total: 2 });
   });
 
+  it('gives two files of the same name distinct paths in one batch, and reports the batch id', async () => {
+    const paths: string[] = [];
+    const names: string[] = [];
+    const host = createFakeKvoxWebHost({
+      routes: {
+        'POST /notes/import-batches': { batchId: 'adhoc-1' },
+        'POST /notes/import-batches/:id/files': (request) => {
+          paths.push(formPath(request));
+          names.push(((request.body as FormData).get('file') as File).name);
+          return { itemId: 'i', action: 'new', skipped: false };
+        },
+      },
+    });
+    const progress: LibrarySyncProgress[] = [];
+    const files = [new File(['a'], 'notes.md'), new File(['b'], 'notes.md')];
+    const result = await importFilesAdHoc({ host, files, concurrency: 1, onProgress: (p) => progress.push(p) });
+    expect(result).toMatchObject({ uploaded: 2, failed: [] });
+    expect(paths).toEqual(['notes.md', 'notes (2).md']);
+    // The file keeps its own name; only the batch path is told apart.
+    expect(names).toEqual(['notes.md', 'notes.md']);
+    expect(progress.every((p) => p.batchId === 'adhoc-1')).toBe(true);
+  });
+
   it('collects a refused file and keeps the others', async () => {
     const host = createFakeKvoxWebHost({
       routes: {
@@ -238,6 +307,42 @@ describe('importFilesAdHoc', () => {
     expect(result.uploaded).toBe(1);
     expect(result.failed).toEqual([expect.objectContaining({ path: 'bad.pdf', reason: 'unsupported_document' })]);
     expect(host.callsTo('POST /notes/import-batches/adhoc-1/close')).toHaveLength(1);
+  });
+});
+
+describe('uniqueNoteImportPaths', () => {
+  it('keeps the first path and numbers later copies before the extension', () => {
+    expect(uniqueNoteImportPaths(['notes.md', 'notes.md', 'notes.md', 'other.md'])).toEqual([
+      'notes.md',
+      'notes (2).md',
+      'notes (3).md',
+      'other.md',
+    ]);
+  });
+
+  it('numbers names without an extension, dotfiles and folder paths on their last segment', () => {
+    expect(uniqueNoteImportPaths(['README', 'README', '.notes', '.notes', 'a.b/c.md', 'a.b/c.md'])).toEqual([
+      'README',
+      'README (2)',
+      '.notes',
+      '.notes (2)',
+      'a.b/c.md',
+      'a.b/c (2).md',
+    ]);
+  });
+
+  it('skips a number another path of the batch already uses, and counts on from an existing "(n)"', () => {
+    expect(uniqueNoteImportPaths(['a.md', 'a.md', 'a (2).md'])).toEqual(['a.md', 'a (3).md', 'a (2).md']);
+    expect(uniqueNoteImportPaths(['a (2).md', 'a (2).md'])).toEqual(['a (2).md', 'a (3).md']);
+    expect(uniqueNoteImportPaths(['x (2).tar.gz', 'x (2).tar.gz'])).toEqual(['x (2).tar.gz', 'x (2).tar (2).gz']);
+  });
+
+  it('compares paths as the server normalises them', () => {
+    expect(uniqueNoteImportPaths(['dir\\a.md', 'dir/a.md', './dir/a.md'])).toEqual(['dir/a.md', 'dir/a (2).md', 'dir/a (3).md']);
+  });
+
+  it('leaves distinct paths alone', () => {
+    expect(uniqueNoteImportPaths(['a/x.md', 'b/x.md', 'x.md'])).toEqual(['a/x.md', 'b/x.md', 'x.md']);
   });
 });
 
