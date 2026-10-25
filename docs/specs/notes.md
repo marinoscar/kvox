@@ -2135,6 +2135,31 @@ share; the folder is read through `KvoxFileAccessPort` (`KvoxWebHost.files`),
 with `createBrowserFileAccess` as the browser implementation. Desktop: see
 [the Desktop guide](../guides/kvox-desktop.md#note-libraries-on-desktop).
 
+**One sync per library (#725).** Every sync goes through a
+`LibrarySyncCoordinator` (`getLibrarySyncCoordinator()`, `syncLibrary`), keyed
+by library id and shared by the pages ("Sync now", "Add folder") and a host's
+watcher. A request for a library with no run starts one (waiting for its turn:
+one library syncs at a time by default); a request for a library whose run is
+waiting joins it; a request while the run is in flight either joins it
+(`whenRunning: 'join'`, the pages) or queues exactly one rerun after it, which
+every later request joins (`'rerun'`, the default, so a change seen during a
+sync is not lost). A run uses the options of the request that created it; a
+failed run rejects every attached request and releases the library. Aborting a
+request's signal detaches it; the run stops when nobody is attached, or on
+`cancel` (the pages' "Stop"). The lock is per tab or renderer, not across
+browser tabs. Progress events carry `batchId` as soon as a scan opens a batch,
+so a host can link to the batch page while the sync runs.
+
+**Unique paths in an ad-hoc batch.** An ad-hoc file's `path` is its folder path
+(a dropped folder) or its name, so two files dropped from different folders can
+collide. `importFilesAdHoc` applies `uniqueNoteImportPaths`: the first file
+keeps its path, each later one with the same (normalised) path gets ` (n)`
+before the extension of its last segment, with the smallest `n` from 2 no other
+path of the batch uses (`notes.md`, `notes (2).md`; `README (2)` without an
+extension; a second `a (2).md` becomes `a (3).md`). A host that uploads into an
+ad-hoc batch itself applies the same function. The server does not rename: two
+items with one path in a batch are two items that read alike.
+
 ## 9. Privacy — what leaves this deployment, to whose account
 
 VISION.md requires that users *"understand when their information is being

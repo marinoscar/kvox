@@ -284,7 +284,11 @@ export interface NoteImportUploadFile {
   body: Blob;
   /** The file name the server stores (the path's last segment). */
   filename: string;
-  /** The library-relative path; omit for an ad-hoc file (the server uses the file name). */
+  /**
+   * The library-relative path; omit for an ad-hoc file (the server uses the file name).
+   * In an ad-hoc batch, give every file a distinct path (`uniqueNoteImportPaths`, which
+   * `importFilesAdHoc` applies): two files named alike would otherwise share one.
+   */
   path?: string;
   /** Last modified time, milliseconds since the epoch. */
   mtime?: number;
