@@ -86,11 +86,11 @@ import type { NotesActor as RequestUser } from './notes-actor.js';
 import { SEARCH_DOC_NOTE, SearchIndexService } from '../search/index.js';
 import { NoteAccessService } from './access/note-access.service.js';
 import { NoteVersionWriter } from './note-version-writer.js';
+import { noteExcerpt } from './note-excerpt.js';
 import { NoteOriginService, type NoteOriginTranscript } from './note-origin.service.js';
 import { NoteSourceNameService, noteSourceNameKey } from './note-source-name.service.js';
 import { NoteTemplateAccessService } from './access/note-template-access.service.js';
 import {
-  EXCERPT_CHARS,
   NOTE_CONFLICT_REASONS,
   RETITLE_SWEEP_LIMIT,
   type CreateNoteDto,
@@ -1423,7 +1423,10 @@ export function detailShape(
   };
 }
 
-/** The list-row projection: everything the detail carries, with an excerpt for a body. */
+/**
+ * The list-row projection: everything the detail carries, with a plain-text
+ * excerpt (prose first, markdown syntax removed) in place of the body.
+ */
 export function listShape(
   note: Note & { template?: { name: string } | null },
   // Resolved for the WHOLE PAGE by `NoteSourceNameService` and passed in, never
@@ -1441,7 +1444,7 @@ export function listShape(
   void contextText;
   void originTranscript;
 
-  return { ...rest, excerpt: excerpt(note.body) };
+  return { ...rest, excerpt: noteExcerpt(note.body, note.bodyFormat) };
 }
 
 /** One version, as both version routes report it. */
@@ -1491,13 +1494,6 @@ function sourceIdOf(
   if (note.sourceType === 'note') return note.sourceNoteId ?? '';
   if (note.sourceType === 'document') return note.sourceObjectId ?? '';
   return '';
-}
-
-/** The first {@link EXCERPT_CHARS} characters of a body, on a whitespace boundary. */
-export function excerpt(body: string): string {
-  const flat = body.replace(/\s+/g, ' ').trim();
-
-  return flat.length <= EXCERPT_CHARS ? flat : `${flat.slice(0, EXCERPT_CHARS).trimEnd()}…`;
 }
 
 /**
