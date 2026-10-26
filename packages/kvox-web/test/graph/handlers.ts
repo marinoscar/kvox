@@ -95,6 +95,8 @@ export const graphHandlers = [
 
   // #765: nothing merged into any entity by default; a test overrides it.
   http.get(`${API_BASE}/graph/entities/:id/merges`, () => HttpResponse.json({ data: { merges: [] } })),
+  // #766: no possible duplicates by default; the duplicates suite overrides it.
+  http.get(`${API_BASE}/graph/duplicates`, () => HttpResponse.json({ data: { pairs: [] } })),
 
   http.get(`${API_BASE}/graph/entities/:id/timeline`, ({ request }) => {
     const url = new URL(request.url);

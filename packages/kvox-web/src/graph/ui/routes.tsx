@@ -21,6 +21,9 @@ import type { KvoxRouteDef } from '../../core/ui/index.js';
  * - `/graph/review-queue` (#721): the same drafts grouped by library and import
  *   batch (`GET /api/graph/review-queue` is `graph:read`), with a safe-policy
  *   batch commit per group gated inside the page on `graph:write`.
+ * - `/graph/duplicates` (#766): the possible-duplicate pairs
+ *   (`GET /api/graph/duplicates` is `graph:read`); merge, "not the same" and
+ *   the deeper scan are `graph:write`, gated inside the page.
  * - `/graph/imports/:proposalId` (#387): `graph:write`, the exact string
  *   `POST /api/graph/imports` and the review writes enforce, because importing
  *   is curating the graph. A viewer without it is sent to `/graph`.
@@ -83,6 +86,15 @@ export const kvoxGraphRoutes: readonly KvoxRouteDef[] = [
     Component: lazy(() =>
       import('./pages/GraphReviewQueuePage.js').then((module) => ({
         default: module.GraphReviewQueuePage,
+      })),
+    ),
+  },
+  {
+    path: '/graph/duplicates',
+    permission: 'graph:read',
+    Component: lazy(() =>
+      import('./pages/GraphDuplicatesPage.js').then((module) => ({
+        default: module.GraphDuplicatesPage,
       })),
     ),
   },

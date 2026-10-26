@@ -17,8 +17,9 @@
  * never whether app chrome mounts, so it is not a sixth coupled breakpoint gate
  * (CLAUDE.md, Settings UI Pattern rule 5).
  *
- * The header links to Explore, Overview and Review (`/graph/review`, the
- * proposals waiting for review). The header's overflow menu (phone and desktop alike) carries "Export
+ * The header links to Explore, Overview, Review (`/graph/review`, the
+ * proposals waiting for review) and Possible duplicates (`/graph/duplicates`,
+ * #766, with the number of pairs from one `?limit=50` read). The header's overflow menu (phone and desktop alike) carries "Export
  * graph…" — `ExportGraphDialog` (#386), an RDF export of the caller's graph —
  * and, for a caller holding `graph:write`, "Import graph…" —
  * `ImportGraphDialog` (#387), which uploads an RDF file as a proposal to
@@ -51,10 +52,12 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { DUPLICATES_BADGE_LIMIT, DuplicatesLink, duplicatesBadgeText } from '../components/DuplicatesLink.js';
 import { EntityListRow } from '../components/EntityListRow.js';
 import { ExportGraphDialog } from '../components/ExportGraphDialog.js';
 import { ImportGraphDialog } from '../components/ImportGraphDialog.js';
 import { EntityTypeFilter } from '../components/EntityTypeFilter.js';
+import { useGraphDuplicates } from '../../headless/hooks/useGraphDuplicates.js';
 import { useGraphEntities } from '../../headless/hooks/useGraphEntities.js';
 import { useRecentGraphImports } from '../../headless/hooks/useGraphImport.js';
 import { useGraphEffectiveOntology } from '../../headless/hooks/useGraphAttributeDefs.js';
@@ -157,6 +160,9 @@ export function GraphIndexPage() {
   const [importOpen, setImportOpen] = useState(false);
   const canImport = useHasPermission('graph:write');
   const recentImports = useRecentGraphImports(canImport);
+  // One cheap read for the "Possible duplicates" badge (#766).
+  const duplicateCount = useGraphDuplicates({ limit: DUPLICATES_BADGE_LIMIT }).pairs.length;
+  const duplicateBadge = duplicatesBadgeText(duplicateCount);
 
   const openExport = () => {
     setMenuAnchor(null);
@@ -224,6 +230,17 @@ export function GraphIndexPage() {
             <MenuItem component={RouterLink} to="/graph/review" onClick={() => setMenuAnchor(null)}>
               Review
             </MenuItem>
+            <MenuItem
+              component={RouterLink}
+              to="/graph/duplicates"
+              onClick={() => setMenuAnchor(null)}
+              aria-label={duplicateBadge ? `Possible duplicates (${duplicateBadge})` : 'Possible duplicates'}
+            >
+              Possible duplicates
+              {duplicateBadge && (
+                <Chip size="small" color="warning" label={duplicateBadge} aria-hidden="true" sx={{ ml: 1, height: 20 }} />
+              )}
+            </MenuItem>
             <MenuItem onClick={openExport}>Export graph…</MenuItem>
             {canImport && <MenuItem onClick={openImport}>Import graph…</MenuItem>}
           </Menu>
@@ -239,6 +256,7 @@ export function GraphIndexPage() {
           <Button component={RouterLink} to="/graph/review" variant="outlined">
             Review
           </Button>
+          <DuplicatesLink count={duplicateCount} />
           <IconButton
             aria-label="More knowledge actions"
             aria-haspopup="menu"
