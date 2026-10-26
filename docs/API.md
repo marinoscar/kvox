@@ -7600,10 +7600,30 @@ never resurrect a forgotten person's name.
   (`pending: true`, `reason: "backfill"`) — the only case this request
   queues anything.
 - **`stale: true`** — your graph changed after the snapshot was computed.
-  Reported, never refreshed automatically; call the refresh route below.
+  Reported, never refreshed by this request. A commit, merge or merge
+  reversal queues one coalesced re-layout automatically (120 s delay, one
+  active job per user); other changes re-lay only past a 20 % entity-count
+  change. You can always call the refresh route below.
 - **`nodes`** carries at most 5000 entities, highest degree first;
-  `nodesTruncated` says whether more were positioned. `clusterEdges` is
-  capped at 500.
+  `nodesTruncated` says whether more matched. `clusterEdges` is capped at
+  500. The response has no per-node edges.
+- **Optional filters**, applied to the snapshot with positions unchanged:
+  `types` (comma-separated entity types or item kinds; absent or blank =
+  all; an unknown key is a `400`), and `from` / `to` (`YYYY-MM-DD` or ISO 8601
+  with offset; `to` is exclusive). The window keeps entities with evidence
+  dated in it, using the `GET /graph/activity` date rule (a live transcript's
+  `recorded_at`, else a live note's `created_at`, else the citation's own
+  `created_at`; evidence on a relation counts for both ends, on an item for
+  its subject). `memberSample` is filtered the same way; cluster `size`,
+  `typeCounts`, `nodeCount` and `edgeCount` stay the snapshot's.
+- **`edges=true`** adds `edges: [{ id, source, target, type }]` and
+  `edgesTruncated`: one per live relation (readable, valid now) whose both
+  ends are in the returned `nodes`, strongest (confidence) then newest first,
+  at most 20000. `id` is the relation id. Item-derived layout edges are not
+  included. Without the flag both fields are omitted.
+- **`typeCounts`** is live readable entities per type, time-filtered by
+  `from` / `to` but never by `types` (it feeds filter-chip counts), so it can
+  exceed the nodes of a stale snapshot.
 
 **Requires:** `graph:read`. **Always `200`** for your own graph — there is
 no state that answers anything else.
@@ -7636,12 +7656,13 @@ no state that answers anything else.
     "nodes": [
       { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person", "x": 11.9, "y": -2.7, "clusterId": 0, "degree": 6 }
     ],
-    "nodesTruncated": false
+    "nodesTruncated": false,
+    "typeCounts": { "Person": 3, "Project": 2 }
   }
 }
 ```
 
-**Errors:** `401` · `403` without `graph:read`.
+**Errors:** `400` unknown `types` key, invalid date or `edges` value · `401` · `403` without `graph:read`.
 
 ##### POST /graph/overview/refresh
 

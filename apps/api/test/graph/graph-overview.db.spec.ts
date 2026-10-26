@@ -25,12 +25,13 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { KG_GRAPH_LAYOUT_JOB_TYPE, GraphLayoutEnqueuer } from '@marinoscar/kvox-api/graph';
+import { GraphOntologyService, GraphPreferencesService } from '@marinoscar/kvox-api/graph';
 import { KgGraphLayoutHandler, GraphLayoutListener, GraphOverviewService, KgPurgeService } from './package-internals';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
 import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
-import { createDbGraphObjects, createDbJobs, createDbEvents } from '../helpers/graph-ports.helper';
+import { createDbGraphObjects, createDbJobs, createDbEvents, createDbSettings } from '../helpers/graph-ports.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-overview.db.spec');
 
@@ -53,7 +54,11 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     const { port } = createDbJobs(prisma);
     handler = new KgGraphLayoutHandler(port, p);
     enqueuer = new GraphLayoutEnqueuer(port);
-    overview = new GraphOverviewService(p, enqueuer);
+    overview = new GraphOverviewService(
+      p,
+      enqueuer,
+      new GraphOntologyService(p, new GraphPreferencesService(createDbSettings(prisma))),
+    );
     listener = new GraphLayoutListener(p, enqueuer, createDbEvents());
     purge = new KgPurgeService(p, createDbGraphObjects(prisma));
   });
@@ -160,6 +165,56 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     expect(view.nodeCount).toBe(5);
   });
 
+  it('filters by types and by an evidence window, keeps positions, and counts types live (#768)', async () => {
+    const { user, g } = await owner('filters');
+    const ids = await seedSmallGraph(g);
+    await run(user.id);
+
+    // Move every piece of Tom's and the meeting's evidence into 2020; the rest stays "now".
+    const old = new Date('2020-03-01T00:00:00Z');
+    await prisma.$executeRaw`UPDATE kg_evidence SET created_at = ${old}
+      WHERE owner_id = ${user.id}::uuid AND subject_kind = 'entity' AND subject_id = ANY(${[ids.tom, ids.meeting]}::uuid[])`;
+
+    const all = await overview.overview(user.id);
+    expect(all.typeCounts).toEqual({ Person: 2, Meeting: 1, Project: 1, Organization: 1 });
+
+    const people = await overview.overview(user.id, { types: 'Person' });
+    expect(people.nodes.map((n) => n.id).sort()).toEqual([ids.sarah, ids.tom].sort());
+    expect(people.typeCounts).toEqual(all.typeCounts);
+    const sarahBefore = all.nodes.find((n) => n.id === ids.sarah);
+    expect(people.nodes.find((n) => n.id === ids.sarah)).toMatchObject({ x: sarahBefore?.x, y: sarahBefore?.y });
+
+    const recent = await overview.overview(user.id, { from: '2021-01-01' });
+    expect(recent.nodes.map((n) => n.id)).not.toContain(ids.tom);
+    expect(recent.nodes.map((n) => n.id)).toContain(ids.sarah);
+    expect(recent.typeCounts.Person).toBe(1);
+
+    const ancient = await overview.overview(user.id, { to: '2021-01-01' });
+    expect(ancient.nodes.map((n) => n.id)).toContain(ids.tom);
+    expect(ancient.nodes.map((n) => n.id)).not.toContain(ids.sarah);
+
+    await expect(overview.overview(user.id, { types: 'Spaceship' })).rejects.toThrow();
+  });
+
+  it('returns edges among the filtered nodes only with edges=true (#768)', async () => {
+    const { user, g } = await owner('edges');
+    const ids = await seedSmallGraph(g);
+    await run(user.id);
+
+    expect(await overview.overview(user.id)).not.toHaveProperty('edges');
+
+    const full = await overview.overview(user.id, { edges: true });
+    expect(full.edgesTruncated).toBe(false);
+    expect(full.edges).toHaveLength(3);
+    expect(full.edges?.map((e) => e.type).sort()).toEqual(['ATTENDED', 'ATTENDED', 'WORKS_ON']);
+    expect(full.edges?.every((e) => e.source && e.target && e.id)).toBe(true);
+
+    // Dropping the meeting drops both ATTENDED edges.
+    const noMeeting = await overview.overview(user.id, { edges: true, types: 'Person,Project' });
+    expect(noMeeting.edges?.map((e) => e.type)).toEqual(['WORKS_ON']);
+    expect(noMeeting.edges?.[0]).toMatchObject({ source: ids.sarah, target: ids.project });
+  });
+
   it('reports stale after a relation is committed, without enqueueing', async () => {
     const { user, g } = await owner('stale');
     const ids = await seedSmallGraph(g);
@@ -217,7 +272,7 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     await run(user.id);
 
     await g.entity('Person', 'One more');
-    await expect(listener.reconcile({ ownerId: user.id, reason: 'commit' })).resolves.toBe(false);
+    await expect(listener.reconcile({ ownerId: user.id, reason: 'manual_edit' })).resolves.toBe(false);
     expect(await layoutJobs(user.id)).toHaveLength(0);
 
     for (let i = 0; i < 10; i += 1) await g.entity('Person', `Q${i}`);
