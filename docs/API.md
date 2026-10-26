@@ -6465,6 +6465,51 @@ as a match for the other again. Order-free and idempotent; audited
 so `aId < bId`; `created: false` when it was already recorded.
 **Errors:** `400` the same id twice · `401` · `403` · `404` either entity.
 
+##### GET /graph/duplicates
+
+Possible duplicates (issue #766): pairs of your own reviewed entities (accepted
+or edited, not merged) that probably are one thing, best first. `graph:read`.
+Query: `type` (only that entity type), `limit` (1 to 200, default 50). Pairs are
+always the same type, and a pair you recorded as "not the same" is left out.
+
+Two sources. `name_pass` is a fast, deterministic pass: one name is a whole-word
+run inside the other (`name_contained`: "Oscar" / "Avery Example"; "Al" is not
+inside "Alan"), one is the initials of the other (`initials`: "OAC" / "Org Alpha
+Consulting"), two entities share a normalized name or alias (`alias_match`), or the
+labels are trigram-similar at 0.6 or more (`similar_name`). It reads the 2 000
+most recently updated entities and at most 200 similar-spelling pairs, through
+indexes (never all-pairs). `resolution_proposal` maps the pending rows of your
+open `resolution` proposals that suggest a merge; `proposalItemId` names the row.
+A pair found by both is listed once, with `source: "resolution_proposal"`.
+
+**Response:** `200`
+```json
+{ "pairs": [ {
+  "a": { "id": "…", "type": "Person", "label": "Oscar", "aliases": [], "mentionCount": 4 },
+  "b": { "id": "…", "type": "Person", "label": "Avery Example", "aliases": [], "mentionCount": 9 },
+  "score": 0.8,
+  "reasons": ["name_contained"],
+  "source": "name_pass",
+  "proposalItemId": "…"
+} ] }
+```
+`score` is 0 to 1: the strongest signal (`alias_match` 0.95, `name_contained`
+0.8, `initials` 0.75, `resolution_proposal` 0.7, `similar_name` its trigram
+similarity, at least 0.6) plus 0.05 per further signal. `proposalItemId` is
+present only for `resolution_proposal`. Nothing is merged: use
+`POST /graph/entities/{id}/merge`.
+**Errors:** `400` bad `type` or `limit` · `401` · `403`.
+
+##### POST /graph/duplicates/scan
+
+Queues a `kg.resolve` re-scan of your whole graph (`scope: "all"`, reason
+`manual`) that writes a draft `resolution` proposal of suggested merges, on your
+own AI key. `graph:write`. A scan already pending or running is joined, not an
+error.
+
+**Response:** `202` `{ "queued": true, "alreadyRunning": false, "jobId": "…" }`
+**Errors:** `401` · `403` · `409` `details.reason: "graph_disabled"`.
+
 **Jobs.** `kg.resolve` (`{ maxRuntimeMs: 20 min, maxAttempts: 1 }`) and
 `kg.embed` (`{ maxRuntimeMs: 5 min, maxAttempts: 3 }`, content-hash keyed so a
 retry re-embeds nothing that is unchanged) are server-only, run on your own

@@ -64,6 +64,7 @@ export type SpeakerLinkReconciler = graphInternals.SpeakerLinkReconciler;
 export const {
   CandidateService,
   ContextFeatureService,
+  DuplicatesService,
   EXTRACTION_SCHEMA_NAME,
   ExtractionInputLoader,
   IDS,

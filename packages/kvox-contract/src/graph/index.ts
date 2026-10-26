@@ -1,3 +1,4 @@
+export * from './duplicates.js';
 export * from './entity-brief.js';
 export * from './extraction.js';
 export * from './graph-attribute-def.js';
