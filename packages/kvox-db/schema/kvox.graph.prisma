@@ -845,6 +845,37 @@ model KgDistinctPair {
   // the section header's "EIGHT CHECK CONSTRAINTS" note.
   @@map("kg_distinct_pairs")
 }
+// -----------------------------------------------------------------------------
+// `kg_synonyms` — the owner's personal synonym dictionary (issue #767): a set
+// of 2..20 interchangeable terms ("PTO", "paid time off", "vacation") that
+// steers entity matching and retrieval. `terms` are the display forms as the
+// owner typed them; `normalized` holds the `normalizeAlias()` form of each
+// term, index-aligned with `terms`. `entity_type` optionally restricts the
+// set to one ontology type (null = every type); it is a plain string, not an
+// enum, so a new ontology type needs no migration. `owner_id` Cascades, like
+// every other `kg_*` table's.
+// -----------------------------------------------------------------------------
+model KgSynonym {
+  id      String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+
+  terms      String[]
+  normalized String[]
+
+  entityType String? @map("entity_type")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  // HAND-WRITTEN in migration.sql only: `kg_synonyms_normalized_gin_idx`
+  // (gin on `normalized`) and the CHECK `kg_synonyms_cardinality_chk`
+  // (2..20 terms, `normalized` the same length). See the section header's
+  // "INTENTIONAL SCHEMA DRIFT" note.
+  @@map("kg_synonyms")
+}
 // One row per user-defined attribute (§17.3) — the schema half of the
 // ontology's user-extensibility story. `owner_id` Cascade, the same
 // reasoning every other `kg_*` table's `owner_id` follows.
@@ -1029,6 +1060,7 @@ extend model User {
   kgProposals     KgProposal[]
   kgMerges        KgMerge[]
   kgDistinctPairs KgDistinctPair[]
+  kgSynonyms      KgSynonym[]
   kgAttributeDefs KgAttributeDef[]
   kgEntityDigests KgEntityDigest[]
   kgEntityViews   KgEntityView[]

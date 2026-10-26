@@ -159,6 +159,14 @@
       ],
       "sha256": "9b2273964e46d13b62abf769e892a65a7e4a515bbdf99b8f4b4253d0d2d59847",
       "slice": "notes"
+    },
+    {
+      "id": "20261026184116_add_kg_synonyms",
+      "requiresHostTables": [
+        "users"
+      ],
+      "sha256": "3b9b856f63829f550296021adcf8052888992d46f9bdfc4c468f3f2862dd9a8d",
+      "slice": "graph"
     }
   ]
 }

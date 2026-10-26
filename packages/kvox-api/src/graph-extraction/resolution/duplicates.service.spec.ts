@@ -20,6 +20,7 @@ interface Opts {
   trigram?: Array<{ a_id: string; b_id: string; sim: number }>;
   items?: Array<Record<string, unknown>>;
   distinct?: Array<{ aId: string; bId: string }>;
+  synonyms?: Array<{ normalized: string[]; entityType: string | null }>;
   mentions?: Array<{ entityId: string; _count: { _all: number } }>;
   enqueue?: { id: string; deduplicated: boolean };
   graphEnabled?: boolean;
@@ -41,6 +42,7 @@ function harness(o: Opts = {}) {
     },
     kgProposalItem: { findMany: jest.fn().mockResolvedValue(o.items ?? []) },
     kgDistinctPair: { findMany: jest.fn().mockResolvedValue(o.distinct ?? []) },
+    kgSynonym: { findMany: jest.fn().mockResolvedValue(o.synonyms ?? []) },
     kgMention: { groupBy: jest.fn().mockResolvedValue(o.mentions ?? []) },
     $transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
   };
@@ -66,6 +68,15 @@ describe('DuplicatesService.list', () => {
     expect(prisma.kgEntity.findMany.mock.calls[0][0].where).toEqual(
       expect.objectContaining({ ownerId: OWNER, mergedIntoId: null, reviewStatus: { in: ['accepted', 'edited'] } }),
     );
+  });
+
+  it('proposes two same-type entities whose names share a synonym group (reason synonym, 0.9)', async () => {
+    const { service } = harness({
+      entities: [ent(A, 'Organization', 'KPMG'), ent(B, 'Organization', 'Klynveld Peat'), ent(C, 'Person', 'Klynveld Peat')],
+      synonyms: [{ normalized: ['kpmg', 'klynveld peat'], entityType: null }],
+    });
+    const { pairs } = await service.list(user, { limit: 50 });
+    expect(pairs.map((p) => [p.a.label, p.b.label, p.reasons, p.score])).toEqual([['KPMG', 'Klynveld Peat', ['synonym'], 0.9]]);
   });
 
   it('merges a trigram hit with a name signal and takes the higher base', async () => {

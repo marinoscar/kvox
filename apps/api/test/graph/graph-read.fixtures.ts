@@ -68,6 +68,7 @@ export async function cleanupGraphFixtures(prisma: PrismaClient, prefix: string)
       await tx.kgEvidence.deleteMany({ where: owner });
       await tx.kgRelation.deleteMany({ where: owner });
       await tx.kgItem.deleteMany({ where: owner });
+      await tx.kgSynonym.deleteMany({ where: owner });
       await tx.kgEntityAlias.deleteMany({ where: owner });
       await tx.kgEntity.deleteMany({ where: owner });
       await deleteTranscriptGrants(tx, owner);

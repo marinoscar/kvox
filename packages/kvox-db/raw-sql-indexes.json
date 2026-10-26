@@ -60,6 +60,11 @@
     "table": "kg_relations"
   },
   {
+    "definition": "CREATE INDEX kg_synonyms_normalized_gin_idx ON public.kg_synonyms USING gin (normalized)",
+    "name": "kg_synonyms_normalized_gin_idx",
+    "table": "kg_synonyms"
+  },
+  {
     "definition": "CREATE INDEX notes_search_vector_idx ON public.notes USING gin (search_vector)",
     "name": "notes_search_vector_idx",
     "table": "notes"

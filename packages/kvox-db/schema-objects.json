@@ -47,6 +47,10 @@
     {
       "name": "kg_relations_valid_precision_chk",
       "table": "kg_relations"
+    },
+    {
+      "name": "kg_synonyms_cardinality_chk",
+      "table": "kg_synonyms"
     }
   ],
   "functions": [

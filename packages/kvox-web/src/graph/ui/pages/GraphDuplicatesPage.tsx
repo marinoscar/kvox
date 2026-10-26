@@ -18,6 +18,9 @@
  *
  * SKIP hides a pair for this browser session (`sessionStorage`, best effort).
  *
+ * The header links to Synonyms (`/graph/synonyms`, #767), where a person
+ * tells KVox which names mean the same thing.
+ *
  * No breakpoint read: the two sides stack below `sm` through `sx` alone.
  */
 
@@ -51,6 +54,7 @@ import { duplicatePairKey, useGraphDuplicates, useScanDuplicates } from '../../h
 import { entityTypeLabel } from '../../headless/utils/graphDisplay.js';
 import { entityPath } from '../components/EntityListRow.js';
 import { mergeConfirmation } from '../components/MergeEntityDialog.js';
+import { SynonymsLink } from '../components/SynonymsLink.js';
 import { visuallyHidden } from '../visuallyHidden.js';
 
 /** How many pairs the page reads: the API's ceiling. */
@@ -68,6 +72,7 @@ export const DUPLICATE_REASON_COPY: Record<DuplicateReason, string> = {
   initials: 'Initials match',
   alias_match: 'Same alias',
   similar_name: 'Similar spelling',
+  synonym: 'Your synonyms',
   resolution_proposal: 'Suggested by KVox',
 };
 
@@ -437,7 +442,10 @@ export function GraphDuplicatesPage() {
             Entities that may be the same person, organization or thing.
           </Typography>
         </Box>
-        {!list.isLoading && visible.length > 0 && findMoreButton('outlined')}
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
+          <SynonymsLink />
+          {!list.isLoading && visible.length > 0 && findMoreButton('outlined')}
+        </Stack>
       </Stack>
 
       {scanner.error && (

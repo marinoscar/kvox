@@ -701,6 +701,7 @@ describe('kvox-guarded routes', () => {
       'GraphReadController',
       'GraphResolutionController',
       'GraphReviewQueueController',
+      'GraphSynonymsController',
       'GraphTopicsPromoteController',
       'NoteGenerationStreamController',
       'NoteImportController',
