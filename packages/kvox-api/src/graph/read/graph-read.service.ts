@@ -21,6 +21,7 @@ import { TranscriptAccessService } from '../../transcripts/index.js';
 import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-access.service.js';
 import { GraphOntologyService } from '../ontology/graph-ontology.service.js';
 import { normalizeAlias } from '../write/normalize.js';
+import { MAX_SYNONYM_EXPANSION, expandWithSynonyms } from '../synonyms/synonym-expansion.js';
 import type {
   GraphEntityDetail,
   ListEntitiesQuery,
@@ -214,6 +215,11 @@ export class GraphReadService {
       normalized = q.toLowerCase();
     }
     const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    // Personal synonym dictionary (#767): the whole query or one of its words in a group also
+    // finds entities known under the group's other names (exact alias match, at most 10 extras).
+    const words = q.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 0).slice(0, 8);
+    const probe = [...new Set([normalized, ...words.flatMap((w) => { try { return [normalizeAlias(w)]; } catch { return []; } })])];
+    const synonyms = await expandWithSynonyms(this.prisma, ownerId, probe, null, MAX_SYNONYM_EXPANSION);
     return this.prisma.$queryRaw<{ id: string; type: string; label: string; sort_key: null }[]>`
       SELECT e.id::text AS id, e.type, e.label, NULL AS sort_key
       FROM kg_entities e
@@ -223,6 +229,8 @@ export class GraphReadService {
           OR e.label ILIKE ${pattern} ESCAPE '\\'
           OR e.id IN (SELECT a.entity_id FROM kg_entity_aliases a
                       WHERE a.owner_id = ${ownerId}::uuid AND a.normalized % ${normalized})
+          OR e.id IN (SELECT a.entity_id FROM kg_entity_aliases a
+                      WHERE a.owner_id = ${ownerId}::uuid AND a.normalized = ANY(${synonyms}::text[]))
         )
       ORDER BY greatest(
                  similarity(e.label, ${q}),

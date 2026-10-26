@@ -27,7 +27,7 @@ export const MIN_ACRONYM_CHARS = 2;
 export const MAX_ACRONYM_CHARS = 6;
 export const SIMILAR_NAME_THRESHOLD = 0.6;
 
-export type NameReason = 'name_contained' | 'initials' | 'alias_match' | 'similar_name';
+export type NameReason = 'name_contained' | 'initials' | 'alias_match' | 'similar_name' | 'synonym';
 
 /** Base score of each signal; extra signals add `EXTRA_REASON_BONUS` each, capped at 1. */
 export const REASON_SCORES: Readonly<Record<NameReason | 'resolution_proposal', number>> = {
@@ -35,6 +35,7 @@ export const REASON_SCORES: Readonly<Record<NameReason | 'resolution_proposal', 
   name_contained: 0.8,
   initials: 0.75,
   similar_name: 0.6,
+  synonym: 0.9,
   resolution_proposal: 0.7,
 };
 export const EXTRA_REASON_BONUS = 0.05;
@@ -116,7 +117,7 @@ export function nameReasons(namesA: readonly string[], namesB: readonly string[]
   return ORDER.filter((r) => found.has(r));
 }
 
-const ORDER: readonly NameReason[] = ['alias_match', 'name_contained', 'initials', 'similar_name'];
+const ORDER: readonly NameReason[] = ['alias_match', 'name_contained', 'initials', 'similar_name', 'synonym'];
 
 /** The best base score, plus a small bonus per additional signal, capped at 1 and rounded to 2 places. */
 export function duplicateScore(reasons: readonly (NameReason | 'resolution_proposal')[], base?: number): number {
@@ -216,6 +217,45 @@ export function findNamePairs(entities: readonly NamedEntity[]): NamePair[] {
         if (acr) fan(i, byInitials.get(acr));
       }
     });
+  }
+  return out;
+}
+
+// -----------------------------------------------------------------------------
+// Personal synonym dictionary (issue #767)
+// -----------------------------------------------------------------------------
+
+export interface SynonymGroupNames {
+  /** Normalized terms of the group. */
+  normalized: readonly string[];
+  /** The entity type the group is limited to, or null for every type. */
+  entityType: string | null;
+}
+
+/**
+ * Pairs of same-type entities whose names fall in one synonym group (reason
+ * `synonym`). Entities are indexed per group, so the cost is linear in the
+ * entities; a group matched by more than {@link MAX_POSTINGS} entities is too
+ * common to say anything and is skipped.
+ */
+export function findSynonymPairs(entities: readonly NamedEntity[], groups: readonly SynonymGroupNames[]): NamePair[] {
+  const out: NamePair[] = [];
+  for (const g of groups) {
+    const terms = new Set(g.normalized);
+    const byType = new Map<string, NamedEntity[]>();
+    for (const e of entities) {
+      if (g.entityType !== null && g.entityType !== e.type) continue;
+      if (!e.names.some((n) => terms.has(n))) continue;
+      const list = byType.get(e.type);
+      if (list) list.push(e);
+      else byType.set(e.type, [e]);
+    }
+    for (const list of byType.values()) {
+      if (list.length < 2 || list.length > MAX_POSTINGS) continue;
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) out.push({ aId: list[i].id, bId: list[j].id, reasons: ['synonym'] });
+      }
+    }
   }
   return out;
 }

@@ -79,6 +79,7 @@ export type {
   KgAttributeDefRow,
   KgAttributeKindValue,
   KgDistinctPairRow,
+  KgSynonymRow,
   KgEntityAliasRow,
   KgEntityDigestRow,
   KgEntityRow,
@@ -130,6 +131,10 @@ export { GraphUserDataService } from './user-data/graph-user-data.service.js';
 // Services other slices and hosts use.
 export { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from './access/graph-access.service.js';
 export { GraphAttributeDefsService } from './attribute-defs/graph-attribute-defs.service.js';
+export { GraphSynonymsController } from './synonyms/graph-synonyms.controller.js';
+export { SynonymsService } from './synonyms/synonyms.service.js';
+export { MAX_SYNONYM_EXPANSION, expandWithSynonyms } from './synonyms/synonym-expansion.js';
+export { expandNamesWith, normalizeSynonymTerms } from './synonyms/synonym-terms.js';
 export { GraphEntitiesService } from './graph-entities.service.js';
 export { GraphObjectsService } from './graph-objects.service.js';
 export { subjectHousekeeping } from './housekeeping-subject.enqueue.js';

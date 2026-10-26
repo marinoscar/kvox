@@ -8,7 +8,9 @@
 //
 //   A  alias/label exact — `kg_entity_aliases.normalized = ANY($names)`, the
 //      mention's label and aliases normalized with #355's `normalizeAlias` in
-//      TypeScript. Relies on #355's contract that every entity's own label is
+//      TypeScript, widened (#767) by every term of the owner's synonym groups
+//      (entity type null or the mention's) that contain one of them: "OAC"
+//      finds "Org Alpha Consulting". Arms B and C still use the mention's own name. Relies on #355's contract that every entity's own label is
 //      also an alias row, so SQL never normalizes a label a second way.
 //   B  trigram ≥ 0.4 — `pg_trgm` over the entity label and the aliases'
 //      NORMALIZED form (the column `kg_entity_aliases_normalized_trgm_idx`
@@ -31,7 +33,7 @@
 
 import { Injectable, Inject } from '@nestjs/common';
 
-import { normalizeAlias } from '../../graph/index.js';
+import { expandWithSynonyms, normalizeAlias } from '../../graph/index.js';
 import { vectorLiteral } from './graph-embedder.service.js';
 import type { KvoxGraphDb, KvoxGraphTx } from '../../graph/index.js';
 import { KVOX_PRISMA } from '../../ports/index.js';
@@ -102,6 +104,7 @@ export class CandidateService {
 
     // --- A: alias / label exact -------------------------------------------
     if (names.length > 0) {
+      const exactNames = [...names, ...(await expandWithSynonyms(db, ownerId, names, mention.type))];
       const exact = await db.$queryRaw<Array<{ id: string }>>`
         SELECT DISTINCT e.id::text AS id
           FROM kg_entities e
@@ -110,7 +113,7 @@ export class CandidateService {
            AND e.type = ${mention.type}
            AND e.review_status IN ('accepted', 'edited')
            AND e.merged_into_id IS NULL
-           AND a.normalized = ANY(${names}::text[])`;
+           AND a.normalized = ANY(${exactNames}::text[])`;
       for (const r of exact) touch(r.id).aliasExact = true;
     }
 

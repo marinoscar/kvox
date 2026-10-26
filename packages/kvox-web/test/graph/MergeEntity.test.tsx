@@ -236,6 +236,85 @@ describe('MergeEntityDialog', () => {
   });
 });
 
+describe('MergeEntityDialog — also add to synonyms (#767)', () => {
+  function useSynonymsApi(fail = false) {
+    const created: unknown[] = [];
+    server.use(
+      http.post('*/api/graph/synonyms', async ({ request }) => {
+        const body = await request.json();
+        created.push(body);
+        if (fail) {
+          return HttpResponse.json(
+            { statusCode: 409, message: 'Conflict', details: { reason: 'synonyms_limit' } },
+            { status: 409 },
+          );
+        }
+        return HttpResponse.json(
+          {
+            data: {
+              id: gid(995),
+              terms: (body as { terms: string[] }).terms,
+              entityType: 'Person',
+              createdAt: '2026-10-26T10:00:00.000Z',
+              updatedAt: '2026-10-26T10:00:00.000Z',
+            },
+          },
+          { status: 201 },
+        );
+      }),
+    );
+    return created;
+  }
+
+  it('is unchecked by default, so a merge alone adds no synonyms', async () => {
+    useMergeApi();
+    const created = useSynonymsApi();
+    const user = userEvent.setup();
+    renderEntity();
+    const dialog = await openMergeDialog(user);
+    await pick(user, dialog, 'Ana', 'Ana Diaz');
+    const box = await within(dialog).findByRole('checkbox', { name: 'Also add these names to my synonyms' });
+    expect(box).not.toBeChecked();
+    await user.click(within(dialog).getByRole('button', { name: 'Merge' }));
+    expect(await screen.findByText('Merged')).toBeInTheDocument();
+    expect(created).toEqual([]);
+  });
+
+  it('when checked, creates a synonym group of the merged and kept names for the type', async () => {
+    useMergeApi();
+    const created = useSynonymsApi();
+    const user = userEvent.setup();
+    renderEntity();
+    const dialog = await openMergeDialog(user);
+    await pick(user, dialog, 'Ana', 'Ana Diaz');
+    await user.click(await within(dialog).findByRole('checkbox', { name: 'Also add these names to my synonyms' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Merge' }));
+
+    expect(await screen.findByText('Merged')).toBeInTheDocument();
+    expect(posts[0]).toEqual({ path: `/graph/entities/${ANA_ID}/merge`, body: { intoId: JOE_ID } });
+    expect(created).toEqual([{ terms: ['Ana Diaz', 'Joe Rivera'], entityType: 'Person' }]);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('a refused synonym keeps the merge and shows a non-blocking notice', async () => {
+    useMergeApi();
+    const created = useSynonymsApi(true);
+    const user = userEvent.setup();
+    renderEntity();
+    const dialog = await openMergeDialog(user);
+    await pick(user, dialog, 'Ana', 'Ana Diaz');
+    await user.click(await within(dialog).findByRole('checkbox', { name: 'Also add these names to my synonyms' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Merge' }));
+
+    expect(await screen.findByText('Merged')).toBeInTheDocument();
+    expect(created).toHaveLength(1);
+    expect(
+      await screen.findByText(/Merged, but the names were not added to your synonyms\. You can keep up to 500 synonym groups/),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+});
+
 describe('GraphEntityPage — merged tombstone', () => {
   it('redirects (replacing) to the survivor', async () => {
     server.use(

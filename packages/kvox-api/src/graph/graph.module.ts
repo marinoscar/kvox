@@ -15,6 +15,8 @@ import { TranscriptsModule } from '../transcripts/index.js';
 import { GraphAccessService } from './access/graph-access.service.js';
 import { GraphAttributeDefsController } from './attribute-defs/graph-attribute-defs.controller.js';
 import { GraphAttributeDefsService } from './attribute-defs/graph-attribute-defs.service.js';
+import { GraphSynonymsController } from './synonyms/graph-synonyms.controller.js';
+import { SynonymsService } from './synonyms/synonyms.service.js';
 import { EntityBriefController } from './brief/entity-brief.controller.js';
 import { EntityBriefService } from './brief/entity-brief.service.js';
 import { EntityDigestEnqueuer } from './brief/entity-digest.enqueuer.js';
@@ -145,6 +147,7 @@ export class GraphModule {
       GraphController,
       GraphEntitiesController,
       GraphAttributeDefsController,
+      GraphSynonymsController,
       GraphReadController,
       GraphOverviewController,
       GraphInsightsController,
@@ -165,6 +168,8 @@ export class GraphModule {
       GraphEntitiesService,
       GraphRelationEditsService,
       GraphAttributeDefsService,
+      // The personal synonym dictionary (#767): a user dictionary, not a graph write.
+      SynonymsService,
       // `kg.purge`: forget-a-person and the Danger Zone's `graph` category (#357).
       KgPurgeService,
       KgPurgeHandler,

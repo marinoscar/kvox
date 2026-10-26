@@ -20,6 +20,7 @@ export const DUPLICATE_REASONS = [
   'initials',
   'alias_match',
   'similar_name',
+  'synonym',
   'resolution_proposal',
 ] as const;
 

@@ -6476,7 +6476,9 @@ Two sources. `name_pass` is a fast, deterministic pass: one name is a whole-word
 run inside the other (`name_contained`: "Oscar" / "Avery Example"; "Al" is not
 inside "Alan"), one is the initials of the other (`initials`: "OAC" / "Org Alpha
 Consulting"), two entities share a normalized name or alias (`alias_match`), or the
-labels are trigram-similar at 0.6 or more (`similar_name`). It reads the 2 000
+labels are trigram-similar at 0.6 or more (`similar_name`), or the names of the two
+fall in one group of your personal synonym dictionary (`synonym`, issue #767,
+[`/graph/synonyms`](#get-graphsynonyms)). It reads the 2 000
 most recently updated entities and at most 200 similar-spelling pairs, through
 indexes (never all-pairs). `resolution_proposal` maps the pending rows of your
 open `resolution` proposals that suggest a merge; `proposalItemId` names the row.
@@ -6494,7 +6496,7 @@ A pair found by both is listed once, with `source: "resolution_proposal"`.
 } ] }
 ```
 `score` is 0 to 1: the strongest signal (`alias_match` 0.95, `name_contained`
-0.8, `initials` 0.75, `resolution_proposal` 0.7, `similar_name` its trigram
+0.8, `initials` 0.75, `synonym` 0.9, `resolution_proposal` 0.7, `similar_name` its trigram
 similarity, at least 0.6) plus 0.05 per further signal. `proposalItemId` is
 present only for `resolution_proposal`. Nothing is merged: use
 `POST /graph/entities/{id}/merge`.
@@ -6509,6 +6511,51 @@ error.
 
 **Response:** `202` `{ "queued": true, "alreadyRunning": false, "jobId": "…" }`
 **Errors:** `401` · `403` · `409` `details.reason: "graph_disabled"`.
+
+##### GET /graph/synonyms
+
+Your personal synonym dictionary (issue #767): groups of names that mean the
+same thing, oldest first. `graph:read`. Always your own groups.
+
+**Response:** `200`
+```json
+{ "groups": [ { "id": "…", "terms": ["OAC", "Org Alpha Consulting"], "entityType": null,
+                "createdAt": "…", "updatedAt": "…" } ] }
+```
+
+What a group does (it never creates or merges an entity; it is not a graph write):
+- **Resolution** (`kg.resolve`, the extraction resolution stage): a mention is also
+  matched, by exact alias, against every other term of a group that contains one
+  of its names, so "OAC" finds the entity "Org Alpha Consulting".
+- **Possible duplicates**: two same-type live entities with names in one group are
+  listed with reason `synonym` (score 0.9).
+- **Entity search** (`GET /graph/entities?q=`): the whole query or one of its words
+  in a group also finds entities known under the group's other names (at most 10
+  extra names).
+
+##### POST /graph/synonyms
+
+`graph:write`. Body `{ "terms": ["OAC", "Org Alpha Consulting"], "entityType": "Organization" }`:
+2 to 20 `terms` of 1 to 120 characters; `entityType` is optional (omit or `null`
+for every type). Terms are compared with the alias normalization (case, spacing and
+edge punctuation ignored) and de-duplicated; the first spelling is kept.
+
+**Response:** `201` the group.
+**Errors:** `400` `details.reason: "synonyms_too_few"` (fewer than two distinct
+names once normalized), `"synonyms_invalid_term"` (no letter or digit) or
+`"unknown_entity_type"` · `401` · `403` · `409` `details.reason: "synonyms_limit"`
+(500 groups per user).
+
+##### PATCH /graph/synonyms/{id}
+
+`graph:write`. Replaces the group's `terms` and `entityType` (same body and rules
+as `POST`). **Response:** `200` the group. **Errors:** `400` as `POST` · `401` ·
+`403` · `404` no such group, or not yours.
+
+##### DELETE /graph/synonyms/{id}
+
+`graph:write`. **Response:** `204`. **Errors:** `401` · `403` · `404` no such
+group, or not yours.
 
 **Jobs.** `kg.resolve` (`{ maxRuntimeMs: 20 min, maxAttempts: 1 }`) and
 `kg.embed` (`{ maxRuntimeMs: 5 min, maxAttempts: 3 }`, content-hash keyed so a

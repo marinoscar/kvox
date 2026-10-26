@@ -29,6 +29,7 @@ export * from './hooks/useGraphOverview.js';
 export * from './hooks/useGraphPreferences.js';
 export * from './hooks/useGraphProposal.js';
 export * from './hooks/useGraphReviewQueue.js';
+export * from './hooks/useGraphSynonyms.js';
 export * from './hooks/useReviewQueue.js';
 export * from './hooks/useGraphTimeline.js';
 export * from './hooks/useGraphTranscriptPeople.js';

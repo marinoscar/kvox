@@ -31,6 +31,14 @@ export {
   GraphDuplicatesPage,
   defaultDuplicateSurvivor,
 } from './pages/GraphDuplicatesPage.js';
+export {
+  GraphSynonymsPage,
+  SYNONYMS_SUBTITLE,
+  synonymGroupText,
+  synonymTypeLabel,
+} from './pages/GraphSynonymsPage.js';
+export { SynonymsLink } from './components/SynonymsLink.js';
+export type { SynonymsLinkProps } from './components/SynonymsLink.js';
 export { DUPLICATES_BADGE_LIMIT, DuplicatesLink, duplicatesBadgeText } from './components/DuplicatesLink.js';
 export type { DuplicatesLinkProps } from './components/DuplicatesLink.js';
 export { ReviewQueueGroupCard, reviewGroupTarget } from './components/review/ReviewQueueGroupCard.js';
