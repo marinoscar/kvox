@@ -80,8 +80,14 @@ export function readVersion(): string {
  * location by PREFIX, so the prefix is the closest it can express: the whole
  * family under each prefix streams, which is harmless for a JSON response and
  * keeps the route from being buffered and cut at the edge.
+ *
+ * NO TRAILING SLASH (#749). nginx answers a request for a proxied prefix
+ * location's URI without its trailing slash with a 301 to the slash form, so
+ * `/api/notes/` turned `GET /api/notes?limit=20` (the notes list) into
+ * `/api/notes/?limit=20`, which the API reads as `GET /notes/:id` with an empty
+ * id. A prefix without the slash redirects nothing and still covers `/:id/stream`.
  */
-export const APP_STREAM_PATHS: readonly string[] = ['/api/notes/', '/api/note-generations/', '/api/ask/messages/'];
+export const APP_STREAM_PATHS: readonly string[] = ['/api/notes', '/api/note-generations', '/api/ask/messages'];
 
 export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: {
