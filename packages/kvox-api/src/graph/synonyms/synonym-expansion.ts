@@ -11,10 +11,18 @@
 import type { KvoxGraphDb, KvoxGraphTx } from '../data/graph-db.js';
 import { expandNamesWith } from './synonym-terms.js';
 
-/** At most this many extra names are added to one lookup. */
+/**
+ * At most this many extra names are added to one lookup.
+ *
+ * @stability experimental
+ */
 export const MAX_SYNONYM_EXPANSION = 10;
 
-/** A graph database handle or an open transaction; synonym lookups run on either. */
+/**
+ * A graph database handle or an open transaction; synonym lookups run on either.
+ *
+ * @stability experimental
+ */
 export type SynonymDb = KvoxGraphDb | KvoxGraphTx;
 
 /**
