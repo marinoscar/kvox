@@ -79,6 +79,7 @@ export type {
 // Controllers (a host that composes its own module lists them).
 export { GraphExtractionController } from './extraction/graph-extraction.controller.js';
 export { GraphResolutionController } from './resolution/graph-resolution.controller.js';
+export { GraphDuplicatesController } from './resolution/graph-duplicates.controller.js';
 export { GraphReviewQueueController } from './proposals/graph-review-queue.controller.js';
 export { GraphProposalsController } from './proposals/graph-proposals.controller.js';
 export { GraphTopicsPromoteController } from './topics/graph-topics-promote.controller.js';
