@@ -1,5 +1,16 @@
 # @marinoscar/kvox-api
 
+## 0.1.0-next.19
+
+### Patch Changes
+
+- 65ac5f9: `note.library.import` now logs a warning naming which condition made an item fail with `source_missing` (no source object id, object not found, bytes unreadable, or an unaccepted stored mime type), without any file content.
+- 24c247f: Note imports enqueue their jobs with the platform's built-in reasons (`upload` for an import, `rerun` for a retry) instead of the unregistered `import` and `retry`, which the platform queue refused with "Unknown job reason" (a 500 on `POST /api/notes/import-batches/:id/files`; the single-file `POST /api/notes/import` lost its source extraction the same way, silently). `KvoxEnqueueInput.reason` is now typed `KvoxJobReason` (`'upload' | 'rerun' | 'backfill'`), so an unregistered reason no longer compiles.
+- 55759c1: The Notes list excerpt is now a plain-text summary (markdown syntax removed, prose first) instead of flattened raw markdown, on web and Desktop.
+- 5bc8ee9: Dependency and peer ranges on the platform packages move from 0.1.0-next.12 to 0.1.0-next.13, the release whose CLI engine decides the compose project by the bind-port holder and refuses a mismatching deploy run (`bind-port-owner`). No code in these packages changes.
+- a0672cb: Dependency and peer ranges on the platform packages move from 0.1.0-next.13 to 0.1.0-next.14, the release whose CLI engine preflights every host port the stack publishes (`stack-ports-free`). No code in these packages changes.
+- 253c539: Dependency and peer ranges on the platform packages move from 0.1.0-next.14 to 0.1.0-next.16, the releases whose CLI engine picks free host ports for each app on a shared server and lets an app choose the manifests the deploy version step writes (`deploy.versionedManifests`). No code in these packages changes.
+
 ## 0.1.0-next.18
 
 ### Patch Changes
