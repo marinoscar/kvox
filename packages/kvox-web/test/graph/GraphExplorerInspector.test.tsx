@@ -558,7 +558,7 @@ describe('the Connections and Timeline tabs', () => {
     expect(calls.every((search) => !search.includes('includeSensitive'))).toBe(true);
   });
 
-  it('"Show in TimeBar" sets the brush to the month of that event (GIC-15)', async () => {
+  it('"Show that month" sets the time range to the month of that event (GIC-15, #768)', async () => {
     server.use(
       http.get('*/api/graph/entities/:id/timeline', () =>
         HttpResponse.json({
@@ -584,10 +584,10 @@ describe('the Connections and Timeline tabs', () => {
     renderExplorer();
     const { panel } = await openNode(user, 'Joe Rivera');
     await user.click(within(panel).getByRole('tab', { name: 'Timeline' }));
-    await user.click(await within(panel).findByRole('button', { name: /Show .* in the time bar/ }));
+    await user.click(await within(panel).findByRole('button', { name: /Show the month of .* in the graph/ }));
     await waitFor(() => expect(currentUrl().searchParams.get('from')).toBe('2026-03-01'));
     expect(currentUrl().searchParams.get('to')).toBe('2026-04-01');
-    expect(await screen.findByTestId('timebar-brush')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Time: 1 Mar 2026 – 31 Mar 2026' })).toBeInTheDocument();
   });
 });
 

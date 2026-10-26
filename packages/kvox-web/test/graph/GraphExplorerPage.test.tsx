@@ -12,8 +12,10 @@ import type { GraphCanvasProps } from '../../src/graph/ui/components/explorer/Gr
 import { STALE_TEXT, TOO_LARGE_TEXT } from '../../src/graph/ui/components/overview/OverviewBanners.js';
 import { PALETTE_LABEL } from '../../src/graph/ui/components/explorer/palette/ExplorerCommandPalette.js';
 import { setExplorerHandoff } from '../../src/graph/headless/utils/explorerHandoff.js';
+import { FULL_VIEW_TRUNCATED_TEXT } from '../../src/graph/ui/components/explorer/fullGraphModel.js';
 import {
   GraphExplorerPage,
+  BUILDING_MAP_TEXT,
   CLUSTER_HINT,
   NOT_IN_GRAPH_TITLE,
   NO_WEBGL_TEXT,
@@ -30,6 +32,10 @@ import {
   gid,
   graphEntitySummaries,
   manyNodesSlice,
+  fullOverviewFixture,
+  overviewEdges,
+  overviewFixture,
+  overviewNodes,
   overviewStates,
   type ExpandFixtureRequest,
 } from './graphData.js';
@@ -201,7 +207,7 @@ describe('GraphExplorerPage — seeding', () => {
     ).toBeInTheDocument();
   });
 
-  it('seeds a bare visit from the recently viewed entities', async () => {
+  it('a bare visit is the full graph (#768): no recently viewed seeding, no seed in the URL', async () => {
     const seen: URL[] = [];
     server.events.on('request:start', ({ request }) => {
       if (request.url.includes('/graph/entities?')) seen.push(new URL(request.url));
@@ -209,11 +215,9 @@ describe('GraphExplorerPage — seeding', () => {
     renderExplorer('/graph/explore');
     await canvasReady();
 
-    expect(seen[0].searchParams.get('sort')).toBe('viewed');
-    expect(seen[0].searchParams.get('limit')).toBe('5');
-    const recent = graphEntitySummaries.slice(0, 5).map((s) => s.id);
-    expect(currentUrl().searchParams.get('seed')).toBe(recent.join(','));
-    expect(bodies[0].nodeIds).toEqual(recent);
+    expect(seen.filter((url) => url.searchParams.get('sort') === 'viewed')).toHaveLength(0);
+    expect(currentUrl().searchParams.get('seed')).toBeNull();
+    expect(bodies).toHaveLength(0);
     server.events.removeAllListeners();
   });
 
@@ -235,7 +239,7 @@ describe('GraphExplorerPage — seeding', () => {
   it('shows Start here when nothing was viewed, and choosing an active person sets ?seed=', async () => {
     noRecents();
     const user = userEvent.setup();
-    const { container } = renderExplorer('/graph/explore');
+    const { container } = renderExplorer('/graph/explore?start=1');
 
     expect(await screen.findByRole('heading', { name: 'Where do you want to start?' })).toBeInTheDocument();
     // Themes from the overview (the "Unconnected" pool is not a theme), Active, and an empty Recent.
@@ -256,7 +260,7 @@ describe('GraphExplorerPage — seeding', () => {
     server.events.on('request:start', ({ request }) => {
       if (request.url.includes('sort=mentions')) seen.push(new URL(request.url));
     });
-    renderExplorer('/graph/explore');
+    renderExplorer('/graph/explore?start=1');
     await screen.findByRole('region', { name: 'Person' });
     const people = seen.find((url) => url.searchParams.get('type') === 'Person');
     expect(people?.searchParams.get('since')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -277,7 +281,7 @@ describe('GraphExplorerPage — seeding', () => {
   it('seeds the explorer with a theme through the overview hand-off', async () => {
     noRecents();
     const user = userEvent.setup();
-    renderExplorer('/graph/explore');
+    renderExplorer('/graph/explore?start=1');
     await user.click(await screen.findByRole('button', { name: /Globex/ }));
     await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBe('1'));
     await canvasReady().catch(() => screen.findByTestId('fake-canvas'));
@@ -288,18 +292,18 @@ describe('GraphExplorerPage — seeding', () => {
   it('says it is building the map while no snapshot exists, and handles the stale and too-large notices', async () => {
     noRecents();
     server.use(http.get('*/api/graph/overview', () => HttpResponse.json({ data: overviewStates.building() })));
-    const first = renderExplorer('/graph/explore');
+    const first = renderExplorer('/graph/explore?start=1');
     expect(await screen.findByText('Building your map…')).toBeInTheDocument();
     first.unmount();
 
     server.use(http.get('*/api/graph/overview', () => HttpResponse.json({ data: overviewStates.stale() })));
-    const second = renderExplorer('/graph/explore');
+    const second = renderExplorer('/graph/explore?start=1');
     expect(await screen.findByText(STALE_TEXT)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /Globex/ })).toBeInTheDocument();
     second.unmount();
 
     server.use(http.get('*/api/graph/overview', () => HttpResponse.json({ data: overviewStates.tooLarge() })));
-    renderExplorer('/graph/explore');
+    renderExplorer('/graph/explore?start=1');
     expect(await screen.findByText(TOO_LARGE_TEXT)).toBeInTheDocument();
   });
 
@@ -363,6 +367,177 @@ describe('GraphExplorerPage — seeding', () => {
     expect(await screen.findByText('Graph query timed out')).toBeInTheDocument();
     fail = false;
     await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await canvasReady();
+  });
+});
+
+describe('GraphExplorerPage — the full view (#768)', () => {
+  const overviewRequests: URL[] = [];
+  const recordOverview = () => {
+    overviewRequests.length = 0;
+    server.events.on('request:start', ({ request }) => {
+      if (request.url.includes('/graph/overview')) overviewRequests.push(new URL(request.url));
+    });
+  };
+  const chip = (name: string | RegExp) =>
+    screen.getAllByRole('button', { name }).find((el) => el.classList.contains('MuiChip-root'))!;
+
+  it('a bare visit requests the overview with edges and draws every node and edge at its snapshot position', async () => {
+    recordOverview();
+    renderExplorer('/graph/explore');
+    const canvas = await canvasReady();
+
+    const full = overviewRequests.find((url) => url.searchParams.get('edges') === 'true');
+    expect(full).toBeDefined();
+    expect(full!.searchParams.get('types')).toBeNull();
+    expect(full!.searchParams.get('from')).toBeNull();
+    // Every overview node, with no explorer cap and no re-layout.
+    for (const node of overviewNodes) {
+      expect(within(canvas).getByRole('button', { name: node.label })).toBeInTheDocument();
+    }
+    expect(within(canvas).getAllByRole('button', { name: /^edge / })).toHaveLength(overviewEdges.length);
+    expect(canvas).toHaveAttribute('data-layout', 'static');
+    expect(screen.getByLabelText(`${overviewNodes.length} entities`)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/of 300 nodes/)).not.toBeInTheDocument();
+    // No expand: the full view is not built from seeds.
+    expect(bodies).toHaveLength(0);
+    server.events.removeAllListeners();
+  });
+
+  it('the type chips show live counts, and an empty type is disabled', async () => {
+    renderExplorer('/graph/explore');
+    await canvasReady();
+    await waitFor(() => expect(chip('People (6)')).toBeInTheDocument());
+    expect(chip('Organizations (3)')).toBeInTheDocument();
+    const products = chip('Products (0)');
+    expect(products).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('a type chip filters on the server and keeps the counts', async () => {
+    recordOverview();
+    const user = userEvent.setup();
+    renderExplorer('/graph/explore');
+    const canvas = await canvasReady();
+    await user.click(await waitFor(() => chip('Organizations (3)')));
+    await waitFor(() => expect(currentUrl().searchParams.get('types')).toBe('Organization'));
+    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument());
+    expect(within(canvas).getByRole('button', { name: 'Globex' })).toBeInTheDocument();
+    expect(overviewRequests.at(-1)!.searchParams.get('types')).toBe('Organization');
+    // Counts are not type-filtered.
+    expect(chip('People (6)')).toBeInTheDocument();
+    server.events.removeAllListeners();
+  });
+
+  it('a time preset sets ?from= and ?to=, refetches with them and filters the nodes', async () => {
+    recordOverview();
+    const user = userEvent.setup();
+    renderExplorer('/graph/explore');
+    const canvas = await canvasReady();
+    await user.click(screen.getByRole('button', { name: 'Time: All time' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Last 30 days' }));
+
+    await waitFor(() => expect(currentUrl().searchParams.get('from')).not.toBeNull());
+    const from = currentUrl().searchParams.get('from');
+    const to = currentUrl().searchParams.get('to');
+    await waitFor(() => expect(overviewRequests.at(-1)!.searchParams.get('from')).toBe(from));
+    expect(overviewRequests.at(-1)!.searchParams.get('to')).toBe(to);
+    expect(overviewRequests.at(-1)!.searchParams.get('edges')).toBe('true');
+    // Only what has evidence in the window stays: filtered, not dimmed.
+    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Globex' })).not.toBeInTheDocument());
+    expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(canvas.getAttribute('data-dimmed')).toBe('');
+    // The counts follow the window.
+    await waitFor(() => expect(chip('People (2)')).toBeInTheDocument());
+    server.events.removeAllListeners();
+  });
+
+  it('Focus switches to the focused view seeded with the node, and Full graph comes back', async () => {
+    const user = userEvent.setup();
+    renderExplorer('/graph/explore');
+    let canvas = await canvasReady();
+    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    const panel = await screen.findByRole('group', { name: 'Acme Corp' });
+    await user.click(within(panel).getByRole('button', { name: 'Focus' }));
+
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(ACME_ID));
+    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ACME_ID]));
+    expect(await screen.findByLabelText(/of 300 nodes/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Full graph' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBeNull());
+    canvas = await screen.findByTestId('fake-canvas');
+    expect(await within(canvas).findByRole('button', { name: 'Lee Park' })).toBeInTheDocument();
+    expect(canvas).toHaveAttribute('data-layout', 'static');
+    expect(screen.queryByRole('button', { name: 'Full graph' })).not.toBeInTheDocument();
+  });
+
+  it('a double-click focuses too', async () => {
+    const user = userEvent.setup();
+    renderExplorer('/graph/explore');
+    const canvas = await canvasReady();
+    await user.dblClick(within(canvas).getByRole('button', { name: 'Globex' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(GLOBEX_ID));
+  });
+
+  it('keeps the filters when it goes back to the full graph', async () => {
+    const user = userEvent.setup();
+    renderExplorer(`/graph/explore?seed=${JOE_ID}&types=Person,Organization`);
+    await screen.findByTestId('fake-canvas');
+    await user.click(await screen.findByRole('button', { name: 'Full graph' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBeNull());
+    expect(currentUrl().searchParams.get('types')).toBe('Person,Organization');
+  });
+
+  it('says when the snapshot was trimmed', async () => {
+    server.use(
+      http.get('*/api/graph/overview', ({ request }) => {
+        const edges = new URL(request.url).searchParams.get('edges') === 'true';
+        return HttpResponse.json({
+          data: fullOverviewFixture({ edges }, overviewStates.truncated()),
+        });
+      }),
+    );
+    renderExplorer('/graph/explore');
+    await canvasReady();
+    expect(await screen.findByText(FULL_VIEW_TRUNCATED_TEXT)).toBeInTheDocument();
+    expect(FULL_VIEW_TRUNCATED_TEXT).toBe('Showing the 5,000 most connected entities');
+  });
+
+  it('says the map is being built while no snapshot exists, and checks again on request', async () => {
+    let calls = 0;
+    server.use(
+      http.get('*/api/graph/overview', () => {
+        calls += 1;
+        return HttpResponse.json({ data: calls === 1 ? overviewStates.building() : fullOverviewFixture({ edges: true }) });
+      }),
+    );
+    const user = userEvent.setup();
+    renderExplorer('/graph/explore');
+    expect(await screen.findByRole('heading', { name: BUILDING_MAP_TEXT })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Check again' }));
+    await canvasReady();
+  });
+
+  it('an empty graph opens Start here', async () => {
+    server.use(http.get('*/api/graph/overview', () => HttpResponse.json({ data: overviewStates.empty() })));
+    renderExplorer('/graph/explore');
+    expect(await screen.findByRole('heading', { name: 'Where do you want to start?' })).toBeInTheDocument();
+  });
+
+  it('a time range with nothing in it says so, and Clear filters brings the graph back', async () => {
+    server.use(
+      http.get('*/api/graph/overview', ({ request }) => {
+        const q = new URL(request.url).searchParams;
+        return HttpResponse.json({
+          data: q.get('from') ? fullOverviewFixture({ edges: true }, overviewFixture({ nodes: [] })) : fullOverviewFixture({ edges: true }),
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderExplorer('/graph/explore?from=2020-01-01&to=2020-02-01');
+    expect(await screen.findByText('Nothing in your graph in this time range')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('from')).toBeNull());
     await canvasReady();
   });
 });
@@ -644,32 +819,14 @@ describe('GraphExplorerPage — filters and time', () => {
     expect(bodies[0].as_of).toBe('2026-06-01');
   });
 
-  it('the list view keeps the as-of slider as the fallback: debounced, writes ?asOf= and rebuilds through expand', async () => {
+  it('has ONE time control, in the list view too: no as-of slider and no time bar (#768)', async () => {
     renderExplorer(`/graph/explore?seed=${JOE_ID}&view=list`);
-    const slider = await screen.findByRole('slider', { name: 'Show the graph as of' });
-    // Wait for the seed's firstSeenAt to widen the range past one step.
-    await waitFor(() => expect(Number(slider.getAttribute('aria-valuemax'))).toBeGreaterThan(0));
-
-    act(() => {
-      slider.focus();
-    });
-    fireEvent.keyDown(slider, { key: 'ArrowLeft' });
-    fireEvent.keyDown(slider, { key: 'ArrowLeft' });
-    expect(bodies).toHaveLength(1);
-
-    const now = new Date();
-    const back = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 1));
-    const expected = back.toISOString().slice(0, 10);
-    await waitFor(() => expect(currentUrl().searchParams.get('asOf')).toBe(expected));
-    await waitFor(() => expect(bodies).toHaveLength(2));
-    expect(bodies[1]).toMatchObject({ nodeIds: [JOE_ID], as_of: expected, cap: 300 });
-
-    // "Now" clears it.
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Now' }));
-    await waitFor(() => expect(currentUrl().searchParams.get('asOf')).toBeNull());
+    expect(await screen.findByRole('button', { name: 'Time: All time' })).toBeInTheDocument();
+    expect(screen.queryByRole('slider', { name: 'Show the graph as of' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Time bar' })).not.toBeInTheDocument();
   });
 
-  describe('the TimeBar (GIC-15)', () => {
+  describe('the Time control in the focused view (#768)', () => {
     const activity = (byEntity: Record<string, { start: string; count: number }[]>) =>
       http.get('*/api/graph/activity', () =>
         HttpResponse.json({
@@ -684,59 +841,61 @@ describe('GraphExplorerPage — filters and time', () => {
         }),
       );
 
-    it('replaces the as-of slider on the canvas with the time bar, which asks for the visible nodes', async () => {
-      const asked: URL[] = [];
-      server.use(
-        http.get('*/api/graph/activity', ({ request }) => {
-          asked.push(new URL(request.url));
-          return HttpResponse.json({ data: { bucket: 'month', series: [], byEntity: {} } });
-        }),
-      );
-      renderExplorer();
-      await canvasReady();
-      expect(await screen.findByRole('group', { name: 'Time bar' })).toBeInTheDocument();
-      expect(screen.queryByRole('slider', { name: 'Show the graph as of' })).not.toBeInTheDocument();
-      await waitFor(() => expect(asked.length).toBeGreaterThan(0));
-      const ids = asked.at(-1)!.searchParams.get('ids')!.split(',');
-      expect(ids).toContain(JOE_ID);
-      expect(ids).toContain(ACME_ID);
-    });
-
-    it('?from=&to= shows the graph as of the range end and dims what has no evidence in it', async () => {
+    it('?from=&to= shows the graph as of the range end and FILTERS out what has no evidence in it (the seed stays)', async () => {
       server.use(activity({ [JOE_ID]: [{ start: '2026-03-01', count: 2 }], [ANA_ID]: [{ start: '2026-01-01', count: 1 }] }));
       renderExplorer(`/graph/explore?seed=${JOE_ID}&from=2026-03-01&to=2026-04-01`);
-      const canvas = await canvasReady();
+      const canvas = await canvasReady().catch(() => screen.findByTestId('fake-canvas'));
       // The range end is the as_of of the expand request.
       expect(bodies[0].as_of).toBe('2026-04-01');
-      // Joe is active in March; everything else visible is dimmed (Ana only in January).
-      await waitFor(() => expect(canvas.getAttribute('data-dimmed')).not.toBe(''));
-      const dimmed = canvas.getAttribute('data-dimmed')!.split(',');
-      expect(dimmed).not.toContain(JOE_ID);
-      expect(dimmed).toContain(ACME_ID);
-      expect(screen.getByTestId('timebar-brush')).toBeInTheDocument();
+      // Ana (January only) and Acme (no evidence) leave the canvas; Joe is active, and the seed anyway.
+      await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Acme Corp' })).not.toBeInTheDocument());
+      expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument();
+      expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
+      // Filtered, never dimmed.
+      expect(canvas.getAttribute('data-dimmed')).toBe('');
+      expect(screen.getByRole('button', { name: /^Time: 1 Mar 2026 – 31 Mar 2026$/ })).toBeInTheDocument();
     });
 
-    it('brushing a bar writes ?from= and ?to= and clearing removes them', async () => {
+    it('a preset writes ?from= and ?to= (ending tomorrow, so no as_of) and All time removes them', async () => {
       server.use(activity({ [JOE_ID]: [{ start: '2026-03-01', count: 2 }] }));
+      const user = userEvent.setup();
       renderExplorer();
       await canvasReady();
-      const plot = await screen.findByTestId('timebar-plot');
-      await waitFor(() => expect(screen.getAllByTestId('timebar-column').length).toBeGreaterThan(0));
-      fireEvent.click(plot, { clientX: 2 });
-      await waitFor(() => expect(currentUrl().searchParams.get('from')).toMatch(/^\d{4}-\d{2}-01$/));
-      expect(currentUrl().searchParams.get('to')).toMatch(/^\d{4}-\d{2}-01$/);
+      await user.click(screen.getByRole('button', { name: 'Time: All time' }));
+      await user.click(screen.getByRole('menuitemradio', { name: 'Last 90 days' }));
+      await waitFor(() => expect(currentUrl().searchParams.get('from')).toMatch(/^\d{4}-\d{2}-\d{2}$/));
+      const from = Date.parse(`${currentUrl().searchParams.get('from')}T00:00:00Z`);
+      const to = Date.parse(`${currentUrl().searchParams.get('to')}T00:00:00Z`);
+      expect((to - from) / 86_400_000).toBe(90);
       expect(currentUrl().searchParams.get('asOf')).toBeNull();
+      // The graph is still evaluated now: no rebuild as of a date.
+      for (const body of bodies) expect(body.as_of).toBeUndefined();
 
-      fireEvent.click(await screen.findByRole('button', { name: 'Clear the range' }));
+      await user.click(screen.getByRole('button', { name: 'Time: Last 90 days' }));
+      await user.click(screen.getByRole('menuitemradio', { name: 'All time' }));
       await waitFor(() => expect(currentUrl().searchParams.get('from')).toBeNull());
       expect(currentUrl().searchParams.get('to')).toBeNull();
+    });
+
+    it('a custom range writes the inclusive end as the exclusive day after', async () => {
+      const user = userEvent.setup();
+      renderExplorer();
+      await canvasReady();
+      await user.click(screen.getByRole('button', { name: 'Time: All time' }));
+      await user.click(screen.getByRole('menuitemradio', { name: 'Custom range…' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Custom range' });
+      fireEvent.change(within(dialog).getByLabelText('From'), { target: { value: '2026-02-01' } });
+      fireEvent.change(within(dialog).getByLabelText('To'), { target: { value: '2026-02-28' } });
+      await user.click(within(dialog).getByRole('button', { name: 'Apply' }));
+      await waitFor(() => expect(currentUrl().searchParams.get('from')).toBe('2026-02-01'));
+      expect(currentUrl().searchParams.get('to')).toBe('2026-03-01');
     });
 
     it('ignores a hand-edited range that is not two ordered dates', async () => {
       renderExplorer(`/graph/explore?seed=${JOE_ID}&from=2026-05-01&to=2026-01-01`);
       await canvasReady();
       expect(bodies[0].as_of).toBeUndefined();
-      expect(screen.queryByTestId('timebar-brush')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Time: All time' })).toBeInTheDocument();
     });
   });
 
@@ -840,6 +999,36 @@ describe('GraphExplorerPage — layout menu (#668)', () => {
   it('opens an ego view of fewer than 40 nodes concentric', async () => {
     renderExplorer();
     expect(await screen.findByTestId('fake-canvas')).toHaveAttribute('data-layout', 'concentric');
+  });
+
+  it('chooses the layout again for each rebuild, not once per visit (#768)', async () => {
+    // A 45-node hand-off opens in Force; a later one-seed ego view must open concentric again.
+    useExpand((body) =>
+      HttpResponse.json({
+        data: body.nodeIds.includes(ANA_ID)
+          ? expandFixture(body)
+          : { seedIds: body.nodeIds, asOf: '2026-09-26T00:00:00.000Z', nodes: [], edges: [], truncated: false, cap: 300 },
+      }),
+    );
+    const nodes = Array.from({ length: 45 }, (_, i) => ({
+      id: gid(7000 + i),
+      label: `Member ${i + 1}`,
+      type: 'Person',
+      x: i * 10,
+      y: i * 5,
+      degree: 1,
+    }));
+    setExplorerHandoff({ seedIds: nodes.map((n) => n.id), title: 'Big cluster', nodes });
+    const user = userEvent.setup();
+    renderExplorer('/graph/explore?cluster=3');
+    await waitFor(() => expect(screen.getByTestId('fake-canvas')).toHaveAttribute('data-layout', 'forceatlas'));
+
+    // Back to the whole graph (static), then focus on Ana: a small ego view, concentric this time.
+    await user.click(await screen.findByRole('button', { name: 'Full graph' }));
+    await waitFor(() => expect(screen.getByTestId('fake-canvas')).toHaveAttribute('data-layout', 'static'));
+    await user.dblClick(await within(screen.getByTestId('fake-canvas')).findByRole('button', { name: 'Ana Diaz' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(ANA_ID));
+    await waitFor(() => expect(screen.getByTestId('fake-canvas')).toHaveAttribute('data-layout', 'concentric'));
   });
 
   it('uses Force for ?layout=force and writes the choice from the menu to the URL', async () => {

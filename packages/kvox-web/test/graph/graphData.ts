@@ -1421,8 +1421,46 @@ export function overviewFixture(overrides: Partial<GraphOverview> = {}): GraphOv
     ],
     nodes: overviewNodes,
     nodesTruncated: false,
+    typeCounts: {},
     ...overrides,
   };
+}
+
+/** Live relations among the overview's nodes, for `edges=true` (#768). */
+export const overviewEdges: NonNullable<GraphOverview['edges']> = [
+  { id: gid(5001), source: JOE_ID, target: ACME_ID, type: 'WORKS_FOR' },
+  { id: gid(5002), source: BEN_ID, target: ACME_ID, type: 'WORKS_FOR' },
+  { id: gid(5003), source: JOE_ID, target: ATLAS_ID, type: 'WORKS_ON' },
+  { id: gid(5004), source: ANA_ID, target: GLOBEX_ID, type: 'WORKS_FOR' },
+  { id: gid(5005), source: CARLA_ID, target: GLOBEX_ID, type: 'WORKS_FOR' },
+  { id: gid(5006), source: JOE_ID, target: ANA_ID, type: 'KNOWS' },
+];
+
+/** The entities the full-view fixture treats as having evidence inside ANY time window (#768). */
+export const OVERVIEW_RECENT_IDS: readonly string[] = [JOE_ID, ANA_ID, ACME_ID];
+
+/**
+ * What `GET /api/graph/overview` answers for the full view (#768): `from`/`to`
+ * keep {@link OVERVIEW_RECENT_IDS} only, `types` keeps those types, `typeCounts`
+ * counts the time-filtered (not type-filtered) entities, and `edges=true` adds
+ * the relations whose two ends are returned.
+ */
+export function fullOverviewFixture(
+  params: { types?: string[]; from?: string | null; to?: string | null; edges?: boolean },
+  base: GraphOverview = overviewFixture(),
+): GraphOverview {
+  const windowed = Boolean(params.from || params.to);
+  const inWindow = base.nodes.filter((n) => !windowed || OVERVIEW_RECENT_IDS.includes(n.id));
+  const typeCounts: Record<string, number> = {};
+  for (const node of inWindow) typeCounts[node.type] = (typeCounts[node.type] ?? 0) + 1;
+  const nodes = params.types && params.types.length > 0 ? inWindow.filter((n) => params.types!.includes(n.type)) : inWindow;
+  const ids = new Set(nodes.map((n) => n.id));
+  const answer: GraphOverview = { ...base, nodes, typeCounts };
+  if (params.edges) {
+    answer.edges = overviewEdges.filter((e) => ids.has(e.source) && ids.has(e.target));
+    answer.edgesTruncated = false;
+  }
+  return answer;
 }
 
 /** The named states the page renders, for `?fixture`-style lookups in tests. */

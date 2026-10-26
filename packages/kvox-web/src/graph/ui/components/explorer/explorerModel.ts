@@ -72,6 +72,8 @@ export interface ExplorerNodeAttributes {
   occurredAt: string | null;
   /** Set by a drag on the canvas; ForceAtlas2 leaves a fixed node where it is. */
   fixed?: boolean;
+  /** Sigma draws this node's label at every zoom (the full view's best-connected nodes, #768). */
+  forceLabel?: boolean;
   /** How many notes mention the node, when the API sends it (#671); drives size and rank, `null` until then. */
   mentionCount: number | null;
   /** ISO 8601 instant the node was last seen in a note, when the API sends it; drives recency in the rank. */

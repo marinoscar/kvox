@@ -3,26 +3,36 @@
  * spec §22.2). Owned by `knowledge` (#438, `config/destinations.ts`), gated on
  * `graph:read`, lazy.
  *
- * WHERE IT STARTS, in order:
- *   1. a hand-off from the whole-graph overview (`?cluster=` + an in-memory
- *      `explorerHandoff`, #375): the cluster's nodes render at once at their
- *      overview positions, then one expand adds their edges and neighbours;
- *   2. `?seed=<id>[,<id>…]` (≤ 10) — the entity page, a search result, a chip;
- *   3. a bare visit: the caller's most recently viewed entities (§22.2), put
- *      into `?seed=` so the view is shareable;
- *   4. nothing viewed yet: a centred seed search.
- *   A reload with `?cluster=` has no hand-off (it is in memory only), so it
- *   falls through to the search with a hint to reopen it from the overview.
+ * TWO MODES (#768):
+ *   - the FULL VIEW — a bare visit (no `seed`, `cluster` or `connectNotes`): the
+ *     whole graph from the stored layout snapshot (`GET /api/graph/overview?edges=true`,
+ *     `useGraphFullView`), drawn at its snapshot positions with the `static`
+ *     layout. Its cap is the server's (5,000 nodes, 20,000 edges), never the
+ *     explorer's 300; the type chips and the time range go to the server.
+ *     "Focus" on a node (or a double-click) opens the focused view seeded with it.
+ *   - the FOCUSED VIEW — `?seed=<id>[,<id>…]` (≤ 10: the entity page, a search
+ *     result, a chip, Focus) or a hand-off from the overview (`?cluster=` + an
+ *     in-memory `explorerHandoff`, #375): the bounded, expandable explorer. Its
+ *     "Full graph" button goes back to the full view, keeping the filters.
+ *   No URL marker says "full": the absence of a seed is it, so `/graph/explore`
+ *   is the whole graph. Start here shows on `?start=1` (Home), when the graph is
+ *   empty, and on a reload with `?cluster=` (the hand-off is in memory only).
  *
  * URL STATE: `seed`, `asOf` (YYYY-MM-DD), `types` (the SELECTED node types — the
  * type chips are "select to show", #764: absent means all, a list means only those, seeds
  * included), `relTypes` (the SHOWN relation types — absent means all, GIC-17),
  * `view=list`, `layout=force|concentric|static` (static: tests/visual only), `lens` (the lens
  * last applied), `focus` (the focused node; the one param that adds a browser history entry),
- * `sel`/`tab` (the inspector) and `cluster`. The URL is the source of truth for all of them; a
- * control writes the URL and an effect applies it. `from`/`to` (time bar) and
- * `pathFrom`/`pathTo` (path mode) are reserved for the stories that write them: nothing here
- * reads or clears them. Pins and positions are NOT in the URL (too large).
+ * `sel`/`tab` (the inspector), `cluster`, and `from`/`to` (the one Time control, #768: absent =
+ * All time). The URL is the source of truth for all of them; a control writes the URL and an
+ * effect applies it. `pathFrom`/`pathTo` belong to path mode. Pins and positions are NOT in
+ * the URL (too large).
+ *
+ * TIME (#768): ONE control (`ExplorerTimeControl`: All time, 30 days, 90 days, a year, a custom
+ * range). In the full view the range filters the overview request. In the focused view the graph
+ * is evaluated as of the range end when that is in the past (as before), and the nodes with no
+ * evidence in the window are taken OFF the canvas (`useTimeHiddenIds`), the seeds and the
+ * selection excepted — filtered, no longer dimmed.
  *
  * HISTORY, LENSES, ASK (GIC-17, #678): Undo/Redo walk the explorer's change stack
  * (`useGraphExplorer`), Back/Forward and the breadcrumbs walk the focus trail
@@ -145,7 +155,17 @@ import { InsightsPanel } from '../components/explorer/insights/InsightsPanel.js'
 import { useInsightSelect } from '../components/explorer/insights/useInsightSelect.js';
 import { clusterHandoff } from '../components/overview/overviewModel.js';
 import { minimapVisible } from '../components/explorer/shell/explorerBudgets.js';
-import { ExplorerTimeBar } from '../components/explorer/timebar/ExplorerTimeBar.js';
+import { ExplorerFilterBar } from '../components/explorer/ExplorerFilterBar.js';
+import { fullViewBudgets } from '../components/explorer/shell/explorerBudgets.js';
+import {
+  FULL_VIEW_EDGES_TRUNCATED_TEXT,
+  FULL_VIEW_NODE_CAP,
+  FULL_VIEW_TRUNCATED_TEXT,
+  fullViewListRows,
+} from '../components/explorer/fullGraphModel.js';
+import { useTimeHiddenIds } from '../components/explorer/timebar/useTimeHiddenIds.js';
+import { countsWindowKey, useGraphFullView } from '../hooks/useGraphFullView.js';
+import type { ExplorerState } from '../components/explorer/explorerModel.js';
 import { formatDay, parseRangeParams, rangeForInstant, type TimeRange } from '../components/explorer/timebar/timeAxis.js';
 import { peekExplorerHandoff, takeExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
 import {
@@ -176,7 +196,7 @@ import { useGraphEffectiveOntology } from '../../headless/hooks/useGraphAttribut
 import { useGraphExplorer, type ExpandOnly } from '../hooks/useGraphExplorer.js';
 import { useExplorerConnect } from '../hooks/useExplorerConnect.js';
 import type { GraphEntityAskPanelProps } from './GraphEntityPage.js';
-import { GRAPH_CONNECT_MAX_ENTITIES, getGraphEntity, listGraphEntities } from '../../headless/clients/graph.js';
+import { GRAPH_CONNECT_MAX_ENTITIES } from '../../headless/clients/graph.js';
 
 import { useKvoxHost } from '../../../core/headless/index.js';
 const GraphCanvas = lazy(() => canvasLoaders.graphCanvas());
@@ -190,6 +210,10 @@ export const CLUSTER_HINT =
   'This view was opened from the graph overview. Open the cluster again from the overview, or start from someone below.';
 export const NO_WEBGL_TEXT =
   "Your browser can't draw the graph (WebGL is unavailable), so it is shown as a list.";
+export const BUILDING_MAP_TEXT = 'Building your graph map\u2026';
+export const TOO_LARGE_HINT =
+  'Your graph is too large to draw whole. Start from someone below, or search for them.';
+export const FULL_GRAPH_LABEL = 'Full graph';
 
 export function parseSeeds(param: string | null): string[] {
   if (!param) return [];
@@ -284,7 +308,13 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   // The shell's window class and input modality, and the budgets they imply (GIC-08).
   const windowClass = useWindowClass();
   const inputModality = useInputModality();
-  const budgets = useMemo(() => explorerBudgets({ windowClass, inputModality }), [windowClass, inputModality]);
+  const focusedBudgets = useMemo(() => explorerBudgets({ windowClass, inputModality }), [windowClass, inputModality]);
+  // The full view (#768): a bare visit, no seed, hand-off or connect answer to start from.
+  const fullView = !startParam && seeds.length === 0 && !clusterParam && !connectNotesParam;
+  const budgets = useMemo(
+    () => (fullView ? fullViewBudgets(focusedBudgets, FULL_VIEW_NODE_CAP) : focusedBudgets),
+    [fullView, focusedBudgets],
+  );
 
   const updateParams = useCallback(
     (mutate: (params: URLSearchParams) => void) => {
@@ -325,11 +355,22 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     nodeTypes: nodeTypeKeys,
     relationTypes: relationKeys,
     palette: theme,
-    nodeCap: budgets.visibleNodeCap,
+    nodeCap: focusedBudgets.visibleNodeCap,
+  });
+  const selectedTypesList = useMemo(
+    () => nodeTypeKeys.filter((key) => selectedTypes.has(key)),
+    [nodeTypeKeys, selectedTypes],
+  );
+  const full = useGraphFullView({
+    enabled: fullView && !ontologyLoading,
+    types: selectedTypesList,
+    from: timeRange?.from ?? null,
+    to: timeRange?.to ?? null,
+    palette: theme,
   });
   const {
-    state,
-    version,
+    state: focusedState,
+    version: focusedVersion,
     load,
     loadHandoff,
     setAsOf,
@@ -360,7 +401,6 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   // Peek during render (StrictMode-safe), take once in the effect.
   const [handoff, setHandoff] = useState(() => (clusterParam ? peekExplorerHandoff() : null));
   const handoffUsed = useRef(false);
-  const [noRecent, setNoRecent] = useState(false);
 
   useEffect(() => {
     if (ontologyLoading) return undefined;
@@ -373,52 +413,26 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
       return undefined;
     }
     if (seeds.length > 0) {
-      setNoRecent(false);
       // Already showing exactly these seeds ("Make seed" wrote them to the URL).
-      if (state.seedIds.join(',') === seedKey && state.graph.order > 0) return undefined;
+      if (focusedState.seedIds.join(',') === seedKey && focusedState.graph.order > 0) return undefined;
       void load(seeds);
       return undefined;
     }
-    if (handoff || clusterParam) return undefined;
-    // `?connectNotes=` seeds the canvas from its own answer (useExplorerConnect), not from what was viewed last.
-    if (connectNotesParam) return undefined;
+    // A bare visit is the full view (#768): `useGraphFullView` loads it; nothing to seed here.
+    return undefined;
+    // `focusedState` is read, not reacted to: the seeds in the URL are the trigger.
+  }, [ontologyLoading, startParam, seedKey, handoff, load, loadHandoff]);
 
-    // A bare visit: seed from what the caller viewed most recently (§22.2).
-    const controller = new AbortController();
-    listGraphEntities(host, { sort: 'viewed', limit: 5 }, controller.signal)
-      .then((response) => {
-        if (controller.signal.aborted) return;
-        if (response.items.length === 0) {
-          setNoRecent(true);
-          return;
-        }
-        updateParams((params) => params.set('seed', response.items.map((item) => item.id).join(',')));
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setNoRecent(true);
-      });
-    return () => controller.abort();
-    // `state` is read, not reacted to: the seeds in the URL are the trigger.
-  }, [ontologyLoading, startParam, seedKey, handoff, clusterParam, connectNotesParam, load, loadHandoff, updateParams]);
+  // The as-of slider is not drawn on this page (the one Time control replaced it, #768); its floor stays a constant.
+  const asOfMin = useMemo(fiveYearsAgo, []);
 
-  // The slider starts at the earliest `firstSeenAt` among the seeds.
-  const [asOfMin, setAsOfMin] = useState(fiveYearsAgo);
-  const stateSeedKey = state.seedIds.slice(0, 5).join(',');
-  useEffect(() => {
-    if (!stateSeedKey) return undefined;
-    const controller = new AbortController();
-    Promise.all(
-      stateSeedKey.split(',').map((id) => getGraphEntity(host, id, controller.signal).catch(() => null)),
-    ).then((details) => {
-      if (controller.signal.aborted) return;
-      const dates = details
-        .map((detail) => detail?.firstSeenAt)
-        .filter((date): date is string => Boolean(date))
-        .sort();
-      setAsOfMin(dates[0] ?? fiveYearsAgo());
-    });
-    return () => controller.abort();
-  }, [stateSeedKey]);
+  // --- The view on screen: the full graph or the focused explorer (#768) ----------------
+  const state: ExplorerState = fullView ? full.state : focusedState;
+  const version = fullView ? full.version : focusedVersion;
+  const viewLoading = fullView ? full.isLoading : explorer.isLoading;
+  // The chips' live counts (#768): the full view's last answer, while it was counted for this time range.
+  const chipCounts =
+    full.typeCounts && full.countsWindow === countsWindowKey(timeRange?.from, timeRange?.to) ? full.typeCounts : null;
 
   // --- Selection -------------------------------------------------------------------
   const [selected, setSelected] = useState<{ kind: 'node' | 'edge'; id: string } | null>(null);
@@ -436,17 +450,37 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     hasSeedParam: seeds.length > 0,
     setSeeds: (ids) => updateParams((params) => params.set('seed', ids.join(','))),
     clearConnectNotes: () => updateParams((params) => params.delete('connectNotes')),
-    addSlice,
+    addSlice: fullView ? full.addSlice : addSlice,
     asOf,
   });
   const { connect } = connectState;
 
   const graph = state.graph;
-  const visibleIds = useMemo(
+  const baseVisibleIds = useMemo(
     () => new Set(visibleNodeIds(state)),
     [state, version],
   );
-  const atCap = remainingCapacity(state) === 0;
+  // The focused view's time filter (#768): what has no evidence in the range leaves the canvas.
+  const timeKeep = useMemo(
+    () => [...state.seedIds, ...(selected?.kind === 'node' ? [selected.id] : [])],
+    [state, version, selected],
+  );
+  const timeHidden = useTimeHiddenIds({
+    state,
+    version,
+    visibleIds: baseVisibleIds,
+    range: timeRange,
+    keep: timeKeep,
+    enabled: !fullView,
+  });
+  const visibleIds = useMemo(
+    () =>
+      timeHidden.size === 0
+        ? baseVisibleIds
+        : new Set([...baseVisibleIds].filter((id) => !timeHidden.has(id))),
+    [baseVisibleIds, timeHidden],
+  );
+  const atCap = !fullView && remainingCapacity(state) === 0;
   // Real nodes: a "+N more" stub is not one, and is outside the cap.
   const nodeCount = realNodeCount(state);
   // A phone offers the list as the default for a graph too big to read; `view=graph` overrides it.
@@ -454,20 +488,27 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const listView = !webgl || viewParam === 'list' || autoList;
 
   // Layout (#668). The URL wins; without it an ego view of fewer than 40 nodes
-  // opens concentric and a larger one in Force. Decided ONCE, when the first
-  // slice arrives, so expanding past 40 nodes never switches the layout.
-  const [defaultLayout, setDefaultLayout] = useState<CanvasLayout | null>(null);
+  // opens concentric and a larger one in Force. Decided once PER REBUILD (#768):
+  // a load, a hand-off or an `as of` rebuild installs a new explorer state and
+  // chooses again from its size; expanding within one state never switches it.
+  // The full view always draws the snapshot's own positions (`static`).
+  const focusedNodeCount = realNodeCount(focusedState);
+  const [layoutChoice, setLayoutChoice] = useState<{ state: ExplorerState; layout: CanvasLayout } | null>(null);
   useEffect(() => {
-    if (defaultLayout === null && nodeCount > 0) setDefaultLayout(ownDefault(nodeCount));
-  }, [defaultLayout, nodeCount]);
-  const layout: CanvasLayout =
-    layoutParam === 'static'
+    if (focusedNodeCount > 0 && layoutChoice?.state !== focusedState) {
+      setLayoutChoice({ state: focusedState, layout: ownDefault(focusedNodeCount) });
+    }
+  }, [focusedState, focusedNodeCount, layoutChoice]);
+  const defaultLayout = layoutChoice?.state === focusedState ? layoutChoice.layout : null;
+  const layout: CanvasLayout = fullView
+    ? 'static'
+    : layoutParam === 'static'
       ? 'static'
       : layoutParam === 'concentric'
         ? 'concentric'
         : layoutParam === 'force'
           ? 'forceatlas'
-          : (defaultLayout ?? ownDefault(nodeCount));
+          : (defaultLayout ?? ownDefault(focusedNodeCount));
   const onLayoutChange = useCallback(
     (next: CanvasLayout) =>
       updateParams((params) => params.set('layout', next === 'forceatlas' ? 'force' : next)),
@@ -514,7 +555,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const inspectorUrl = useInspectorUrlState({
     selected,
     setSelected,
-    ready: nodeCount > 0 && !explorer.isLoading,
+    ready: nodeCount > 0 && !viewLoading,
     hasNode: (id) => graph.hasNode(id),
     hasEdge: (id) => graph.hasEdge(id),
   });
@@ -587,14 +628,55 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   // On a phone, Hide and Expand are followed by a snackbar with Undo (GIC-17): there is no Undo button in view.
   const [undoNotice, setUndoNotice] = useState<string | null>(null);
   const { undoDepth } = explorer;
+
+  /** Full view (#768): open the focused view seeded with this node, keeping the filters, the time and the selection. */
+  const focusOn = useCallback(
+    (id: string) => {
+      if (!graph.hasNode(id)) return;
+      updateParams((params) => {
+        params.set('seed', id);
+        params.delete('cluster');
+        params.delete('start');
+        params.delete('layout');
+      });
+      setAnnouncement(`Focused on ${graph.getNodeAttribute(id, 'label')}`);
+    },
+    [graph, updateParams],
+  );
+
+  /** Focused view: back to the whole graph (#768), keeping the type filter and the time range. */
+  const showFullGraph = useCallback(() => {
+    updateParams((params) => {
+      for (const key of ['seed', 'cluster', 'connectNotes', 'start', 'sel', 'tab', 'focus', 'lens', 'layout', 'asOf']) {
+        params.delete(key);
+      }
+    });
+  }, [updateParams]);
+  // The selection belongs to the focused view being left. Cleared once the URL says "full", not in
+  // the same tick as the URL write: the inspector's own URL writer would start from the old params.
+  const wasFullView = useRef(fullView);
+  useEffect(() => {
+    if (fullView && !wasFullView.current) {
+      setSelected(null);
+      setPreviewId(null);
+      setMarked(new Set());
+    }
+    wasFullView.current = fullView;
+  }, [fullView]);
+
   const onExpand = useCallback(
     (id: string, only?: ExpandOnly) => {
+      if (fullView) {
+        // The full view already holds every neighbour it can draw: "expand" means look closer.
+        focusOn(id);
+        return;
+      }
       const depth = undoDepth();
       void expand(id, only).then(() => {
         if (windowClass === 'compact' && undoDepth() > depth) setUndoNotice('Expanded');
       });
     },
-    [expand, undoDepth, windowClass],
+    [expand, undoDepth, windowClass, fullView, focusOn],
   );
 
   // "Expand all" of the Selection view: one request at a time (a newer request aborts the one in flight).
@@ -610,8 +692,10 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const onHide = useCallback(
     (id: string) => {
       const depth = undoDepth();
-      hide(id);
-      if (windowClass === 'compact' && undoDepth() > depth) setUndoNotice('Node hidden');
+      // The full view hides for this visit only: the next request (a filter, a reload) brings it back.
+      if (fullView) full.hide(id);
+      else hide(id);
+      if (!fullView && windowClass === 'compact' && undoDepth() > depth) setUndoNotice('Node hidden');
       setMarked((previous) => {
         if (!previous.has(id)) return previous;
         const next = new Set(previous);
@@ -620,7 +704,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
       });
       setSelected((current) => (current?.kind === 'node' && current.id === id ? null : current));
     },
-    [hide, undoDepth, windowClass],
+    [hide, undoDepth, windowClass, fullView, full.hide],
   );
 
   const onHideAll = useCallback(
@@ -632,6 +716,10 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
 
   const onMakeSeed = useCallback(
     (id: string) => {
+      if (fullView) {
+        focusOn(id);
+        return;
+      }
       makeSeed(id);
       const next = [...new Set([...state.seedIds, id])];
       if (next.length <= MAX_URL_SEEDS) {
@@ -641,16 +729,21 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         });
       }
     },
-    [makeSeed, state, updateParams],
+    [makeSeed, state, updateParams, fullView, focusOn],
   );
 
   const onReset = useCallback(() => {
     setSelected(null);
     setPreviewId(null);
     setMarked(new Set());
+    if (fullView) {
+      // The full view: nothing to reload from seeds; put the whole map back in frame.
+      canvasControls.current?.fit();
+      return;
+    }
     const current = state.seedIds.length > 0 ? state.seedIds : seeds;
     if (current.length > 0) void load(current);
-  }, [load, seeds, state]);
+  }, [load, seeds, state, fullView]);
 
   const toggleListView = useCallback(() => {
     if (!webgl) return;
@@ -710,7 +803,6 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     [selectedTypes, setSelectedTypes],
   );
 
-  const clearTypeFilter = useCallback(() => setSelectedTypes(new Set()), [setSelectedTypes]);
 
   const onToggleRelationType = useCallback(
     (key: string) => {
@@ -722,13 +814,14 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     [hiddenRelations, setShownRelations],
   );
 
+  // The one Time control (#768): `from`/`to` in the URL, All time = neither. A range replaces any `asOf`.
   const onTimeRangeChange = useCallback(
     (next: TimeRange | null) => {
       updateParams((params) => {
+        params.delete('asOf');
         if (next) {
           params.set('from', next.from);
           params.set('to', next.to);
-          params.delete('asOf');
         } else {
           params.delete('from');
           params.delete('to');
@@ -737,8 +830,6 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     },
     [updateParams],
   );
-  // The nodes the TimeBar dims (nothing in the brushed window, or inactive in the bar under the pointer).
-  const [timeDimmed, setTimeDimmed] = useState<ReadonlySet<string> | null>(null);
   const onShowInTimeBar = useCallback(
     (at: string) => {
       const next = rangeForInstant(at);
@@ -807,7 +898,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const trail = useFocusTrail({
     focusedId: selected?.kind === 'node' ? selected.id : null,
     focusNode: (id) => setSelected({ kind: 'node', id }),
-    ready: nodeCount > 0 && !explorer.isLoading,
+    ready: nodeCount > 0 && !viewLoading,
     hasNode: (id) => graph.hasNode(id),
   });
   const crumbs = useMemo(
@@ -1028,27 +1119,49 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   };
 
   // --- Render -----------------------------------------------------------------------------------
+  // The full view lists its best-connected entities (a list of 5,000 rows helps nobody).
   const listRows = useMemo(
-    () => toListModel(state),
-    [state, version],
+    () => (fullView ? fullViewListRows(state) : toListModel(state)),
+    [fullView, state, version],
   );
 
   const hasGraph = nodeCount > 0;
-  // Start here: asked for (Home), or nothing to open (no seed, hand-off or recents; a reload lost its hand-off).
+  // What the explorer says about itself only counts in the focused view; the full view has its own states.
+  const notFound = !fullView && explorer.notFound;
+  const viewError = fullView ? (full.status === 'error' ? full.error : null) : explorer.error;
+  const building = fullView && full.status === 'building' && !hasGraph;
+  const tooLarge = fullView && full.status === 'tooLarge' && !hasGraph;
+  const timeFiltered = timeRange !== null;
+  // Start here: asked for (Home), an empty or too-large graph (full view), or a reload that lost its hand-off.
   const showStartHere =
     startParam ||
-    (!hasGraph && !explorer.isLoading && !explorer.notFound && !explorer.error && seeds.length === 0 &&
-      (noRecent || Boolean(clusterParam && !handoff)));
-  // A type filter that leaves nothing on the canvas (#764): say so, rather than spin.
-  const filteredEmpty =
-    !hasGraph &&
-    !showStartHere &&
-    selectedTypes.size > 0 &&
-    state.seedIds.length > 0 &&
-    !explorer.isLoading &&
-    !explorer.notFound &&
-    !explorer.error;
-  const initialLoading = !hasGraph && !showStartHere && !filteredEmpty && !explorer.notFound && !explorer.error;
+    (fullView && !hasGraph && !full.isLoading && (full.status === 'empty' || full.status === 'tooLarge')) ||
+    (!fullView &&
+      !hasGraph &&
+      !explorer.isLoading &&
+      !explorer.notFound &&
+      !explorer.error &&
+      seeds.length === 0 &&
+      Boolean(clusterParam && !handoff));
+  // A filter that leaves nothing on the canvas (#764, #768): say so, rather than spin.
+  const filteredEmpty = fullView
+    ? !hasGraph && !showStartHere && full.status === 'ready' && !full.isLoading && (selectedTypes.size > 0 || timeFiltered)
+    : !hasGraph &&
+      !showStartHere &&
+      selectedTypes.size > 0 &&
+      state.seedIds.length > 0 &&
+      !explorer.isLoading &&
+      !explorer.notFound &&
+      !explorer.error;
+  const initialLoading = !hasGraph && !showStartHere && !filteredEmpty && !notFound && !viewError && !building;
+  const clearFilters = useCallback(() => {
+    updateParams((params) => {
+      params.delete('types');
+      params.delete('from');
+      params.delete('to');
+      params.delete('asOf');
+    });
+  }, [updateParams]);
 
   // The seeds an add from the palette builds on: none while Start here shows.
   const paletteSeeds = showStartHere ? [] : state.seedIds.length > 0 ? state.seedIds : seeds;
@@ -1091,7 +1204,8 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     announce: setAnnouncement,
   });
 
-  const minimapShown = minimapVisible({ windowClass, nodeCount, mediumOn: mediumMinimap, listView });
+  // No minimap over the whole graph: it IS the overview, and 5,000 dots redrawn every frame cost more than they say.
+  const minimapShown = !fullView && minimapVisible({ windowClass, nodeCount, mediumOn: mediumMinimap, listView });
 
   // Path mode ("Connect A <-> B", GIC-13): its state and UI come from the hook.
   const pathMode = usePathMode({
@@ -1196,11 +1310,28 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         onChooseTheme={chooseTheme}
         onOpenSearch={openPalette}
         onConnect={() => pathMode.openPicker()}
-        hint={clusterParam && !handoff && !startParam ? CLUSTER_HINT : undefined}
+        hint={
+          startParam ? undefined : tooLarge ? TOO_LARGE_HINT : clusterParam && !handoff ? CLUSTER_HINT : undefined
+        }
         typeLabel={typeLabel}
       />
     );
-  } else if (explorer.notFound && !hasGraph) {
+  } else if (building) {
+    earlyBody = (
+      <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
+        <CircularProgress aria-label={BUILDING_MAP_TEXT} sx={{ mb: 2 }} />
+        <Typography variant="h6" component="h2" gutterBottom>
+          {BUILDING_MAP_TEXT}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          The first map of your graph is being laid out. This page checks again by itself.
+        </Typography>
+        <Button variant="outlined" onClick={full.retry} disabled={full.isLoading}>
+          Check again
+        </Button>
+      </Paper>
+    );
+  } else if (notFound && !hasGraph) {
     earlyBody = (
       <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
         <Typography variant="h6" component="h2" gutterBottom>
@@ -1214,17 +1345,21 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         </Button>
       </Paper>
     );
-  } else if (explorer.error && !hasGraph) {
+  } else if (viewError && !hasGraph) {
     earlyBody = (
       <Alert
         severity="error"
         action={
-          <Button color="inherit" size="small" onClick={() => void explorer.retry()}>
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => (fullView ? full.retry() : void explorer.retry())}
+          >
             Retry
           </Button>
         }
       >
-        {explorer.error}
+        {viewError}
       </Alert>
     );
   } else if (connectState.earlyState && !hasGraph) {
@@ -1249,23 +1384,37 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           onToggleListView={toggleListView}
           nodeCount={nodeCount}
           nodeCap={budgets.visibleNodeCap}
+          countLabel={fullView ? entityCountLabel(nodeCount) : undefined}
           selectMode={selectMode}
           onToggleSelectMode={() => setSelectMode((on) => !on)}
           markedCount={marked.size}
           onClearMarked={() => setMarked(new Set())}
           connectAction={pathMode.connectButton}
-          onOpenSearch={openPalette}
           onHome={goHome}
-          minimapControl={{ shown: mediumMinimap, onToggle: () => setMediumMinimap((on) => !on) }}
-          layoutControl={{
-            layout,
-            onLayoutChange,
-            onRelayoutAll: () => canvasControls.current?.relayoutAll(),
-            pinnedCount,
-            onUnpinAll: () => canvasControls.current?.unpinAll(),
-          }}
+          minimapControl={fullView ? undefined : { shown: mediumMinimap, onToggle: () => setMediumMinimap((on) => !on) }}
+          layoutControl={
+            fullView
+              ? undefined
+              : {
+                  layout,
+                  onLayoutChange,
+                  onRelayoutAll: () => canvasControls.current?.relayoutAll(),
+                  pinnedCount,
+                  onUnpinAll: () => canvasControls.current?.unpinAll(),
+                }
+          }
           extraControls={
             <>
+              {!fullView && (
+                <Button
+                  size="small"
+                  startIcon={<HubOutlinedIcon />}
+                  onClick={showFullGraph}
+                  sx={{ whiteSpace: 'nowrap', minHeight: inputModality === 'touch' ? 44 : undefined }}
+                >
+                  {FULL_GRAPH_LABEL}
+                </Button>
+              )}
               <HistoryControls
                 windowClass={windowClass}
                 inputModality={inputModality}
@@ -1340,6 +1489,23 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           ]}
         />
       )}
+      {!loadingFacets && (
+        <ExplorerFilterBar
+          nodeTypes={nodeTypes}
+          selectedTypes={selectedTypes}
+          onToggleType={onToggleType}
+          counts={chipCounts}
+          range={timeRange}
+          onRangeChange={onTimeRangeChange}
+          onOpenSearch={openPalette}
+          windowClass={windowClass}
+          inputModality={inputModality}
+        />
+      )}
+      {fullView && full.overview?.nodesTruncated && <Alert severity="info">{FULL_VIEW_TRUNCATED_TEXT}</Alert>}
+      {fullView && !full.overview?.nodesTruncated && full.overview?.edgesTruncated && (
+        <Alert severity="info">{FULL_VIEW_EDGES_TRUNCATED_TEXT}</Alert>
+      )}
       {crumbs.length > 1 && <FocusBreadcrumbs crumbs={crumbs} windowClass={windowClass} onGoTo={trail.goTo} />}
       {askProblem && (
         <Alert severity="warning" onClose={() => setAskProblem(null)}>
@@ -1358,7 +1524,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         cap={budgets.visibleNodeCap}
         onDismiss={explorer.dismissCap}
       />
-      {explorer.error && hasGraph && <Alert severity="error">{explorer.error}</Alert>}
+      {viewError && hasGraph && <Alert severity="error">{viewError}</Alert>}
     </Box>
   );
 
@@ -1385,7 +1551,8 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         asOf={asOf}
         asOfMin={asOfMin}
         onAsOfChange={onAsOfChange}
-        hideAsOf={!listView}
+        hideAsOf
+        hideTypes
       />
       {hasGraph && (
         <GraphLegend model={legend} mode={theme.palette.mode} />
@@ -1444,11 +1611,6 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   ) : null;
   const askAvailable = host.features().graphEnabled === true ? slots?.AskPanel : undefined;
   const NodeActionsSlot = slots?.NodeActions;
-  // The nodes whose activity the TimeBar overlays: the selection and the marked set.
-  const timeBarSelectedIds = useMemo(
-    () => [...new Set([...(selected?.kind === 'node' ? [selected.id] : []), ...markedVisible])],
-    [selected, markedVisible],
-  );
 
   // The node menu's extra rows: "Path to…" (GIC-13) and "Ask about this…" (GIC-17).
   const contextExtras = [
@@ -1479,21 +1641,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           fillHeight={!listView}
           topBar={topBar}
           facets={facets}
-          timeBar={
-            hasGraph && !loadingFacets ? (
-              <ExplorerTimeBar
-                graph={graph}
-                version={version}
-                visibleIds={visibleIds}
-                selectedIds={timeBarSelectedIds}
-                range={timeRange}
-                onRangeChange={onTimeRangeChange}
-                onDimmedIdsChange={setTimeDimmed}
-                typeLabel={typeLabel}
-              />
-            ) : undefined
-          }
-          facetsActiveCount={activeFilterCount({ selectedTypes, hiddenRelationTypes: hiddenRelations, asOf })}
+          facetsActiveCount={activeFilterCount({ selectedTypes, hiddenRelationTypes: hiddenRelations, asOf: null })}
           inspectorOpen={!listView && (selection !== null || multi !== null || connectResults !== null || pathMode.sheetWanted)}
           onInspectorOpenChange={(open) => {
             if (!open) {
@@ -1591,7 +1739,12 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                 </Box>
               ) : filteredEmpty ? (
                 <Box sx={{ position: 'relative', minHeight: 240 }}>
-                  <FilteredEmptyState selectedTypes={selectedTypes} nodeTypes={nodeTypes} onClear={clearTypeFilter} />
+                  <FilteredEmptyState
+                    selectedTypes={selectedTypes}
+                    nodeTypes={nodeTypes}
+                    timeFiltered={timeFiltered}
+                    onClear={clearFilters}
+                  />
                 </Box>
               ) : (
                 <CenteredSpinner label="Loading the graph" />
@@ -1602,7 +1755,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                 tabIndex={0}
                 role="application"
                 aria-label={`Graph explorer, ${nodeCount} nodes. Press L for list view.`}
-                aria-busy={explorer.isLoading || undefined}
+                aria-busy={viewLoading || undefined}
                 onKeyDown={onCanvasKeyDown}
                 sx={{
                   position: 'relative',
@@ -1613,18 +1766,20 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                 {hasGraph && (
                   <Suspense fallback={<CenteredSpinner label="Loading the graph" />}>
                     <GraphCanvas
+                      // A distinct mode: switching between the full and the focused view starts a fresh canvas.
+                      key={fullView ? 'full' : 'focused'}
                       graph={graph}
                       version={version}
                       visibleIds={visibleIds}
                       selectedId={selected?.kind === 'node' ? selected.id : null}
                       previewId={previewId}
                       markedIds={canvasMarked}
-                      dimmedIds={timeDimmed}
+                      dimmedIds={null}
                       pathNodeIds={pathMode.pathNodeIds}
                       pathEdgeIds={pathMode.pathEdgeIds}
                       layout={layout}
                       seedIds={state.seedIds}
-                      pinsKey={pinsKey}
+                      pinsKey={fullView ? undefined : pinsKey}
                       onPinnedCountChange={setPinnedCount}
                       inputModality={inputModality}
                       budgets={budgets}
@@ -1655,9 +1810,14 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                   </Box>
                 )}
                 {filteredEmpty && (
-                  <FilteredEmptyState selectedTypes={selectedTypes} nodeTypes={nodeTypes} onClear={clearTypeFilter} />
+                  <FilteredEmptyState
+                    selectedTypes={selectedTypes}
+                    nodeTypes={nodeTypes}
+                    timeFiltered={timeFiltered}
+                    onClear={clearFilters}
+                  />
                 )}
-                {(initialLoading || explorer.isLoading) && <CenteredSpinner label="Loading the graph" overlay />}
+                {(initialLoading || viewLoading) && <CenteredSpinner label="Loading the graph" overlay />}
                 {pathMode.overlay(canvasInsets)}
               </Box>
             )
@@ -1707,14 +1867,24 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
 function FilteredEmptyState({
   selectedTypes,
   nodeTypes,
+  timeFiltered = false,
   onClear,
 }: {
   selectedTypes: ReadonlySet<string>;
   nodeTypes: readonly { key: string; label: string }[];
+  /** A time range is set (#768). */
+  timeFiltered?: boolean;
   onClear: () => void;
 }) {
   const labels = nodeTypes.filter((option) => selectedTypes.has(option.key)).map((option) => option.label);
-  const message = labels.length === 1 ? `No ${labels[0]} in your graph yet` : 'Nothing matches these filters';
+  const message =
+    labels.length === 0 && timeFiltered
+      ? 'Nothing in your graph in this time range'
+      : labels.length === 1 && !timeFiltered
+        ? `No ${labels[0]} in your graph yet`
+        : labels.length === 1
+          ? `No ${labels[0]} in this time range`
+          : 'Nothing matches these filters';
   return (
     <Box
       role="status"
@@ -1739,6 +1909,11 @@ function FilteredEmptyState({
       </Button>
     </Box>
   );
+}
+
+/** The full view's count (#768): "1,234 entities" / "1 entity". */
+function entityCountLabel(n: number): string {
+  return n === 1 ? '1 entity' : `${n.toLocaleString('en-US')} entities`;
 }
 
 function CenteredSpinner({ label, overlay = false }: { label: string; overlay?: boolean }) {

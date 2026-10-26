@@ -58,6 +58,8 @@ export interface ExplorerBudgets {
   hitTargetPx: number;
   /** Visible nodes above which the list view is the default (compact windows only). */
   listViewDefaultAbove: number;
+  /** Rendered node size (px) below which sigma draws no label; absent: 12 constrained, 8 otherwise. The full view raises it (#768). */
+  labelSizeThreshold?: number;
 }
 
 /** Budgets of a compact window. */
@@ -119,4 +121,30 @@ export function minimapVisible(input: {
   if (input.windowClass === 'compact') return false;
   if (input.windowClass === 'medium') return input.mediumOn;
   return input.nodeCount > MINIMAP_MIN_NODES;
+}
+
+/** Label threshold of the full view (#768): only nodes drawn at least this big carry a label. */
+export const FULL_VIEW_LABEL_THRESHOLD = 14;
+/** Edge count above which the full view hides edges while the camera moves. */
+export const FULL_VIEW_HIDE_EDGES_ON_MOVE_ABOVE = 1000;
+
+/**
+ * The budgets of the full-graph view (#768), a DISTINCT MODE from the bounded
+ * explorer: its node cap is the server's snapshot cap (the explorer's 300 / 120
+ * apply only to expansion-driven focused views), labels are sparser (reduced
+ * density, a higher size threshold) and edges hide while the camera moves.
+ * Everything tied to the device (pixel ratio, hit target, layout time box) is
+ * the window's own.
+ *
+ * @stability experimental
+ */
+export function fullViewBudgets(base: ExplorerBudgets, nodeCap: number): ExplorerBudgets {
+  return {
+    ...base,
+    visibleNodeCap: nodeCap,
+    labelDensity: 'reduced',
+    labelSizeThreshold: FULL_VIEW_LABEL_THRESHOLD,
+    hideEdgesOnMoveAbove: Math.min(base.hideEdgesOnMoveAbove, FULL_VIEW_HIDE_EDGES_ON_MOVE_ABOVE),
+    listViewDefaultAbove: Number.POSITIVE_INFINITY,
+  };
 }

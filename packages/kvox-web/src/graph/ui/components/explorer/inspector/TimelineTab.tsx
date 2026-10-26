@@ -44,7 +44,7 @@ export interface TimelineTabProps {
   ontology: GraphOntology | null;
   /** A coarse pointer. */
   touch: boolean;
-  /** Sets the TimeBar's brush to the bucket holding an event (GIC-15). Without it no "Show in TimeBar" link is drawn. */
+  /** Sets the explorer's time range to the month holding an event (GIC-15; the one Time control since #768). Without it no "Show that month" link is drawn. */
   onShowInTimeBar?: (at: string) => void;
 }
 
@@ -95,9 +95,9 @@ export function TimelineTab({ entityId, ontology, touch, onShowInTimeBar }: Time
                   size="small"
                   onClick={() => onShowInTimeBar(event.at!)}
                   sx={{ px: 0.5, minWidth: 0, minHeight: touch ? 44 : undefined }}
-                  aria-label={`Show ${formatPrecisionDate(event.at, event.precision)} in the time bar`}
+                  aria-label={`Show the month of ${formatPrecisionDate(event.at, event.precision)} in the graph`}
                 >
-                  Show in TimeBar
+                  Show that month
                 </Button>
               )}
             </li>
