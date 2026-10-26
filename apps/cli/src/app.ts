@@ -27,6 +27,8 @@ import { APP_ENV_SPEC } from './extensions/env-spec.js';
 //     `base.compose.yml` needs, which install creates; the deploy end-to-end workflow
 //     asserts it). The port guard is the platform's `bind-port-owner` (issue #745);
 //     this app no longer carries its own;
+//   - the manifests the deploy version step versions (`deploy.versionedManifests`):
+//     apps/api, apps/web and packages/shared, never apps/cli, which keeps its own version;
 //   - the pre-platform `deploy` flags the platform dropped are translated in
 //     extensions/legacy-flags.ts before the platform parses them.
 //
@@ -89,6 +91,22 @@ export function readVersion(): string {
  */
 export const APP_STREAM_PATHS: readonly string[] = ['/api/notes', '/api/note-generations', '/api/ask/messages'];
 
+/**
+ * The manifests the deploy version step writes the app release version into.
+ *
+ * The CLI keeps its OWN version (`apps/cli/package.json`, recorded as
+ * `appctlVersion` in deploy state, `deployedBy.version` in deploy-info and the
+ * User-Agent), so `apps/cli` is deliberately absent: the release step must not
+ * rewrite it to the app release version (production deploys committed
+ * `chore(release): 1.2.3` / `1.2.4` and moved it from 1.10.7). The first entry
+ * is the version source, so `apps/api` leads.
+ */
+export const APP_VERSIONED_MANIFESTS: readonly string[] = [
+  'apps/api/package.json',
+  'apps/web/package.json',
+  'packages/shared/package.json',
+];
+
 export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: {
     name: CLI_NAME,
@@ -101,4 +119,5 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   envSpecFragments: [APP_ENV_SPEC],
   deployChecks: [dockerNetworkCheck],
   proxy: { streamPaths: APP_STREAM_PATHS },
+  deploy: { versionedManifests: APP_VERSIONED_MANIFESTS },
 };
