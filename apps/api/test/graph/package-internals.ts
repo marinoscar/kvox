@@ -113,6 +113,7 @@ export type ProposalEntityView = extractionInternals.ProposalEntityView;
 export type ProposedRow = extractionInternals.ProposedRow;
 export type RawAnswer = extractionInternals.RawAnswer;
 export type CandidateService = extractionInternals.CandidateService;
+export type DuplicatesService = extractionInternals.DuplicatesService;
 export type ContextFeatureService = extractionInternals.ContextFeatureService;
 export type ExtractionInputLoader = extractionInternals.ExtractionInputLoader;
 export type ProposalWriter = extractionInternals.ProposalWriter;
