@@ -24,6 +24,15 @@ export { GraphImportPage } from './pages/GraphImportPage.js';
 export { GraphReviewPage, reviewTarget } from './pages/GraphReviewPage.js';
 export type { ReviewTarget } from './pages/GraphReviewPage.js';
 export { GraphReviewQueuePage } from './pages/GraphReviewQueuePage.js';
+export {
+  DUPLICATE_REASON_COPY,
+  DUPLICATES_SCAN_QUEUED_MESSAGE,
+  DUPLICATES_SCAN_RUNNING_MESSAGE,
+  GraphDuplicatesPage,
+  defaultDuplicateSurvivor,
+} from './pages/GraphDuplicatesPage.js';
+export { DUPLICATES_BADGE_LIMIT, DuplicatesLink, duplicatesBadgeText } from './components/DuplicatesLink.js';
+export type { DuplicatesLinkProps } from './components/DuplicatesLink.js';
 export { ReviewQueueGroupCard, reviewGroupTarget } from './components/review/ReviewQueueGroupCard.js';
 export type { ReviewQueueGroupCardProps } from './components/review/ReviewQueueGroupCard.js';
 export { UserKnowledgeGraphPage } from './pages/UserKnowledgeGraphPage.js';

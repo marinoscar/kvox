@@ -91,6 +91,9 @@ import type {
   ReverseMergeResponse as ContractReverseMergeResponse,
   DistinctPairResponse as ContractDistinctPairResponse,
   ListEntityMergesResponse as ContractListEntityMergesResponse,
+  DuplicatePair as ContractDuplicatePair,
+  ListDuplicatesResponse as ContractListDuplicatesResponse,
+  DuplicatesScanResponse as ContractDuplicatesScanResponse,
 } from '@marinoscar/kvox-contract/graph';
 import { MANUAL_RELATION_TYPES as CONTRACT_MANUAL_RELATION_TYPES } from '@marinoscar/kvox-contract/graph';
 import type { AttributeChoice as ContractAttributeChoice } from '@marinoscar/kvox-contract/ontology';
@@ -1566,6 +1569,74 @@ export function recordDistinctPair(host: KvoxWebHost, aId: string, bId: string):
 export async function listEntityMerges(host: KvoxWebHost, id: string, signal?: AbortSignal): Promise<EntityMergeRow[]> {
   const body = await kvoxGet<ContractListEntityMergesResponse>(host, `/graph/entities/${enc(id)}/merges`, { signal });
   return Array.isArray(body?.merges) ? body.merges : [];
+}
+
+// =============================================================================
+// Possible duplicates (#766): the pairs that probably are one entity
+// =============================================================================
+
+/**
+ * One possible-duplicate pair, as `GET /api/graph/duplicates` lists it (best score first): both entities, the score, every reason that fired and where the pair came from.
+ *
+ * @stability experimental
+ */
+export type DuplicatePair = ContractDuplicatePair;
+
+/**
+ * Why a pair is listed: `name_contained`, `initials`, `alias_match`, `similar_name` or `resolution_proposal`.
+ *
+ * @stability experimental
+ */
+export type DuplicateReason = ContractDuplicatePair['reasons'][number];
+
+/**
+ * One side of a {@link DuplicatePair}.
+ *
+ * @stability experimental
+ */
+export type DuplicateEntity = ContractDuplicatePair['a'];
+
+/**
+ * What `POST /api/graph/duplicates/scan` answers: the queued `kg.resolve` job, or the run already in flight it joined.
+ *
+ * @stability experimental
+ */
+export type DuplicatesScanResult = ContractDuplicatesScanResponse;
+
+/**
+ * The query of {@link listDuplicates}.
+ *
+ * @stability experimental
+ */
+export interface ListDuplicatesParams {
+  /** Only pairs of this entity type; absent means every type. */
+  type?: string;
+  /** Most pairs returned, best first (the API's default is 50, its ceiling 200). */
+  limit?: number;
+}
+
+/**
+ * Lists the caller's possible-duplicate pairs (`GET /api/graph/duplicates`, `graph:read`), best score first.
+ *
+ * @stability experimental
+ */
+export async function listDuplicates(
+  host: KvoxWebHost,
+  params: ListDuplicatesParams = {},
+  signal?: AbortSignal,
+): Promise<DuplicatePair[]> {
+  const query = buildGraphQuery({ type: params.type, limit: params.limit });
+  const body = await kvoxGet<ContractListDuplicatesResponse>(host, `/graph/duplicates${query}`, { signal });
+  return Array.isArray(body?.pairs) ? body.pairs : [];
+}
+
+/**
+ * Queues the deeper duplicate scan (`POST /api/graph/duplicates/scan`, `graph:write`): `202` with `alreadyRunning` when it joined a run in flight; `409`, `details.reason: "graph_disabled"`, while connected knowledge is off. Its results appear in {@link listDuplicates} when the job finishes.
+ *
+ * @stability experimental
+ */
+export function scanDuplicates(host: KvoxWebHost): Promise<DuplicatesScanResult> {
+  return kvoxPost<DuplicatesScanResult>(host, '/graph/duplicates/scan', {});
 }
 
 // =============================================================================

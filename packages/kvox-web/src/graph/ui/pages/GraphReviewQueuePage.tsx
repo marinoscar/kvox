@@ -56,6 +56,8 @@ import {
 } from '../../headless/utils/reviewQueue.js';
 import type { CommitBatchSummary } from '../../headless/utils/reviewQueue.js';
 import { ReviewQueueGroupCard } from '../components/review/ReviewQueueGroupCard.js';
+import { DUPLICATES_BADGE_LIMIT, DuplicatesLink } from '../components/DuplicatesLink.js';
+import { useGraphDuplicates } from '../../headless/hooks/useGraphDuplicates.js';
 
 const SKELETON_GROUPS = 3;
 
@@ -75,6 +77,8 @@ export function GraphReviewQueuePage() {
   const [searchParams] = useSearchParams();
   const canWrite = useHasPermission('graph:write');
   const queue = useReviewQueue();
+  // One cheap read for the "Possible duplicates" badge (#766).
+  const duplicateCount = useGraphDuplicates({ limit: DUPLICATES_BADGE_LIMIT }).pairs.length;
   const refreshQueue = queue.refresh;
   const onCommitted = useCallback(() => void refreshQueue(), [refreshQueue]);
   const batch = useCommitBatch({ onCommitted });
@@ -115,9 +119,12 @@ export function GraphReviewQueuePage() {
         <Typography variant="h5" component="h1" sx={{ fontWeight: 600 }}>
           Review Queue
         </Typography>
-        <Button size="small" component={RouterLink} to="/graph/review">
-          Review one by one
-        </Button>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button size="small" component={RouterLink} to="/graph/review">
+            Review one by one
+          </Button>
+          <DuplicatesLink count={duplicateCount} size="small" variant="text" />
+        </Stack>
       </Stack>
 
       {totals && totals.proposals > 0 && (
