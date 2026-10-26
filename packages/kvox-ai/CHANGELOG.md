@@ -1,5 +1,11 @@
 # @marinoscar/kvox-ai
 
+## 0.1.0-next.20
+
+### Patch Changes
+
+- dc715fe: Dependency and peer ranges on the platform packages move from 0.1.0-next.16 to 0.1.0-next.17, the release whose CLI engine prints a once-a-day start-up update notice (`createCli({ updateNotice })`, `githubRawManifest`). No code in these packages changes.
+
 ## 0.1.0-next.19
 
 ### Patch Changes
