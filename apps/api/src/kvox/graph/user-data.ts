@@ -59,6 +59,7 @@ export function graphUserDataModels(): Array<UserDataModelHint<Prisma.ModelName>
     graphModel('KgProposal'),
     graphModel('KgMerge'),
     graphModel('KgDistinctPair'),
+    graphModel('KgSynonym'),
     graphModel('KgAttributeDef'),
     graphModel('KgEntityDigest'),
     graphModel('KgExport'),

@@ -147,6 +147,7 @@ describe('the export policy of the user-owned registry', () => {
       'KgProposal',
       'KgMerge',
       'KgDistinctPair',
+      'KgSynonym',
       'KgEntityDigest',
       'KgExport',
       'KgGraphLayout',

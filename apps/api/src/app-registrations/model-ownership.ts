@@ -67,6 +67,7 @@ export const KVOX_MODEL_OWNERSHIP: readonly Def[] = [
   user('KgProposalItem', 'An item of a proposal, and so of one user’s review queue.'),
   user('KgMerge', 'A merge in one user’s graph.'),
   user('KgDistinctPair', 'A "these are different" decision in one user’s graph.'),
+  user('KgSynonym', 'A personal synonym set in one user’s graph.'),
   user('KgAttributeDef', 'An attribute definition in one user’s ontology.'),
   user('KgEntityDigest', 'A derived summary of an entity in one user’s graph.'),
   user('KgEntityView', 'One user’s saved view of an entity.'),
