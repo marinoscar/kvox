@@ -137,6 +137,20 @@ Re-run the same command you installed with — the curl one-liner above, or
 the `KVOX_SRC` form for a local clone. Either way the installer detects
 the existing install and updates it in place.
 
+### Update notice
+
+Once a day `kvox` checks whether a newer CLI is available and, if so, prints one line on stderr after the command finishes:
+
+```
+kvox 1.10.9 is available (you have 1.10.8). Update: curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/install.sh | bash
+```
+
+(the hint is the install one-liner above, built from the repository this CLI was renamed for)
+
+The latest version is the `version` of `apps/cli/package.json` on `main`, which is what a re-run of the installer builds. The answer is cached in `~/.kvox/update-check.json`, so the network is touched at most once a day; the check waits at most 1.5 seconds and any failure (offline, timeout, bad response) is silent.
+
+It stays silent in CI, when stdout or stderr is not a terminal, with `--json`, for `--version` and help, and for `node start` (the long-running worker). To turn it off everywhere, set `KVOX_NO_UPDATE_CHECK=1`.
+
 ### Uninstall
 
 ```bash
