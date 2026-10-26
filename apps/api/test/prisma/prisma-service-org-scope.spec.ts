@@ -1,6 +1,6 @@
 // =============================================================================
 // PrismaService is the platform's `PLATFORM_PRISMA`: the shape it must keep
-// (marinoscar/kvox#757)
+// (#757)
 // =============================================================================
 //
 // `@marinoscar/platform-api` 0.1.0-next.16 calls `PLATFORM_PRISMA.forOrg(orgId,
