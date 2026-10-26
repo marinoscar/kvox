@@ -70,6 +70,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { getNoteSourceDownload } from '../../headless/clients/notes.js';
 import type { Note } from '../../headless/clients/notes.js';
 import {
+  isImportedNote,
   noteSourceFallbackLabel,
   noteSourcePath,
   noteSourceRef,
@@ -101,7 +102,7 @@ export function NoteProvenance({ note, sourceName }: NoteProvenanceProps) {
   const ref = noteSourceRef(note);
   const path = noteSourcePath(note);
   const label = ref ? (sourceName ?? noteSourceFallbackLabel(ref.type)) : null;
-  const imported = note.sourceType === 'document' && !note.templateId && !note.templateName;
+  const imported = isImportedNote(note);
   const verb = imported ? 'Imported' : 'Generated';
   const downloadable = note.sourceType === 'document' && Boolean(note.sourceObjectId);
 

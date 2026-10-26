@@ -132,8 +132,11 @@ import { RegenerateNoteDialogContainer } from '../components/RegenerateNoteDialo
 import { RegenerateSameConfirmDialog } from '../components/RegenerateSameConfirmDialog.js';
 import { useNoteTemplateDetail } from '../../headless/hooks/useNoteTemplates.js';
 import { NOTE_ACTIVE_POLL_MS, isNoteInFlight, useNote } from '../../headless/hooks/useNotes.js';
+import { useNoteAiRevision } from '../../headless/hooks/useNoteAiRevision.js';
+import { isImportedNote } from '../../headless/utils/noteSource.js';
 import {
   KvoxApiError,
+  formatShortDate,
   useKvoxHost,
   useKvoxPermissionCheck,
   useUnsavedChangesWarning,
@@ -302,6 +305,17 @@ function NotePageView({ id, slots, ai }: NotePageViewProps) {
    * has yet.
    */
   const templateDetail = useNoteTemplateDetail(note?.templateId);
+
+  /**
+   * #758: an imported note was never generated. Its AI formatting pass, if one
+   * ran, is a later version — read from the history only for an imported note
+   * past version 1, above the early returns like the template read.
+   */
+  const imported = note ? isImportedNote(note) : false;
+  const { revision: aiRevision } = useNoteAiRevision(note?.id ?? '', {
+    enabled: imported && (note?.currentVersion ?? 0) > 1,
+    currentVersion: note?.currentVersion ?? 0,
+  });
 
   /** The buffer the stream has produced, offset-reconciled by the service. */
   const [streamed, setStreamed] = useState('');
@@ -751,20 +765,28 @@ function NotePageView({ id, slots, ai }: NotePageViewProps) {
         mr: { lg: asideWidth > 0 ? `${asideWidth}px` : 'auto' },
       }}
     >
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={1}
-        sx={{ alignItems: { sm: 'flex-start' }, justifyContent: 'space-between', mb: 1 }}
-      >
+      {/* #758: THE TITLE OWNS ITS OWN ROW, the status and the actions the row
+          under it. Side by side, the action row (which a host's
+          `HeaderActions` slot can make arbitrarily long) took the width and
+          left the title one word per line, with the chip drawn over it. Stacked
+          at every width, the title wraps like prose and the actions wrap onto
+          as many rows as they need — a component-level layout, no breakpoint
+          read. */}
+      <Box sx={{ mb: 1 }} data-testid="note-header">
         {titleDraft === null ? (
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
-            <Typography variant="h5" component="h1" sx={{ minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, minWidth: 0 }}>
+            <Typography
+              variant="h5"
+              component="h1"
+              sx={{ flex: '0 1 auto', minWidth: 0, overflowWrap: 'anywhere' }}
+            >
               {note.title}
             </Typography>
             <Tooltip title="Rename this note">
               <IconButton
                 size="small"
                 aria-label="Rename this note"
+                sx={{ flexShrink: 0, mt: 0.25 }}
                 onClick={() => {
                   setTitleDraft(note.title);
                   setTitleError(null);
@@ -773,11 +795,11 @@ function NotePageView({ id, slots, ai }: NotePageViewProps) {
                 <EditIcon fontSize="inherit" />
               </IconButton>
             </Tooltip>
-          </Stack>
+          </Box>
         ) : (
           <Box
             component="form"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}
+            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}
             onSubmit={(event) => {
               event.preventDefault();
               void saveTitle();
@@ -817,10 +839,14 @@ function NotePageView({ id, slots, ai }: NotePageViewProps) {
           </Box>
         )}
 
+        {/* `useFlexGap`: Stack's default margin spacing misaligns wrapped
+            rows; a flex `gap` spaces every row the same. */}
         <Stack
           direction="row"
           spacing={1}
-          sx={{ alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}
+          useFlexGap
+          sx={{ alignItems: 'center', flexWrap: 'wrap', minWidth: 0, mt: 1 }}
+          data-testid="note-header-actions"
         >
           <NoteStatusChip status={note.status} />
           {/* Copying is a READ, like Export — available whenever there is a
@@ -868,7 +894,7 @@ function NotePageView({ id, slots, ai }: NotePageViewProps) {
             </IconButton>
           )}
         </Stack>
-      </Stack>
+      </Box>
 
       {canWriteNotes && (
         <Menu
@@ -930,6 +956,18 @@ function NotePageView({ id, slots, ai }: NotePageViewProps) {
           made concrete — see `NoteProvenance`'s own header. */}
       <Box sx={{ mb: 2 }}>
         <NoteProvenance note={note} sourceName={sourceName} />
+        {/* #758: an imported note's AI formatting pass is a VERSION, named by
+            the summary its history carries — said as the API wrote it. */}
+        {imported && aiRevision ? (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            component="p"
+            data-testid="note-import-revision"
+          >
+            {`${aiRevision.summary} · version ${aiRevision.version}, ${formatShortDate(aiRevision.createdAt)}`}
+          </Typography>
+        ) : null}
       </Box>
 
       {/* The recording itself, one press away (#309). Lazy: nothing is signed
@@ -943,14 +981,21 @@ function NotePageView({ id, slots, ai }: NotePageViewProps) {
           application — and the model. Collapsed, directly under the sentence it
           expands on; see `NoteGenerationContext`'s own header for why the two
           are not one control. */}
-      <NoteGenerationContext
-        note={note}
-        sourceName={sourceName}
-        template={templateDetail.template}
-        templateState={templateDetail.state}
-        templateError={templateDetail.error}
-        onOpenContext={() => setContextOpen(true)}
-      />
+      {/* #758: NOT FOR AN IMPORTED NOTE. It was never generated — no
+          template, no context, no model — so every row of the panel would be
+          an absence dressed as a fact ("This template was deleted"). The
+          provenance sentence above already names the file, offers it back and
+          dates the import. */}
+      {!imported && (
+        <NoteGenerationContext
+          note={note}
+          sourceName={sourceName}
+          template={templateDetail.template}
+          templateState={templateDetail.state}
+          templateError={templateDetail.error}
+          onOpenContext={() => setContextOpen(true)}
+        />
+      )}
 
       {inFlight && (
         <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>

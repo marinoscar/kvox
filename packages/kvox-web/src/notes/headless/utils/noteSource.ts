@@ -106,3 +106,24 @@ export function noteSourceFallbackLabel(type: NoteSourceType): string {
       return 'a source';
   }
 }
+
+/**
+ * Whether a note was IMPORTED rather than generated (#730, #758).
+ *
+ * A document kept as the note — "Keep it as my note", a library import or an
+ * ad-hoc import — has a document source and no template: no model wrote its
+ * text from a recipe, so there is no generation to describe. The note page says
+ * "Imported from" and does not draw "How this note was generated" for it. A
+ * later AI formatting pass (`note.import.format`) is a version, not a
+ * generation, and does not change the answer.
+ *
+ * @param note - The note's source type and template columns.
+ * @returns `true` for an imported note.
+ *
+ * @stability experimental
+ */
+export function isImportedNote(
+  note: Pick<Note | NoteListItem, 'sourceType' | 'templateId' | 'templateName'>,
+): boolean {
+  return note.sourceType === 'document' && !note.templateId && !note.templateName;
+}
