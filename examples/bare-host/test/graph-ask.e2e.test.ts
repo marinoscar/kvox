@@ -306,15 +306,14 @@ describe('the graph and Ask on the bare host, end to end', () => {
   });
 
   it('6. lays out the overview (kg.graph_layout, the graphology peers)', async () => {
-    // The first commit emitted `graph.changed` (#591) and enqueued the delayed layout (seedRecording
-    // waited for it and drained it), so a snapshot exists before this GET: the bootstrap trigger of the
-    // GET is not needed. That snapshot predates the second recording (4 -> 5 readable entities is not
-    // the 20 % material change that would schedule another), so it reads back ready but stale.
-    expect(await succeeded('kg.graph_layout')).toBe(1);
+    // Every commit emits `graph.changed` (#591) and, since #768, always enqueues the coalesced layout,
+    // so each recording's commit left a fresh snapshot (seedRecording drained it): the bootstrap trigger
+    // of the GET is not needed, and the snapshot already covers the second recording.
+    expect(await succeeded('kg.graph_layout')).toBe(2);
     const before = await json(await api('/api/graph/overview'));
     expect(before.status).toBe('ready');
-    expect(before.stale).toBe(true);
-    expect(before.nodeCount).toBe(4);
+    expect(before.stale).toBe(false);
+    expect(before.nodeCount).toBe(5);
 
     // A manual refresh recomputes over the full graph.
     await json(await api('/api/graph/overview/refresh', { method: 'POST', json: {} }), 202);
@@ -325,7 +324,7 @@ describe('the graph and Ask on the bare host, end to end', () => {
     expect(after.stale).toBe(false);
     expect(after.nodeCount).toBe(5);
     expect(after.edgeCount).toBe(6);
-    expect(await succeeded('kg.graph_layout')).toBe(2);
+    expect(await succeeded('kg.graph_layout')).toBe(3);
   });
 
   it('7. answers "What are the action items from Joe?": search, then list_commitments for his open ones', async () => {
