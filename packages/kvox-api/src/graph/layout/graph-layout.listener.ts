@@ -2,7 +2,8 @@
 // GraphLayoutListener (#371, epic #347; docs/specs/ontology.md §22.3)
 // =============================================================================
 //
-// The third — and only automatic — re-layout trigger: a MATERIAL change.
+// The third — and only automatic — re-layout trigger: a MATERIAL change (and, since #768, any
+// commit, merge or merge reversal — still one coalesced job per owner).
 // Spec §22.3 forbids re-laying the whole graph on every commit, so on
 // `graph.changed` this runs ONE cheap count and enqueues a delayed
 // `kg.graph_layout` only when the readable entity count moved by ≥ 20 % from
@@ -35,6 +36,18 @@ export const MATERIAL_CHANGE_RATIO = 0.2;
 
 /** The denominator's floor, so a small graph does not re-lay constantly. */
 export const MATERIAL_CHANGE_FLOOR = 50;
+
+/**
+ * Reasons that always re-lay (debounced), whatever the size of the change (#768): the explorer opens on the
+ * whole graph, so a committed proposal, a merge or a merge reversal must show up without a manual Refresh.
+ * The enqueue is the coalescing one (`scheduleAutomatic`: 120 s delay, one active job per owner), so a burst of
+ * commits is one run. Manual edits, purges and the like keep the ≥ 20 % rule.
+ */
+export const ALWAYS_RELAYOUT_REASONS: ReadonlySet<GraphChangedEvent['reason']> = new Set([
+  'commit',
+  'merge',
+  'merge_reversed',
+]);
 
 /** Pure: whether `current` entities differ materially from a snapshot of `snapshot`. */
 export function isMaterialChange(snapshot: number, current: number, ratio: number = MATERIAL_CHANGE_RATIO): boolean {
@@ -82,7 +95,8 @@ export class GraphLayoutListener implements OnModuleInit {
       countReadableEntities(this.prisma, ownerId),
     ]);
 
-    const material = latest ? isMaterialChange(latest.nodeCount, current, this.options?.layoutMaterialChange) : current > 0;
+    const structural = ALWAYS_RELAYOUT_REASONS.has(event.reason) && current > 0;
+    const material = structural || (latest ? isMaterialChange(latest.nodeCount, current, this.options?.layoutMaterialChange) : current > 0);
     if (!material) return false;
 
     const job = await this.enqueuer.scheduleAutomatic(ownerId);

@@ -37,8 +37,27 @@ describe('isMaterialChange', () => {
 });
 
 describe('GraphLayoutListener', () => {
-  it('enqueues nothing for a below-threshold change', async () => {
+  it('enqueues nothing for a below-threshold manual edit', async () => {
     const { listener, jobs } = harness({ snapshot: 100, current: 105 });
+    await expect(listener.reconcile({ ownerId: OWNER, reason: 'manual_edit' })).resolves.toBe(false);
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+
+  it.each(['commit', 'merge', 'merge_reversed'] as const)(
+    'enqueues one coalesced job after a %s even below the threshold',
+    async (reason) => {
+      const { listener, jobs } = harness({ snapshot: 100, current: 101 });
+      await expect(listener.reconcile({ ownerId: OWNER, reason })).resolves.toBe(true);
+      expect(jobs.enqueue).toHaveBeenCalledTimes(1);
+      const input = (jobs.enqueue.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+      expect(input).toMatchObject({ reason: 'backfill', subjectId: OWNER });
+      expect(input.skipDedup).toBeUndefined();
+      expect(input.scheduledFor).toBeInstanceOf(Date);
+    },
+  );
+
+  it('does not re-lay on a commit when there is no snapshot and nothing to lay out', async () => {
+    const { listener, jobs } = harness({ snapshot: null, current: 0 });
     await expect(listener.reconcile({ ownerId: OWNER, reason: 'commit' })).resolves.toBe(false);
     expect(jobs.enqueue).not.toHaveBeenCalled();
   });

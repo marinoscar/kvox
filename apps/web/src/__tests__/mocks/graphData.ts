@@ -1306,6 +1306,7 @@ export function overviewFixture(overrides: Partial<GraphOverview> = {}): GraphOv
     ],
     nodes: overviewNodes,
     nodesTruncated: false,
+    typeCounts: {},
     ...overrides,
   };
 }

@@ -16,6 +16,20 @@ import { z } from 'zod';
  */
 export const OVERVIEW_MAX_NODES = 5000;
 
+/**
+ * Most edges one overview response carries when `edges=true`.
+ *
+ * @stability experimental
+ */
+export const OVERVIEW_MAX_EDGES = 20000;
+
+const overviewEdgeSchema = z.object({
+  id: z.uuid().describe('The relation id.'),
+  source: z.uuid().describe('A returned node id (the relation\'s from end).'),
+  target: z.uuid().describe('A returned node id (the relation\'s to end).'),
+  type: z.string().describe('The relation type key.'),
+});
+
 const memberSampleSchema = z.object({
   id: z.uuid(),
   label: z.string(),
@@ -50,6 +64,41 @@ const overviewNodeSchema = z.object({
   degree: z.number().int(),
 });
 
+const overviewDateSchema = z.union([z.iso.date(), z.iso.datetime({ offset: true })]);
+
+/**
+ * Zod schema for the optional `GET /api/graph/overview` filters.
+ *
+ * `types` is comma-separated entity types / item kinds (absent or blank = all; an unknown key is a 400).
+ * `from` / `to` keep entities with evidence dated in the window (same date rule as `GET /api/graph/activity`).
+ *
+ * @stability experimental
+ */
+export const graphOverviewQuerySchema = z.object({
+  types: z
+    .string()
+    .optional()
+    .describe('Comma-separated entity types or item kinds to keep. Absent or blank = all. Unknown key = 400.'),
+  from: overviewDateSchema
+    .optional()
+    .describe('Keep entities with evidence dated at or after this instant (`YYYY-MM-DD` is 00:00:00Z that day).'),
+  to: overviewDateSchema
+    .optional()
+    .describe('Keep entities with evidence dated before this instant (`YYYY-MM-DD` is 00:00:00Z that day).'),
+  edges: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional()
+    .describe('`true` adds `edges` among the returned nodes. Absent or `false` omits them.'),
+});
+
+/**
+ * The parsed shape of {@link graphOverviewQuerySchema}.
+ *
+ * @stability experimental
+ */
+export type GraphOverviewQuery = z.infer<typeof graphOverviewQuerySchema>;
+
 /**
  * Zod schema for the graph overview response wire shape.
  *
@@ -73,7 +122,22 @@ export const graphOverviewResponseSchema = z
     nodes: z.array(overviewNodeSchema).max(OVERVIEW_MAX_NODES),
     nodesTruncated: z
       .boolean()
-      .describe(`More positioned nodes exist than returned (the top ${OVERVIEW_MAX_NODES} by degree are).`),
+      .describe(`More positioned nodes matched than returned (the top ${OVERVIEW_MAX_NODES} by degree are).`),
+    edges: z
+      .array(overviewEdgeSchema)
+      .max(OVERVIEW_MAX_EDGES)
+      .optional()
+      .describe('Present only with `edges=true`: live relations valid now with both ends in `nodes`.'),
+    edgesTruncated: z
+      .boolean()
+      .optional()
+      .describe(`Present only with \`edges=true\`: more edges matched than the ${OVERVIEW_MAX_EDGES} returned.`),
+    typeCounts: z
+      .record(z.string(), z.number().int())
+      .describe(
+        'Live readable entities per type, time-filtered by `from`/`to` but NOT by `types`. Read live, so it can ' +
+          'exceed the nodes in a stale snapshot. Feeds filter-chip counts.',
+      ),
   })
   .describe('The latest whole-graph layout snapshot, with labels read live.');
 

@@ -14,9 +14,10 @@
  * types at once. Chips are toggle buttons (`aria-pressed` = selected). The
  * relation menu stays a checklist of what shows.
  *
- * No per-type counts: no headless source gives a cheap, current count per node
- * type (the overview's cluster `typeCounts` is a possibly-stale snapshot of
- * entities only), so chips are never disabled for being empty.
+ * The explorer page itself (#768) draws the type chips, with live counts, and
+ * the one time control in `ExplorerFilterBar`, a row under its toolbar; it passes
+ * `hideTypes` and `hideAsOf` so the facets keep only the domains and relations.
+ * Without them (another host) this component is the full facet set, uncounted.
  */
 
 import CheckIcon from '@mui/icons-material/Check';
@@ -56,8 +57,10 @@ export interface ExplorerFiltersProps {
   asOf: string | null;
   asOfMin: string;
   onAsOfChange: (value: string | null) => void;
-  /** Hide the as-of slider: the TimeBar is the time control (GIC-15). The list view keeps the slider as the fallback. */
+  /** Hide the as-of slider: the page draws its own time control (`ExplorerTimeControl`, #768). */
   hideAsOf?: boolean;
+  /** Hide the type chips: the page draws them, with counts, in its filter row (`ExplorerFilterBar`, #768). */
+  hideTypes?: boolean;
   disabled?: boolean;
 }
 
@@ -110,6 +113,7 @@ export function ExplorerFilters(props: ExplorerFiltersProps) {
     asOfMin,
     onAsOfChange,
     hideAsOf,
+    hideTypes,
     disabled,
   } = props;
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -144,7 +148,8 @@ export function ExplorerFilters(props: ExplorerFiltersProps) {
           </Box>
         </>
       )}
-      <SectionHeading>Types</SectionHeading>
+      {!hideTypes && <SectionHeading>Types</SectionHeading>}
+      {!hideTypes && (
       <Box role="group" aria-label="Show only these types" sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
         {nodeTypes.map((type) => {
           const selected = selectedTypes.has(type.key);
@@ -163,6 +168,7 @@ export function ExplorerFilters(props: ExplorerFiltersProps) {
           );
         })}
       </Box>
+      )}
       {relationTypes.length > 0 && (
         <>
           <SectionHeading>Relations</SectionHeading>

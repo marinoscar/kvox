@@ -29,6 +29,7 @@ import {
   neighborhoodFixture,
   insightsFixture,
   overviewFixture,
+  fullOverviewFixture,
   proposalMock,
   timelineFixture,
 } from './graphData.js';
@@ -126,7 +127,21 @@ export const graphHandlers = [
 
   // #375 — the whole-graph overview (#371): a ready snapshot; suites override
   // for the pending/stale/none/tooLarge/truncated states.
-  http.get(`${API_BASE}/graph/overview`, () => HttpResponse.json({ data: overviewFixture() })),
+  // With `edges`, `types`, `from` or `to` (the explorer's full view, #768) the answer is filtered.
+  http.get(`${API_BASE}/graph/overview`, ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    if (!q.has('edges') && !q.has('types') && !q.has('from') && !q.has('to')) {
+      return HttpResponse.json({ data: overviewFixture() });
+    }
+    return HttpResponse.json({
+      data: fullOverviewFixture({
+        types: q.get('types')?.split(',').filter(Boolean),
+        from: q.get('from'),
+        to: q.get('to'),
+        edges: q.get('edges') === 'true',
+      }),
+    });
+  }),
 
   // GIC-16 — the Insights panel; suites override for the empty, stale and pending states.
   http.get(`${API_BASE}/graph/insights`, ({ request }) => {
