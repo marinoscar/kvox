@@ -161,6 +161,16 @@ export class NoteLibraryImportHandler implements KvoxJobHandler, OnModuleInit {
     const bytes = sourceObjectId && info ? await this.objects.downloadBuffer(sourceObjectId) : null;
     const mimeType = normalizeDocumentMimeType(info?.mimeType);
     if (!sourceObjectId || !bytes || !mimeType) {
+      // Diagnosable without content: which of the conditions failed, never bytes or text.
+      const failed = [
+        !sourceObjectId ? 'item has no source object id' : null,
+        sourceObjectId && !info ? 'object not found in the store (describe returned null)' : null,
+        sourceObjectId && info && !bytes ? 'object bytes could not be read (download returned null)' : null,
+        info && !mimeType ? `stored mime type "${String(info.mimeType).slice(0, 100)}" is not an accepted document type` : null,
+      ].filter((reason): reason is string => reason !== null);
+      this.logger.warn(
+        `Import item ${item.id} failed with source_missing: ${failed.join('; ')} (object ${sourceObjectId ?? 'none'}, state ${info?.state ?? 'unknown'})`,
+      );
       await this.failItem(item, 'source_missing', true);
       return;
     }
