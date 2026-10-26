@@ -1,10 +1,14 @@
-import { Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ZodValidationPipe } from 'nestjs-zod';
 
 import {
   GraphOverviewRefreshResponseDto,
   GraphOverviewResponseDto,
+  graphOverviewQuerySchema,
+  type GraphOverviewQuery,
   OVERVIEW_MAX_NODES,
+  OVERVIEW_MAX_EDGES,
   type GraphOverviewRefreshResponse,
   type GraphOverviewResponse,
 } from './dto/graph-overview.dto.js';
@@ -44,12 +48,28 @@ export class GraphOverviewController {
       "dropped from `nodes` and `memberSample`, and a cluster named after one falls back to " +
       '`Cluster <n>` (`Unconnected` for cluster `-1`, which pools every isolated entity).\n' +
       `- **\`nodes\`** carries at most ${OVERVIEW_MAX_NODES} entities, highest degree first; ` +
-      '`nodesTruncated` says whether more were positioned.\n\n' +
+      '`nodesTruncated` says whether more matched.\n' +
+      '- **Filters** (all optional, applied to the snapshot, positions unchanged): `types` keeps those entity ' +
+      'types (comma-separated; item kinds are accepted but have no nodes here); `from`/`to` keep entities with ' +
+      'evidence dated in the window (a transcript\'s `recorded_at` or a note\'s `created_at`, else the ' +
+      'citation time; evidence on a relation or item counts for the entities it links). ' +
+      '`typeCounts` is time-filtered but not type-filtered.\n' +
+      `- **\`edges=true\`** adds \`edges\` (\`{id, source, target, type}\`, one per live relation valid now with ` +
+      `both ends in \`nodes\`; strongest, then newest first; at most ${OVERVIEW_MAX_EDGES}, \`edgesTruncated\`). ` +
+      'Omitted otherwise.\n\n' +
       'Requires `graph:read`. Always 200 for your own graph.',
   })
+  @ApiQuery({ name: 'types', required: false, type: String, description: 'Comma-separated entity types / item kinds; absent = all' })
+  @ApiQuery({ name: 'from', required: false, type: String, description: 'YYYY-MM-DD or ISO 8601 with offset' })
+  @ApiQuery({ name: 'edges', required: false, enum: ['true', 'false'], description: 'true adds edges among the returned nodes' })
+  @ApiQuery({ name: 'to', required: false, type: String, description: 'YYYY-MM-DD or ISO 8601 with offset' })
   @ApiDataResponse(GraphOverviewResponseDto, { description: 'The latest snapshot, or `status: "none"`' })
-  async overview(@CurrentGraphActor() user: GraphActor): Promise<GraphOverviewResponse> {
-    return this.overviews.overview(user.id);
+  @ApiResponse({ status: 400, description: 'Unknown type, or an invalid date' })
+  async overview(
+    @CurrentGraphActor() user: GraphActor,
+    @Query(new ZodValidationPipe(graphOverviewQuerySchema)) query: GraphOverviewQuery,
+  ): Promise<GraphOverviewResponse> {
+    return this.overviews.overview(user.id, query);
   }
 
   @Post('refresh')

@@ -2972,6 +2972,37 @@ export interface GraphOverview {
   nodes: GraphOverviewNode[];
   /** `true` when more positioned nodes exist than `nodes` carries. */
   nodesTruncated: boolean;
+  /** Live readable entities per type, time-filtered but not type-filtered (filter-chip counts). */
+  typeCounts: Record<string, number>;
+  /** Present only with `edges: true`: relations among `nodes`, strongest then newest first. */
+  edges?: Array<{
+    /** The relation id. */
+    id: string;
+    /** The `from` entity id. */
+    source: string;
+    /** The `to` entity id. */
+    target: string;
+    /** The relation type key, e.g. `WORKS_FOR`. */
+    type: string;
+  }>;
+  /** Present only with `edges: true`: more edges matched than were returned. */
+  edgesTruncated?: boolean;
+}
+
+/**
+ * Optional filters of {@link getGraphOverview}; mirror the contract's `GraphOverviewQuery`.
+ *
+ * @stability experimental
+ */
+export interface GraphOverviewParams {
+  /** Entity types / item kinds to keep; absent or empty = all. */
+  types?: string[];
+  /** ISO date or datetime; keep entities with evidence at or after it. */
+  from?: string;
+  /** ISO date or datetime; keep entities with evidence before it. */
+  to?: string;
+  /** Also return the edges among the returned nodes. */
+  edges?: boolean;
 }
 
 /**
@@ -2986,8 +3017,18 @@ export type GraphOverviewRefreshResponse = ContractGraphOverviewRefreshResponse;
  *
  * @stability experimental
  */
-export function getGraphOverview(host: KvoxWebHost, signal?: AbortSignal): Promise<GraphOverview> {
-  return kvoxGet<GraphOverview>(host, '/graph/overview', { signal });
+export function getGraphOverview(
+  host: KvoxWebHost,
+  signal?: AbortSignal,
+  params: GraphOverviewParams = {},
+): Promise<GraphOverview> {
+  const q = new URLSearchParams();
+  if (params.types && params.types.length > 0) q.set('types', params.types.join(','));
+  if (params.from) q.set('from', params.from);
+  if (params.to) q.set('to', params.to);
+  if (params.edges) q.set('edges', 'true');
+  const qs = q.toString();
+  return kvoxGet<GraphOverview>(host, `/graph/overview${qs ? `?${qs}` : ''}`, { signal });
 }
 
 /**

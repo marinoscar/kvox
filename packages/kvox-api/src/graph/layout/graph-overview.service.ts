@@ -19,16 +19,22 @@
 // =============================================================================
 
 import { Injectable, Inject } from '@nestjs/common';
+import type { EffectiveSchema } from '@marinoscar/kvox-contract/ontology';
 
 import { READABLE_ENTITY_STATUSES } from '../read/readable.js';
 import { UNCONNECTED_CLUSTER_ID } from './layout-constants.js';
 import {
   OVERVIEW_MAX_NODES,
+  OVERVIEW_MAX_EDGES,
+  type GraphOverviewQuery,
   type GraphOverviewRefreshResponse,
   type GraphOverviewResponse,
 } from './dto/graph-overview.dto.js';
 import { GraphLayoutEnqueuer } from './graph-layout.enqueuer.js';
 import { countReadableEntities, readSourceUpdatedAt } from './layout-source.js';
+import { isWindowed, readEntityIdsInWindow, readOverviewEdges, readTypeCounts, type OverviewWindow } from './overview-filter.js';
+import { asOfOr400, resolveNodeTypes } from '../read/read-params.js';
+import { GraphOntologyService } from '../ontology/graph-ontology.service.js';
 import { storedClustersSchema, storedPositionsSchema } from './layout-snapshot.js';
 import { KVOX_PRISMA } from '../../ports/index.js';
 import type { KvoxGraphDb } from '../data/graph-db.js';
@@ -53,9 +59,20 @@ export class GraphOverviewService {
   constructor(
     @Inject(KVOX_PRISMA) private readonly prisma: KvoxGraphDb,
     private readonly enqueuer: GraphLayoutEnqueuer,
+    private readonly ontology: GraphOntologyService,
   ) {}
 
-  async overview(ownerId: string): Promise<GraphOverviewResponse> {
+  async overview(ownerId: string, query: GraphOverviewQuery = {}): Promise<GraphOverviewResponse> {
+    // Validate first: a typo'd filter is a 400 even before a snapshot exists.
+    let schema: EffectiveSchema | undefined;
+    const rawTypes = query.types?.trim();
+    if (rawTypes) schema = await this.ontology.effectiveSchemaFor(ownerId);
+    const typeFilter = schema ? resolveNodeTypes(schema, rawTypes, 'types') : undefined;
+    const window: OverviewWindow = {
+      from: query.from ? asOfOr400(query.from) : null,
+      to: query.to ? asOfOr400(query.to) : null,
+    };
+
     const [latest, active] = await Promise.all([
       this.prisma.kgGraphLayout.findFirst({
         where: { ownerId },
@@ -94,11 +111,29 @@ export class GraphOverviewService {
 
     const degreeOf = new Map<string, number>(snapshotNodes.map((n) => [n[0], n[5]]));
 
-    const liveNodes = snapshotNodes.filter(([id]) => live.has(id));
+    // Filters drop nodes only; every kept node keeps its snapshot position, so the layout is stable.
+    const allowedTypes = typeFilter ? new Set(typeFilter.entityTypes) : null;
+    const inWindow = isWindowed(window)
+      ? await readEntityIdsInWindow(this.prisma, ownerId, window, [...live.keys()])
+      : null;
+    const keep = (id: string): boolean => {
+      const entity = live.get(id);
+      if (!entity) return false;
+      if (allowedTypes && !allowedTypes.has(entity.type)) return false;
+      return inWindow === null || inWindow.has(id);
+    };
+    const typeCounts = await readTypeCounts(this.prisma, ownerId, window);
+
+    const liveNodes = snapshotNodes.filter(([id]) => keep(id));
     const nodes = liveNodes.slice(0, OVERVIEW_MAX_NODES).map(([id, x, y, clusterId, , degree]) => {
       const entity = live.get(id) as LiveEntity;
       return { id, label: entity.label, type: entity.type, x, y, clusterId, degree };
     });
+
+    const nodeIds = nodes.map((n) => n.id);
+    const edgePart = query.edges
+      ? await readOverviewEdges(this.prisma, ownerId, nodeIds, new Date(), OVERVIEW_MAX_EDGES)
+      : null;
 
     return {
       status: 'ready',
@@ -120,7 +155,7 @@ export class GraphOverviewService {
           radius: c.radius,
           typeCounts: c.typeCounts,
           memberSample: c.sampleIds
-            .filter((id) => live.has(id))
+            .filter((id) => keep(id))
             .slice(0, 8)
             .map((id) => {
               const entity = live.get(id) as LiveEntity;
@@ -131,6 +166,8 @@ export class GraphOverviewService {
       clusterEdges: snapshotClusters.clusterEdges.slice(0, 500),
       nodes,
       nodesTruncated: liveNodes.length > OVERVIEW_MAX_NODES,
+      ...(edgePart ? { edges: edgePart.edges, edgesTruncated: edgePart.truncated } : {}),
+      typeCounts,
     };
   }
 
@@ -169,5 +206,6 @@ function emptyOverview(pending: boolean): GraphOverviewResponse {
     clusterEdges: [],
     nodes: [],
     nodesTruncated: false,
+    typeCounts: {},
   };
 }
