@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ZodValidationPipe } from 'nestjs-zod';
 
@@ -7,6 +7,7 @@ import {
   DistinctPairResponseDto,
   MergeEntityBodyDto,
   MergeEntityResponseDto,
+  ListEntityMergesResponseDto,
   ReverseMergeBodyDto,
   ReverseMergeResponseDto,
   distinctPairBodySchema,
@@ -14,13 +15,14 @@ import {
   reverseMergeBodySchema,
   type DistinctPairBody,
   type DistinctPairResponse,
+  type ListEntityMergesResponse,
   type MergeEntityBody,
   type MergeEntityResponse,
   type ReverseMergeResponse,
 } from './dto/resolution.dto.js';
 import { ResolutionActionsService } from './resolution-actions.service.js';
 import { KvoxAuth } from '../../core/index.js';
-import { GRAPH_WRITE_PERMISSION, CurrentGraphActor, ApiDataResponse } from '../../graph/index.js';
+import { GRAPH_READ_PERMISSION, GRAPH_WRITE_PERMISSION, CurrentGraphActor, ApiDataResponse } from '../../graph/index.js';
 import type { GraphActor } from '../../graph/index.js';
 
 // =============================================================================
@@ -77,6 +79,26 @@ export class GraphResolutionController {
     @CurrentGraphActor() user: GraphActor,
   ): Promise<MergeEntityResponse> {
     return this.actions.merge(id, body.intoId, user);
+  }
+
+  @Get('entities/:id/merges')
+  @KvoxAuth(GRAPH_READ_PERMISSION)
+  @ApiOperation({
+    summary: 'List the merges into an entity',
+    description:
+      'The entities merged **into** `:id`, newest merge first, with whether each can still be undone ' +
+      '(`reversible`: not reversed, and `:id` has not itself been merged since). Pass `mergeId` to ' +
+      '`POST /api/graph/merges/{id}/reverse` to undo.\n\n' +
+      'Requires `graph:read`. **404**: no such entity, not yours, or never in your reviewed graph.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'The surviving entity.' })
+  @ApiDataResponse(ListEntityMergesResponseDto, { description: 'The merges, newest first' })
+  @ApiResponse({ status: 404, description: 'No such entity, not yours, or not in your reviewed graph' })
+  async listMerges(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentGraphActor() user: GraphActor,
+  ): Promise<ListEntityMergesResponse> {
+    return this.actions.listMerges(id, user);
   }
 
   @Post('merges/:id/reverse')

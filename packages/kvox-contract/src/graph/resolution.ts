@@ -129,3 +129,31 @@ export const distinctPairResponseSchema = z
  * @stability experimental
  */
 export type DistinctPairResponse = z.infer<typeof distinctPairResponseSchema>;
+
+/**
+ * Zod schema for the list entity merges response wire shape
+ * (`GET /api/graph/entities/:id/merges`).
+ *
+ * @stability experimental
+ */
+export const listEntityMergesResponseSchema = z
+  .object({
+    merges: z.array(
+      z.object({
+        mergeId: z.guid().describe('The merge record — pass it to `POST /api/graph/merges/{id}/reverse` to undo.'),
+        mergedEntity: z.object({ id: z.guid(), label: z.string(), type: z.string() }),
+        createdAt: z.string().describe('ISO 8601.'),
+        reversedAt: z.string().nullable().describe('ISO 8601; `null` while the merge stands.'),
+        reversible: z
+          .boolean()
+          .describe('`false` once reversed, or when the survivor has itself been merged since (reverse that merge first).'),
+      }),
+    ),
+  })
+  .describe('The entities merged INTO this one, newest merge first.');
+/**
+ * The parsed shape of {@link listEntityMergesResponseSchema}.
+ *
+ * @stability experimental
+ */
+export type ListEntityMergesResponse = z.infer<typeof listEntityMergesResponseSchema>;

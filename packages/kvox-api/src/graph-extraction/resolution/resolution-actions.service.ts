@@ -17,7 +17,7 @@ import { BadRequestException, Injectable, Inject } from '@nestjs/common';
 
 import { GraphAccessService, KG_SUBJECT_ENTITY } from '../../graph/index.js';
 import { DistinctPairService } from './distinct-pair.service.js';
-import type { DistinctPairResponse, MergeEntityResponse, ReverseMergeResponse } from './dto/resolution.dto.js';
+import type { DistinctPairResponse, ListEntityMergesResponse, MergeEntityResponse, ReverseMergeResponse } from './dto/resolution.dto.js';
 import { MergeService } from './merge.service.js';
 import { KVOX_PRISMA, KVOX_AUDIT, type KvoxAuditPort } from '../../ports/index.js';
 import type { KvoxGraphDb, GraphActor } from '../../graph/index.js';
@@ -46,6 +46,35 @@ export class ResolutionActionsService {
   async reverse(mergeId: string, user: GraphActor): Promise<ReverseMergeResponse> {
     await this.access.require(user.id, 'merge', mergeId, 'edit', user.permissions);
     return this.merges.reverse({ ownerId: user.id, mergeId, actorId: user.id });
+  }
+
+  /** Entities merged INTO `id`, newest first. The survivor is authorised like any entity read (404 never 403). */
+  async listMerges(id: string, user: GraphActor): Promise<ListEntityMergesResponse> {
+    const survivor = await this.access.require(user.id, 'entity', id, 'view', user.permissions, { includeMerged: true });
+    const rows = await this.prisma.kgMerge.findMany({
+      where: { ownerId: user.id, survivorId: survivor.id },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    const mergedIds = [...new Set(rows.map((r) => r.mergedId))];
+    const entities = mergedIds.length
+      ? await this.prisma.kgEntity.findMany({ where: { id: { in: mergedIds }, ownerId: user.id }, select: { id: true, label: true, type: true } })
+      : [];
+    const byId = new Map(entities.map((e) => [e.id, e]));
+    // Mirrors MergeService.reverseIn: a survivor merged since is a revert_conflict.
+    const survivorMergedSince = survivor.mergedIntoId !== null || survivor.reviewStatus === 'merged';
+    return {
+      merges: rows.flatMap((r) => {
+        const e = byId.get(r.mergedId);
+        if (!e) return [];
+        return [{
+          mergeId: r.id,
+          mergedEntity: { id: e.id, label: e.label, type: e.type },
+          createdAt: r.createdAt.toISOString(),
+          reversedAt: r.reversedAt ? r.reversedAt.toISOString() : null,
+          reversible: r.reversedAt === null && !survivorMergedSince,
+        }];
+      }),
+    };
   }
 
   async recordDistinct(aId: string, bId: string, user: GraphActor): Promise<DistinctPairResponse> {

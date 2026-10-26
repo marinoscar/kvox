@@ -45,6 +45,8 @@ import { CandidateService } from './resolution/candidate.service.js';
 import { ContextFeatureService } from './resolution/context-features.service.js';
 import { DistinctPairService } from './resolution/distinct-pair.service.js';
 import { GraphEmbedder } from './resolution/graph-embedder.service.js';
+import { DuplicatesService } from './resolution/duplicates.service.js';
+import { GraphDuplicatesController } from './resolution/graph-duplicates.controller.js';
 import { GraphResolutionController } from './resolution/graph-resolution.controller.js';
 import { GraphPreferencesListener } from './resolution/listeners/graph-preferences.listener.js';
 import { MergeService } from './resolution/merge.service.js';
@@ -91,7 +93,7 @@ export class GraphExtractionModule {
    */
   static forRoot(options: GraphExtractionModuleOptions = {}): DynamicModule {
     const resolved = resolveGraphExtractionOptions(options);
-    const controllers = [GraphExtractionController, GraphResolutionController, GraphProposalsController, GraphReviewQueueController, GraphTopicsPromoteController, GraphImportBatchesController];
+    const controllers = [GraphExtractionController, GraphResolutionController, GraphDuplicatesController, GraphProposalsController, GraphReviewQueueController, GraphTopicsPromoteController, GraphImportBatchesController];
 
     const providers: Provider[] = [
       { provide: GRAPH_EXTRACTION_OPTIONS, useValue: resolved },
@@ -112,6 +114,7 @@ export class GraphExtractionModule {
       AliasLearningService,
       MergeService,
       ResolutionActionsService,
+      DuplicatesService,
       GraphPreferencesListener,
       KgResolveHandler,
       KgEmbedHandler,

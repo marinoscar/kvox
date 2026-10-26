@@ -45,6 +45,7 @@ describe('kvoxGraphRoutes', () => {
       { path: '/graph/overview', permission: 'graph:read', redirectTo: undefined },
       { path: '/graph/review', permission: 'graph:read', redirectTo: undefined },
       { path: '/graph/review-queue', permission: 'graph:read', redirectTo: undefined },
+      { path: '/graph/duplicates', permission: 'graph:read', redirectTo: undefined },
       { path: '/graph/imports/:proposalId', permission: 'graph:write', redirectTo: '/graph' },
       { path: '/settings/knowledge-graph', permission: 'graph:write', redirectTo: '/settings' },
     ]);

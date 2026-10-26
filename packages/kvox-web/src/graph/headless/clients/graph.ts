@@ -87,6 +87,13 @@ import type {
   CreateManualRelationResponse as ContractCreateManualRelationResponse,
   RemoveManualRelationResponse as ContractRemoveManualRelationResponse,
   ManualRelationType as ContractManualRelationType,
+  MergeEntityResponse as ContractMergeEntityResponse,
+  ReverseMergeResponse as ContractReverseMergeResponse,
+  DistinctPairResponse as ContractDistinctPairResponse,
+  ListEntityMergesResponse as ContractListEntityMergesResponse,
+  DuplicatePair as ContractDuplicatePair,
+  ListDuplicatesResponse as ContractListDuplicatesResponse,
+  DuplicatesScanResponse as ContractDuplicatesScanResponse,
 } from '@marinoscar/kvox-contract/graph';
 import { MANUAL_RELATION_TYPES as CONTRACT_MANUAL_RELATION_TYPES } from '@marinoscar/kvox-contract/graph';
 import type { AttributeChoice as ContractAttributeChoice } from '@marinoscar/kvox-contract/ontology';
@@ -1493,6 +1500,143 @@ export function setEntityRelation(host: KvoxWebHost, entityId: string, body: Set
  */
 export function removeEntityRelation(host: KvoxWebHost, entityId: string, relationId: string): Promise<RemoveEntityRelationResult> {
   return kvoxDelete<RemoveEntityRelationResult>(host, `/graph/entities/${enc(entityId)}/relations/${enc(relationId)}`);
+}
+
+// =============================================================================
+// Entity merges (#364 API; #765 UI): merge, undo, "not the same", merged-from
+// =============================================================================
+
+/**
+ * What `POST /api/graph/entities/:id/merge` answers: the merge record (its `id` undoes it) and the surviving entity.
+ *
+ * @stability experimental
+ */
+export type MergeEntityResult = ContractMergeEntityResponse;
+
+/**
+ * What `POST /api/graph/merges/:id/reverse` answers: the reversed merge, the restored entity and the rows that could not be given back.
+ *
+ * @stability experimental
+ */
+export type ReverseMergeResult = ContractReverseMergeResponse;
+
+/**
+ * What `POST /api/graph/distinct-pairs` answers: the normalized pair and whether it was new.
+ *
+ * @stability experimental
+ */
+export type DistinctPairResult = ContractDistinctPairResponse;
+
+/**
+ * One entity merged into another, as `GET /api/graph/entities/:id/merges` lists it (newest first).
+ *
+ * @stability experimental
+ */
+export type EntityMergeRow = ContractListEntityMergesResponse['merges'][number];
+
+/**
+ * Merges `mergedId` INTO `intoId` (`POST /api/graph/entities/:id/merge`). The merged entity becomes a tombstone and its label and aliases become aliases of the survivor. Both must be of the same type (`400`, `details.reason: "type_mismatch"`).
+ *
+ * @stability experimental
+ */
+export function mergeEntity(host: KvoxWebHost, mergedId: string, intoId: string): Promise<MergeEntityResult> {
+  return kvoxPost<MergeEntityResult>(host, `/graph/entities/${enc(mergedId)}/merge`, { intoId });
+}
+
+/**
+ * Undoes a merge (`POST /api/graph/merges/:id/reverse`) and restores the merged entity. `409`, `details.reason: "revert_conflict"`, when the survivor has been merged again since.
+ *
+ * @stability experimental
+ */
+export function reverseMerge(host: KvoxWebHost, mergeId: string): Promise<ReverseMergeResult> {
+  return kvoxPost<ReverseMergeResult>(host, `/graph/merges/${enc(mergeId)}/reverse`, {});
+}
+
+/**
+ * Records that two entities are NOT the same (`POST /api/graph/distinct-pairs`); resolution never proposes the pair again. Order does not matter.
+ *
+ * @stability experimental
+ */
+export function recordDistinctPair(host: KvoxWebHost, aId: string, bId: string): Promise<DistinctPairResult> {
+  return kvoxPost<DistinctPairResult>(host, '/graph/distinct-pairs', { aId, bId });
+}
+
+/**
+ * Lists the entities merged INTO an entity (`GET /api/graph/entities/:id/merges`), newest merge first, each saying whether it can still be undone.
+ *
+ * @stability experimental
+ */
+export async function listEntityMerges(host: KvoxWebHost, id: string, signal?: AbortSignal): Promise<EntityMergeRow[]> {
+  const body = await kvoxGet<ContractListEntityMergesResponse>(host, `/graph/entities/${enc(id)}/merges`, { signal });
+  return Array.isArray(body?.merges) ? body.merges : [];
+}
+
+// =============================================================================
+// Possible duplicates (#766): the pairs that probably are one entity
+// =============================================================================
+
+/**
+ * One possible-duplicate pair, as `GET /api/graph/duplicates` lists it (best score first): both entities, the score, every reason that fired and where the pair came from.
+ *
+ * @stability experimental
+ */
+export type DuplicatePair = ContractDuplicatePair;
+
+/**
+ * Why a pair is listed: `name_contained`, `initials`, `alias_match`, `similar_name` or `resolution_proposal`.
+ *
+ * @stability experimental
+ */
+export type DuplicateReason = ContractDuplicatePair['reasons'][number];
+
+/**
+ * One side of a {@link DuplicatePair}.
+ *
+ * @stability experimental
+ */
+export type DuplicateEntity = ContractDuplicatePair['a'];
+
+/**
+ * What `POST /api/graph/duplicates/scan` answers: the queued `kg.resolve` job, or the run already in flight it joined.
+ *
+ * @stability experimental
+ */
+export type DuplicatesScanResult = ContractDuplicatesScanResponse;
+
+/**
+ * The query of {@link listDuplicates}.
+ *
+ * @stability experimental
+ */
+export interface ListDuplicatesParams {
+  /** Only pairs of this entity type; absent means every type. */
+  type?: string;
+  /** Most pairs returned, best first (the API's default is 50, its ceiling 200). */
+  limit?: number;
+}
+
+/**
+ * Lists the caller's possible-duplicate pairs (`GET /api/graph/duplicates`, `graph:read`), best score first.
+ *
+ * @stability experimental
+ */
+export async function listDuplicates(
+  host: KvoxWebHost,
+  params: ListDuplicatesParams = {},
+  signal?: AbortSignal,
+): Promise<DuplicatePair[]> {
+  const query = buildGraphQuery({ type: params.type, limit: params.limit });
+  const body = await kvoxGet<ContractListDuplicatesResponse>(host, `/graph/duplicates${query}`, { signal });
+  return Array.isArray(body?.pairs) ? body.pairs : [];
+}
+
+/**
+ * Queues the deeper duplicate scan (`POST /api/graph/duplicates/scan`, `graph:write`): `202` with `alreadyRunning` when it joined a run in flight; `409`, `details.reason: "graph_disabled"`, while connected knowledge is off. Its results appear in {@link listDuplicates} when the job finishes.
+ *
+ * @stability experimental
+ */
+export function scanDuplicates(host: KvoxWebHost): Promise<DuplicatesScanResult> {
+  return kvoxPost<DuplicatesScanResult>(host, '/graph/duplicates/scan', {});
 }
 
 // =============================================================================
