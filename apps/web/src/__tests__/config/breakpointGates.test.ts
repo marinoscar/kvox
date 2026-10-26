@@ -76,6 +76,7 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   '@marinoscar/kvox-web:notes/ui/components/NoteConflictDialog.tsx': WHY.dialog,
   '@marinoscar/kvox-web:graph/ui/components/ImportGraphDialog.tsx': WHY.dialog,
   '@marinoscar/kvox-web:graph/ui/components/ExportGraphDialog.tsx': WHY.dialog,
+  '@marinoscar/kvox-web:graph/ui/components/MergeEntityDialog.tsx': WHY.dialog,
   '@marinoscar/kvox-web:graph/ui/components/EntityEditDialog.tsx': WHY.dialog,
   '@marinoscar/kvox-web:graph/ui/components/settings/AttributeDefDialog.tsx': WHY.dialog,
   '@marinoscar/kvox-web:graph/ui/components/guide/ExtractDialog.tsx': WHY.dialog,
