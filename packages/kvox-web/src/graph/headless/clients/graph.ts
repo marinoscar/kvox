@@ -2975,7 +2975,16 @@ export interface GraphOverview {
   /** Live readable entities per type, time-filtered but not type-filtered (filter-chip counts). */
   typeCounts: Record<string, number>;
   /** Present only with `edges: true`: relations among `nodes`, strongest then newest first. */
-  edges?: Array<{ id: string; source: string; target: string; type: string }>;
+  edges?: Array<{
+    /** The relation id. */
+    id: string;
+    /** The `from` entity id. */
+    source: string;
+    /** The `to` entity id. */
+    target: string;
+    /** The relation type key, e.g. `WORKS_FOR`. */
+    type: string;
+  }>;
   /** Present only with `edges: true`: more edges matched than were returned. */
   edgesTruncated?: boolean;
 }
