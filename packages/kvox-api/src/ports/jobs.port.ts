@@ -114,6 +114,15 @@ export interface KvoxJobHandler<P = unknown> {
 }
 
 /**
+ * The enqueue reasons every host's queue accepts: the platform's built-in three.
+ * A package job may only use these; any other string is refused by the platform
+ * queue at enqueue time (an unregistered reason throws, #751).
+ *
+ * @stability experimental
+ */
+export type KvoxJobReason = 'upload' | 'rerun' | 'backfill';
+
+/**
  * What to enqueue.
  *
  * @stability experimental
@@ -121,8 +130,8 @@ export interface KvoxJobHandler<P = unknown> {
 export interface KvoxEnqueueInput {
   /** The handler type. */
   type: string;
-  /** Why the job exists (`upload`, `rerun`, `backfill`); the host default when absent. */
-  reason?: string;
+  /** Why the job exists; the host default when absent. */
+  reason?: KvoxJobReason;
   /** The kind of thing the job is about. */
   subjectType?: string;
   /** Which one. Two pending jobs with the same type and subject collapse into one. */
