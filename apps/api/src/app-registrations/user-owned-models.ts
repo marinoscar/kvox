@@ -236,6 +236,13 @@ export const KVOX_USER_OWNED_MODELS: readonly Def[] = [
     rationale: 'A "these are different" decision that only steers duplicate suggestions; derived bookkeeping.',
   },
   {
+    model: 'KgSynonym',
+    ownerField: 'ownerId',
+    purge: 'delete',
+    export: 'exclude',
+    rationale: 'The owner’s personal synonym dictionary; a derived matching aid that is rebuilt as the user curates it.',
+  },
+  {
     model: 'KgAttributeDef',
     ownerField: 'ownerId',
     purge: 'delete',

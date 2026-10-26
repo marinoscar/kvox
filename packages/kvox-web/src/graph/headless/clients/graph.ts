@@ -94,6 +94,8 @@ import type {
   DuplicatePair as ContractDuplicatePair,
   ListDuplicatesResponse as ContractListDuplicatesResponse,
   DuplicatesScanResponse as ContractDuplicatesScanResponse,
+  SynonymGroup as ContractSynonymGroup,
+  ListSynonymGroupsResponse as ContractListSynonymGroupsResponse,
 } from '@marinoscar/kvox-contract/graph';
 import { MANUAL_RELATION_TYPES as CONTRACT_MANUAL_RELATION_TYPES } from '@marinoscar/kvox-contract/graph';
 import type { AttributeChoice as ContractAttributeChoice } from '@marinoscar/kvox-contract/ontology';
@@ -1583,7 +1585,7 @@ export async function listEntityMerges(host: KvoxWebHost, id: string, signal?: A
 export type DuplicatePair = ContractDuplicatePair;
 
 /**
- * Why a pair is listed: `name_contained`, `initials`, `alias_match`, `similar_name` or `resolution_proposal`.
+ * Why a pair is listed: `name_contained`, `initials`, `alias_match`, `similar_name`, `synonym` or `resolution_proposal`.
  *
  * @stability experimental
  */
@@ -1637,6 +1639,91 @@ export async function listDuplicates(
  */
 export function scanDuplicates(host: KvoxWebHost): Promise<DuplicatesScanResult> {
   return kvoxPost<DuplicatesScanResult>(host, '/graph/duplicates/scan', {});
+}
+
+// =============================================================================
+// Personal synonyms (#767): names that mean the same thing
+// =============================================================================
+
+/**
+ * One synonym group, as `GET /api/graph/synonyms` lists it: the names that mean the same thing and the entity type it applies to (`null` for every type).
+ *
+ * @stability experimental
+ */
+export type SynonymGroup = ContractSynonymGroup;
+
+/**
+ * The body of {@link createSynonym} and {@link updateSynonym}: at least two names, and an optional entity type key (`null` or absent for every type).
+ *
+ * @stability experimental
+ */
+export interface SynonymGroupInput {
+  /** The names that mean the same thing; at least two must stay distinct once normalized. */
+  terms: string[];
+  /** An entity type key of the caller's effective schema, or `null` for every type. */
+  entityType?: string | null;
+}
+
+/**
+ * Why a synonym write was refused (`details.reason`): `synonyms_too_few`, `synonyms_invalid_term` or `unknown_entity_type` (`400`), `synonyms_limit` (`409`). Typed `| string` so a newer server's reason is not coerced.
+ *
+ * @stability experimental
+ */
+export type SynonymErrorReason =
+  | 'synonyms_too_few'
+  | 'synonyms_invalid_term'
+  | 'unknown_entity_type'
+  | 'synonyms_limit'
+  | (string & {});
+
+/**
+ * Reads `details.reason` of a refused synonym write, or `null` when the error carries none.
+ *
+ * @stability experimental
+ */
+export function synonymErrorReason(err: unknown): SynonymErrorReason | null {
+  if (!(err instanceof KvoxApiError)) return null;
+  const details = err.details;
+  if (typeof details !== 'object' || details === null) return null;
+  const reason = (details as { reason?: unknown }).reason;
+  return typeof reason === 'string' ? reason : null;
+}
+
+/**
+ * Lists the caller's synonym groups (`GET /api/graph/synonyms`, `graph:read`).
+ *
+ * @stability experimental
+ */
+export async function listSynonyms(host: KvoxWebHost, signal?: AbortSignal): Promise<SynonymGroup[]> {
+  const body = await kvoxGet<ContractListSynonymGroupsResponse>(host, '/graph/synonyms', { signal });
+  return Array.isArray(body?.groups) ? body.groups : [];
+}
+
+/**
+ * Creates a synonym group (`POST /api/graph/synonyms`, `graph:write`); answers the stored group.
+ *
+ * @stability experimental
+ */
+export function createSynonym(host: KvoxWebHost, input: SynonymGroupInput): Promise<SynonymGroup> {
+  return kvoxPost<SynonymGroup>(host, '/graph/synonyms', input);
+}
+
+/**
+ * Replaces a synonym group's names and type (`PATCH /api/graph/synonyms/{id}`, `graph:write`); answers the stored group.
+ *
+ * @stability experimental
+ */
+export function updateSynonym(host: KvoxWebHost, id: string, input: SynonymGroupInput): Promise<SynonymGroup> {
+  return kvoxPatch<SynonymGroup>(host, `/graph/synonyms/${enc(id)}`, input);
+}
+
+/**
+ * Deletes a synonym group (`DELETE /api/graph/synonyms/{id}`, `graph:write`; `204`).
+ *
+ * @stability experimental
+ */
+export function deleteSynonym(host: KvoxWebHost, id: string): Promise<void> {
+  return kvoxDelete<void>(host, `/graph/synonyms/${enc(id)}`);
 }
 
 // =============================================================================

@@ -24,6 +24,9 @@ import type { KvoxRouteDef } from '../../core/ui/index.js';
  * - `/graph/duplicates` (#766): the possible-duplicate pairs
  *   (`GET /api/graph/duplicates` is `graph:read`); merge, "not the same" and
  *   the deeper scan are `graph:write`, gated inside the page.
+ * - `/graph/synonyms` (#767): the caller's synonym groups
+ *   (`GET /api/graph/synonyms` is `graph:read`); add, edit and delete are
+ *   `graph:write`, gated inside the page.
  * - `/graph/imports/:proposalId` (#387): `graph:write`, the exact string
  *   `POST /api/graph/imports` and the review writes enforce, because importing
  *   is curating the graph. A viewer without it is sent to `/graph`.
@@ -95,6 +98,15 @@ export const kvoxGraphRoutes: readonly KvoxRouteDef[] = [
     Component: lazy(() =>
       import('./pages/GraphDuplicatesPage.js').then((module) => ({
         default: module.GraphDuplicatesPage,
+      })),
+    ),
+  },
+  {
+    path: '/graph/synonyms',
+    permission: 'graph:read',
+    Component: lazy(() =>
+      import('./pages/GraphSynonymsPage.js').then((module) => ({
+        default: module.GraphSynonymsPage,
       })),
     ),
   },

@@ -98,6 +98,8 @@ export const graphHandlers = [
   http.get(`${API_BASE}/graph/entities/:id/merges`, () => HttpResponse.json({ data: { merges: [] } })),
   // #766: no possible duplicates by default; the duplicates suite overrides it.
   http.get(`${API_BASE}/graph/duplicates`, () => HttpResponse.json({ data: { pairs: [] } })),
+  // #767: no synonym groups by default; the synonyms suite overrides it.
+  http.get(`${API_BASE}/graph/synonyms`, () => HttpResponse.json({ data: { groups: [] } })),
 
   http.get(`${API_BASE}/graph/entities/:id/timeline`, ({ request }) => {
     const url = new URL(request.url);

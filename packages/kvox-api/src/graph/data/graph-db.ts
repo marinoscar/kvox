@@ -440,6 +440,28 @@ export interface KgDistinctPairRow {
 }
 
 /**
+ * A row of `kg_synonyms`.
+ *
+ * @stability experimental
+ */
+export interface KgSynonymRow {
+  /** The `id` column. */
+  id: string;
+  /** The `owner_id` column. */
+  ownerId: string;
+  /** The `terms` column. */
+  terms: string[];
+  /** The `normalized` column (`normalizeAlias` of each term, same order). */
+  normalized: string[];
+  /** The `entity_type` column. */
+  entityType: string | null;
+  /** The `created_at` column. */
+  createdAt: Date;
+  /** The `updated_at` column. */
+  updatedAt: Date;
+}
+
+/**
  * A row of `kg_attribute_defs`.
  *
  * @stability experimental
@@ -639,6 +661,8 @@ export interface KvoxGraphDelegates {
   kgMerge: RowDelegate<KgMergeRow>;
   /** `kg_distinct_pairs`. */
   kgDistinctPair: RowDelegate<KgDistinctPairRow>;
+  /** `kg_synonyms`. */
+  kgSynonym: RowDelegate<KgSynonymRow>;
   /** `kg_attribute_defs`. */
   kgAttributeDef: RowDelegate<KgAttributeDefRow>;
   /** `kg_entity_digests`. */

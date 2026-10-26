@@ -44,7 +44,8 @@ export const kvoxGraphDestinations: readonly KvoxDestination<'knowledge', 'graph
  * @remarks
  * `/graph` covers the index, `/graph/entities/:id`, `/graph/explore`,
  * `/graph/overview`, `/graph/imports/:id`, `/graph/review`,
- * `/graph/review-queue` and `/graph/duplicates` (#373 to #375, #387, #721, #766); `/ask`
+ * `/graph/review-queue`, `/graph/duplicates` and `/graph/synonyms` (#373 to #375, #387, #721, #766,
+ * #767); `/ask`
  * covers `/ask` and `/ask/:conversationId` (#380). Owned whether or not the tab
  * is DRAWN: with connected knowledge off the row is hidden, and a user who
  * reaches one of these pages anyway simply sees no highlighted row. The ask

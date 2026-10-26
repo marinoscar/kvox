@@ -10,12 +10,19 @@
  * The other entity's name and aliases become aliases of the survivor, and the
  * merge can be undone (the page offers Undo). The dialog only merges; the page
  * decides where to go next through `onMerged`.
+ *
+ * "Also add these names to my synonyms" (#767, unchecked by default): after a
+ * successful merge the dialog also creates a synonym group of the two names
+ * for the entity's type (`POST /api/graph/synonyms`). The merge stands either
+ * way; a refused synonym only reaches the page as `synonymsError`, for a
+ * non-blocking snackbar.
  */
 
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import Checkbox from '@mui/material/Checkbox';
 import CircularProgress from '@mui/material/CircularProgress';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -31,10 +38,11 @@ import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useEffect, useId, useRef, useState } from 'react';
 
-import { getGraphEntity } from '../../headless/clients/graph.js';
+import { createSynonym, getGraphEntity } from '../../headless/clients/graph.js';
 import type { GraphEntityDetail, GraphEntitySearchResult, MergeEntityResult } from '../../headless/clients/graph.js';
 import { graphErrorMessage } from '../../headless/hooks/graphHookUtils.js';
 import { useEntityMergeActions } from '../../headless/hooks/useEntityMerges.js';
+import { synonymErrorMessage } from '../../headless/hooks/useGraphSynonyms.js';
 import { EntitySearchField } from './schema/EntitySearchField.js';
 
 import { useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
@@ -45,6 +53,20 @@ export interface MergeOutcome {
   result: MergeEntityResult;
   /** The entity that became a tombstone. */
   merged: { id: string; label: string };
+  /**
+   * Set when the person asked to add the two names to their synonyms and that
+   * failed: the sentence to show. The merge itself succeeded.
+   */
+  synonymsError?: string;
+}
+
+/**
+ * The snackbar text when the merge worked but adding the names to the synonyms did not.
+ *
+ * @stability experimental
+ */
+export function mergeSynonymsFailedMessage(reason: string): string {
+  return `Merged, but the names were not added to your synonyms. ${reason}`;
 }
 
 export interface MergeEntityDialogProps {
@@ -119,6 +141,8 @@ export function MergeEntityDialog({ open, entity, typeLabel, onClose, onMerged }
   const [candidate, setCandidate] = useState<GraphEntityDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [survivorId, setSurvivorId] = useState<string | null>(null);
+  const [alsoSynonyms, setAlsoSynonyms] = useState(false);
+  const [addingSynonyms, setAddingSynonyms] = useState(false);
   // Read for its counts when a candidate loads; a refresh of the page's entity
   // must not reload the candidate.
   const entityRef = useRef(entity);
@@ -131,6 +155,7 @@ export function MergeEntityDialog({ open, entity, typeLabel, onClose, onMerged }
     setCandidate(null);
     setLoadError(null);
     setSurvivorId(null);
+    setAlsoSynonyms(false);
     clearError();
   }, [clearError, entity.id, open]);
 
@@ -160,11 +185,25 @@ export function MergeEntityDialog({ open, entity, typeLabel, onClose, onMerged }
   const submit = async () => {
     if (!survivor || !merged) return;
     const result = await actions.merge(merged.id, survivor.id);
-    if (result) onMerged({ result, merged: { id: merged.id, label: merged.label } });
+    if (!result) return;
+    const outcome: MergeOutcome = { result, merged: { id: merged.id, label: merged.label } };
+    if (alsoSynonyms) {
+      setAddingSynonyms(true);
+      try {
+        await createSynonym(host, { terms: [merged.label, survivor.label], entityType: entity.type });
+      } catch (err) {
+        outcome.synonymsError = mergeSynonymsFailedMessage(synonymErrorMessage(err, 'Something went wrong.'));
+      } finally {
+        if (isMounted()) setAddingSynonyms(false);
+      }
+    }
+    onMerged(outcome);
   };
 
+  const busy = actions.isSaving || addingSynonyms;
+
   const close = () => {
-    if (actions.isSaving) return;
+    if (busy) return;
     onClose();
   };
 
@@ -182,7 +221,7 @@ export function MergeEntityDialog({ open, entity, typeLabel, onClose, onMerged }
           excludeIds={[entity.id]}
           value={picked}
           onChange={setPicked}
-          disabled={actions.isSaving}
+          disabled={busy}
           autoFocus
         />
 
@@ -216,6 +255,19 @@ export function MergeEntityDialog({ open, entity, typeLabel, onClose, onMerged }
             {mergeConfirmation(merged.label, survivor.label)}
           </Alert>
         )}
+        {survivor && merged && (
+          <FormControlLabel
+            sx={{ mt: 1, '& .MuiFormControlLabel-label': { overflowWrap: 'anywhere' } }}
+            control={
+              <Checkbox
+                checked={alsoSynonyms}
+                onChange={(event) => setAlsoSynonyms(event.target.checked)}
+                disabled={busy}
+              />
+            }
+            label="Also add these names to my synonyms"
+          />
+        )}
         {actions.error && (
           <Alert severity="error" sx={{ mt: 2 }}>
             {actions.error}
@@ -223,14 +275,14 @@ export function MergeEntityDialog({ open, entity, typeLabel, onClose, onMerged }
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={close} disabled={actions.isSaving}>
+        <Button onClick={close} disabled={busy}>
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={() => void submit()}
-          disabled={!survivor || actions.isSaving}
-          startIcon={actions.isSaving ? <CircularProgress size={16} color="inherit" /> : undefined}
+          disabled={!survivor || busy}
+          startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}
         >
           Merge
         </Button>
