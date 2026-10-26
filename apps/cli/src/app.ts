@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { APP_NAME, CLI_NAME, REPO_SLUG } from '@app/shared';
-import type { CreateCliOptions } from '@marinoscar/platform-cli';
+import { githubRawManifest, type CreateCliOptions } from '@marinoscar/platform-cli';
 
 import { mediaAudioTranscodeExecutor } from './executors/media-audio-transcode.executor.js';
 import { dockerNetworkCheck } from './extensions/docker-network.check.js';
@@ -30,7 +30,8 @@ import { APP_ENV_SPEC } from './extensions/env-spec.js';
 //   - the manifests the deploy version step versions (`deploy.versionedManifests`):
 //     apps/api, apps/web and packages/shared, never apps/cli, which keeps its own version;
 //   - the pre-platform `deploy` flags the platform dropped are translated in
-//     extensions/legacy-flags.ts before the platform parses them.
+//     extensions/legacy-flags.ts before the platform parses them;
+//   - the start-up update notice (`updateNotice`, issue #756).
 //
 // The binary name, the config directory, the environment-variable prefix and
 // the systemd unit all derive from `CLI_NAME` (`cliName` in packages/shared/identity.json). The
@@ -107,6 +108,27 @@ export const APP_VERSIONED_MANIFESTS: readonly string[] = [
   'packages/shared/package.json',
 ];
 
+/**
+ * The one-liner that updates an installed CLI: the installer, re-run from `main`.
+ * Derived from `REPO_SLUG` so a renamed fork points at its own `install.sh`.
+ */
+export const APP_UPGRADE_HINT = `curl -fsSL https://raw.githubusercontent.com/${REPO_SLUG}/main/install.sh | bash`;
+
+/**
+ * Where the start-up update notice reads the newest CLI version (issue #756).
+ *
+ * `apps/cli/package.json` on `main` is the right source: `install.sh` installs
+ * from `main`, so that file is exactly the version a re-run of the installer
+ * would produce, and nothing else rewrites it (the deploy version step versions
+ * `APP_VERSIONED_MANIFESTS`, never this package; `deploy.versionedManifests`).
+ * The platform prints the notice at most once a day, on stderr, and stays silent
+ * in CI, without a TTY, with `--json`, and with `KVOX_NO_UPDATE_CHECK=1`.
+ */
+export const APP_UPDATE_NOTICE: NonNullable<CreateCliOptions['updateNotice']> = {
+  latestVersion: githubRawManifest({ repo: REPO_SLUG, ref: 'main', path: 'apps/cli/package.json' }),
+  upgradeHint: APP_UPGRADE_HINT,
+};
+
 export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: {
     name: CLI_NAME,
@@ -120,4 +142,5 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   deployChecks: [dockerNetworkCheck],
   proxy: { streamPaths: APP_STREAM_PATHS },
   deploy: { versionedManifests: APP_VERSIONED_MANIFESTS },
+  updateNotice: APP_UPDATE_NOTICE,
 };
