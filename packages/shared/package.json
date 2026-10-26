@@ -28,7 +28,7 @@
     "lint": "echo 'No linter configured'"
   },
   "dependencies": {
-    "@marinoscar/kvox-contract": "0.1.0-next.18",
+    "@marinoscar/kvox-contract": "0.1.0-next.19",
     "zod": "^4.4.3"
   },
   "devDependencies": {
