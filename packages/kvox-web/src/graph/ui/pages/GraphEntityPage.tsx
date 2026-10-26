@@ -12,6 +12,15 @@
  *      edits (#586): "Set manager", "Set employer", "Add role", and Remove.
  *   4. Timeline — with the opt-in sensitive-facts switch.
  *   5. Mentions.
+ *   6. Merged from (#765) — the entities merged into this one, with Undo.
+ *
+ * MERGE (#765). "Merge into…" in the header's menu (`graph:write`) opens
+ * `MergeEntityDialog`. After a merge the page REPLACES its history entry with
+ * the survivor's page (the merged one is a tombstone now) and shows "Merged"
+ * with Undo; the snackbar travels in router state (`EntityMergeLocationState`)
+ * so it survives the route change. Undo reverses the merge and opens the
+ * restored entity. A tombstone's own URL (`mergedIntoId` set) redirects,
+ * replacing, to its survivor.
  *
  * ASK (#381). With connected knowledge on (`host.features().graphEnabled`), the
  * header's `actions` slot carries the host's Ask action, opening the host's Ask
@@ -34,8 +43,9 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
+import Snackbar from '@mui/material/Snackbar';
 import Typography from '@mui/material/Typography';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { EntityBriefCard } from '../components/EntityBriefCard.js';
@@ -43,6 +53,9 @@ import { EntityConnectionsList } from '../components/EntityConnectionsList.js';
 import { EntityEditDialog } from '../components/EntityEditDialog.js';
 import { EntityHeader } from '../components/EntityHeader.js';
 import { EntityMentionsList } from '../components/EntityMentionsList.js';
+import { EntityMergedFromList } from '../components/EntityMergedFromList.js';
+import { MergeEntityDialog } from '../components/MergeEntityDialog.js';
+import type { MergeOutcome } from '../components/MergeEntityDialog.js';
 import { EntityPageSkeleton } from '../components/EntityPageSkeleton.js';
 import { EntityTimeline } from '../components/EntityTimeline.js';
 import { ForgetPersonDialog } from '../components/ForgetPersonDialog.js';
@@ -50,6 +63,8 @@ import { NeighborhoodWidget } from '../components/NeighborhoodWidget.js';
 import { GRAPH_NOT_FOUND_MESSAGE } from '../../headless/hooks/graphHookUtils.js';
 import { useGraphBrief } from '../../headless/hooks/useGraphBrief.js';
 import { useGraphEntity } from '../../headless/hooks/useGraphEntity.js';
+import { useEntityMergeActions, useEntityMerges } from '../../headless/hooks/useEntityMerges.js';
+import type { EntityMergeRow } from '../../headless/clients/graph.js';
 import { useGraphEffectiveOntology } from '../../headless/hooks/useGraphAttributeDefs.js';
 import { entityTypeLabel } from '../../headless/utils/graphDisplay.js';
 import type { GraphIndexLocationState } from './GraphIndexPage.js';
@@ -73,6 +88,16 @@ export const ENTITY_ASK_NEW = '1';
 /** Router state marking a history entry this page pushed to open the panel. */
 interface EntityAskLocationState {
   askPanelPushed?: boolean;
+}
+
+/** The one-shot snackbar a merge or an undo hands to the next entity page (#765). */
+type EntityMergeSnack =
+  | { kind: 'merged'; mergeId: string; mergedLabel: string }
+  | { kind: 'message'; text: string };
+
+/** Router state carrying {@link EntityMergeSnack} across the navigation. */
+interface EntityMergeLocationState {
+  mergeSnack?: EntityMergeSnack;
 }
 
 /**
@@ -179,8 +204,13 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
   const brief = useGraphBrief(id);
   const { ontology } = useGraphEffectiveOntology();
 
+  const merges = useEntityMerges(id);
+  const mergeActions = useEntityMergeActions();
+
   const [editOpen, setEditOpen] = useState(false);
   const [forgetOpen, setForgetOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeSnack, setMergeSnack] = useState<EntityMergeSnack | null>(null);
   // Bumped by a manual relation edit (#586): the neighbourhood canvas re-reads.
   const [relationsVersion, setRelationsVersion] = useState(0);
 
@@ -239,8 +269,75 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
     );
   }, [askPushed, navigate, setSearchParams]);
 
+  // --- Merge (#765) -----------------------------------------------------------
+  // A tombstone's URL (an old link, a bookmark) goes to the survivor, replacing.
+  const mergedIntoId = entity.data?.mergedIntoId ?? null;
+  useEffect(() => {
+    if (mergedIntoId) navigate(`/graph/entities/${mergedIntoId}`, { replace: true });
+  }, [mergedIntoId, navigate]);
+
+  // Consume the one-shot snackbar a merge or undo handed over, so a reload or
+  // Back does not show it again.
+  const handedSnack = (location.state as EntityMergeLocationState | null)?.mergeSnack;
+  useEffect(() => {
+    if (!handedSnack) return;
+    setMergeSnack(handedSnack);
+    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
+  }, [handedSnack, location.pathname, location.search, navigate]);
+
+  const goToEntity = useCallback(
+    (entityId: string, snack: EntityMergeSnack, replace: boolean) => {
+      const state: EntityMergeLocationState = { mergeSnack: snack };
+      navigate(`/graph/entities/${entityId}`, { replace, state });
+    },
+    [navigate],
+  );
+
+  const reloadAll = useCallback(() => {
+    void entity.refresh();
+    void brief.refresh();
+    void merges.refresh();
+    setRelationsVersion((n) => n + 1);
+  }, [brief, entity, merges]);
+
+  const onMerged = useCallback(
+    ({ result, merged }: MergeOutcome) => {
+      setMergeOpen(false);
+      const snack: EntityMergeSnack = { kind: 'merged', mergeId: result.merge.id, mergedLabel: merged.label };
+      if (result.merge.survivorId === id) {
+        // This page's entity survived: stay, and read it again.
+        setMergeSnack(snack);
+        reloadAll();
+      } else {
+        // This page's entity is a tombstone now: replace its history entry.
+        goToEntity(result.merge.survivorId, snack, true);
+      }
+    },
+    [goToEntity, id, reloadAll],
+  );
+
+  const undoMerge = useCallback(
+    async (mergeId: string) => {
+      setMergeSnack(null);
+      const reversed = await mergeActions.reverse(mergeId);
+      if (!reversed) return;
+      goToEntity(reversed.restored.id, { kind: 'message', text: `Merge undone. “${reversed.restored.label}” is back.` }, false);
+    },
+    [goToEntity, mergeActions],
+  );
+
+  const undoListedMerge = useCallback(
+    async (row: EntityMergeRow) => {
+      const reversed = await mergeActions.reverse(row.mergeId);
+      if (!reversed) return;
+      setMergeSnack({ kind: 'message', text: `Merge undone. “${reversed.restored.label}” is back.` });
+      reloadAll();
+    },
+    [mergeActions, reloadAll],
+  );
+
   let content;
-  if (entity.isLoading) {
+  if (entity.isLoading || mergedIntoId) {
     content = <EntityPageSkeleton />;
   } else if (entity.notFound) {
     content = (
@@ -284,6 +381,7 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
           canEdit={canWrite}
           onEdit={() => setEditOpen(true)}
           onForget={() => setForgetOpen(true)}
+          onMerge={() => setMergeOpen(true)}
           actions={
             askEnabled && AskButton ? (
               <AskButton entityId={detail.id} entityLabel={detail.label} onClick={openAsk} />
@@ -329,6 +427,12 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
         />
         <EntityTimeline entityId={detail.id} ontology={ontology} />
         <EntityMentionsList entityId={detail.id} />
+        <EntityMergedFromList
+          merges={merges.data}
+          canUndo={canWrite}
+          busy={mergeActions.isSaving}
+          onUndo={(row) => void undoListedMerge(row)}
+        />
 
         {askEnabled && AskPanel && (
           <AskPanel
@@ -355,6 +459,15 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
             }}
           />
         )}
+        {canWrite && (
+          <MergeEntityDialog
+            open={mergeOpen}
+            entity={detail}
+            typeLabel={entityTypeLabel(detail.type, ontology)}
+            onClose={() => setMergeOpen(false)}
+            onMerged={onMerged}
+          />
+        )}
         {canWrite && detail.type === 'Person' && (
           <ForgetPersonDialog
             open={forgetOpen}
@@ -374,5 +487,40 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
     );
   }
 
-  return <Box sx={{ maxWidth: 960, mx: 'auto', py: { xs: 2, sm: 3 }, minWidth: 0 }}>{content}</Box>;
+  return (
+    <Box sx={{ maxWidth: 960, mx: 'auto', py: { xs: 2, sm: 3 }, minWidth: 0 }}>
+      {content}
+      <Snackbar
+        open={Boolean(mergeSnack)}
+        autoHideDuration={mergeSnack?.kind === 'merged' ? 10000 : 6000}
+        onClose={(_event, reason) => {
+          if (reason !== 'clickaway') setMergeSnack(null);
+        }}
+        message={mergeSnack ? (mergeSnack.kind === 'merged' ? 'Merged' : mergeSnack.text) : undefined}
+        action={
+          mergeSnack?.kind === 'merged' ? (
+            <Button
+              color="inherit"
+              size="small"
+              disabled={mergeActions.isSaving}
+              onClick={() => void undoMerge(mergeSnack.mergeId)}
+            >
+              Undo
+            </Button>
+          ) : undefined
+        }
+      />
+      <Snackbar
+        open={Boolean(mergeActions.error)}
+        autoHideDuration={8000}
+        onClose={(_event, reason) => {
+          if (reason !== 'clickaway') mergeActions.clearError();
+        }}
+      >
+        <Alert severity="error" onClose={mergeActions.clearError} sx={{ width: '100%' }}>
+          {mergeActions.error}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
 }

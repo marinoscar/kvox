@@ -270,13 +270,11 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
 
     const unreviewed = await g.entity('Person', 'Draft', { reviewStatus: 'unreviewed' });
     const rejected = await g.entity('Person', 'No', { reviewStatus: 'rejected' });
-    const tombstone = await g.entity('Person', 'Joey', { reviewStatus: 'merged', mergedIntoId: joe });
     const messages = await Promise.all(
       [
         () => reads.getEntity({ id: other.id }, joe),
         () => reads.getEntity({ id: user.id }, unreviewed),
         () => reads.getEntity({ id: user.id }, rejected),
-        () => reads.getEntity({ id: user.id }, tombstone),
         () => reads.getEntity({ id: user.id }, '00000000-0000-4000-8000-000000000000'),
         () => reads.mentions({ id: other.id }, joe, { limit: 25 } as never),
         () => timeline(other.id, joe),
@@ -286,6 +284,15 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
       expect(err).toBeInstanceOf(NotFoundException);
       expect((err as NotFoundException).getResponse()).toEqual((messages[0] as NotFoundException).getResponse());
     }
+
+    // A merged tombstone is readable (#765): 200 with its survivor, so the UI can redirect.
+    const tombstone = await g.entity('Person', 'Joey', { reviewStatus: 'merged', mergedIntoId: joe });
+    await expect(reads.getEntity({ id: user.id }, tombstone)).resolves.toMatchObject({
+      id: tombstone,
+      reviewStatus: 'merged',
+      mergedIntoId: joe,
+    });
+    await expect(reads.getEntity({ id: other.id }, tombstone)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('groups relations by relation type and by the type at the other end, in both directions (GIC-11)', async () => {

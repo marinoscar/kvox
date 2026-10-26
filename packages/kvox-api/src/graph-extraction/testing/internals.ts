@@ -22,6 +22,7 @@ export { addDeterministicRows, validateExtraction } from '../extraction/validate
 export type { EvidenceDraft, ProposedRow } from '../extraction/validate.js';
 export { buildAdjudicationOutputSchema } from '../resolution/adjudication-prompt.js';
 export { CandidateService } from '../resolution/candidate.service.js';
+export { DuplicatesService } from '../resolution/duplicates.service.js';
 export { ContextFeatureService, emptyContext } from '../resolution/context-features.service.js';
 export { decide } from '../resolution/resolution.service.js';
 export { ResolutionStage } from '../resolution/resolution.stage.js';

@@ -242,10 +242,28 @@ export class GraphReadService {
    */
   async getEntity(user: GraphReader, id: string): Promise<GraphEntityDetail> {
     const ownerId = user.id;
-    const entity = await this.access.require(ownerId, 'entity', id, 'view');
-    // `require` admits exactly accepted/edited here (merged, unreviewed and
-    // rejected are its 404); the tombstone column is checked for belt and braces.
-    if (entity.mergedIntoId !== null) throw new NotFoundException(GRAPH_NOT_FOUND_MESSAGES.entity);
+    // A merged tombstone is admitted (it is yours and was once accepted) so the
+    // page can redirect to the survivor; unreviewed and rejected stay a 404.
+    const entity = await this.access.require(ownerId, 'entity', id, 'view', undefined, { includeMerged: true });
+    if (entity.reviewStatus === 'merged' || entity.mergedIntoId !== null) {
+      if (entity.mergedIntoId === null) throw new NotFoundException(GRAPH_NOT_FOUND_MESSAGES.entity);
+      return {
+        id: entity.id,
+        type: entity.type,
+        label: entity.label,
+        props: (entity.props ?? {}) as Record<string, unknown>,
+        aliases: [],
+        occurredAt: iso(entity.occurredAt),
+        reviewStatus: 'merged',
+        mergedIntoId: entity.mergedIntoId,
+        ontologyVersion: entity.ontologyVersion,
+        firstSeenAt: null,
+        lastSeenAt: null,
+        counts: { relations: 0, mentions: 0, evidence: 0, items: { commitment: 0, decision: 0, claim: 0, person_fact: 0, risk: 0 }, openCommitments: 0, relationsByType: {}, relationsByNeighborType: {} },
+        createdAt: entity.createdAt.toISOString(),
+        updatedAt: entity.updatedAt.toISOString(),
+      };
+    }
 
     const now = new Date();
     const [aliases, mentionCounts, seen, counts, relationGroups] = await Promise.all([
@@ -317,6 +335,7 @@ export class GraphReadService {
       aliases: aliases.map((a) => ({ id: a.id, alias: a.alias, source: a.source })),
       occurredAt: iso(entity.occurredAt),
       reviewStatus: entity.reviewStatus as 'accepted' | 'edited',
+      mergedIntoId: null,
       ontologyVersion: entity.ontologyVersion,
       firstSeenAt: iso(range?.first),
       lastSeenAt: iso(range?.last),

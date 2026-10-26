@@ -6420,6 +6420,21 @@ recorded for the reverse. Audited `graph.entity_merged`
 types (`details.reason: "type_mismatch"`) · `401` · `403` without
 `graph:write` · `404` either entity.
 
+##### GET /graph/entities/:id/merges
+
+The entities merged **into** `:id`, newest merge first. Requires `graph:read`;
+`:id` must be yours and in your reviewed graph (otherwise `404`).
+
+**Response:** `200`
+```json
+{ "data": { "merges": [
+  { "mergeId": "…", "mergedEntity": { "id": "…", "label": "S. Chen", "type": "Person" },
+    "createdAt": "2026-09-26T12:00:00.000Z", "reversedAt": null, "reversible": true }
+] } }
+```
+`reversible` is `false` once reversed, or when `:id` has itself been merged
+since (reverse that merge first). Pass `mergeId` to `POST /graph/merges/{id}/reverse`.
+
 ##### POST /graph/merges/:id/reverse
 
 Undoes one merge exactly: the tombstone is restored and every moved row is
@@ -6449,6 +6464,51 @@ as a match for the other again. Order-free and idempotent; audited
 **Response:** `200` `{ "aId": "…", "bId": "…", "created": true }` — normalized
 so `aId < bId`; `created: false` when it was already recorded.
 **Errors:** `400` the same id twice · `401` · `403` · `404` either entity.
+
+##### GET /graph/duplicates
+
+Possible duplicates (issue #766): pairs of your own reviewed entities (accepted
+or edited, not merged) that probably are one thing, best first. `graph:read`.
+Query: `type` (only that entity type), `limit` (1 to 200, default 50). Pairs are
+always the same type, and a pair you recorded as "not the same" is left out.
+
+Two sources. `name_pass` is a fast, deterministic pass: one name is a whole-word
+run inside the other (`name_contained`: "Oscar" / "Oscar Marin"; "Al" is not
+inside "Alan"), one is the initials of the other (`initials`: "EY" / "Ernst &
+Young"), two entities share a normalized name or alias (`alias_match`), or the
+labels are trigram-similar at 0.6 or more (`similar_name`). It reads the 2 000
+most recently updated entities and at most 200 similar-spelling pairs, through
+indexes (never all-pairs). `resolution_proposal` maps the pending rows of your
+open `resolution` proposals that suggest a merge; `proposalItemId` names the row.
+A pair found by both is listed once, with `source: "resolution_proposal"`.
+
+**Response:** `200`
+```json
+{ "pairs": [ {
+  "a": { "id": "…", "type": "Person", "label": "Oscar", "aliases": [], "mentionCount": 4 },
+  "b": { "id": "…", "type": "Person", "label": "Oscar Marin", "aliases": [], "mentionCount": 9 },
+  "score": 0.8,
+  "reasons": ["name_contained"],
+  "source": "name_pass",
+  "proposalItemId": "…"
+} ] }
+```
+`score` is 0 to 1: the strongest signal (`alias_match` 0.95, `name_contained`
+0.8, `initials` 0.75, `resolution_proposal` 0.7, `similar_name` its trigram
+similarity, at least 0.6) plus 0.05 per further signal. `proposalItemId` is
+present only for `resolution_proposal`. Nothing is merged: use
+`POST /graph/entities/{id}/merge`.
+**Errors:** `400` bad `type` or `limit` · `401` · `403`.
+
+##### POST /graph/duplicates/scan
+
+Queues a `kg.resolve` re-scan of your whole graph (`scope: "all"`, reason
+`manual`) that writes a draft `resolution` proposal of suggested merges, on your
+own AI key. `graph:write`. A scan already pending or running is joined, not an
+error.
+
+**Response:** `202` `{ "queued": true, "alreadyRunning": false, "jobId": "…" }`
+**Errors:** `401` · `403` · `409` `details.reason: "graph_disabled"`.
 
 **Jobs.** `kg.resolve` (`{ maxRuntimeMs: 20 min, maxAttempts: 1 }`) and
 `kg.embed` (`{ maxRuntimeMs: 5 min, maxAttempts: 3 }`, content-hash keyed so a
@@ -6988,8 +7048,13 @@ directions); each sums to `relations`. They feed the explorer inspector's
 Expand menu ("Works for 3", "Person 2"): choosing one sends `types` or
 `relationTypes` to `POST /graph/explore/expand`. An older API omits them.
 
+A merged entity (a tombstone) returns `200` with `reviewStatus: "merged"` and
+`mergedIntoId` set to the survivor's id, so a page can redirect; its `aliases`
+are empty, its counts `0` and `firstSeenAt`/`lastSeenAt` `null`. A live entity
+returns `mergedIntoId: null`.
+
 **Errors:** `401` · `403` without `graph:read` · `404` no such entity, not
-yours, or merged.
+yours, or not yet reviewed (unreviewed or rejected).
 
 ##### GET /graph/entities/{id}/mentions
 

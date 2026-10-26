@@ -142,7 +142,9 @@ export class GraphReadController {
     description:
       'One entity with its attributes, every alias, when it was first and last seen in a ' +
       'meeting, and the counts its page shows (relations valid now, mentions, evidence, items ' +
-      'by kind, open commitments). `sensitive` person facts are not counted.',
+      'by kind, open commitments). `sensitive` person facts are not counted.\n\n' +
+      'A **merged** entity answers `200` with `reviewStatus: "merged"`, `mergedIntoId` (the survivor ' +
+      'to redirect to) and zero counts; every other entity route still answers 404 for it.',
   })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @ApiDataResponse(GraphEntityDetailDto, { description: 'The entity' })
@@ -190,7 +192,7 @@ export class GraphReadController {
       'relation always has an id of its own.\n' +
       '- **`as_of`** evaluates every relation and item at that instant — "who did Joe report to ' +
       'in January 2024" — with ranges half-open `[from, to)`.\n' +
-      '- **`types`** keeps only those entity types / item kinds (the seed is always kept); ' +
+      '- **`types`** keeps only those entity types / item kinds; ' +
       '**`relationTypes`** walks only along those edge types. Unknown keys are a **400**.\n' +
       `- At most \`limit\` nodes (≤ ${GRAPH_NODE_CAP}); \`truncated\` says more were reachable. ` +
       'The closest and best-connected nodes are kept.\n\n' +

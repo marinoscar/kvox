@@ -85,7 +85,7 @@ describe('GraphEntityPage — header', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 
-  it('caps the alias chips at five with a "+n"', async () => {
+  it('caps the alias chips at five with a "+n" that expands (#765)', async () => {
     server.use(
       http.get('*/api/graph/entities/:id', () =>
         HttpResponse.json({
@@ -101,7 +101,13 @@ describe('GraphEntityPage — header', () => {
     );
     renderEntity();
     await pageReady();
-    expect(screen.getByRole('listitem', { name: '2 more names' })).toHaveTextContent('+2');
+    const more = screen.getByRole('button', { name: 'Show 2 more names' });
+    expect(more).toHaveTextContent('+2');
+    expect(screen.queryByText('F')).not.toBeInTheDocument();
+    await userEvent.setup().click(more);
+    expect(screen.getByText('F')).toBeInTheDocument();
+    expect(screen.getByText('G')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Show fewer' }));
     expect(screen.queryByText('F')).not.toBeInTheDocument();
   });
 
@@ -298,7 +304,10 @@ describe('GraphEntityPage — forget', () => {
     renderEntity(ACME_ID);
     await screen.findByRole('heading', { level: 1, name: 'Acme Corp' });
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /More actions for/ })).not.toBeInTheDocument();
+    // The menu is there for "Merge into…" (#765), without the Person-only Forget.
+    await userEvent.setup().click(screen.getByRole('button', { name: 'More actions for Acme Corp' }));
+    expect(await screen.findByRole('menuitem', { name: 'Merge into…' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Forget this person…' })).not.toBeInTheDocument();
   });
 });
 
