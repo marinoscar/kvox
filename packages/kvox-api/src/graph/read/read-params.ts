@@ -46,13 +46,16 @@ export interface NodeTypeFilter {
 
 /**
  * A node filter: entity type keys (`Person`), item type keys (`Commitment`) or
- * item kinds (`commitment`), mixed freely. `undefined` = keep everything.
+ * item kinds (`commitment`), mixed freely. `undefined` (param absent, or a
+ * string with no keys) = keep everything; an explicitly EMPTY array = keep no
+ * node type at all (an empty result, not "no filter").
  */
 export function resolveNodeTypes(
   schema: EffectiveSchema,
   raw: string | readonly string[] | undefined,
   param = 'types',
 ): NodeTypeFilter | undefined {
+  if (Array.isArray(raw) && raw.length === 0) return { entityTypes: [], itemKinds: [] };
   const keys = parseCsv(raw);
   if (!keys) return undefined;
   const entityTypes: string[] = [];
