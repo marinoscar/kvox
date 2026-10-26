@@ -1,5 +1,11 @@
 # @marinoscar/kvox-contract
 
+## 0.1.0-next.19
+
+### Patch Changes
+
+- 55759c1: The Notes list excerpt is now a plain-text summary (markdown syntax removed, prose first) instead of flattened raw markdown, on web and Desktop.
+
 ## 0.1.0-next.18
 
 ## 0.1.0-next.17

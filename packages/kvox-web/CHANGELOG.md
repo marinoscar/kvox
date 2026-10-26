@@ -1,5 +1,14 @@
 # @marinoscar/kvox-web
 
+## 0.1.0-next.19
+
+### Patch Changes
+
+- 65ac5f9: Notes import: an upload refused because object storage is not set up (503, `storage_not_configured` or `storage_bucket_unknown`) now says "File storage is not set up on this server yet. An administrator can set it up in Settings → Storage." instead of the generic per-file sentence, an unknown refusal reason keeps the server's own message, and the `source_missing` failure reason has its own sentence.
+- 5bc8ee9: Dependency and peer ranges on the platform packages move from 0.1.0-next.12 to 0.1.0-next.13, the release whose CLI engine decides the compose project by the bind-port holder and refuses a mismatching deploy run (`bind-port-owner`). No code in these packages changes.
+- a0672cb: Dependency and peer ranges on the platform packages move from 0.1.0-next.13 to 0.1.0-next.14, the release whose CLI engine preflights every host port the stack publishes (`stack-ports-free`). No code in these packages changes.
+- 253c539: Dependency and peer ranges on the platform packages move from 0.1.0-next.14 to 0.1.0-next.16, the releases whose CLI engine picks free host ports for each app on a shared server and lets an app choose the manifests the deploy version step writes (`deploy.versionedManifests`). No code in these packages changes.
+
 ## 0.1.0-next.18
 
 ### Minor Changes
