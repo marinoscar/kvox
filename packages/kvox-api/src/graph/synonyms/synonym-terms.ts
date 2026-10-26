@@ -13,7 +13,9 @@ import { normalizeAlias } from '../write/normalize.js';
 
 /** The caller's terms, de-duplicated by normalized form, in input order. */
 export interface NormalizedSynonymTerms {
+  /** The display forms, trimmed, as the caller wrote them. */
   terms: string[];
+  /** The `normalizeAlias` form of each term, index-aligned with `terms`. */
   normalized: string[];
 }
 

@@ -14,7 +14,8 @@ import { expandNamesWith } from './synonym-terms.js';
 /** At most this many extra names are added to one lookup. */
 export const MAX_SYNONYM_EXPANSION = 10;
 
-type Db = KvoxGraphDb | KvoxGraphTx;
+/** A graph database handle or an open transaction; synonym lookups run on either. */
+export type SynonymDb = KvoxGraphDb | KvoxGraphTx;
 
 /**
  * The normalized synonyms of `names` for `ownerId`: every other term of every
@@ -25,7 +26,7 @@ type Db = KvoxGraphDb | KvoxGraphTx;
  * @stability experimental
  */
 export async function expandWithSynonyms(
-  db: Db,
+  db: SynonymDb,
   ownerId: string,
   names: readonly string[],
   type: string | null,
