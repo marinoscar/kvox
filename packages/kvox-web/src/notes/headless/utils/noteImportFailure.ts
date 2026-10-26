@@ -10,6 +10,12 @@
 
 import { isKvoxApiError } from '../../../core/headless/index.js';
 
+/** Platform reasons (503) for an upload refused because object storage is not set up. */
+const STORAGE_NOT_CONFIGURED_REASONS: ReadonlySet<string> = new Set(['storage_not_configured', 'storage_bucket_unknown']);
+
+const STORAGE_NOT_CONFIGURED_SENTENCE =
+  'File storage is not set up on this server yet. An administrator can set it up in Settings → Storage.';
+
 const FAILURE_SENTENCES: Readonly<Record<string, string>> = {
   encrypted_pdf: 'This PDF is password-protected, so its text cannot be read. Remove the password and import it again.',
   no_text_layer:
@@ -26,6 +32,8 @@ const FAILURE_SENTENCES: Readonly<Record<string, string>> = {
   unsupported_document: 'This kind of file cannot be imported. Use Markdown, text, PDF, Word (.docx) or PowerPoint (.pptx).',
   invalid_path: 'This file’s name or folder path cannot be used.',
   too_large: 'This file is larger than the import limit.',
+  source_missing:
+    'The uploaded copy of this file could not be read back from storage, so it was not imported. Try again; if it keeps happening, ask an administrator to check the file storage settings.',
   batch_cancelled: 'This import was cancelled.',
   internal_error: 'Something went wrong on the server while importing this file. Try again.',
 };
@@ -57,7 +65,10 @@ export function describeNoteImportFailure(reason: string | null | undefined): st
 export function noteImportUploadErrorMessage(error: unknown): string {
   if (isKvoxApiError(error)) {
     if (error.status === 413) return FAILURE_SENTENCES.too_large!;
-    if (error.reason) return describeNoteImportFailure(error.reason)!;
+    if (error.reason && STORAGE_NOT_CONFIGURED_REASONS.has(error.reason)) return STORAGE_NOT_CONFIGURED_SENTENCE;
+    // A reason this table knows is worded here; an unknown one (another layer's code) keeps the
+    // server's own message rather than the generic per-file sentence.
+    if (error.reason && Object.hasOwn(FAILURE_SENTENCES, error.reason)) return FAILURE_SENTENCES[error.reason]!;
     if (error.status === 404) return 'This import no longer exists.';
     if (error.status === 0) return 'The upload could not reach the server. Check your connection and try again.';
     if (error.message) return error.message;
