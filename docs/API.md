@@ -4511,7 +4511,10 @@ user pages. It is **not** "how many are left", and it is **not** `items.length`.
 
 **Template previews never appear here** — a preview has no note (`noteId:
 null`) and creates none; this route reads `notes`. Each row carries an
-`excerpt` (the first 280 characters of the body), never the whole thing.
+`excerpt`, never the whole body: a plain-text summary with the markdown
+syntax removed, prose first (headings, code, rules and bold-only label lines
+are skipped; table rows are used only when the note has no prose, as
+`Field: value`), at most 280 characters, cut on a word boundary with `…`.
 
 Every row also carries **`sourceName`** (issue #192): the name of the
 transcript, note or document the note was generated from, denormalised beside
