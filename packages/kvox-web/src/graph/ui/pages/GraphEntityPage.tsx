@@ -211,6 +211,8 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
   const [forgetOpen, setForgetOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeSnack, setMergeSnack] = useState<EntityMergeSnack | null>(null);
+  // #767: the merge worked but "Also add these names to my synonyms" did not.
+  const [synonymsNotice, setSynonymsNotice] = useState<string | null>(null);
   // Bumped by a manual relation edit (#586): the neighbourhood canvas re-reads.
   const [relationsVersion, setRelationsVersion] = useState(0);
 
@@ -301,8 +303,9 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
   }, [brief, entity, merges]);
 
   const onMerged = useCallback(
-    ({ result, merged }: MergeOutcome) => {
+    ({ result, merged, synonymsError }: MergeOutcome) => {
       setMergeOpen(false);
+      if (synonymsError) setSynonymsNotice(synonymsError);
       const snack: EntityMergeSnack = { kind: 'merged', mergeId: result.merge.id, mergedLabel: merged.label };
       if (result.merge.survivorId === id) {
         // This page's entity survived: stay, and read it again.
@@ -510,6 +513,18 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
           ) : undefined
         }
       />
+      <Snackbar
+        open={synonymsNotice !== null}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        autoHideDuration={8000}
+        onClose={(_event, reason) => {
+          if (reason !== 'clickaway') setSynonymsNotice(null);
+        }}
+      >
+        <Alert severity="warning" onClose={() => setSynonymsNotice(null)} sx={{ width: '100%' }}>
+          {synonymsNotice}
+        </Alert>
+      </Snackbar>
       <Snackbar
         open={Boolean(mergeActions.error)}
         autoHideDuration={8000}

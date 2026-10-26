@@ -148,3 +148,23 @@ describe('findNamePairs', () => {
     expect(findNamePairs([...many, e('x', 'Person', 'jones')])).toEqual([]);
   });
 });
+
+import { findSynonymPairs } from './duplicate-names.js';
+
+describe('findSynonymPairs (#767)', () => {
+  const ents = [
+    { id: 'a', type: 'Organization', names: ['ey'] },
+    { id: 'b', type: 'Organization', names: ['ernst & young', 'e&y'] },
+    { id: 'c', type: 'Person', names: ['ey'] },
+    { id: 'd', type: 'Organization', names: ['acme'] },
+  ];
+  it('pairs same-type entities that fall in one group', () => {
+    expect(findSynonymPairs(ents, [{ normalized: ['ey', 'ernst & young'], entityType: null }])).toEqual([
+      { aId: 'a', bId: 'b', reasons: ['synonym'] },
+    ]);
+  });
+  it('respects the group entity type and finds nothing without a match', () => {
+    expect(findSynonymPairs(ents, [{ normalized: ['ey', 'ernst & young'], entityType: 'Person' }])).toEqual([]);
+    expect(findSynonymPairs(ents, [{ normalized: ['x', 'y'], entityType: null }])).toEqual([]);
+  });
+});

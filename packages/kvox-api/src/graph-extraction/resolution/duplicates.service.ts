@@ -42,6 +42,7 @@ import {
   SIMILAR_NAME_THRESHOLD,
   duplicateScore,
   findNamePairs,
+  findSynonymPairs,
   pairKey,
   type NameReason,
 } from './duplicate-names.js';
@@ -107,6 +108,20 @@ export class DuplicatesService {
     for (const p of findNamePairs(scanned.map((e) => ({ id: e.id, type: e.type, names: namesOf(e.label, aliases.get(e.id) ?? []) })))) {
       const f = touch(p.aId, p.bId);
       for (const r of p.reasons) f.reasons.add(r);
+    }
+
+    // --- the personal synonym dictionary (#767) --------------------------------
+    const synonymGroups = await this.prisma.kgSynonym.findMany({
+      where: { ownerId },
+      select: { normalized: true, entityType: true },
+      take: 500,
+    });
+    if (synonymGroups.length > 0) {
+      const namedScanned = scanned.map((e) => ({ id: e.id, type: e.type, names: namesOf(e.label, aliases.get(e.id) ?? []) }));
+      for (const p of findSynonymPairs(namedScanned, synonymGroups)) {
+        const f = touch(p.aId, p.bId);
+        for (const r of p.reasons) f.reasons.add(r);
+      }
     }
 
     // --- trigram, in SQL -------------------------------------------------------
@@ -235,7 +250,7 @@ function namesOf(label: string, aliasRows: readonly AliasRow[]): string[] {
   return [...out];
 }
 
-const REASON_ORDER: readonly Reason[] = ['alias_match', 'name_contained', 'initials', 'similar_name', 'resolution_proposal'];
+const REASON_ORDER: readonly Reason[] = ['alias_match', 'synonym', 'name_contained', 'initials', 'similar_name', 'resolution_proposal'];
 function orderReasons(reasons: readonly Reason[]): Reason[] {
   return REASON_ORDER.filter((r) => reasons.includes(r));
 }

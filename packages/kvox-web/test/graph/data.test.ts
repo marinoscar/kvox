@@ -35,7 +35,7 @@ describe('kvoxGraphDestinations', () => {
 });
 
 describe('kvoxGraphRoutes', () => {
-  it('declares the seven graph routes and the settings route, with the exact gates', () => {
+  it('declares the eight graph routes and the settings route, with the exact gates', () => {
     expect(
       kvoxGraphRoutes.map(({ path, permission, redirectTo }) => ({ path, permission, redirectTo })),
     ).toEqual([
@@ -46,6 +46,7 @@ describe('kvoxGraphRoutes', () => {
       { path: '/graph/review', permission: 'graph:read', redirectTo: undefined },
       { path: '/graph/review-queue', permission: 'graph:read', redirectTo: undefined },
       { path: '/graph/duplicates', permission: 'graph:read', redirectTo: undefined },
+      { path: '/graph/synonyms', permission: 'graph:read', redirectTo: undefined },
       { path: '/graph/imports/:proposalId', permission: 'graph:write', redirectTo: '/graph' },
       { path: '/settings/knowledge-graph', permission: 'graph:write', redirectTo: '/settings' },
     ]);

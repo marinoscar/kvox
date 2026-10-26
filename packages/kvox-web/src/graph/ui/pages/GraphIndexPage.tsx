@@ -19,7 +19,8 @@
  *
  * The header links to Explore, Overview, Review (`/graph/review`, the
  * proposals waiting for review) and Possible duplicates (`/graph/duplicates`,
- * #766, with the number of pairs from one `?limit=50` read). The header's overflow menu (phone and desktop alike) carries "Export
+ * #766, with the number of pairs from one `?limit=50` read). The header's overflow menu (phone and desktop alike) carries
+ * "Synonyms" (`/graph/synonyms`, #767, the caller's personal synonym groups), "Export
  * graph…" — `ExportGraphDialog` (#386), an RDF export of the caller's graph —
  * and, for a caller holding `graph:write`, "Import graph…" —
  * `ImportGraphDialog` (#387), which uploads an RDF file as a proposal to
@@ -241,6 +242,9 @@ export function GraphIndexPage() {
                 <Chip size="small" color="warning" label={duplicateBadge} aria-hidden="true" sx={{ ml: 1, height: 20 }} />
               )}
             </MenuItem>
+            <MenuItem component={RouterLink} to="/graph/synonyms" onClick={() => setMenuAnchor(null)}>
+              Synonyms
+            </MenuItem>
             <MenuItem onClick={openExport}>Export graph…</MenuItem>
             {canImport && <MenuItem onClick={openImport}>Import graph…</MenuItem>}
           </Menu>
@@ -265,6 +269,9 @@ export function GraphIndexPage() {
             <MoreVertIcon />
           </IconButton>
           <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
+            <MenuItem component={RouterLink} to="/graph/synonyms" onClick={() => setMenuAnchor(null)}>
+              Synonyms
+            </MenuItem>
             <MenuItem onClick={openExport}>Export graph…</MenuItem>
             {canImport && <MenuItem onClick={openImport}>Import graph…</MenuItem>}
           </Menu>
