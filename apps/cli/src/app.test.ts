@@ -178,7 +178,10 @@ describe('no copy of a platform engine file', () => {
 describe('the streaming routes of the shared host proxy', () => {
   it('cover the three server-sent-event families of this app, and the same ones the inner nginx streams', () => {
     expect(APP_CLI_OPTIONS.proxy?.streamPaths).toEqual(APP_STREAM_PATHS);
-    expect([...APP_STREAM_PATHS].sort()).toEqual(['/api/ask/messages/', '/api/note-generations/', '/api/notes/']);
+    expect([...APP_STREAM_PATHS].sort()).toEqual(['/api/ask/messages', '/api/note-generations', '/api/notes']);
+    // A proxied prefix ending in "/" makes nginx 301 the bare URI to the slash form,
+    // which broke GET /api/notes (#749).
+    for (const path of APP_STREAM_PATHS) expect(path.endsWith('/')).toBe(false);
 
     // infra/nginx/app.d/locations/app-streams.conf is the inner nginx's copy of the same routes.
     const inner = readFileSync(join(REPO_ROOT, 'infra', 'nginx', 'app.d', 'locations', 'app-streams.conf'), 'utf8');
