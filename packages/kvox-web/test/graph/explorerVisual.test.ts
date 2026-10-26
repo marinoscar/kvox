@@ -631,12 +631,12 @@ describe('legendModel', () => {
     expect(model.hasStance).toBe(false);
   });
 
-  it('keeps a hidden type so it can be switched back on, with a count of zero', () => {
+  it('lists only the types on the canvas: a hidden or absent type is not a row (#764, the chips filter)', () => {
     const state = loaded();
     state.hiddenTypes = new Set(['Topic']);
     const model = legendModel(state, nodeTypes, relationTypes);
-    const topic = model.types.find((t) => t.key === 'Topic')!;
-    expect(topic).toMatchObject({ shown: false, count: 0 });
+    expect(model.types.find((t) => t.key === 'Topic')).toBeUndefined();
+    expect(model.types.every((t) => t.count > 0)).toBe(true);
   });
 
   it('counts relations, ignoring stub ties, and flags the stance key when a stance is present', () => {

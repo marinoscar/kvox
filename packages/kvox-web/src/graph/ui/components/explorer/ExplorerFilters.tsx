@@ -7,8 +7,16 @@
  *
  * Every filter here is SERVER-SIDE: toggling one prunes what no longer
  * qualifies and narrows every later expand, so a hidden type is never fetched.
- * Chips are toggle buttons (`aria-pressed`) rather than checkboxes because
- * they read as a row of on/off filters, which is what they are.
+ *
+ * TYPE AND DOMAIN CHIPS SELECT WHAT SHOWS (#764), like the `/graph` index's
+ * `EntityTypeFilter`: with no chip selected every type shows; select "Products"
+ * and only Products show — seeds included. A domain chip selects all of its node
+ * types at once. Chips are toggle buttons (`aria-pressed` = selected). The
+ * relation menu stays a checklist of what shows.
+ *
+ * No per-type counts: no headless source gives a cheap, current count per node
+ * type (the overview's cluster `typeCounts` is a possibly-stale snapshot of
+ * entities only), so chips are never disabled for being empty.
  */
 
 import CheckIcon from '@mui/icons-material/Check';
@@ -37,9 +45,12 @@ export interface ExplorerFiltersProps {
   domains: DomainOption[];
   nodeTypes: FilterOption[];
   relationTypes: FilterOption[];
-  hiddenTypes: ReadonlySet<string>;
+  /** The SELECTED node types; empty means every type shows. */
+  selectedTypes: ReadonlySet<string>;
   hiddenRelationTypes: ReadonlySet<string>;
+  /** Select or deselect a node type. */
   onToggleType: (key: string) => void;
+  /** Select or deselect every node type of a domain. */
   onToggleDomain: (domain: DomainOption) => void;
   onToggleRelationType: (key: string) => void;
   asOf: string | null;
@@ -51,16 +62,25 @@ export interface ExplorerFiltersProps {
 }
 
 /**
- * How many facets narrow the graph right now: hidden types, hidden relations and a set `as of` date. The badge on the Filters chip and button.
+ * How many facets narrow the graph right now: selected types, hidden relations and a set `as of` date. The badge on the Filters chip and button.
  *
  * @stability experimental
  */
 export function activeFilterCount(input: {
-  hiddenTypes: ReadonlySet<string>;
+  selectedTypes: ReadonlySet<string>;
   hiddenRelationTypes: ReadonlySet<string>;
   asOf: string | null;
 }): number {
-  return input.hiddenTypes.size + input.hiddenRelationTypes.size + (input.asOf ? 1 : 0);
+  return input.selectedTypes.size + input.hiddenRelationTypes.size + (input.asOf ? 1 : 0);
+}
+
+/**
+ * Whether a domain chip reads as selected: every one of its node types is selected. A domain without node types never is.
+ *
+ * @stability experimental
+ */
+export function domainSelected(domain: DomainOption, selectedTypes: ReadonlySet<string>): boolean {
+  return domain.nodeTypes.length > 0 && domain.nodeTypes.every((key) => selectedTypes.has(key));
 }
 
 function SectionHeading({ children }: { children: string }) {
@@ -81,7 +101,7 @@ export function ExplorerFilters(props: ExplorerFiltersProps) {
     domains,
     nodeTypes,
     relationTypes,
-    hiddenTypes,
+    selectedTypes,
     hiddenRelationTypes,
     onToggleType,
     onToggleDomain,
@@ -94,29 +114,28 @@ export function ExplorerFilters(props: ExplorerFiltersProps) {
   } = props;
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 
-  const domainShown = (domain: DomainOption) =>
-    domain.nodeTypes.every((key) => !hiddenTypes.has(key)) &&
-    domain.relationTypes.every((key) => !hiddenRelationTypes.has(key));
+  // A domain chip selects node types; a domain that only contributes relations has nothing to select.
+  const typeDomains = domains.filter((domain) => domain.nodeTypes.length > 0);
 
   const hiddenRelationCount = relationTypes.filter((r) => hiddenRelationTypes.has(r.key)).length;
 
   return (
     <Box role="group" aria-label="Filter the graph" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
-      {domains.length > 0 && (
+      {typeDomains.length > 0 && (
         <>
           <SectionHeading>Domains</SectionHeading>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            {domains.map((domain) => {
-              const shown = domainShown(domain);
+            {typeDomains.map((domain) => {
+              const selected = domainSelected(domain, selectedTypes);
               return (
                 <Chip
                   key={`domain-${domain.key}`}
                   label={domain.label}
-                  icon={shown ? <CheckIcon fontSize="small" /> : undefined}
-                  color={shown ? 'primary' : 'default'}
-                  variant="outlined"
+                  icon={selected ? <CheckIcon fontSize="small" /> : undefined}
+                  color={selected ? 'primary' : 'default'}
+                  variant={selected ? 'filled' : 'outlined'}
                   onClick={() => onToggleDomain(domain)}
-                  aria-pressed={shown}
+                  aria-pressed={selected}
                   aria-label={`${domain.label} domain`}
                   disabled={disabled}
                 />
@@ -126,19 +145,19 @@ export function ExplorerFilters(props: ExplorerFiltersProps) {
         </>
       )}
       <SectionHeading>Types</SectionHeading>
-      <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+      <Box role="group" aria-label="Show only these types" sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
         {nodeTypes.map((type) => {
-          const shown = !hiddenTypes.has(type.key);
+          const selected = selectedTypes.has(type.key);
           return (
             <Chip
               key={type.key}
               label={type.label}
               size="small"
-              icon={shown ? <CheckIcon fontSize="small" /> : undefined}
-              color={shown ? 'primary' : 'default'}
-              variant="outlined"
+              icon={selected ? <CheckIcon fontSize="small" /> : undefined}
+              color={selected ? 'primary' : 'default'}
+              variant={selected ? 'filled' : 'outlined'}
               onClick={() => onToggleType(type.key)}
-              aria-pressed={shown}
+              aria-pressed={selected}
               disabled={disabled}
             />
           );

@@ -181,9 +181,40 @@ function narrowTo(allowed: string[] | undefined, wanted: readonly string[] | und
   return allowed ? wanted.filter((key) => allowed.includes(key)) : [...wanted];
 }
 
+/**
+ * The keys a request may carry: `undefined` (no restriction) when nothing is
+ * hidden, else exactly the keys still allowed. The result can be EMPTY — every
+ * key hidden — and an empty list is never sent: the server would read `[]` as
+ * "no restriction" (#764). Callers check {@link nothingCanMatch} first.
+ */
 function allowedList(universe: readonly string[], hidden: ReadonlySet<string>): string[] | undefined {
   if (hidden.size === 0) return undefined;
   return universe.filter((key) => !hidden.has(key));
+}
+
+/** A filter that lets nothing through: there is nothing to fetch. */
+function nothingCanMatch(filters: { types?: string[]; relationTypes?: string[] }): boolean {
+  return (filters.types?.length ?? 1) === 0 || (filters.relationTypes?.length ?? 1) === 0;
+}
+
+/**
+ * Apply the state's own type and relation filters to its graph (seeds included,
+ * #764). While a type filter is on, a type the options do not list is hidden
+ * too: "show only Products" shows only Products.
+ */
+function filterState(state: ExplorerState, nodeTypes: readonly string[], relationTypes: readonly string[]): void {
+  let allowedTypes: Set<string>;
+  if (state.hiddenTypes.size === 0) {
+    allowedTypes = new Set<string>(nodeTypes);
+    state.graph.forEachNode((_id, attrs) => allowedTypes.add(attrs.entityType));
+  } else {
+    allowedTypes = new Set(nodeTypes.filter((key) => !state.hiddenTypes.has(key)));
+  }
+  const allowedRelations =
+    state.hiddenRelationTypes.size === 0
+      ? null
+      : new Set(relationTypes.filter((key) => !state.hiddenRelationTypes.has(key)));
+  applyFilters(state, allowedTypes, allowedRelations);
 }
 
 /**
@@ -287,29 +318,45 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
       setError(null);
       setNotFound(false);
       const requested = [...new Set(expandFrom)].slice(0, EXPLORER_MAX_REQUEST_SEEDS);
-      try {
-        const slice = await expandGraph(host, 
-          { nodeIds: requested, ...filtersFor(base), cap: stateRef.current.cap },
-          controller.signal,
-        );
-        if (!isMounted() || controller.signal.aborted) return;
+      const filters = filtersFor(base);
+      const typeFiltered = base.hiddenTypes.size > 0;
+      const install = (slice: GraphSlice | null) => {
         const next = createExplorerState(stateRef.current.cap);
         next.asOf = base.asOf;
         next.hiddenTypes = new Set(base.hiddenTypes);
         next.hiddenRelationTypes = new Set(base.hiddenRelationTypes);
-        const { capped: wasCapped } = mergeSlice(next, orderSeedsFirst(slice, seedIds), {
-          palette: optionsRef.current.palette,
-          previousPositions: carryPositions ? positionsOf(base) : undefined,
-          neighbourLimit: EXPLORER_NEIGHBOUR_LIMIT,
-        });
-        next.seedIds = [...new Set(seedIds)].filter((id) => next.graph.hasNode(id));
+        let wasCapped = false;
+        if (slice) {
+          wasCapped = mergeSlice(next, orderSeedsFirst(slice, seedIds), {
+            palette: optionsRef.current.palette,
+            previousPositions: carryPositions ? positionsOf(base) : undefined,
+            neighbourLimit: EXPLORER_NEIGHBOUR_LIMIT,
+          }).capped;
+        }
+        // Under a type filter a seed may be left out (or taken off) for its type:
+        // its id stays, as the anchor of the request that relaxes the filter.
+        next.seedIds = [...new Set(seedIds)].filter((id) => typeFiltered || next.graph.hasNode(id));
         syncSeedFlags(next);
         for (const id of requested) if (next.graph.hasNode(id)) next.expanded.add(id);
+        filterState(next, optionsRef.current.nodeTypes, optionsRef.current.relationTypes);
         recordStep(before);
         stateRef.current = next;
         setCapped(wasCapped);
-        setTruncated(slice.truncated);
+        setTruncated(slice?.truncated ?? false);
         bump();
+      };
+      try {
+        if (nothingCanMatch(filters)) {
+          // Every type (or relation) is filtered out: nothing to ask for, and `[]` is never sent.
+          install(null);
+          return;
+        }
+        const slice = await expandGraph(host, 
+          { nodeIds: requested, ...filters, cap: stateRef.current.cap },
+          controller.signal,
+        );
+        if (!isMounted() || controller.signal.aborted) return;
+        install(slice);
       } catch (err) {
         if (isAbortError(err) || controller.signal.aborted || !isMounted()) return;
         fail(err, 'Failed to load the graph');
@@ -339,20 +386,28 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
       // Render the overview's nodes NOW, at their overview positions.
       const next = createExplorerState(stateRef.current.cap);
       seedFromNodes(next, handoff.seedIds, handoff.nodes, optionsRef.current.palette);
+      next.hiddenTypes = new Set(stateRef.current.hiddenTypes);
+      next.hiddenRelationTypes = new Set(stateRef.current.hiddenRelationTypes);
+      next.asOf = stateRef.current.asOf;
+      const seeds = next.seedIds.slice(0, EXPLORER_MAX_REQUEST_SEEDS);
+      // The overview's nodes obey the filter too, seeds included (#764).
+      filterState(next, optionsRef.current.nodeTypes, optionsRef.current.relationTypes);
       stateRef.current = next;
       setCapped(false);
       setTruncated(false);
       bump();
 
-      const seeds = next.seedIds.slice(0, EXPLORER_MAX_REQUEST_SEEDS);
       const action = async () => {
+        if (seeds.length === 0) return;
+        const filters = filtersFor(stateRef.current);
+        if (nothingCanMatch(filters)) return;
         const controller = nextController();
         setIsLoading(true);
         setError(null);
         setNotFound(false);
         try {
           const slice = await expandGraph(host, 
-            { nodeIds: seeds, ...filtersFor(stateRef.current), cap: stateRef.current.cap },
+            { nodeIds: seeds, ...filters, cap: stateRef.current.cap },
             controller.signal,
           );
           if (!isMounted() || controller.signal.aborted) return;
@@ -361,7 +416,8 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
             palette: optionsRef.current.palette,
             neighbourLimit: EXPLORER_NEIGHBOUR_LIMIT,
           });
-          for (const id of seeds) state.expanded.add(id);
+          for (const id of seeds) if (state.graph.hasNode(id)) state.expanded.add(id);
+          filterState(state, optionsRef.current.nodeTypes, optionsRef.current.relationTypes);
           setCapped(wasCapped);
           setTruncated(slice.truncated);
           bump();
@@ -461,15 +517,7 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
   );
 
   const refilter = useCallback(() => {
-    const state = stateRef.current;
-    const present = new Set<string>(optionsRef.current.nodeTypes);
-    state.graph.forEachNode((_id, attrs) => present.add(attrs.entityType));
-    const allowedTypes = new Set([...present].filter((key) => !state.hiddenTypes.has(key)));
-    const allowedRelations =
-      state.hiddenRelationTypes.size === 0
-        ? null
-        : new Set(optionsRef.current.relationTypes.filter((key) => !state.hiddenRelationTypes.has(key)));
-    applyFilters(state, allowedTypes, allowedRelations);
+    filterState(stateRef.current, optionsRef.current.nodeTypes, optionsRef.current.relationTypes);
     bump();
   }, [bump]);
 
@@ -481,10 +529,19 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
    */
   const refetchRemoved = useCallback(async () => {
     const state = stateRef.current;
-    const roots = [...new Set([...state.seedIds, ...state.expanded])]
-      .filter((id) => state.graph.hasNode(id) && !state.graph.getNodeAttribute(id, 'isStub'))
-      .slice(0, EXPLORER_MAX_REQUEST_SEEDS);
+    // A seed is a root even when a type filter took it off the canvas: that is
+    // how relaxing the filter brings it back (#764).
+    const roots = [
+      ...new Set([
+        ...state.seedIds,
+        ...[...state.expanded].filter(
+          (id) => state.graph.hasNode(id) && !state.graph.getNodeAttribute(id, 'isStub'),
+        ),
+      ]),
+    ].slice(0, EXPLORER_MAX_REQUEST_SEEDS);
     if (roots.length === 0) return;
+    const filters = filtersFor(state);
+    if (nothingCanMatch(filters)) return;
     const capacity = remainingCapacity(state);
     if (capacity === 0) {
       setCapped(true);
@@ -493,12 +550,13 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
     const controller = nextController();
     setIsLoading(true);
     try {
-      const slice = await expandGraph(host, { nodeIds: roots, ...filtersFor(state), cap: capacity }, controller.signal);
+      const slice = await expandGraph(host, { nodeIds: roots, ...filters, cap: capacity }, controller.signal);
       if (!isMounted() || controller.signal.aborted || stateRef.current !== state) return;
       const { capped: wasCapped } = mergeSlice(state, slice, {
         palette: optionsRef.current.palette,
         neighbourLimit: EXPLORER_NEIGHBOUR_LIMIT,
       });
+      filterState(state, optionsRef.current.nodeTypes, optionsRef.current.relationTypes);
       if (wasCapped) setCapped(true);
       setTruncated(slice.truncated);
       bump();

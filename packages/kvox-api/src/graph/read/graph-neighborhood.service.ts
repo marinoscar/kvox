@@ -74,7 +74,12 @@ export const WALK_ROW_FACTOR = 4;
 
 export interface WalkOptions {
   hops: 1 | 2;
-  /** Node filter; the seeds are always kept. `undefined` = everything. */
+  /**
+   * Node filter, applied to every returned node INCLUDING seeds: the walk still
+   * starts from (and traverses through) every seed, but a node of another type
+   * is omitted, and so is every edge touching it. An empty filter returns no
+   * nodes. `undefined` = everything.
+   */
   types?: NodeTypeFilter;
   /** Edge-type filter, applied to stored and derived edges alike. */
   relationTypes?: string[];
@@ -216,8 +221,8 @@ export class GraphNeighborhoodService {
         const candidateIds = [...depthById.keys()];
 
         const [entities, items] = await Promise.all([
-          this.loadEntities(tx, ownerId, candidateIds, seeds, opts.types),
-          this.loadItems(tx, ownerId, candidateIds, seeds, opts.types),
+          this.loadEntities(tx, ownerId, candidateIds, opts.types),
+          this.loadItems(tx, ownerId, candidateIds, opts.types),
         ]);
         const kept = [...entities, ...items];
         const degree = await this.degrees(tx, ownerId, kept.map((n) => n.id), opts.asOf);
@@ -336,12 +341,11 @@ export class GraphNeighborhoodService {
     tx: Tx,
     ownerId: string,
     ids: string[],
-    seeds: string[],
     types: NodeTypeFilter | undefined,
   ): Promise<Omit<GraphNode, 'depth' | 'degree'>[]> {
     if (ids.length === 0) return [];
     const typeOk = types
-      ? Prisma.sql`(e.type = ANY(${textArray(types.entityTypes)}) OR e.id = ANY(${uuidArray(seeds)}))`
+      ? Prisma.sql`e.type = ANY(${textArray(types.entityTypes)})`
       : Prisma.sql`TRUE`;
     const rows = await tx.$queryRaw<{ id: string; type: string; label: string; occurred_at: Date | null }[]>`
       SELECT e.id::text AS id, e.type, e.label, e.occurred_at
@@ -362,12 +366,11 @@ export class GraphNeighborhoodService {
     tx: Tx,
     ownerId: string,
     ids: string[],
-    seeds: string[],
     types: NodeTypeFilter | undefined,
   ): Promise<Omit<GraphNode, 'depth' | 'degree'>[]> {
     if (ids.length === 0) return [];
     const kindOk = types
-      ? Prisma.sql`(i.kind::text = ANY(${textArray(types.itemKinds)}) OR i.id = ANY(${uuidArray(seeds)}))`
+      ? Prisma.sql`i.kind::text = ANY(${textArray(types.itemKinds)})`
       : Prisma.sql`TRUE`;
     const rows = await tx.$queryRaw<
       { id: string; kind: string; title: string | null; statement: string; status: string; occurred_at: Date | null }[]

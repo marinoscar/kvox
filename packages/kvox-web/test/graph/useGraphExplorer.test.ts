@@ -398,27 +398,57 @@ describe('useGraphExplorer — as_of', () => {
 });
 
 describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
-  it('prunes already-loaded nodes that no longer qualify, never a seed', async () => {
+  it('prunes already-loaded nodes that no longer qualify, a seed included, and brings the seed back (#764)', async () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
     expect(result.current.state.graph.hasNode(Q3_MEETING_ID)).toBe(true);
     act(() => result.current.setHiddenTypes(['Meeting', 'Person']));
     expect(result.current.state.graph.hasNode(Q3_MEETING_ID)).toBe(false);
     expect(result.current.state.graph.hasNode(ANA_ID)).toBe(false);
-    expect(result.current.state.graph.hasNode(JOE_ID)).toBe(true);
+    // The Person seed is filtered like any node, but stays the anchor; what came from it stays.
+    expect(result.current.state.graph.hasNode(JOE_ID)).toBe(false);
+    expect(result.current.state.seedIds).toEqual([JOE_ID]);
+    expect(result.current.state.graph.hasNode(ACME_ID)).toBe(true);
 
     // Hiding is local: no request. Re-enabling refetches what the filter removed (#667).
     expect(bodies).toHaveLength(1);
-    const before = result.current.state.graph.getNodeAttributes(JOE_ID);
+    const before = result.current.state.graph.getNodeAttributes(ACME_ID);
     await act(async () => result.current.setHiddenTypes([]));
     await waitFor(() => expect(result.current.state.graph.hasNode(Q3_MEETING_ID)).toBe(true));
     expect(result.current.state.graph.hasNode(ANA_ID)).toBe(true);
+    expect(result.current.state.graph.hasNode(JOE_ID)).toBe(true);
+    expect(result.current.state.graph.getNodeAttribute(JOE_ID, 'isSeed')).toBe(true);
     expect(bodies).toHaveLength(2);
     // The seeds and expanded nodes are asked again, with no type filter now that nothing is hidden.
     expect(bodies[1]).toEqual({ nodeIds: [JOE_ID], cap: expect.any(Number) });
     // Nothing that stayed moved.
-    const after = result.current.state.graph.getNodeAttributes(JOE_ID);
+    const after = result.current.state.graph.getNodeAttributes(ACME_ID);
     expect({ x: after.x, y: after.y }).toEqual({ x: before.x, y: before.y });
+  });
+
+  it('a load under a type no node has leaves the canvas empty but keeps the seed (Products only, #764)', async () => {
+    const { result } = renderExplorer();
+    act(() => result.current.setHiddenTypes(NODE_TYPES.filter((t) => t !== 'Project')));
+    await act(() => result.current.load([JOE_ID]));
+    expect(bodies[0].types).toEqual(['Project']);
+    // The fixture returns the Person seed regardless of the filter; the client filters it too.
+    expect(result.current.state.graph.hasNode(JOE_ID)).toBe(false);
+    expect(result.current.state.seedIds).toEqual([JOE_ID]);
+  });
+
+  it('never sends types: [] — a filter that allows nothing fetches nothing', async () => {
+    const { result } = renderExplorer();
+    act(() => result.current.setHiddenTypes(NODE_TYPES));
+    await act(() => result.current.load([JOE_ID]));
+    expect(bodies).toHaveLength(0);
+    expect(result.current.state.graph.order).toBe(0);
+    expect(result.current.state.seedIds).toEqual([JOE_ID]);
+
+    // Relaxing it asks again, from the seed, with exactly what is allowed.
+    await act(async () => result.current.setHiddenTypes(NODE_TYPES.filter((t) => t !== 'Organization')));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ nodeIds: [JOE_ID], types: ['Organization'] });
+    await waitFor(() => expect(result.current.state.graph.hasNode(ACME_ID)).toBe(true));
   });
 
   it('re-enabling a relation type refetches too; hiding more does not', async () => {

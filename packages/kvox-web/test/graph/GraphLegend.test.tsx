@@ -17,9 +17,10 @@ import { JOE_ID, expandFixture, graphOntologyFixture } from './graphData.js';
 import { render } from './helpers.js';
 
 /**
- * `GraphLegend` (#667): a list of toggle buttons with `aria-pressed`, counts
- * announced, a relation section, the stance key — and the `types` URL parameter
- * round-trip through `useLegendTypeFilter`.
+ * `GraphLegend` (#667): display-only by default (#764), a list of toggle buttons
+ * with `aria-pressed` when a host passes the handlers, counts announced, a
+ * relation section, the stance key — and the `types` URL parameter round-trip
+ * through `useLegendTypeFilter`, with the explorer chips' "select to show" meaning.
  */
 
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
@@ -67,6 +68,15 @@ describe('GraphLegend', () => {
     const meetings = screen.getByRole('button', { name: 'Meetings' });
     expect(meetings).toHaveAttribute('aria-pressed', 'false');
     expect(meetings).toHaveAccessibleDescription('hidden');
+  });
+
+  it('is display-only without onToggleType: plain rows, no buttons (#764, the explorer default)', () => {
+    const state = loaded();
+    render(<GraphLegend model={modelFor(state)} />);
+    const types = screen.getByRole('list', { name: 'Types' });
+    expect(within(types).queryAllByRole('button')).toHaveLength(0);
+    expect(within(types).getByText('People')).toBeInTheDocument();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 
   it('reports a click with the type key', async () => {
@@ -161,21 +171,19 @@ describe('useLegendTypeFilter — the `types` URL parameter', () => {
   }
   const search = () => screen.getByTestId('search').textContent;
 
-  it('writes the SHOWN types when a type is hidden, and drops the parameter when all are shown again', async () => {
+  it('writes the SELECTED types: a click shows only that type, a second click drops the parameter (#764)', async () => {
     const user = userEvent.setup();
     render(<Harness state={loaded()} />, { wrapperOptions: { route: '/graph/explore' } });
     expect(search()).toBe('');
 
     await user.click(screen.getByRole('button', { name: 'Meetings' }));
-    expect(screen.getByRole('button', { name: 'Meetings' })).toHaveAttribute('aria-pressed', 'false');
-    const shown = new URLSearchParams(search()!).get('types')!.split(',');
-    expect(shown).not.toContain('Meeting');
-    expect(shown).toContain('Person');
-    expect(shown.sort()).toEqual(ALL_KEYS.filter((k) => k !== 'Meeting').sort());
+    expect(new URLSearchParams(search()!).get('types')).toBe('Meeting');
+    expect(screen.getByRole('button', { name: 'Meetings' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'People' })).toHaveAttribute('aria-pressed', 'false');
 
     await user.click(screen.getByRole('button', { name: 'Meetings' }));
-    expect(screen.getByRole('button', { name: 'Meetings' })).toHaveAttribute('aria-pressed', 'true');
     expect(search()).toBe('');
+    expect(screen.getByRole('button', { name: 'People' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('reads the parameter back: a reload with ?types= hides everything not listed', () => {
@@ -192,6 +200,6 @@ describe('useLegendTypeFilter — the `types` URL parameter', () => {
     const params = new URLSearchParams(search()!);
     expect(params.get('seed')).toBe(JOE_ID);
     expect(params.get('asOf')).toBe('2026-06-01');
-    expect(params.get('types')).toBeTruthy();
+    expect(params.get('types')).toBe('Meeting');
   });
 });
