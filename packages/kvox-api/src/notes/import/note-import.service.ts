@@ -224,7 +224,7 @@ export class NoteImportService {
     try {
       await this.jobs.enqueue({
         type: NOTE_SOURCE_EXTRACT_JOB_TYPE,
-        reason: 'import',
+        reason: 'upload',
         subjectType: STORAGE_OBJECT_SUBJECT_TYPE,
         subjectId: objectId,
         payload: { objectId },

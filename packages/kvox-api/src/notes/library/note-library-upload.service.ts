@@ -194,7 +194,7 @@ export class NoteLibraryUploadService {
         });
         const job = await this.jobs.enqueueWithin(tx, {
           type: NOTE_LIBRARY_IMPORT_JOB_TYPE,
-          reason: 'import',
+          reason: 'upload',
           subjectType: NOTE_IMPORT_ITEM_SUBJECT_TYPE,
           subjectId: item.id,
           priority: 0,
@@ -247,7 +247,7 @@ export class NoteLibraryUploadService {
         }
         const job = await this.jobs.enqueueWithin(tx, {
           type: NOTE_LIBRARY_IMPORT_JOB_TYPE,
-          reason: 'retry',
+          reason: 'rerun',
           subjectType: NOTE_IMPORT_ITEM_SUBJECT_TYPE,
           subjectId: item.id,
           priority: 0,

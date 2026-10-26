@@ -36,7 +36,7 @@ describe('NoteLibraryUploadService.upload', () => {
     expect([...t.store.objects.values()]).toHaveLength(1);
     expect(item.sourceObjectId).toBe([...t.store.objects.keys()][0]);
     expect(t.jobs.jobs.map((j) => j.input)).toEqual([
-      expect.objectContaining({ type: 'note.library.import', priority: 0, subjectType: 'note_import_batch_item', subjectId: item.id, payload: { itemId: item.id }, reason: 'import' }),
+      expect.objectContaining({ type: 'note.library.import', priority: 0, subjectType: 'note_import_batch_item', subjectId: item.id, payload: { itemId: item.id }, reason: 'upload' }),
     ]);
     expect(item.jobId).toBe(t.jobs.jobs[0]!.id);
   });
