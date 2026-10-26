@@ -14,8 +14,9 @@
  *   A reload with `?cluster=` has no hand-off (it is in memory only), so it
  *   falls through to the search with a hint to reopen it from the overview.
  *
- * URL STATE: `seed`, `asOf` (YYYY-MM-DD), `types` (the SHOWN node types —
- * absent means all), `relTypes` (the SHOWN relation types — absent means all, GIC-17),
+ * URL STATE: `seed`, `asOf` (YYYY-MM-DD), `types` (the SELECTED node types — the
+ * type chips are "select to show", #764: absent means all, a list means only those, seeds
+ * included), `relTypes` (the SHOWN relation types — absent means all, GIC-17),
  * `view=list`, `layout=force|concentric|static` (static: tests/visual only), `lens` (the lens
  * last applied), `focus` (the focused node; the one param that adds a browser history entry),
  * `sel`/`tab` (the inspector) and `cluster`. The URL is the source of truth for all of them; a
@@ -115,6 +116,7 @@ import {
   ExplorerFilters,
   ExplorerFiltersSkeleton,
   activeFilterCount,
+  domainSelected,
 } from '../components/explorer/ExplorerFilters.js';
 import { InsightCanvasLayout } from '../components/explorer/shell/InsightCanvasLayout.js';
 import { explorerBudgets } from '../components/explorer/shell/explorerBudgets.js';
@@ -148,12 +150,15 @@ import { formatDay, parseRangeParams, rangeForInstant, type TimeRange } from '..
 import { peekExplorerHandoff, takeExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
 import {
   domainOptions,
+  hiddenFromSelected,
   hiddenFromShown,
   nodeTypeLabel,
   nodeTypeOptions,
   parseAsOfParam,
   relationTypeOptions,
+  selectedTypesFromParam,
   shownParamFromHidden,
+  typesParamFromSelected,
   type DomainOption,
 } from '../../headless/utils/explorerFilters.js';
 import {
@@ -302,7 +307,10 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const domains = useMemo(() => domainOptions(ontology), [ontology]);
   const nodeTypeKeys = useMemo(() => nodeTypes.map((t) => t.key), [nodeTypes]);
   const relationKeys = useMemo(() => relationTypes.map((r) => r.key), [relationTypes]);
-  const hiddenTypes = useMemo(() => hiddenFromShown(typesParam, nodeTypeKeys), [typesParam, nodeTypeKeys]);
+  // The type chips SELECT what shows (#764): none selected = every type; the model and
+  // the requests work from the complement, the hidden types.
+  const selectedTypes = useMemo(() => selectedTypesFromParam(typesParam, nodeTypeKeys), [typesParam, nodeTypeKeys]);
+  const hiddenTypes = useMemo(() => hiddenFromSelected(selectedTypes, nodeTypeKeys), [selectedTypes, nodeTypeKeys]);
   const hiddenTypesKey = [...hiddenTypes].sort().join(',');
   // Hidden relation types live in the URL too (`relTypes` = the SHOWN ones), so they survive a reload and a shared link.
   const relTypesParam = searchParams.get('relTypes');
@@ -655,12 +663,12 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     });
   }, [updateParams, webgl, listView, autoList]);
 
-  const setShownTypes = useCallback(
-    (hidden: Set<string>) => {
-      const shown = shownParamFromHidden(hidden, nodeTypeKeys);
+  const setSelectedTypes = useCallback(
+    (selected: Set<string>) => {
+      const param = typesParamFromSelected(selected, nodeTypeKeys);
       updateParams((params) => {
-        if (shown === null) params.delete('types');
-        else params.set('types', shown);
+        if (param === null) params.delete('types');
+        else params.set('types', param);
       });
     },
     [nodeTypeKeys, updateParams],
@@ -677,43 +685,32 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     [relationKeys, updateParams],
   );
 
+  // Select to show (#764), like the `/graph` index's type chips: a chip adds its type to the selection.
   const onToggleType = useCallback(
     (key: string) => {
-      const next = new Set(hiddenTypes);
+      const next = new Set(selectedTypes);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      setShownTypes(next);
+      setSelectedTypes(next);
     },
-    [hiddenTypes, setShownTypes],
+    [selectedTypes, setSelectedTypes],
   );
 
+  // A domain chip selects (or deselects) all of its node types at once.
   const onToggleDomain = useCallback(
     (domain: DomainOption) => {
-      const shown =
-        domain.nodeTypes.every((key) => !hiddenTypes.has(key)) &&
-        domain.relationTypes.every((key) => !hiddenRelations.has(key));
-      const types = new Set(hiddenTypes);
-      const relations = new Set(hiddenRelations);
+      const isOn = domainSelected(domain, selectedTypes);
+      const next = new Set(selectedTypes);
       for (const key of domain.nodeTypes) {
-        if (shown) types.add(key);
-        else types.delete(key);
+        if (isOn) next.delete(key);
+        else next.add(key);
       }
-      for (const key of domain.relationTypes) {
-        if (shown) relations.add(key);
-        else relations.delete(key);
-      }
-      // ONE write: two `setSearchParams` in a tick would each start from the same stale params.
-      const shownTypes = shownParamFromHidden(types, nodeTypeKeys);
-      const shownRelations = shownParamFromHidden(relations, relationKeys);
-      updateParams((params) => {
-        if (shownTypes === null) params.delete('types');
-        else params.set('types', shownTypes);
-        if (shownRelations === null) params.delete('relTypes');
-        else params.set('relTypes', shownRelations);
-      });
+      setSelectedTypes(next);
     },
-    [hiddenRelations, hiddenTypes, nodeTypeKeys, relationKeys, updateParams],
+    [selectedTypes, setSelectedTypes],
   );
+
+  const clearTypeFilter = useCallback(() => setSelectedTypes(new Set()), [setSelectedTypes]);
 
   const onToggleRelationType = useCallback(
     (key: string) => {
@@ -778,7 +775,11 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
       if (!view) return;
       updateParams((params) => {
         if (view.seedIds.length > 0 && view.seedIds.length <= MAX_URL_SEEDS) params.set('seed', view.seedIds.join(','));
-        const shownTypes = shownParamFromHidden(new Set(view.hiddenTypes), nodeTypeKeys);
+        // The snapshot holds the hidden complement; the URL holds the selection (absent = all).
+        const shownTypes = typesParamFromSelected(
+          new Set(view.hiddenTypes.length > 0 ? nodeTypeKeys.filter((key) => !view.hiddenTypes.includes(key)) : []),
+          nodeTypeKeys,
+        );
         if (shownTypes === null) params.delete('types');
         else params.set('types', shownTypes);
         const shownRelations = shownParamFromHidden(new Set(view.hiddenRelationTypes), relationKeys);
@@ -1038,7 +1039,16 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     startParam ||
     (!hasGraph && !explorer.isLoading && !explorer.notFound && !explorer.error && seeds.length === 0 &&
       (noRecent || Boolean(clusterParam && !handoff)));
-  const initialLoading = !hasGraph && !showStartHere && !explorer.notFound && !explorer.error;
+  // A type filter that leaves nothing on the canvas (#764): say so, rather than spin.
+  const filteredEmpty =
+    !hasGraph &&
+    !showStartHere &&
+    selectedTypes.size > 0 &&
+    state.seedIds.length > 0 &&
+    !explorer.isLoading &&
+    !explorer.notFound &&
+    !explorer.error;
+  const initialLoading = !hasGraph && !showStartHere && !filteredEmpty && !explorer.notFound && !explorer.error;
 
   // The seeds an add from the palette builds on: none while Start here shows.
   const paletteSeeds = showStartHere ? [] : state.seedIds.length > 0 ? state.seedIds : seeds;
@@ -1352,8 +1362,8 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     </Box>
   );
 
-  // What the colours and pictograms mean, and a second way to toggle a type (the same `types` URL
-  // parameter as the chips). `version` and the hidden sets are the dependencies: the state is mutated in place.
+  // What the colours and pictograms mean: display only (#764); the chips above are the one type filter.
+  // `version` and the hidden sets are the dependencies: the state is mutated in place.
   const legend = useMemo(
     () => legendModel(state, nodeTypes, relationTypes, theme.palette.mode),
     [state, version, nodeTypes, relationTypes, hiddenTypesKey, hiddenRelations, theme.palette.mode],
@@ -1367,7 +1377,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         domains={domains}
         nodeTypes={nodeTypes}
         relationTypes={relationTypes}
-        hiddenTypes={hiddenTypes}
+        selectedTypes={selectedTypes}
         hiddenRelationTypes={hiddenRelations}
         onToggleType={onToggleType}
         onToggleDomain={onToggleDomain}
@@ -1378,12 +1388,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         hideAsOf={!listView}
       />
       {hasGraph && (
-        <GraphLegend
-          model={legend}
-          mode={theme.palette.mode}
-          onToggleType={onToggleType}
-          onToggleRelation={onToggleRelationType}
-        />
+        <GraphLegend model={legend} mode={theme.palette.mode} />
       )}
       <InsightsPanel onSelect={onInsightSelect} typeLabel={typeLabel} inputModality={inputModality} />
     </Box>
@@ -1488,7 +1493,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
               />
             ) : undefined
           }
-          facetsActiveCount={activeFilterCount({ hiddenTypes, hiddenRelationTypes: hiddenRelations, asOf })}
+          facetsActiveCount={activeFilterCount({ selectedTypes, hiddenRelationTypes: hiddenRelations, asOf })}
           inspectorOpen={!listView && (selection !== null || multi !== null || connectResults !== null || pathMode.sheetWanted)}
           onInspectorOpenChange={(open) => {
             if (!open) {
@@ -1584,6 +1589,10 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                     onHide={onHide}
                   />
                 </Box>
+              ) : filteredEmpty ? (
+                <Box sx={{ position: 'relative', minHeight: 240 }}>
+                  <FilteredEmptyState selectedTypes={selectedTypes} nodeTypes={nodeTypes} onClear={clearTypeFilter} />
+                </Box>
               ) : (
                 <CenteredSpinner label="Loading the graph" />
               )
@@ -1645,6 +1654,9 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                     />
                   </Box>
                 )}
+                {filteredEmpty && (
+                  <FilteredEmptyState selectedTypes={selectedTypes} nodeTypes={nodeTypes} onClear={clearTypeFilter} />
+                )}
                 {(initialLoading || explorer.isLoading) && <CenteredSpinner label="Loading the graph" overlay />}
                 {pathMode.overlay(canvasInsets)}
               </Box>
@@ -1683,6 +1695,48 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
       <Box role="status" aria-live="polite" sx={visuallyHidden}>
         {announcement}
       </Box>
+    </Box>
+  );
+}
+
+/**
+ * What a type filter that leaves the canvas empty says (#764). One type names
+ * itself with its ontology plural ("No Products in your graph yet"); several
+ * read "Nothing matches these filters". Either way one button clears the filter.
+ */
+function FilteredEmptyState({
+  selectedTypes,
+  nodeTypes,
+  onClear,
+}: {
+  selectedTypes: ReadonlySet<string>;
+  nodeTypes: readonly { key: string; label: string }[];
+  onClear: () => void;
+}) {
+  const labels = nodeTypes.filter((option) => selectedTypes.has(option.key)).map((option) => option.label);
+  const message = labels.length === 1 ? `No ${labels[0]} in your graph yet` : 'Nothing matches these filters';
+  return (
+    <Box
+      role="status"
+      sx={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 1.5,
+        p: 2,
+        textAlign: 'center',
+        minHeight: 240,
+      }}
+    >
+      <Typography variant="body1" color="text.secondary">
+        {message}
+      </Typography>
+      <Button variant="outlined" size="small" onClick={onClear}>
+        Clear filters
+      </Button>
     </Box>
   );
 }
