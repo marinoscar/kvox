@@ -59,7 +59,7 @@ export class PrismaService
    * The platform's AI, storage and sharing slices call
    * `PLATFORM_PRISMA.forOrg(orgId, { userId? })` (usage recorder, limits, runs,
    * output writer, ...); without it every AI call failed with
-   * `this.prisma.forOrg is not a function` (marinoscar/kvox#757). Same
+   * `this.prisma.forOrg is not a function` (#757). Same
    * mechanism and signature as the reference app's `PrismaService.forOrg`.
    *
    * Good for single operations; a unit of work of more than one statement uses

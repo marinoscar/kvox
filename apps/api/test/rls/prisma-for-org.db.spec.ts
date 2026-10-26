@@ -1,6 +1,6 @@
 // =============================================================================
 // Real-Postgres test: `PrismaService.forOrg` / `runInOrg(orgId, ...)` work under
-// row-level security for the application role (marinoscar/kvox#757)
+// row-level security for the application role (#757)
 // =============================================================================
 //
 // The platform's AI slice reads and writes `ai_usage_events` through
