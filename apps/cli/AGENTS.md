@@ -12,7 +12,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 
 ## Version bump (root rule: CLI Version Bump on Improvement)
 
-- The version lives **only** in `apps/cli/package.json` (today `1.10.8`). `readVersion()` in `src/app.ts` reads it at runtime; never hardcode it or import `package.json` elsewhere (see its comment).
+- The version lives **only** in `apps/cli/package.json` (today `1.10.9`). `readVersion()` in `src/app.ts` reads it at runtime; never hardcode it or import `package.json` elsewhere (see its comment).
 - The version is recorded as `appctlVersion` in a deployment's state file, as `deployedBy.version` in `deploy-info/info.json`, and sent as the User-Agent on every API request. A stale version makes two installs indistinguishable in a deployment record.
 - PATCH for an improvement or a set shipped together; MINOR for a new command or subcommand; **one bump per PR**. Then `npm install --package-lock-only` (the lockfile's `apps/cli` entry carries the version).
 - The deploy version step versions `apps/api`, `apps/web` and `packages/shared` only (`deploy.versionedManifests` in `src/app.ts`; `apps/api` is the version source), so it never touches this package and the CLI version is bumped by hand per the root rule.

@@ -2,12 +2,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CLI_NAME } from '@app/shared';
+import { CLI_NAME, REPO_SLUG } from '@app/shared';
 import { configDirName, createCli, envPrefix, versionText } from '@marinoscar/platform-cli';
 import { resetCliForTests } from '@marinoscar/platform-cli/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { APP_CLI_OPTIONS, APP_STREAM_PATHS, APP_VERSIONED_MANIFESTS, readVersion } from './app.js';
+import { APP_CLI_OPTIONS, APP_STREAM_PATHS, APP_UPGRADE_HINT, APP_VERSIONED_MANIFESTS, readVersion } from './app.js';
 
 // =============================================================================
 // The CLI is `createCli()` with this app's identity  (issue #482, epic #478)
@@ -207,5 +207,33 @@ describe('the streaming routes of the shared host proxy', () => {
     const inner = readFileSync(join(REPO_ROOT, 'infra', 'nginx', 'app.d', 'locations', 'app-streams.conf'), 'utf8');
     expect(inner).toContain('^/api/(notes|note-generations)/[^/]+/stream$');
     expect(inner).toContain('^/api/ask/messages/[^/]+/stream$');
+  });
+});
+
+describe('the start-up update notice (issue #756)', () => {
+  it('is set, and tells the operator to re-run the installer from main', () => {
+    const notice = APP_CLI_OPTIONS.updateNotice;
+
+    expect(notice).toBeDefined();
+    expect(notice?.upgradeHint).toBe(APP_UPGRADE_HINT);
+    expect(notice?.upgradeHint).toBe(`curl -fsSL https://raw.githubusercontent.com/${REPO_SLUG}/main/install.sh | bash`);
+  });
+
+  it('reads the version from apps/cli/package.json on main of this repository', async () => {
+    const fetchSpy = vi.fn(async (_url: unknown) => new Response(JSON.stringify({ version: '9.8.7' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      await expect(APP_CLI_OPTIONS.updateNotice?.latestVersion()).resolves.toBe('9.8.7');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toBe(
+      `https://raw.githubusercontent.com/${REPO_SLUG}/main/apps/cli/package.json`,
+    );
+  });
+
+  it('passes the engine validation: createCli builds with it', () => {
+    expect(() => createCli(APP_CLI_OPTIONS)).not.toThrow();
   });
 });
