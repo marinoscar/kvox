@@ -1,22 +1,26 @@
 /**
- * `GraphLegend` — what the canvas's colours, pictograms and lines mean, and the
- * type filter (#667, epic #661).
+ * `GraphLegend` — what the canvas's colours, pictograms and lines mean (#667,
+ * epic #661).
  *
  * A STANDALONE component: it renders from a `LegendModel` (`legendModel()` in
  * `explorerModel.ts`) and reports clicks; it does not know where it sits. The
  * responsive shell (#669) places it: in the facets pane on an expanded window,
  * in the chip-rail popover on a medium one, in the left drawer on a compact one.
  *
- * It is a LIST OF TOGGLE BUTTONS, not a picture: each type is a `button` with
- * `aria-pressed` whose accessible name is the type's label and whose description
- * announces the count ("12 on the canvas", or "hidden"), so a screen reader gets
- * what a sighted user reads off the chip. The pictogram beside it repeats the
- * node's colour AND glyph, so the legend teaches both channels.
+ * It is a LIST, not a picture: each row's text is the type's label and its
+ * description announces the count ("12 on the canvas", or "hidden"), so a screen
+ * reader gets what a sighted user reads off the row. The pictogram beside it
+ * repeats the node's colour AND glyph, so the legend teaches both channels.
  *
- * `useLegendTypeFilter` is the URL half: the existing `types` search parameter
- * (the SHOWN types; absent means all), through the same `hiddenFromShown` /
- * `shownParamFromHidden` helpers the page's own chips use, so the two agree and
- * a shared link restores the filter.
+ * DISPLAY ONLY BY DEFAULT (#764): the explorer's type chips are the one type
+ * filter, so the page passes no toggles. A host that wants the rows to act can
+ * still pass `onToggleType` / `onToggleRelation`; each row then becomes a
+ * toggle button with `aria-pressed`.
+ *
+ * `useLegendTypeFilter` is the URL half for such a host: the `types` search
+ * parameter holds the SELECTED types (absent means all), through the same
+ * `selectedTypesFromParam` / `typesParamFromSelected` helpers the explorer's
+ * chips use, so the two agree and a shared link restores the filter.
  */
 
 import Box from '@mui/material/Box';
@@ -26,7 +30,11 @@ import { useCallback, useId, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { visuallyHidden } from '../../visuallyHidden.js';
-import { hiddenFromShown, shownParamFromHidden } from '../../../headless/utils/explorerFilters.js';
+import {
+  hiddenFromSelected,
+  selectedTypesFromParam,
+  typesParamFromSelected,
+} from '../../../headless/utils/explorerFilters.js';
 import { STANCES, STANCE_COLORS, type ExplorerMode } from './explorerEncoding.js';
 import type { LegendModel, LegendRelation, LegendType } from './explorerModel.js';
 import { PICTOGRAMS, type PictogramName } from './icons/pictograms.js';
@@ -41,8 +49,8 @@ export interface GraphLegendProps {
   model: LegendModel;
   /** Light or dark variant, for the stance key's colours. Default `light`. */
   mode?: ExplorerMode;
-  /** A type row was toggled. */
-  onToggleType: (key: string) => void;
+  /** A type row was toggled; without it (the explorer's default, #764) the type section is a plain list. */
+  onToggleType?: (key: string) => void;
   /** A relation row was toggled; without it the relation section is a plain list. */
   onToggleRelation?: (key: string) => void;
   /** Heading of the legend. Default "Legend". */
@@ -88,10 +96,42 @@ function TypeRow({
   disabled,
 }: {
   type: LegendType;
-  onToggle: (key: string) => void;
+  onToggle?: (key: string) => void;
   disabled?: boolean;
 }) {
   const id = useId();
+  const content = (
+    <>
+      <Glyph type={type} />
+      <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>
+        {type.label}
+      </Typography>
+      <Typography
+        aria-hidden
+        variant="caption"
+        color="text.secondary"
+        sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
+      >
+        {type.shown ? type.count : 'hidden'}
+      </Typography>
+    </>
+  );
+  // Outside the button, so it describes it and is not part of its name.
+  const description = (
+    <Box component="span" id={id} sx={visuallyHidden}>
+      {describe(type.count, type.shown, 'on the canvas')}
+    </Box>
+  );
+  if (!onToggle) {
+    return (
+      <li>
+        <Box sx={{ ...rowSx, '&:hover': undefined }} aria-describedby={id}>
+          {content}
+        </Box>
+        {description}
+      </li>
+    );
+  }
   return (
     <li>
       <ButtonBase
@@ -101,23 +141,9 @@ function TypeRow({
         disabled={disabled}
         onClick={() => onToggle(type.key)}
       >
-        <Glyph type={type} />
-        <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>
-          {type.label}
-        </Typography>
-        <Typography
-          aria-hidden
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
-        >
-          {type.shown ? type.count : 'hidden'}
-        </Typography>
+        {content}
       </ButtonBase>
-      {/* Outside the button, so it describes it and is not part of its name. */}
-      <Box component="span" id={id} sx={visuallyHidden}>
-        {describe(type.count, type.shown, 'on the canvas')}
-      </Box>
+      {description}
     </li>
   );
 }
@@ -155,7 +181,7 @@ function RelationRow({
   if (!onToggle) {
     return (
       <li>
-        <Box sx={rowSx} aria-describedby={id}>
+        <Box sx={{ ...rowSx, '&:hover': undefined }} aria-describedby={id}>
           {content}
         </Box>
         {description}
@@ -181,9 +207,9 @@ function RelationRow({
 const listSx = { listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 0.25 } as const;
 
 /**
- * The legend and type filter. Renders a "Types" list of toggle buttons, a
- * "Relations" list when any relation is on the canvas, and the stance key when an
- * `INVOLVED_IN` edge carries a stance.
+ * The legend. Renders a "Types" list, a "Relations" list when any relation is on
+ * the canvas, and the stance key when an `INVOLVED_IN` edge carries a stance. The
+ * rows are toggle buttons only when the matching `onToggle*` prop is passed.
  *
  * @stability experimental
  */
@@ -274,19 +300,21 @@ export function GraphLegend({
  * @stability experimental
  */
 export interface LegendTypeFilter {
-  /** Types currently hidden by the `types` URL parameter. */
+  /** Types currently selected by the `types` URL parameter; empty means every type shows. */
+  selectedTypes: ReadonlySet<string>;
+  /** Types the selection hides (its complement among the known keys); empty when nothing is selected. */
   hiddenTypes: ReadonlySet<string>;
-  /** Show a hidden type or hide a shown one; writes `types` (and drops it when nothing is hidden). */
+  /** Select or deselect a type; writes `types` (and drops it when nothing is selected). */
   toggleType: (key: string) => void;
 }
 
 /**
- * The legend's type filter, kept in the existing `types` search parameter. The
- * parameter holds the SHOWN types (absent means all), so `?types=Person,Project`
- * round-trips: reload it and every other type reads as hidden.
+ * The legend's type filter, kept in the `types` search parameter with the same
+ * "select to show" meaning as the explorer's chips (#764): the parameter holds
+ * the SELECTED types, absent means all, and `?types=Person,Project` round-trips.
  *
  * @param allTypeKeys - every type key the filter knows (the ontology's node types).
- * @returns The hidden types and a toggle that writes the URL.
+ * @returns The selected and hidden types and a toggle that writes the URL.
  *
  * @stability experimental
  */
@@ -294,27 +322,31 @@ export function useLegendTypeFilter(allTypeKeys: readonly string[]): LegendTypeF
   const [searchParams, setSearchParams] = useSearchParams();
   const typesParam = searchParams.get('types');
   const keysKey = allTypeKeys.join('\n');
-  const hiddenTypes = useMemo(
-    () => hiddenFromShown(typesParam, keysKey ? keysKey.split('\n') : []),
+  const selectedTypes = useMemo(
+    () => selectedTypesFromParam(typesParam, keysKey ? keysKey.split('\n') : []),
     [typesParam, keysKey],
+  );
+  const hiddenTypes = useMemo(
+    () => hiddenFromSelected(selectedTypes, keysKey ? keysKey.split('\n') : []),
+    [selectedTypes, keysKey],
   );
   const toggleType = useCallback(
     (key: string) => {
-      const next = new Set(hiddenTypes);
+      const next = new Set(selectedTypes);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      const shown = shownParamFromHidden(next, keysKey ? keysKey.split('\n') : []);
+      const param = typesParamFromSelected(next, keysKey ? keysKey.split('\n') : []);
       setSearchParams(
         (previous) => {
           const params = new URLSearchParams(previous);
-          if (shown === null) params.delete('types');
-          else params.set('types', shown);
+          if (param === null) params.delete('types');
+          else params.set('types', param);
           return params;
         },
         { replace: true },
       );
     },
-    [hiddenTypes, keysKey, setSearchParams],
+    [selectedTypes, keysKey, setSearchParams],
   );
-  return { hiddenTypes, toggleType };
+  return { selectedTypes, hiddenTypes, toggleType };
 }

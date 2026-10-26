@@ -508,44 +508,91 @@ describe('GraphExplorerPage — the 300-node cap', () => {
 });
 
 describe('GraphExplorerPage — filters and time', () => {
-  it('a type chip writes ?types=, prunes loaded nodes and narrows later requests', async () => {
+  // The type chips SELECT what shows (#764), like the /graph index's chips: none selected = all.
+  const typeChip = (name: string, pressed: boolean) =>
+    screen.getAllByRole('button', { name, pressed }).find((el) => el.classList.contains('MuiChip-root'))!;
+
+  it('a type chip selects what shows: ?types= lists it, the seed goes too, and later requests carry exactly it', async () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
     expect(within(canvas).getByRole('button', { name: 'Q3 planning' })).toBeInTheDocument();
+    // Nothing selected: every chip reads unpressed, and every type shows.
+    await waitFor(() => expect(typeChip('Organizations', false)).toBeInTheDocument());
+    expect(typeChip('People', false)).toBeInTheDocument();
 
-    // Two controls toggle a type (the filter chip and the legend row); the chip is the one in the filters.
-    const chip = (pressed: boolean) =>
-      screen.getAllByRole('button', { name: 'Meetings', pressed }).find((el) => el.classList.contains('MuiChip-root'))!;
-    await screen.findAllByRole('button', { name: 'Meetings', pressed: true });
-    await user.click(chip(true));
+    await user.click(typeChip('Organizations', false));
     await waitFor(() =>
       expect(within(canvas).queryByRole('button', { name: 'Q3 planning' })).not.toBeInTheDocument(),
     );
-    const shown = currentUrl().searchParams.get('types')?.split(',') ?? [];
-    expect(shown).not.toContain('Meeting');
-    expect(shown).toContain('Person');
-    expect(chip(false)).toBeInTheDocument();
+    expect(currentUrl().searchParams.get('types')).toBe('Organization');
+    expect(typeChip('Organizations', true)).toBeInTheDocument();
+    // The Person seed is filtered like any node; ACME, fetched from it, stays.
+    expect(within(canvas).queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument();
+    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toBeInTheDocument();
 
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
     await user.click(await screen.findByRole('button', { name: 'Expand' }));
     await waitFor(() => expect(bodies).toHaveLength(2));
-    expect(bodies[1].types).not.toContain('Meeting');
-    expect(bodies[1].types).toContain('Person');
+    expect(bodies[1].types).toEqual(['Organization']);
+
+    // Deselecting the last chip means "all" again: the parameter goes and the seed comes back.
+    await user.click(typeChip('Organizations', true));
+    await waitFor(() => expect(currentUrl().searchParams.get('types')).toBeNull());
+    expect(await within(canvas).findByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
+    const last = bodies[bodies.length - 1];
+    expect(last.nodeIds).toContain(JOE_ID);
+    expect(last.types).toBeUndefined();
   });
 
-  it('places the legend in the facets and a legend row toggles the same ?types= parameter', async () => {
+  it('never sends an empty types list: every request names exactly the selection or none at all', async () => {
     const user = userEvent.setup();
     renderExplorer();
-    const canvas = await canvasReady();
-    const legend = await screen.findByRole('region', { name: 'Legend' });
-    expect(within(legend).getByRole('button', { name: 'Meetings', pressed: true })).toBeInTheDocument();
+    await canvasReady();
+    await waitFor(() => expect(typeChip('Meetings', false)).toBeInTheDocument());
+    await user.click(typeChip('Meetings', false));
+    await user.click(typeChip('People', false));
+    await waitFor(() => expect(currentUrl().searchParams.get('types')).toBe('Person,Meeting'));
+    await user.click(typeChip('Meetings', true));
+    await user.click(typeChip('People', true));
+    await waitFor(() => expect(currentUrl().searchParams.get('types')).toBeNull());
+    await waitFor(() => expect(bodies.length).toBeGreaterThan(1));
+    for (const body of bodies) {
+      if (body.types !== undefined) expect(body.types.length).toBeGreaterThan(0);
+    }
+  });
 
-    await user.click(within(legend).getByRole('button', { name: 'Meetings', pressed: true }));
-    await waitFor(() => expect(currentUrl().searchParams.get('types')?.split(',') ?? []).not.toContain('Meeting'));
-    expect(within(canvas).queryByRole('button', { name: 'Q3 planning' })).not.toBeInTheDocument();
-    // Hidden, it stays in the legend so it can be turned back on.
-    expect(within(screen.getByRole('region', { name: 'Legend' })).getByRole('button', { name: 'Meetings', pressed: false })).toBeInTheDocument();
+  it('places the legend in the facets, display-only: the chips are the one type filter', async () => {
+    renderExplorer();
+    await canvasReady();
+    const legend = await screen.findByRole('region', { name: 'Legend' });
+    expect(within(legend).getByText('Meetings')).toBeInTheDocument();
+    expect(within(legend).queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('Products only with a Person seed: the canvas is empty and says so, and Clear filters brings it back', async () => {
+    const user = userEvent.setup();
+    renderExplorer(`/graph/explore?seed=${JOE_ID}&types=Product`);
+    expect(await screen.findByText('No Products in your graph yet')).toBeInTheDocument();
+    expect(bodies[0].types).toEqual(['Product']);
+    // Nothing on the canvas — the Person seed included — and no spinner.
+    expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Loading the graph')).not.toBeInTheDocument();
+    expect(typeChip('Products', true)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('types')).toBeNull());
+    const canvas = await screen.findByTestId('fake-canvas');
+    expect(await within(canvas).findByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(screen.queryByText('No Products in your graph yet')).not.toBeInTheDocument();
+  });
+
+  it('several selected types that match nothing read "Nothing matches these filters"', async () => {
+    renderExplorer(`/graph/explore?seed=${JOE_ID}&types=Product,Topic`);
+    expect(await screen.findByText('Nothing matches these filters')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
   });
 
   it('sends ?types= with the very first request', async () => {
@@ -555,16 +602,21 @@ describe('GraphExplorerPage — filters and time', () => {
     expect(within(canvas).queryByRole('button', { name: 'Q3 planning' })).not.toBeInTheDocument();
   });
 
-  it('a domain chip hides its types and relation types together', async () => {
+  it('a domain chip selects all of its node types at once, and leaves the relations alone', async () => {
     const user = userEvent.setup();
     renderExplorer();
-    await canvasReady();
-    await user.click(await screen.findByRole('button', { name: 'Work domain', pressed: true }));
-    expect(await screen.findByRole('button', { name: 'Work domain', pressed: false })).toBeInTheDocument();
-    const shown = currentUrl().searchParams.get('types')?.split(',') ?? [];
-    expect(shown).not.toContain('Project');
-    expect(shown).not.toContain('commitment');
-    expect(screen.getByRole('button', { name: /Relations \(\d+ hidden\)/ })).toBeInTheDocument();
+    const canvas = await canvasReady();
+    await user.click(await screen.findByRole('button', { name: 'Work domain', pressed: false }));
+    expect(await screen.findByRole('button', { name: 'Work domain', pressed: true })).toBeInTheDocument();
+    expect(currentUrl().searchParams.get('types')).toBe('Project,Product,commitment,decision,risk');
+    expect(currentUrl().searchParams.get('relTypes')).toBeNull();
+    await waitFor(() =>
+      expect(within(canvas).queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Relations' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Work domain', pressed: true }));
+    await waitFor(() => expect(currentUrl().searchParams.get('types')).toBeNull());
   });
 
   it('the relation menu toggles one relation type', async () => {
