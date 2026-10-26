@@ -321,7 +321,7 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
   // Filters
   // ---------------------------------------------------------------------------
 
-  it('filters by relation type and by node type, keeping the seed', async () => {
+  it('filters by relation type and by node type; the seed obeys the type filter (#764)', async () => {
     const { user, g } = await owner();
     const a = await g.entity('Person', 'A');
     const acme = await g.entity('Organization', 'Acme');
@@ -330,8 +330,9 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     await g.relation('REPORTS_TO', a, jane, { valid: '[2019-01-01,)', precision: 'year' });
 
     expect(ids(await nbhd(user.id, a, { relationTypes: 'WORKS_FOR' }))).toEqual([a, acme].sort());
-    expect(ids(await nbhd(user.id, a, { types: 'Organization' }))).toEqual([a, acme].sort());
+    expect(ids(await nbhd(user.id, a, { types: 'Organization' }))).toEqual([acme]);
     expect(ids(await nbhd(user.id, a, { types: 'Person' }))).toEqual([a, jane].sort());
+    expect(ids(await nbhd(user.id, a, { types: 'Product' }))).toEqual([]);
 
     await expect(nbhd(user.id, a, { types: 'Spaceship' })).rejects.toThrow(BadRequestException);
     await expect(nbhd(user.id, a, { relationTypes: 'LOVES' })).rejects.toThrow(BadRequestException);
