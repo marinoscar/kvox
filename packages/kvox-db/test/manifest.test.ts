@@ -43,7 +43,7 @@ describe('migrations/manifest.json', () => {
       expect(fragments.has(entry.slice), `${entry.id} slice ${entry.slice}`).toBe(true);
       for (const table of entry.requiresHostTables) expect(KVOX_HOST_TABLES).toContain(table);
     }
-    expect(ids).toHaveLength(21);
+    expect(ids).toHaveLength(22);
   });
 
   it('derives requiresHostTables from the foreign keys in the SQL', () => {
@@ -75,7 +75,7 @@ describe('inventories', () => {
     expect(KVOX_EXTENSIONS[0]?.minVersion).toBe('0.5.0');
   });
 
-  it('lists the seventeen special indexes of the domain by name', () => {
+  it('lists the eighteen special indexes of the domain by name', () => {
     expect(KVOX_RAW_SQL_INDEXES.map((index) => index.name).sort()).toEqual(
       [
         'ask_messages_one_running_turn_uniq_idx',
@@ -90,6 +90,7 @@ describe('inventories', () => {
         'kg_proposals_owner_import_extracting_uniq_idx',
         'kg_relations_speaker_link_uniq_idx',
         'kg_relations_valid_gist_idx',
+        'kg_synonyms_normalized_gin_idx',
         'notes_search_vector_idx',
         'search_embeddings_embedding_hnsw_idx',
         'transcript_segments_search_vector_idx',
