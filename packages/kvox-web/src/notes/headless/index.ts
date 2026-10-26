@@ -14,6 +14,7 @@ export * from './clients/noteLibraries.js';
 export * from './hooks/useNotes.js';
 export * from './hooks/useNoteTemplates.js';
 export * from './hooks/useNoteGenerationContext.js';
+export * from './hooks/useNoteAiRevision.js';
 export * from './hooks/useTemplatePreview.js';
 export * from './hooks/useNoteLibraries.js';
 
