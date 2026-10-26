@@ -1,5 +1,13 @@
 # @marinoscar/kvox-eval
 
+## 0.1.0-next.19
+
+### Patch Changes
+
+- 5bc8ee9: Dependency and peer ranges on the platform packages move from 0.1.0-next.12 to 0.1.0-next.13, the release whose CLI engine decides the compose project by the bind-port holder and refuses a mismatching deploy run (`bind-port-owner`). No code in these packages changes.
+- a0672cb: Dependency and peer ranges on the platform packages move from 0.1.0-next.13 to 0.1.0-next.14, the release whose CLI engine preflights every host port the stack publishes (`stack-ports-free`). No code in these packages changes.
+- 253c539: Dependency and peer ranges on the platform packages move from 0.1.0-next.14 to 0.1.0-next.16, the releases whose CLI engine picks free host ports for each app on a shared server and lets an app choose the manifests the deploy version step writes (`deploy.versionedManifests`). No code in these packages changes.
+
 ## 0.1.0-next.18
 
 ### Patch Changes
