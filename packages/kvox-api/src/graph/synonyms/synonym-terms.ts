@@ -11,7 +11,11 @@
 import { GraphValidationError } from '../write/graph-write.errors.js';
 import { normalizeAlias } from '../write/normalize.js';
 
-/** The caller's terms, de-duplicated by normalized form, in input order. */
+/**
+ * The caller's terms, de-duplicated by normalized form, in input order.
+ *
+ * @stability experimental
+ */
 export interface NormalizedSynonymTerms {
   /** The display forms, trimmed, as the caller wrote them. */
   terms: string[];
@@ -46,7 +50,11 @@ export function groupAppliesToType(groupType: string | null, type: string): bool
   return groupType === null || groupType === type;
 }
 
-/** The synonyms of `names`, from `groups` (each `{ normalized, entityType }`), excluding `names` themselves. */
+/**
+ * The synonyms of `names`, from `groups` (each `{ normalized, entityType }`), excluding `names` themselves.
+ *
+ * @stability experimental
+ */
 export function expandNamesWith(
   names: readonly string[],
   type: string,
