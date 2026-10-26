@@ -178,15 +178,33 @@ describe('ringPosition', () => {
 });
 
 describe('applyFilters', () => {
-  it('drops non-qualifying types, never a seed', () => {
+  it('drops non-qualifying types, a seed included, and keeps what was fetched from the seed (#764)', () => {
     const state = loaded();
     const { removed } = applyFilters(state, new Set(['Organization']), null);
-    expect(state.graph.hasNode(JOE_ID)).toBe(true);
+    // The Person seed leaves the canvas; ACME, fetched FROM it, stays.
+    expect(state.graph.hasNode(JOE_ID)).toBe(false);
     expect(state.graph.hasNode(ACME_ID)).toBe(true);
     expect(state.graph.hasNode(ANA_ID)).toBe(false);
     expect(state.graph.hasNode(Q3_MEETING_ID)).toBe(false);
-    expect(removed).toContain(ANA_ID);
-    expect(removed).not.toContain(JOE_ID);
+    expect(removed).toEqual(expect.arrayContaining([JOE_ID, ANA_ID]));
+    // The seed's id stays: it anchors the request that relaxes the filter.
+    expect(state.seedIds).toEqual([JOE_ID]);
+  });
+
+  it('a later pass with every seed already gone only drops by type', () => {
+    const state = loaded();
+    applyFilters(state, new Set(['Organization']), null);
+    const { removed } = applyFilters(state, new Set(['Organization']), null);
+    expect(removed).toEqual([]);
+    expect(state.graph.hasNode(ACME_ID)).toBe(true);
+  });
+
+  it('a type no node has leaves the canvas empty — Products only with a Person seed (#764)', () => {
+    const state = loaded();
+    applyFilters(state, new Set(['Product']), null);
+    expect(state.graph.order).toBe(0);
+    expect(state.seedIds).toEqual([JOE_ID]);
+    expect(visibleNodeIds(state)).toEqual([]);
   });
 
   it('drops edges of hidden relation types and the nodes left unreachable', () => {
@@ -211,11 +229,11 @@ describe('applyFilters', () => {
 });
 
 describe('visibleNodeIds', () => {
-  it('always includes seeds, and excludes hidden types', () => {
+  it('excludes hidden types, seeds included (#764)', () => {
     const state = loaded();
     state.hiddenTypes = new Set(['Person', 'Meeting']);
     const visible = visibleNodeIds(state);
-    expect(visible).toContain(JOE_ID);
+    expect(visible).not.toContain(JOE_ID);
     expect(visible).toContain(ACME_ID);
     expect(visible).not.toContain(ANA_ID);
     expect(visible).not.toContain(Q3_MEETING_ID);

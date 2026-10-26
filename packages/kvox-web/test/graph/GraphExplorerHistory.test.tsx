@@ -218,13 +218,13 @@ describe('URL state — relation types (GIC-17)', () => {
     await waitFor(() => expect(currentUrl().searchParams.has('relTypes')).toBe(false));
   });
 
-  it('writes types and relTypes together when a domain chip is toggled', async () => {
+  it('a domain chip selects its node types into ?types= and leaves ?relTypes= alone (#764)', async () => {
     const user = userEvent.setup();
-    renderExplorer();
+    renderExplorer(`/graph/explore?seed=${JOE_ID}&relTypes=WORKS_FOR`);
     await canvasReady();
-    await user.click(await screen.findByRole('button', { name: 'Work domain', pressed: true }));
+    await user.click(await screen.findByRole('button', { name: 'Work domain', pressed: false }));
     await waitFor(() => expect(currentUrl().searchParams.has('types')).toBe(true));
-    expect(currentUrl().searchParams.has('relTypes')).toBe(true);
+    expect(currentUrl().searchParams.get('relTypes')).toBe('WORKS_FOR');
   });
 
   it('leaves the keys other stories write alone', async () => {

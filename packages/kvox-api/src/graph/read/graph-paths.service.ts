@@ -299,8 +299,8 @@ export class GraphPathsService {
     degree: Map<string, number>,
   ): Promise<GraphNode[]> {
     const [entities, items] = await Promise.all([
-      this.neighborhood.loadEntities(tx, ownerId, ids, [from, to], undefined),
-      this.neighborhood.loadItems(tx, ownerId, ids, [from, to], undefined),
+      this.neighborhood.loadEntities(tx, ownerId, ids, undefined),
+      this.neighborhood.loadItems(tx, ownerId, ids, undefined),
     ]);
     const rank = (id: string): number => (id === from ? 0 : id === to ? 1 : 2);
     const nodes: GraphNode[] = [...entities, ...items]

@@ -278,7 +278,7 @@ export type GraphSlice = z.infer<typeof graphSliceSchema>;
  */
 export const neighborhoodQuerySchema = z.object({
   hops: z.coerce.number().int().min(1).max(2).default(1),
-  types: csv.describe('Comma-separated entity types / item kinds to keep (the seed is always kept).'),
+  types: csv.describe('Comma-separated entity types / item kinds to keep (absent or blank keeps every type; seeds obey the filter).'),
   relationTypes: csv.describe('Comma-separated relation types to walk along.'),
   as_of: asOfParam,
   limit: z.coerce.number().int().min(1).max(GRAPH_NODE_CAP).default(150),

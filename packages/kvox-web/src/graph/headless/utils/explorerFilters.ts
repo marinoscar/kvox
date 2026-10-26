@@ -121,7 +121,57 @@ export function nodeTypeLabel(key: string, ontology: GraphOntology | null): stri
 }
 
 /**
- * Parse `?types=Person,Organization` into the set of HIDDEN types (its complement).
+ * Parse a `?types=Product,Person` param into the SELECTED types (#764). The
+ * explorer's type chips are "select to show": an EMPTY set means no type filter
+ * (every type shows), a non-empty set means only those types show.
+ *
+ * Keys the ontology does not know (a stale link, a domain switched off) are
+ * dropped when `all` is non-empty, so a link naming only unknown types reads as
+ * "no filter" rather than "show nothing".
+ *
+ * @param param - The raw `types` search parameter (`null` when absent).
+ * @param all - Every node type key the filter knows, in ontology order.
+ * @returns The selected keys; empty means all types.
+ *
+ * @stability experimental
+ */
+export function selectedTypesFromParam(param: string | null, all: readonly string[]): Set<string> {
+  if (!param) return new Set();
+  const listed = param.split(',').map((s) => s.trim()).filter(Boolean);
+  if (all.length === 0) return new Set(listed);
+  const known = new Set(all);
+  return new Set(listed.filter((key) => known.has(key)));
+}
+
+/**
+ * The inverse of {@link selectedTypesFromParam}: the selected keys in ontology
+ * order, or `null` (drop the param) when nothing is selected, which means all.
+ * Never an empty string: an empty list is not a way to say "all".
+ *
+ * @stability experimental
+ */
+export function typesParamFromSelected(selected: ReadonlySet<string>, all: readonly string[]): string | null {
+  if (selected.size === 0) return null;
+  const ordered = all.filter((key) => selected.has(key));
+  // Keys outside `all` keep their place at the end, so nothing selected is lost.
+  for (const key of selected) if (!all.includes(key)) ordered.push(key);
+  return ordered.length > 0 ? ordered.join(',') : null;
+}
+
+/**
+ * The node types a selection HIDES: every known type outside it, or none when
+ * nothing is selected (no filter). The explorer's model and its requests work
+ * from this complement.
+ *
+ * @stability experimental
+ */
+export function hiddenFromSelected(selected: ReadonlySet<string>, all: readonly string[]): Set<string> {
+  if (selected.size === 0) return new Set();
+  return new Set(all.filter((key) => !selected.has(key)));
+}
+
+/**
+ * Parse a "shown" list param (`?relTypes=WORKS_FOR,REPORTS_TO`) into the set of HIDDEN keys (its complement). Absent or empty means nothing is hidden.
  *
  * @stability experimental
  */
@@ -133,13 +183,16 @@ export function hiddenFromShown(shownParam: string | null, all: readonly string[
 }
 
 /**
- * The inverse: `null` when nothing is hidden (the param is dropped).
+ * The inverse of {@link hiddenFromShown}: `null` when nothing is hidden (the
+ * param is dropped), and also `null` when EVERY key is hidden — an empty list
+ * would read back as "all", so it is never written.
  *
  * @stability experimental
  */
 export function shownParamFromHidden(hidden: ReadonlySet<string>, all: readonly string[]): string | null {
   if (hidden.size === 0) return null;
-  return all.filter((key) => !hidden.has(key)).join(',');
+  const shown = all.filter((key) => !hidden.has(key));
+  return shown.length > 0 ? shown.join(',') : null;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

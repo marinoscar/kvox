@@ -52,6 +52,13 @@ describe('filters', () => {
     expect(badRequest(() => resolveNodeTypes(schema, ['Person', 'Spaceship'])).details.unknown).toEqual(['Spaceship']);
   });
 
+  it('treats an explicitly empty types array as "no node types", but an absent or blank value as no filter', () => {
+    expect(resolveNodeTypes(schema, [])).toEqual({ entityTypes: [], itemKinds: [] });
+    expect(resolveNodeTypes(schema, '')).toBeUndefined();
+    expect(resolveNodeTypes(schema, ' , ')).toBeUndefined();
+    expect(resolveNodeTypes(schema, undefined)).toBeUndefined();
+  });
+
   it('accepts relation types of any representation', () => {
     expect(resolveRelationTypes(schema, 'WORKS_FOR,ABOUT')).toEqual(['WORKS_FOR', 'ABOUT']);
     expect(badRequest(() => resolveRelationTypes(schema, 'LOVES')).message).toContain('LOVES');

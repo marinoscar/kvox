@@ -144,7 +144,7 @@ export type ExplorerGraph = MultiDirectedGraph<ExplorerNodeAttributes, ExplorerE
 export interface ExplorerState {
   /** The graph the canvas draws. */
   graph: ExplorerGraph;
-  /** Ids of the nodes the exploration started from; they survive filters and are never hidden. */
+  /** Ids of the nodes the exploration started from. A type filter can take a seed off the canvas, but its id stays here as the anchor of the next request; "Hide" never removes one. */
   seedIds: string[];
   /** Nodes whose one-hop neighbourhood has been requested. */
   expanded: Set<string>;
@@ -845,11 +845,18 @@ export function remainingCapacity(state: ExplorerState): number {
 }
 
 /**
- * Drop every non-seed node whose type is not allowed, every edge whose
- * relation type is not allowed (`null` = all relation types), and then every
- * non-seed node that no longer connects to a seed — a node reached only along
- * a now-hidden relation would never have been fetched under this filter.
- * Seeds never disappear.
+ * Drop every node whose type is not allowed — a seed included (#764: a filter
+ * that asks for Products shows Products, not the Person the exploration started
+ * from) — every edge whose relation type is not allowed (`null` = all relation
+ * types), and then every node that no longer connects to a seed: a node reached
+ * only along a now-hidden relation, or through a now-hidden node, would never
+ * have been fetched under this filter.
+ *
+ * A seed whose type is filtered out leaves the canvas but stays in
+ * `state.seedIds`: it still anchors the request when the filter is relaxed, and
+ * what was fetched FROM it (its allowed neighbours) stays. When no seed is on the
+ * canvas at all (an earlier pass took them), there is nothing to measure
+ * reachability from, so this pass only drops by type and relation.
  */
 export function applyFilters(
   state: ExplorerState,
@@ -858,12 +865,11 @@ export function applyFilters(
 ): { removed: string[] } {
   const { graph } = state;
   const seeds = new Set(state.seedIds);
-  const removed: string[] = [];
 
+  const typeRemoved = new Set<string>();
   graph.forEachNode((id, attrs) => {
-    if (!seeds.has(id) && !allowedTypes.has(attrs.entityType)) removed.push(id);
+    if (!allowedTypes.has(attrs.entityType)) typeRemoved.add(id);
   });
-  for (const id of removed) graph.dropNode(id);
 
   if (allowedRelationTypes) {
     const dropEdges: string[] = [];
@@ -876,17 +882,26 @@ export function applyFilters(
     for (const id of dropEdges) graph.dropEdge(id);
   }
 
-  const reachable = reachableFromSeeds(state);
-  const orphans = graph.filterNodes((id) => !seeds.has(id) && !reachable.has(id));
-  for (const id of orphans) graph.dropNode(id);
-  removed.push(...orphans);
+  // Reachability is measured BEFORE the filtered nodes go, with the seeds as
+  // roots even when their own type is filtered out: what was fetched from a seed
+  // stays. A filtered non-seed node is never walked through.
+  const anchored = [...seeds].some((id) => graph.hasNode(id));
+  const orphans: string[] = [];
+  if (anchored) {
+    const reachable = reachableFromSeeds(state, typeRemoved);
+    graph.forEachNode((id) => {
+      if (!typeRemoved.has(id) && !reachable.has(id)) orphans.push(id);
+    });
+  }
 
+  const removed = [...typeRemoved, ...orphans];
+  for (const id of removed) graph.dropNode(id);
   for (const id of removed) state.expanded.delete(id);
   refreshCurvature(graph);
   return { removed: removed.sort() };
 }
 
-function reachableFromSeeds(state: ExplorerState): Map<string, number> {
+function reachableFromSeeds(state: ExplorerState, blocked?: ReadonlySet<string>): Map<string, number> {
   const { graph } = state;
   const depth = new Map<string, number>();
   const queue: string[] = [];
@@ -900,7 +915,7 @@ function reachableFromSeeds(state: ExplorerState): Map<string, number> {
     const id = queue.shift()!;
     const next = depth.get(id)! + 1;
     graph.forEachNeighbor(id, (neighbour) => {
-      if (!depth.has(neighbour)) {
+      if (!depth.has(neighbour) && !blocked?.has(neighbour)) {
         depth.set(neighbour, next);
         queue.push(neighbour);
       }
@@ -909,12 +924,9 @@ function reachableFromSeeds(state: ExplorerState): Map<string, number> {
   return depth;
 }
 
-/** Seeds always; everything else unless its type is hidden. */
+/** Every node whose type is not hidden — a seed included (#764). */
 export function visibleNodeIds(state: ExplorerState): string[] {
-  const seeds = new Set(state.seedIds);
-  return state.graph.filterNodes(
-    (id, attrs) => seeds.has(id) || !state.hiddenTypes.has(attrs.entityType),
-  );
+  return state.graph.filterNodes((_id, attrs) => !state.hiddenTypes.has(attrs.entityType));
 }
 
 /** "Hide" a node from this session. Never a seed. Returns whether it was removed. */
@@ -951,7 +963,7 @@ export interface ExplorerListRow {
   type: string;
   nodeKind: 'entity' | 'item';
   degree: number;
-  /** Hops from the nearest seed; `Infinity` never happens for a filtered graph. */
+  /** Hops from the nearest seed; `Infinity` when a type filter took every seed off the canvas. */
   depthFromSeed: number;
   isSeed: boolean;
   expandable: boolean;
@@ -1126,9 +1138,10 @@ export function relationCounts(state: ExplorerState): Map<string, number> {
 }
 
 /**
- * The legend for the canvas now. A type or relation appears when it has nodes or
- * edges on the canvas or is hidden; the others would be rows of zeros. Order is
- * the options' (the ontology's) own.
+ * The legend for the canvas now. A node type appears when it has nodes on the
+ * canvas (#764: the type filter is the facets' chips, not the legend); a relation
+ * when it has edges on the canvas or is hidden. Order is the options' (the
+ * ontology's) own.
  *
  * @stability experimental
  */
@@ -1144,7 +1157,9 @@ export function legendModel(
   for (const option of nodeTypes) {
     const count = counts.get(option.key) ?? 0;
     const shown = !state.hiddenTypes.has(option.key);
-    if (count === 0 && shown) continue;
+    // The legend explains what is ON the canvas; the type filter lives in the
+    // facets' chips (#764), so a hidden or absent type is not a row here.
+    if (count === 0) continue;
     const encoding = encodingFor(option.key, mode);
     types.push({
       key: option.key,
