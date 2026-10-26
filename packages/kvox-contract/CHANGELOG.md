@@ -1,5 +1,37 @@
 # @marinoscar/kvox-contract
 
+## 0.1.0-next.20
+
+### Minor Changes
+
+- 97585da: Add the `kg_synonyms` table (`KgSynonym`): the owner's personal synonym dictionary for the knowledge graph, with a GIN index on `normalized` and a cardinality CHECK.
+
+  Add the personal synonym dictionary (issue #767): `GET/POST /graph/synonyms`, `PATCH/DELETE /graph/synonyms/{id}` (`GraphSynonymsController`, `SynonymsService`, contract `synonyms.ts`). Entity resolution matches a mention against every term of a synonym group that contains one of its names, the possible-duplicates list proposes same-type entities whose names share a group (new reason `synonym`, score 0.9) and entity search finds an entity under any name of a matching group.
+
+  Add the Synonyms page (`/graph/synonyms`, `GraphSynonymsPage`) with the `listSynonyms`/`createSynonym`/`updateSynonym`/`deleteSynonym` client and the `useGraphSynonyms` hook, "Synonyms" links on Possible duplicates and the Knowledge index menu, and an "Also add these names to my synonyms" option in the merge dialog.
+
+- b9ac49e: Possible duplicates (#766). `@marinoscar/kvox-api`: `GET /api/graph/duplicates` (`graph:read`; `type`, `limit`) lists pairs of the caller's live entities that probably are one thing, from a bounded name pass (whole-word containment, initials such as "EY" for "Ernst & Young", shared name or alias, `pg_trgm` similarity of 0.6 or more; same type only, distinct pairs excluded) and from the open `resolution` proposals, each with `reasons`, a deterministic `score` and its source. `POST /api/graph/duplicates/scan` (`graph:write`) queues `kg.resolve` with reason `manual` and joins a run already in flight (`alreadyRunning`). The pure name signals live in `resolution/duplicate-names.ts`. `@marinoscar/kvox-contract/graph`: `listDuplicatesQuerySchema`, `listDuplicatesResponseSchema`, `duplicatesScanResponseSchema`, `DUPLICATE_REASONS`, `DUPLICATE_SOURCES`.
+
+  `@marinoscar/kvox-web/graph`: a Possible duplicates page at `/graph/duplicates` (`graph:read`) lists each pair side by side with types, aliases, mention counts and the reasons in words, filters by type, and lets a `graph:write` user Merge (choosing which name to keep, with Undo), mark Not the same, Skip for the session, or "Find more duplicates" (the deeper scan); the Knowledge index and the Review Queue link to it with a count badge. New exports: `listDuplicates`, `scanDuplicates`, `useGraphDuplicates`, `useScanDuplicates`, `duplicatePairKey`, `GraphDuplicatesPage`, `DuplicatesLink`.
+
+- d5ecbce: Graph overview for a full-graph explorer (#768): `GET /api/graph/overview` takes optional `types`, `from` and `to` filters (positions unchanged) and returns `typeCounts`; a commit, merge or merge reversal now queues one coalesced `kg.graph_layout` re-layout regardless of the 20 % threshold. `GraphOverviewService` takes `GraphOntologyService` as its third constructor argument.
+
+  Also: `edges=true` returns the induced live relations between the returned nodes (`edges`, `edgesTruncated`, capped at 20000), so the explorer can draw the whole graph.
+
+  Web: `/graph/explore` opens on the FULL graph (#768). A bare visit loads `GET /api/graph/overview?edges=true` and draws every node and edge at its stable snapshot position (static layout, colour by type, size by degree, labels only for the best-connected nodes), as a distinct mode with the server's 5,000-node / 20,000-edge cap instead of the explorer's 300; it no longer seeds from the five recently viewed entities. Focus (or a double-click) on a node opens the focused, expandable view seeded with it, and its new "Full graph" button goes back. The filters sit in one row under the toolbar (`ExplorerFilterBar`): search, the type chips with live counts from `typeCounts` (an empty type is disabled), and ONE Time control (`ExplorerTimeControl`: All time, Last 30 days, Last 90 days, Last year, Custom range) that replaces the TimeBar strip and the as-of slider on the page. In the full view the type filter and time range go to the server; in the focused view the range still sets `as_of` to its end when that is in the past, and nodes with no evidence in the window are now filtered off the canvas instead of dimmed. A "Building your graph map…" state with "Check again" covers a graph with no snapshot yet, a banner says when the snapshot was trimmed, and the focused view's default layout is chosen again on every rebuild. New: `useGraphFullView`, `fullViewBudgets`, an optional `labelSizeThreshold` budget, `ExplorerToolbar`'s `countLabel` and `ExplorerFilters`' `hideTypes`.
+
+- 669e957: Merge graph entities from the UI, with undo, and show every alias (#765).
+
+  - `@marinoscar/kvox-api`: `GET /api/graph/entities/:id/merges` lists the entities merged into an entity, newest first, each with `reversible`. `GET /api/graph/entities/:id` answers 200 for a merged tombstone (`reviewStatus: 'merged'`, `mergedIntoId` set to the survivor, zero counts) instead of 404, so a client can redirect.
+  - `@marinoscar/kvox-contract`: `listEntityMergesResponseSchema`; `graphEntityDetailSchema.reviewStatus` adds `'merged'` and the optional `mergedIntoId`.
+  - `@marinoscar/kvox-web`: the headless client functions `mergeEntity`, `reverseMerge`, `recordDistinctPair` and `listEntityMerges`, and the hooks `useEntityMerges` and `useEntityMergeActions` (with `mergeErrorMessage`). The entity page's menu offers "Merge into…" for every type to a `graph:write` viewer: search the same type, preview both side by side, choose which name to keep, then merge; the page opens the survivor and offers Undo. A tombstone's URL redirects to its survivor, a "Merged from" section lists merges with Undo, and the header shows every alias under "Also known as" with a "+n" that expands; a writer clicking a name opens the edit dialog.
+
+### Patch Changes
+
+- 74c0ddb: Graph explorer type filter selects what shows (#764). The type and domain chips now work like the `/graph` index's chips: with none selected every type shows, and selecting "Products" shows only Products. Seeds are filtered too; a filtered seed still anchors the next request. A filter that leaves the canvas empty shows "No Products in your graph yet" (or "Nothing matches these filters") with a Clear filters button, and an empty `types` list is never sent to the API. `?types=` still lists the shown types (absent means all). The legend is display-only in the explorer. `GraphLegend`'s `onToggleType` is now optional. `useLegendTypeFilter` returns `selectedTypes`. New headless helpers: `selectedTypesFromParam`, `typesParamFromSelected` and `hiddenFromSelected`.
+
+  API: the explore and neighbourhood type filter no longer exempts seeds, and an explicitly empty `types` array matches nothing (absent or blank still means every type).
+
 ## 0.1.0-next.19
 
 ### Patch Changes
