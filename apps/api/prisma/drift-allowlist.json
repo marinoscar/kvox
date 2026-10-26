@@ -31,6 +31,11 @@
       "removeIn": "permanent"
     },
     {
+      "statement": "DROP INDEX \"kg_synonyms_normalized_gin_idx\";",
+      "reason": "kg_synonyms_normalized_gin_idx is a GIN index on a text[] column declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
+      "removeIn": "permanent"
+    },
+    {
       "statement": "DROP INDEX \"notes_search_vector_idx\";",
       "reason": "notes_search_vector_idx is a GIN on a generated tsvector column index declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
       "removeIn": "permanent"

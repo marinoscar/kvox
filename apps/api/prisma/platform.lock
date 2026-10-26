@@ -24,7 +24,8 @@
     "20260927050000_ai_token_limits_follow_model",
     "20261016120000_transcripts_org_id",
     "20261021200000_add_kg_item_kind_risk",
-    "20261023033028_add_note_libraries"
+    "20261023033028_add_note_libraries",
+    "20261026184116_add_kg_synonyms"
   ],
   "deviations": [
     {
@@ -557,6 +558,10 @@
     {
       "definition": "CREATE INDEX kg_relations_valid_gist_idx ON public.kg_relations USING gist (valid)",
       "name": "kg_relations_valid_gist_idx"
+    },
+    {
+      "definition": "CREATE INDEX kg_synonyms_normalized_gin_idx ON public.kg_synonyms USING gin (normalized)",
+      "name": "kg_synonyms_normalized_gin_idx"
     },
     {
       "definition": "CREATE INDEX notes_search_vector_idx ON public.notes USING gin (search_vector)",
