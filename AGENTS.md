@@ -85,6 +85,7 @@ Every improvement to the CLI (`apps/cli`, `install.sh`, `apps/cli/bootstrap-vps.
 
 - PATCH by default; MINOR for a new command or subcommand. **One bump per PR**, not per commit.
 - Then run `npm install --package-lock-only` so the lockfile's `apps/cli` entry matches; the bump is incomplete without it.
+- The deploy version step versions `apps/api`, `apps/web` and `packages/shared` only (`deploy.versionedManifests` in `apps/cli/src/app.ts`), so the CLI version is bumped by hand, never by a deploy.
 - Detail and the deploy pointers: [apps/cli/AGENTS.md](apps/cli/AGENTS.md).
 
 ## MANDATORY: Settings UI Pattern
