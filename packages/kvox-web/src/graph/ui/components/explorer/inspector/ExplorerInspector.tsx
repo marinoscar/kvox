@@ -124,7 +124,7 @@ export interface ExplorerInspectorProps {
   onShowOnCanvas: (ids: string[]) => void;
   /** Close the inspector (and unmark a multi-selection). */
   onClose: () => void;
-  /** Set the TimeBar's brush to the bucket holding an event's date (`YYYY-MM-DD` or an ISO instant): the Timeline tab's "Show in TimeBar". Without it the link is not offered. */
+  /** Set the time range to the month holding an event's date (`YYYY-MM-DD` or an ISO instant): the Timeline tab's "Show that month". Without it the link is not offered. */
   onShowInTimeBar?: (at: string) => void;
   /** The host's Ask panel (the entity page's `AskPanel` slot); without it there is no Ask tab. */
   AskPanel?: ComponentType<GraphEntityAskPanelProps>;

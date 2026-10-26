@@ -557,7 +557,7 @@ function CanvasBehaviour({
   }, [sigma, pixelRatioCap]);
 
   const labelDensity = budgets ? LABEL_DENSITY[budgets.labelDensity] : null;
-  const labelThreshold = budgets ? (budgets.constrained ? 12 : 8) : null;
+  const labelThreshold = budgets ? (budgets.labelSizeThreshold ?? (budgets.constrained ? 12 : 8)) : null;
   useEffect(() => {
     if (labelDensity !== null && labelThreshold !== null) {
       setSettings({ labelDensity, labelRenderedSizeThreshold: labelThreshold });

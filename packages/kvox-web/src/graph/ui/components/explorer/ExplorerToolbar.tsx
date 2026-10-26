@@ -65,6 +65,8 @@ export interface ExplorerToolbarProps {
   nodeCount: number;
   /** The cap in force (the budget's); defaults to `EXPLORER_NODE_CAP`. */
   nodeCap?: number;
+  /** Replaces the "n / cap" count with this text (the full view's "1,234 entities", #768): the full view has no cap of its own. */
+  countLabel?: string;
   /** "Select" mode: a tap marks nodes (touch); a drag draws a lasso (pointer). */
   selectMode: boolean;
   onToggleSelectMode: () => void;
@@ -105,6 +107,7 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
     onToggleListView,
     nodeCount,
     nodeCap = EXPLORER_NODE_CAP,
+    countLabel,
     selectMode,
     onToggleSelectMode,
     markedCount,
@@ -127,9 +130,9 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
       variant="body2"
       color="text.secondary"
       sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
-      aria-label={`${nodeCount} of ${nodeCap} nodes`}
+      aria-label={countLabel ?? `${nodeCount} of ${nodeCap} nodes`}
     >
-      {nodeCount} / {nodeCap}
+      {countLabel ?? `${nodeCount} / ${nodeCap}`}
     </Typography>
   );
 

@@ -89,6 +89,7 @@ function host(options: Options = {}): FakeKvoxWebHost {
         clusterEdges: [],
         nodes: [],
         nodesTruncated: false,
+        typeCounts: {},
       },
       'GET /graph/entities': {
         items: [{ id: 'e1', type: 'Person', label: 'Grace Hopper', aliases: [], mentionCount: 3, lastSeenAt: null }],
