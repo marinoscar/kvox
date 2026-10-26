@@ -93,6 +93,9 @@ export const graphHandlers = [
 
   http.get(`${API_BASE}/graph/entities/:id/brief`, () => HttpResponse.json({ data: briefFixture() })),
 
+  // #765: nothing merged into any entity by default; a test overrides it.
+  http.get(`${API_BASE}/graph/entities/:id/merges`, () => HttpResponse.json({ data: { merges: [] } })),
+
   http.get(`${API_BASE}/graph/entities/:id/timeline`, ({ request }) => {
     const url = new URL(request.url);
     const includeSensitive = url.searchParams.get('includeSensitive') === 'true';

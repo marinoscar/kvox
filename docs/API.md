@@ -6420,6 +6420,21 @@ recorded for the reverse. Audited `graph.entity_merged`
 types (`details.reason: "type_mismatch"`) · `401` · `403` without
 `graph:write` · `404` either entity.
 
+##### GET /graph/entities/:id/merges
+
+The entities merged **into** `:id`, newest merge first. Requires `graph:read`;
+`:id` must be yours and in your reviewed graph (otherwise `404`).
+
+**Response:** `200`
+```json
+{ "data": { "merges": [
+  { "mergeId": "…", "mergedEntity": { "id": "…", "label": "S. Chen", "type": "Person" },
+    "createdAt": "2026-09-26T12:00:00.000Z", "reversedAt": null, "reversible": true }
+] } }
+```
+`reversible` is `false` once reversed, or when `:id` has itself been merged
+since (reverse that merge first). Pass `mergeId` to `POST /graph/merges/{id}/reverse`.
+
 ##### POST /graph/merges/:id/reverse
 
 Undoes one merge exactly: the tombstone is restored and every moved row is
@@ -6988,8 +7003,13 @@ directions); each sums to `relations`. They feed the explorer inspector's
 Expand menu ("Works for 3", "Person 2"): choosing one sends `types` or
 `relationTypes` to `POST /graph/explore/expand`. An older API omits them.
 
+A merged entity (a tombstone) returns `200` with `reviewStatus: "merged"` and
+`mergedIntoId` set to the survivor's id, so a page can redirect; its `aliases`
+are empty, its counts `0` and `firstSeenAt`/`lastSeenAt` `null`. A live entity
+returns `mergedIntoId: null`.
+
 **Errors:** `401` · `403` without `graph:read` · `404` no such entity, not
-yours, or merged.
+yours, or not yet reviewed (unreviewed or rejected).
 
 ##### GET /graph/entities/{id}/mentions
 

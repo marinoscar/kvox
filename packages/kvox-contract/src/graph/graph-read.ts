@@ -127,7 +127,12 @@ export const graphEntityDetailSchema = z
     props: z.record(z.string(), z.unknown()).describe('Keyed by attribute key; user-defined attributes by their `u_…` key (§17.3).'),
     aliases: z.array(z.object({ id: z.uuid(), alias: z.string(), source: z.enum(KG_ALIAS_SOURCES_FOR_DTO) })),
     occurredAt: z.string().nullable().describe('Meeting only.'),
-    reviewStatus: z.enum(['accepted', 'edited']),
+    reviewStatus: z.enum(['accepted', 'edited', 'merged']),
+    mergedIntoId: z
+      .uuid()
+      .nullable()
+      .optional()
+      .describe('Set only on a merged tombstone (`reviewStatus: merged`): the surviving entity to redirect to. A tombstone carries zero counts. Absent from an older API.'),
     ontologyVersion: z.string(),
     firstSeenAt: z.string().nullable(),
     lastSeenAt: z.string().nullable(),

@@ -6,6 +6,7 @@ import {
   reverseMergeResponseSchema,
   distinctPairBodySchema,
   distinctPairResponseSchema,
+  listEntityMergesResponseSchema,
 } from '@marinoscar/kvox-contract/graph';
 
 // The wire schemas of this file moved to `@marinoscar/kvox-contract/graph` (issue #488, file `graph/resolution.ts`); they are re-exported below so no importer changes.
@@ -21,6 +22,8 @@ export {
   type DistinctPairBody,
   distinctPairResponseSchema,
   type DistinctPairResponse,
+  listEntityMergesResponseSchema,
+  type ListEntityMergesResponse,
 } from '@marinoscar/kvox-contract/graph';
 
 export class MergeEntityBodyDto extends createZodDto(mergeEntityBodySchema) {}
@@ -29,3 +32,4 @@ export class ReverseMergeBodyDto extends createZodDto(reverseMergeBodySchema) {}
 export class ReverseMergeResponseDto extends createZodDto(reverseMergeResponseSchema) {}
 export class DistinctPairBodyDto extends createZodDto(distinctPairBodySchema) {}
 export class DistinctPairResponseDto extends createZodDto(distinctPairResponseSchema) {}
+export class ListEntityMergesResponseDto extends createZodDto(listEntityMergesResponseSchema) {}

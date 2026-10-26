@@ -16,6 +16,7 @@ export * from './hooks/useGraphBrief.js';
 export * from './hooks/useGraphEntities.js';
 export * from './hooks/useGraphEntity.js';
 export * from './hooks/useEntityRelationEdits.js';
+export * from './hooks/useEntityMerges.js';
 export * from './hooks/useGraphEvidence.js';
 export * from './hooks/useGraphExport.js';
 export * from './hooks/useGraphExtractEstimate.js';
