@@ -1,6 +1,6 @@
 {
   "name": "@app/shared",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "private": true,
   "description": "Cross-app constants. Home of APP_NAME - the one line a fork edits to rebrand.",
   "type": "commonjs",
