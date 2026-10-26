@@ -7,7 +7,7 @@ import { configDirName, createCli, envPrefix, versionText } from '@marinoscar/pl
 import { resetCliForTests } from '@marinoscar/platform-cli/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { APP_CLI_OPTIONS, APP_STREAM_PATHS, readVersion } from './app.js';
+import { APP_CLI_OPTIONS, APP_STREAM_PATHS, APP_VERSIONED_MANIFESTS, readVersion } from './app.js';
 
 // =============================================================================
 // The CLI is `createCli()` with this app's identity  (issue #482, epic #478)
@@ -128,6 +128,26 @@ describe('the deploy checks this app adds', () => {
 
   it('carries no port guard of its own: the platform\'s bind-port-owner decides (issue #745)', () => {
     expect((APP_CLI_OPTIONS.deployChecks ?? []).map((check) => check.id)).not.toContain('bind-port-not-promised');
+  });
+});
+
+describe('the manifests the deploy version step versions', () => {
+  it('leaves apps/cli out: the CLI keeps its own version', () => {
+    expect(APP_CLI_OPTIONS.deploy?.versionedManifests).toEqual(APP_VERSIONED_MANIFESTS);
+    expect(APP_VERSIONED_MANIFESTS).not.toContain('apps/cli/package.json');
+  });
+
+  it('starts with apps/api, the version source', () => {
+    expect(APP_VERSIONED_MANIFESTS[0]).toBe('apps/api/package.json');
+    expect([...APP_VERSIONED_MANIFESTS]).toEqual([
+      'apps/api/package.json',
+      'apps/web/package.json',
+      'packages/shared/package.json',
+    ]);
+  });
+
+  it('passes the engine validation: createCli builds without throwing', () => {
+    expect(() => createCli(APP_CLI_OPTIONS)).not.toThrow();
   });
 });
 
