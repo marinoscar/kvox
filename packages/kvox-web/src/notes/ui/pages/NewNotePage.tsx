@@ -117,7 +117,7 @@ import type { NewNoteDraft } from '../../headless/utils/newNote.js';
 import { useImportBatch, useImportBatchItems } from '../../headless/hooks/useNoteLibraries.js';
 import { checkNoteImportFiles, importFilesAdHoc } from '../../headless/sync/librarySync.js';
 import type { NoteImportRejectedFile } from '../../headless/sync/librarySync.js';
-import { describeNoteImportFailure } from '../../headless/utils/noteImportFailure.js';
+import { describeNoteImportFailure, noteImportUploadErrorMessage } from '../../headless/utils/noteImportFailure.js';
 import { NO_NOTES_AI_ACCESS } from '../ai.js';
 import type { NotesAiAccess } from '../ai.js';
 
@@ -492,7 +492,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
     } catch (err) {
       if (!isMounted()) return;
       setImportError(
-        err instanceof KvoxApiError ? err.message : 'The document could not be imported. Try again.',
+        err instanceof KvoxApiError ? noteImportUploadErrorMessage(err) : 'The document could not be imported. Try again.',
       );
     } finally {
       if (isMounted()) setIsImportUploading(false);
