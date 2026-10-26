@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/commo
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import {
+  orgScopeExtension,
   runInOrg,
   type OrgScope,
   type RlsTransactionClient,
@@ -51,23 +52,66 @@ export class PrismaService
   }
 
   /**
+   * A client whose every operation runs in a transaction that first sets the
+   * transaction-local `app.org_id` (and `app.user_id`), so row-level security
+   * shows it one organization's rows and refuses an insert naming another.
+   *
+   * The platform's AI, storage and sharing slices call
+   * `PLATFORM_PRISMA.forOrg(orgId, { userId? })` (usage recorder, limits, runs,
+   * output writer, ...); without it every AI call failed with
+   * `this.prisma.forOrg is not a function` (marinoscar/kvox#757). Same
+   * mechanism and signature as the reference app's `PrismaService.forOrg`.
+   *
+   * Good for single operations; a unit of work of more than one statement uses
+   * {@link PrismaService.runInOrg}. Never open `$transaction(async tx => ...)`
+   * on the returned client.
+   *
+   * @param orgId - `principal.activeOrgId`, or a job payload's `orgId`; never request input.
+   * @param opts - `userId`: the acting user, becomes `app.user_id`.
+   * @throws ScopedAccessError when an id is not a UUID.
+   */
+  forOrg(orgId: string, opts: { userId?: string } = {}) {
+    return this.$extends(orgScopeExtension(this, { orgId, ...opts }));
+  }
+
+  /**
    * Runs `fn` in ONE interactive transaction scoped to an organization (and,
    * when given, a user), so row-level security confines every query on an
-   * `org_id` table to `scope.orgId` (issue #466; copied from the reference
-   * app's `PrismaService`).
+   * `org_id` table to the scope's organization (issue #466).
    *
-   * The scope is set with `set_config(name, value, true)` as the transaction's
-   * first statement (`runInOrg` from `@marinoscar/platform-api/core`), NEVER a
-   * session-level `SET`: a pooled connection would carry the scope into the next
-   * request. Bound to the settings slice's `SETTINGS_DATA` port by
-   * `platform/settings/settings-data.adapter.ts`.
+   * Two call shapes, both transaction-local (`set_config(name, value, true)`
+   * as the first statement, NEVER a session-level `SET`):
+   *  - `runInOrg({ orgId, userId? }, fn, options)`: this app's callers, the
+   *    settings and sharing adapters (`SETTINGS_DATA`, `SHARING_DATA`).
+   *  - `runInOrg(orgId, fn, { userId?, maxWait?, timeout? })`: the platform's
+   *    own callers (`AiRunsService`, the storage `storageRunInOrg` helper),
+   *    which call `PLATFORM_PRISMA.runInOrg(orgId, fn, opts)`.
    */
   runInOrg<R>(
     scope: OrgScope,
     fn: (tx: RlsTransactionClient<PrismaService>) => Promise<R>,
     options?: RlsTransactionOptions,
+  ): Promise<R>;
+  runInOrg<R>(
+    orgId: string,
+    fn: (tx: RlsTransactionClient<PrismaService>) => Promise<R>,
+    options?: { userId?: string } & RlsTransactionOptions,
+  ): Promise<R>;
+  runInOrg<R>(
+    scopeOrOrgId: OrgScope | string,
+    fn: (tx: RlsTransactionClient<PrismaService>) => Promise<R>,
+    options: { userId?: string } & RlsTransactionOptions = {},
   ): Promise<R> {
-    return runInOrg(this, scope, fn, options);
+    if (typeof scopeOrOrgId === 'string') {
+      const { userId, ...transaction } = options;
+      return runInOrg(
+        this,
+        { orgId: scopeOrOrgId, ...(userId !== undefined ? { userId } : {}) },
+        fn,
+        transaction,
+      );
+    }
+    return runInOrg(this, scopeOrOrgId, fn, options);
   }
 
   /**
