@@ -87,6 +87,10 @@ import type {
   CreateManualRelationResponse as ContractCreateManualRelationResponse,
   RemoveManualRelationResponse as ContractRemoveManualRelationResponse,
   ManualRelationType as ContractManualRelationType,
+  MergeEntityResponse as ContractMergeEntityResponse,
+  ReverseMergeResponse as ContractReverseMergeResponse,
+  DistinctPairResponse as ContractDistinctPairResponse,
+  ListEntityMergesResponse as ContractListEntityMergesResponse,
 } from '@marinoscar/kvox-contract/graph';
 import { MANUAL_RELATION_TYPES as CONTRACT_MANUAL_RELATION_TYPES } from '@marinoscar/kvox-contract/graph';
 import type { AttributeChoice as ContractAttributeChoice } from '@marinoscar/kvox-contract/ontology';
@@ -1493,6 +1497,75 @@ export function setEntityRelation(host: KvoxWebHost, entityId: string, body: Set
  */
 export function removeEntityRelation(host: KvoxWebHost, entityId: string, relationId: string): Promise<RemoveEntityRelationResult> {
   return kvoxDelete<RemoveEntityRelationResult>(host, `/graph/entities/${enc(entityId)}/relations/${enc(relationId)}`);
+}
+
+// =============================================================================
+// Entity merges (#364 API; #765 UI): merge, undo, "not the same", merged-from
+// =============================================================================
+
+/**
+ * What `POST /api/graph/entities/:id/merge` answers: the merge record (its `id` undoes it) and the surviving entity.
+ *
+ * @stability experimental
+ */
+export type MergeEntityResult = ContractMergeEntityResponse;
+
+/**
+ * What `POST /api/graph/merges/:id/reverse` answers: the reversed merge, the restored entity and the rows that could not be given back.
+ *
+ * @stability experimental
+ */
+export type ReverseMergeResult = ContractReverseMergeResponse;
+
+/**
+ * What `POST /api/graph/distinct-pairs` answers: the normalized pair and whether it was new.
+ *
+ * @stability experimental
+ */
+export type DistinctPairResult = ContractDistinctPairResponse;
+
+/**
+ * One entity merged into another, as `GET /api/graph/entities/:id/merges` lists it (newest first).
+ *
+ * @stability experimental
+ */
+export type EntityMergeRow = ContractListEntityMergesResponse['merges'][number];
+
+/**
+ * Merges `mergedId` INTO `intoId` (`POST /api/graph/entities/:id/merge`). The merged entity becomes a tombstone and its label and aliases become aliases of the survivor. Both must be of the same type (`400`, `details.reason: "type_mismatch"`).
+ *
+ * @stability experimental
+ */
+export function mergeEntity(host: KvoxWebHost, mergedId: string, intoId: string): Promise<MergeEntityResult> {
+  return kvoxPost<MergeEntityResult>(host, `/graph/entities/${enc(mergedId)}/merge`, { intoId });
+}
+
+/**
+ * Undoes a merge (`POST /api/graph/merges/:id/reverse`) and restores the merged entity. `409`, `details.reason: "revert_conflict"`, when the survivor has been merged again since.
+ *
+ * @stability experimental
+ */
+export function reverseMerge(host: KvoxWebHost, mergeId: string): Promise<ReverseMergeResult> {
+  return kvoxPost<ReverseMergeResult>(host, `/graph/merges/${enc(mergeId)}/reverse`, {});
+}
+
+/**
+ * Records that two entities are NOT the same (`POST /api/graph/distinct-pairs`); resolution never proposes the pair again. Order does not matter.
+ *
+ * @stability experimental
+ */
+export function recordDistinctPair(host: KvoxWebHost, aId: string, bId: string): Promise<DistinctPairResult> {
+  return kvoxPost<DistinctPairResult>(host, '/graph/distinct-pairs', { aId, bId });
+}
+
+/**
+ * Lists the entities merged INTO an entity (`GET /api/graph/entities/:id/merges`), newest merge first, each saying whether it can still be undone.
+ *
+ * @stability experimental
+ */
+export async function listEntityMerges(host: KvoxWebHost, id: string, signal?: AbortSignal): Promise<EntityMergeRow[]> {
+  const body = await kvoxGet<ContractListEntityMergesResponse>(host, `/graph/entities/${enc(id)}/merges`, { signal });
+  return Array.isArray(body?.merges) ? body.merges : [];
 }
 
 // =============================================================================

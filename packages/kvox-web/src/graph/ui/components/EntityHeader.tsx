@@ -1,25 +1,32 @@
 /**
  * `EntityHeader` — the entity page's heading block (#373): type chip, the
  * page's only `<h1>` (the entity label — the AppBar title stays "Knowledge"),
- * aliases (≤ 5 + "+n"), first/last seen, counts, and the actions.
+ * "Also known as" with every alias (five shown, a "+n" that expands; with
+ * `graph:write`, clicking a name opens the edit dialog, where aliases are
+ * managed — #765), first/last seen, counts, and the actions.
  *
  * `actions` is a SLOT for #381's "Ask about …" button; Edit and the overflow
- * menu ("Forget this person…", Person + `graph:write` only) are built in.
+ * menu are built in, both for `graph:write` only (hidden, like Edit, from a
+ * read-only viewer): "Merge into…" for every type (#765) and "Forget this
+ * person…" for a Person.
  */
 
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import MergeIcon from '@mui/icons-material/Merge';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import type { GraphEntityDetail } from '../../headless/clients/graph.js';
@@ -33,6 +40,8 @@ export interface EntityHeaderProps {
   canEdit: boolean;
   onEdit: () => void;
   onForget: () => void;
+  /** Opens the "Merge into…" dialog. */
+  onMerge: () => void;
   /** Extra actions (#381 mounts "Ask about …" here). */
   actions?: ReactNode;
 }
@@ -48,7 +57,7 @@ function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
 
-export function EntityHeader({ entity, typeLabel, canEdit, onEdit, onForget, actions }: EntityHeaderProps) {
+export function EntityHeader({ entity, typeLabel, canEdit, onEdit, onForget, onMerge, actions }: EntityHeaderProps) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   // Page-level read (not a sixth breakpoint gate): on a phone the Edit button
   // folds to an icon so a long name keeps the row without horizontal scroll.
@@ -56,8 +65,11 @@ export function EntityHeader({ entity, typeLabel, canEdit, onEdit, onForget, act
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const canForget = canEdit && entity.type === 'Person';
 
+  const [showAllAliases, setShowAllAliases] = useState(false);
+  useEffect(() => setShowAllAliases(false), [entity.id]);
+
   const aliases = entity.aliases.map((alias) => alias.alias);
-  const shown = aliases.slice(0, MAX_ALIASES);
+  const shown = showAllAliases ? aliases : aliases.slice(0, MAX_ALIASES);
   const hidden = aliases.length - shown.length;
 
   const first = formatDay(entity.firstSeenAt);
@@ -97,7 +109,7 @@ export function EntityHeader({ entity, typeLabel, canEdit, onEdit, onForget, act
                 Edit
               </Button>
             ))}
-          {canForget && (
+          {canEdit && (
             <>
               <IconButton
                 aria-label={`More actions for ${entity.label}`}
@@ -110,24 +122,70 @@ export function EntityHeader({ entity, typeLabel, canEdit, onEdit, onForget, act
                 <MenuItem
                   onClick={() => {
                     setMenuAnchor(null);
-                    onForget();
+                    onMerge();
                   }}
-                  sx={{ color: 'error.main' }}
                 >
-                  Forget this person…
+                  <ListItemIcon>
+                    <MergeIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Merge into…</ListItemText>
                 </MenuItem>
+                {canForget && (
+                  <MenuItem
+                    onClick={() => {
+                      setMenuAnchor(null);
+                      onForget();
+                    }}
+                    sx={{ color: 'error.main' }}
+                  >
+                    Forget this person…
+                  </MenuItem>
+                )}
               </Menu>
             </>
           )}
         </Stack>
       </Stack>
 
-      {shown.length > 0 && (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1.5 }} aria-label="Also known as" role="list">
-          {shown.map((alias) => (
-            <Chip key={alias} size="small" label={alias} role="listitem" />
-          ))}
-          {hidden > 0 && <Chip size="small" label={`+${hidden}`} role="listitem" aria-label={`${hidden} more names`} />}
+      {aliases.length > 0 && (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.75, mt: 1.5 }}>
+          <Typography variant="body2" color="text.secondary" component="span">
+            Also known as
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }} aria-label="Also known as" role="list">
+            {shown.map((alias) => (
+              <Box key={alias} component="span" role="listitem" sx={{ display: 'inline-flex' }}>
+                {canEdit ? (
+                  <Chip size="small" label={alias} onClick={onEdit} aria-label={`${alias} (edit names)`} />
+                ) : (
+                  <Chip size="small" label={alias} />
+                )}
+              </Box>
+            ))}
+            {hidden > 0 && (
+              <Box component="span" role="listitem" sx={{ display: 'inline-flex' }}>
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={`+${hidden}`}
+                  aria-label={`Show ${hidden} more ${hidden === 1 ? 'name' : 'names'}`}
+                  aria-expanded={false}
+                  onClick={() => setShowAllAliases(true)}
+                />
+              </Box>
+            )}
+            {showAllAliases && aliases.length > MAX_ALIASES && (
+              <Box component="span" role="listitem" sx={{ display: 'inline-flex' }}>
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label="Show fewer"
+                  aria-expanded
+                  onClick={() => setShowAllAliases(false)}
+                />
+              </Box>
+            )}
+          </Box>
         </Box>
       )}
 
