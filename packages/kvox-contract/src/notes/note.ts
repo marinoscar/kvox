@@ -625,7 +625,8 @@ export const noteListItemSchema = noteResponseSchema
     excerpt: z
       .string()
       .describe(
-        `The first ${EXCERPT_CHARS} characters of the body. A list renders a snippet; fetch the ` +
+        `A plain-text summary of the body (markdown syntax removed, prose first) of at most ` +
+          `${EXCERPT_CHARS} characters. A list renders a snippet; fetch the ` +
           'note itself for the rest.',
       ),
   });
