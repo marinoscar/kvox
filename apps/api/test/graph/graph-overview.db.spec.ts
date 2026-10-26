@@ -170,10 +170,14 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     const ids = await seedSmallGraph(g);
     await run(user.id);
 
-    // Move every piece of Tom's and the meeting's evidence into 2020; the rest stays "now".
+    // Move Tom's and the meeting's own evidence into 2020; the rest stays "now".
     const old = new Date('2020-03-01T00:00:00Z');
     await prisma.$executeRaw`UPDATE kg_evidence SET created_at = ${old}
       WHERE owner_id = ${user.id}::uuid AND subject_kind = 'entity' AND subject_id = ANY(${[ids.tom, ids.meeting]}::uuid[])`;
+    // A relation's evidence counts for both ends, so Tom's one relation (ATTENDED) moves to 2020 too.
+    await prisma.$executeRaw`UPDATE kg_evidence SET created_at = ${old}
+      WHERE owner_id = ${user.id}::uuid AND subject_kind = 'relation'
+        AND subject_id IN (SELECT id FROM kg_relations WHERE from_id = ${ids.tom}::uuid OR to_id = ${ids.tom}::uuid)`;
 
     const all = await overview.overview(user.id);
     expect(all.typeCounts).toEqual({ Person: 2, Meeting: 1, Project: 1, Organization: 1 });
