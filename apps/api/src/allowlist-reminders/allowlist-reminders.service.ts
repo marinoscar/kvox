@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
-import { AUDIT_SINK, type AuditSink } from '@marinoscar/platform-api/core';
+import { AUDIT_SINK, type AuditSink, type RequestWithHeaders } from '@marinoscar/platform-api/core';
+import { SettingsResolver } from '@marinoscar/platform-api/settings';
 
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../prisma/prisma.service';
@@ -52,6 +53,7 @@ export class AllowlistRemindersService {
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
     @Inject(AUDIT_SINK) private readonly audit: AuditSink,
+    private readonly settings: SettingsResolver,
   ) {}
 
   /**
@@ -74,7 +76,11 @@ export class AllowlistRemindersService {
    * `$transaction` (root invariant), and a failure in it, or in the audit write,
    * never fails the request.
    */
-  async sendReminder(id: string, adminUserId: string): Promise<AllowlistReminderState> {
+  async sendReminder(
+    id: string,
+    adminUserId: string,
+    request?: RequestWithHeaders,
+  ): Promise<AllowlistReminderState> {
     const entry = await this.prisma.allowedEmail.findUnique({
       where: { id },
       include: { addedBy: { select: { id: true, email: true } } },
@@ -102,6 +108,11 @@ export class AllowlistRemindersService {
 
     const signInUrl = this.signInUrl();
 
+    // The invitee is an address with no account, so there is no zone of theirs to render in: the date
+    // in the mail is cut in the SENDING administrator's zone (profile, then X-Time-Zone, then UTC),
+    // the person who chose to send it and the best available guess at the invitee's world.
+    const timeZone = await this.adminTimeZone(adminUserId, request);
+
     // `entry.notes` IS DELIBERATELY NOT IN THE PAYLOAD: it is an administrator's
     // private annotation about this person, and omitting it at the call site
     // means no future edit to the copy can surface it.
@@ -111,7 +122,7 @@ export class AllowlistRemindersService {
       invitedAt: entry.addedAt,
       ...(entry.addedBy?.email ? { invitedBy: entry.addedBy.email } : {}),
       ...(signInUrl ? { signInUrl } : {}),
-    });
+    }, { timeZone });
 
     return reminder;
   }
@@ -208,6 +219,19 @@ export class AllowlistRemindersService {
       this.logger.error(
         `Could not audit reminder for allowlist entry ${entryId}: ${error instanceof Error ? error.message : String(error)}`,
       );
+    }
+  }
+
+  /**
+   * The zone the reminder's dates are rendered in: the sending administrator's (profile, then the
+   * request's `X-Time-Zone`, then UTC). Never throws.
+   */
+  private async adminTimeZone(adminUserId: string, request?: RequestWithHeaders): Promise<string> {
+    try {
+      return await this.settings.resolveRequestTimeZone(request, adminUserId);
+    } catch {
+      // A zone is presentation only; the reminder is sent in UTC rather than not at all.
+      return 'UTC';
     }
   }
 

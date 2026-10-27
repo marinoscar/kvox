@@ -250,8 +250,29 @@ test('host-neutral: every kvox-web slice may import exactly @marinoscar/platform
     const text = violations.map((v) => v.message).join('\n');
     assert.equal(violations.length, 2, text);
     assert.match(text, /kvox-web\/src\/core\/picker\.ts imports '@marinoscar\/platform-web\/timezone\/ui'/);
+    // The web timezone entry is a web entry: a kvox-api file may not import it.
     assert.match(text, /kvox-api\/src\/core\/when\.ts imports '@marinoscar\/platform-web\/timezone\/headless'/);
     assert.doesNotMatch(text, /kvox-web\/src\/core\/when\.ts/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-neutral: every kvox-api slice may import exactly @marinoscar/platform-contract/timezone', () => {
+  const dir = fixtureCopy();
+  try {
+    plant(dir, 'host-neutral/kvox-api-timezone-allowed.ts', 'packages/kvox-api/src/core/when.ts');
+    plant(dir, 'host-neutral/kvox-api-timezone-allowed.ts', 'packages/kvox-api/src/ports/when.ts');
+    plant(dir, 'host-neutral/kvox-api-timezone-settings-forbidden.ts', 'packages/kvox-api/src/core/settings.ts');
+    plant(dir, 'host-neutral/kvox-api-timezone-allowed.ts', 'packages/kvox-web/src/core/contract-when.ts');
+    const violations = hostNeutralOf(dir);
+    const text = violations.map((v) => v.message).join('\n');
+    assert.equal(violations.length, 2, text);
+    assert.match(text, /kvox-api\/src\/core\/settings\.ts imports '@marinoscar\/platform-contract\/settings'/);
+    assert.match(text, /may import only '@marinoscar\/platform-contract\/timezone'/);
+    // kvox-web is allowed the web entry only; the contract entry is for the API.
+    assert.match(text, /kvox-web\/src\/core\/contract-when\.ts imports '@marinoscar\/platform-contract\/timezone'/);
+    assert.doesNotMatch(text, /kvox-api\/src\/(core|ports)\/when\.ts/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

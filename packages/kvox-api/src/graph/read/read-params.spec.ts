@@ -3,6 +3,7 @@ import { computeEffectiveSchema } from '@marinoscar/kvox-contract/ontology';
 
 import {
   asOfOr400,
+  instantBoundOr400,
   parseCsv,
   resolveEntityTypes,
   resolveNodeTypes,
@@ -75,5 +76,32 @@ describe('filters', () => {
   it('maps a bad as_of to a 400', () => {
     expect(asOfOr400('2024-01-15').toISOString()).toBe('2024-01-15T00:00:00.000Z');
     expect(() => asOfOr400('2024-02-30')).toThrow(BadRequestException);
+  });
+});
+
+describe('instantBoundOr400 (a bound over INSTANTS, vs asOfOr400 for calendar predicates)', () => {
+  it('reads a bare day as LOCAL midnight in the requester zone', () => {
+    expect(instantBoundOr400('2026-10-26', 'America/Chicago').toISOString()).toBe('2026-10-26T05:00:00.000Z');
+    expect(instantBoundOr400('2026-10-26', 'Asia/Tokyo').toISOString()).toBe('2026-10-25T15:00:00.000Z');
+    expect(instantBoundOr400('2026-10-26', 'UTC').toISOString()).toBe('2026-10-26T00:00:00.000Z');
+  });
+
+  it('follows DST: the same wall-clock midnight is a different UTC hour either side of the change', () => {
+    // America/Chicago falls back on 2026-11-01 02:00 (CDT -> CST).
+    expect(instantBoundOr400('2026-11-01', 'America/Chicago').toISOString()).toBe('2026-11-01T05:00:00.000Z');
+    expect(instantBoundOr400('2026-11-02', 'America/Chicago').toISOString()).toBe('2026-11-02T06:00:00.000Z');
+  });
+
+  it('keeps a full instant as it is, whatever the zone', () => {
+    expect(instantBoundOr400('2026-10-26T10:00:00+02:00', 'America/Chicago').toISOString()).toBe('2026-10-26T08:00:00.000Z');
+  });
+
+  it('is a 400 for a calendar-impossible day or garbage, like as_of', () => {
+    expect(() => instantBoundOr400('2026-02-30', 'UTC')).toThrow(BadRequestException);
+    expect(() => instantBoundOr400('soon', 'UTC')).toThrow(BadRequestException);
+  });
+
+  it('leaves as_of on UTC midnight: it is read against calendar predicates', () => {
+    expect(asOfOr400('2026-10-26').toISOString()).toBe('2026-10-26T00:00:00.000Z');
   });
 });

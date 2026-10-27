@@ -31,6 +31,7 @@
 // all pure and tested here rather than split across a query.
 // =============================================================================
 
+import { localDateKey } from '../../core/index.js';
 import type {
   EffectiveAttribute,
   EffectiveEntityType,
@@ -111,6 +112,12 @@ export interface ExtractionInput {
   };
   /** The Meeting whose `props.transcriptId`/`noteId` matches. */
   existingMeeting: { id: string } | null;
+  /**
+   * The note owner's IANA time zone (absent: UTC). The meeting date is the day the recording
+   * (or the note) falls on IN THIS ZONE: a call recorded at 21:30 in Chicago on the 26th is the
+   * 26th, not the 27th it is in UTC.
+   */
+  timeZone?: string;
 }
 
 export interface SegmentAliasEntry {
@@ -169,7 +176,7 @@ export interface ExtractionContext {
   note: { id: string; title: string; body: string; version: number; contextText: string | null };
   transcript: { id: string; title: string } | null;
   meetingTitle: string;
-  /** `YYYY-MM-DD` (UTC). */
+  /** `YYYY-MM-DD`, the day of the recording (or the note) in the owner's zone; stored as a floating date. */
   meetingDate: string;
   dateSource: DateSource;
   segments: SegmentLine[];
@@ -358,7 +365,7 @@ export function buildExtractionContext(input: ExtractionInput): ExtractionContex
 
   // Meeting date.
   const recordedAt = input.transcript?.recordedAt ?? null;
-  const meetingDate = isoDay(recordedAt ?? input.note.createdAt);
+  const meetingDate = localDateKey(recordedAt ?? input.note.createdAt, input.timeZone ?? 'UTC');
   const recordedAtEdited =
     input.transcript !== null &&
     Math.abs(input.transcript.recordedAt.getTime() - input.transcript.createdAt.getTime()) >

@@ -11,7 +11,10 @@
 // user's private content.
 // =============================================================================
 
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, Optional } from '@nestjs/common';
+
+import { KvoxTimeZoneService } from '../../core/index.js';
+
 
 import { defaultSpeakerName, parseSpeakerIdentities } from '../../transcripts/index.js';
 import { NOTE_NOT_FOUND_MESSAGE, NoteOriginService } from '../../notes/index.js';
@@ -42,6 +45,7 @@ export class ExtractionInputLoader {
     @Inject(KVOX_PRISMA) private readonly prisma: KvoxGraphDb,
     private readonly origin: NoteOriginService,
     private readonly ontology: GraphOntologyService,
+    @Optional() private readonly zones?: KvoxTimeZoneService,
   ) {}
 
   async load(args: LoadExtractionInput): Promise<ExtractionInput> {
@@ -181,6 +185,8 @@ export class ExtractionInputLoader {
         recentlyMentioned: pick(recentIds),
       },
       existingMeeting,
+      // The note owner's zone: the meeting date is the local day of the recording.
+      timeZone: (await this.zones?.forUser(userId)) ?? 'UTC',
     };
   }
 

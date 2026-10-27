@@ -108,3 +108,46 @@ describe('rewriteEndpoints', () => {
     expect(out).toEqual({ from: { entityId: 'ID1' }, to: { ref: 'e2' } });
   });
 });
+
+describe('ProposalBatchCommitService.reviewQueue: the import label follows the requester zone', () => {
+  const batchCreatedAt = new Date('2026-10-27T02:30:00.000Z');
+
+  function queueService(zone: string) {
+    const prisma: any = {
+      kgProposal: {
+        findMany: jest.fn(async () => [
+          { id: 'p1', kind: 'extraction', status: 'draft', noteId: 'n1', noteVersion: 1, createdAt: new Date('2026-10-27T02:31:00.000Z') },
+        ]),
+      },
+      note: { findMany: jest.fn(async () => [{ id: 'n1', title: 'Kickoff', currentVersion: 1 }]) },
+      kgProposalItem: { findMany: jest.fn(async () => []) },
+      noteImportBatchItem: { findMany: jest.fn(async () => [{ batchId: 'b1', noteId: 'n1', noteVersion: 1 }]) },
+      noteImportBatch: { findMany: jest.fn(async () => [{ id: 'b1', libraryId: null, createdAt: batchCreatedAt }]) },
+      noteLibrary: { findMany: jest.fn(async () => []) },
+    };
+    const zones = { forRequest: jest.fn(async (_u: string, header?: string) => header ?? zone) };
+    const svc = new ProposalBatchCommitService(
+      prisma,
+      {} as never,
+      {} as never,
+      { get: async () => ({ review: { minConfidence: 0.7 } }) } as never,
+      { effectiveSchemaFor: async () => ({ entityTypes: [], relationTypes: [] }) } as never,
+      {} as never,
+      { record: jest.fn() } as never,
+      zones as never,
+    );
+    return { svc, zones };
+  }
+
+  it('names the batch by the requester local day (02:30Z on the 27th is the 26th in Chicago, the 27th in Tokyo)', async () => {
+    const chicago = await queueService('UTC').svc.reviewQueue(actor as never, 500, 'America/Chicago');
+    expect(chicago.groups[0]!.key.label).toBe('Import 2026-10-26');
+    const tokyo = await queueService('UTC').svc.reviewQueue(actor as never, 500, 'Asia/Tokyo');
+    expect(tokyo.groups[0]!.key.label).toBe('Import 2026-10-27');
+  });
+
+  it('exposes the batch createdAt in the group key so a client can format it itself', async () => {
+    const { groups } = await queueService('UTC').svc.reviewQueue(actor as never);
+    expect(groups[0]!.key).toMatchObject({ type: 'batch', id: 'b1', createdAt: '2026-10-27T02:30:00.000Z' });
+  });
+});

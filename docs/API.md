@@ -70,6 +70,10 @@ Endpoints returning lists support pagination with the following query parameters
 }
 ```
 
+## Time zones
+
+Every date the API derives from an **instant** or from "now" follows the signed-in user's time zone: the stored profile zone (`profile.timezone`), else the `X-Time-Zone` request header the web client sends with the device zone (a user on "Automatic"), else `UTC`. An invalid value is ignored. **Calendar-only values** (a relation's valid range, an item's `occurred_at` / `due_at`, date attributes, a bare `as_of`) are floating dates at UTC midnight and never shift with a zone. A bare `YYYY-MM-DD` in a `since`, `from` or `to` that filters timestamps (`GET /graph/entities?sort=mentions&since=`, `GET /graph/activity`, `GET /graph/overview`, `GET /graph/entities/:id/brief?since=`) is **local midnight** in the requester's zone. Where it matters the zone is echoed (`timeZone` on `GET /graph/activity`) or captured when the work is queued (the `ask.respond` and export job payloads); the Ask prompt states the asker's local date, weekday, time and zone, and an export request from another zone is rendered again (the zone is part of the content address of the note exports and the PDF transcript export).
+
 ---
 
 ## Endpoints
@@ -7454,8 +7458,11 @@ One aggregate SQL statement under the neighbourhood's 3 s budget, driven by the
 - **When:** a citation is dated by its transcript's `recorded_at` or its note's
   `created_at` (the meeting date; notes have no separate occurred-at column),
   falling back to the citation's own `created_at` when the source is gone or
-  soft-deleted. Buckets are **UTC**; a `week` starts on Monday, a `month` on the
-  1st. `from` (inclusive) and `to` (exclusive) restrict that date.
+  soft-deleted. Buckets are days of **your time zone** (the stored profile
+  zone, else the `X-Time-Zone` header the web client sends, else UTC), echoed
+  as `timeZone`; a `week` starts on Monday there, a `month` on the 1st, and a
+  daylight-saving change moves nothing. `from` (inclusive) and `to` (exclusive)
+  restrict that date; a bare `YYYY-MM-DD` is **local midnight** in that zone.
 - **Readable rows only:** entities and relations pass the same predicates as
   the neighbourhood, items must be readable too, and a `sensitive` person fact
   contributes nothing (naming one in `ids` is the 404 below).
@@ -7471,6 +7478,7 @@ datetime with an offset, both optional).
 {
   "data": {
     "bucket": "month",
+    "timeZone": "America/Chicago",
     "series": [
       { "start": "2026-01-01", "total": 9, "byType": { "Person": 5, "Project": 4 } }
     ],

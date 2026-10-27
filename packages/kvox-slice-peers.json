@@ -64,6 +64,7 @@
     "core": {
       "peers": [
         "@marinoscar/kvox-contract",
+        "@marinoscar/platform-contract",
         "@nestjs/common",
         "@nestjs/core",
         "reflect-metadata",

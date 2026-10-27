@@ -105,7 +105,7 @@ export class AskToolset {
    */
   async createContext(
     user: GraphActor,
-    opts: { scopeEntityId?: string | null; now?: Date; countTokens?: (text: string) => number } = {},
+    opts: { scopeEntityId?: string | null; now?: Date; timeZone?: string; countTokens?: (text: string) => number } = {},
   ): Promise<AskToolContext> {
     const prefs = await this.preferences.get(user.id);
     return {
@@ -114,6 +114,7 @@ export class AskToolset {
       personalFactsAllowed: personalFactsAllowedFor(prefs),
       scopeEntityId: opts.scopeEntityId ?? null,
       now: opts.now ?? new Date(),
+      ...(opts.timeZone ? { timeZone: opts.timeZone } : {}),
       ...(opts.countTokens ? { countTokens: opts.countTokens } : {}),
     };
   }

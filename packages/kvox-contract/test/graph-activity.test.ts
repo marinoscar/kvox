@@ -42,11 +42,12 @@ describe('graph activity contract (GIC-15)', () => {
   it('parses a response, including the empty one', () => {
     const response = {
       bucket: 'month',
+      timeZone: 'America/Chicago',
       series: [{ start: '2026-01-01', total: 9, byType: { Person: 5, Project: 4 } }],
       byEntity: { [id(1)]: [{ start: '2026-01-01', count: 3 }] },
     };
     expect(graphActivityResponseSchema.parse(response)).toEqual(response);
-    expect(graphActivityResponseSchema.safeParse({ bucket: 'week', series: [], byEntity: {} }).success).toBe(true);
+    expect(graphActivityResponseSchema.safeParse({ bucket: 'week', timeZone: 'UTC', series: [], byEntity: {} }).success).toBe(true);
     expect(graphActivityResponseSchema.safeParse({ ...response, bucket: 'day' }).success).toBe(false);
     expect(
       graphActivityResponseSchema.safeParse({ ...response, byEntity: { [id(1)]: [{ start: '2026-01-01', count: 0 }] } }).success,

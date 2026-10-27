@@ -146,6 +146,28 @@ describe('buildExtractionContext (#363)', () => {
       expect(ctx.dateSource).toBe('stated');
     });
 
+    it("cuts the meeting date in the owner's zone: 02:30Z on the 27th is the 26th in Chicago, the 27th in Tokyo", () => {
+      const at = (timeZone?: string) => {
+        const input = makeInput();
+        input.transcript = { ...input.transcript!, recordedAt: new Date('2026-10-27T02:30:00.000Z') };
+        return buildExtractionContext({ ...input, ...(timeZone ? { timeZone } : {}) }).meetingDate;
+      };
+      expect(at('America/Chicago')).toBe('2026-10-26');
+      expect(at('Asia/Tokyo')).toBe('2026-10-27');
+      expect(at()).toBe('2026-10-27');
+    });
+
+    it('cuts a note-only meeting (no recording) at the note creation instant in the owner zone', () => {
+      const input = makeInput();
+      const ctx = buildExtractionContext({
+        ...input,
+        transcript: null,
+        timeZone: 'America/Chicago',
+        note: { ...input.note, createdAt: new Date('2026-10-27T02:30:00.000Z') },
+      });
+      expect(ctx.meetingDate).toBe('2026-10-26');
+    });
+
     it('is stated when the Context text names a date', () => {
       const input = makeInput();
       input.note = { ...input.note, contextText: 'Call held on March 2nd with Northwind.' };

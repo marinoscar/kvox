@@ -56,6 +56,7 @@ export function createDbSettings(
     patchUser: async () => {
       throw new Error('createDbSettings: patchUser is not part of the graph specs');
     },
+    readUserTimeZone: async () => null,
   } as unknown as KvoxSettingsPort;
 }
 

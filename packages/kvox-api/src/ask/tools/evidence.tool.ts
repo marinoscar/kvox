@@ -21,7 +21,7 @@ import type { KvoxAskDb } from '../data/ask-db.js';
 import {
   AskToolError,
   clip,
-  isoDate,
+  localInstantDate,
   jsonNullableInteger,
   jsonString,
   objectParameters,
@@ -89,7 +89,7 @@ export class EvidenceTool implements AskTool<EvidenceToolInput> {
       return {
         ref: ctx.handles.register({ kind: 'ev', id: link.id, ...(title ? { label: title } : {}) }),
         quote: clip(link.quote, QUOTE_MAX_CHARS),
-        source: { kind, title, at: isoDate(occurredAt), startMs },
+        source: { kind, title, at: localInstantDate(occurredAt, ctx.timeZone), startMs },
         available: src.available,
       };
     });

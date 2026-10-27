@@ -200,6 +200,36 @@ describe('Allowlist reminders (Integration)', () => {
       expect(JSON.stringify(data)).not.toContain('private annotation');
     });
 
+    it("renders the invitation date in the SENDING admin's zone: the X-Time-Zone header when the admin has no stored zone", async () => {
+      prismaMock.allowedEmail.findUnique.mockResolvedValue(entry());
+      counterWrites(1);
+      const user = await admin();
+
+      await request(context.app.getHttpServer())
+        .post(`/api/allowlist/${ENTRY_ID}/reminder`)
+        .set(authHeader(user.accessToken))
+        .set('X-Time-Zone', 'Asia/Tokyo')
+        .expect(200);
+
+      expect(notifyAddress).toHaveBeenCalledTimes(1);
+      // The 4th argument is `NotifyOptions`: the hint the platform uses for an address with no account.
+      expect(notifyAddress.mock.calls[0][3]).toEqual({ timeZone: 'Asia/Tokyo' });
+    });
+
+    it('falls back to UTC when the admin has no stored zone and the client sent no header (or a bad one)', async () => {
+      prismaMock.allowedEmail.findUnique.mockResolvedValue(entry());
+      counterWrites(1);
+      const user = await admin();
+
+      await request(context.app.getHttpServer())
+        .post(`/api/allowlist/${ENTRY_ID}/reminder`)
+        .set(authHeader(user.accessToken))
+        .set('X-Time-Zone', 'Not/AZone')
+        .expect(200);
+
+      expect(notifyAddress.mock.calls[0][3]).toEqual({ timeZone: 'UTC' });
+    });
+
     it('writes one allowlist.reminder_sent audit row naming the admin and the entry', async () => {
       prismaMock.allowedEmail.findUnique.mockResolvedValue(entry());
       counterWrites(3);

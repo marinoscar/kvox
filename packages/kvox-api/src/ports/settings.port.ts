@@ -135,4 +135,23 @@ export interface KvoxSettingsPort {
    * @param patch - the fields to change.
    */
   patchUser<T>(userId: string, name: string, patch: Partial<T>): Promise<T>;
+
+  /**
+   * The IANA time zone one user's dates follow (`America/Chicago`): every calendar
+   * day the domain derives from an instant or from "now" (a prompt's "today", a
+   * meeting date, an activity bucket, an export's "saved" line) is cut in it.
+   *
+   * The web edition answers the stored profile zone (`null` when the user has none,
+   * so the request's `X-Time-Zone` header and then UTC apply). KVox Desktop answers
+   * the device zone, `Intl.DateTimeFormat().resolvedOptions().timeZone`, and is
+   * never `null`. Total: a host that cannot tell answers `null`, never throws; a
+   * value that is not a valid IANA id is treated as `null` by the caller.
+   *
+   * Calendar-only values (valid ranges, `occurred_at`, `due_at`, a bare `as_of`) are
+   * floating dates at UTC midnight and never read this.
+   *
+   * @param userId - the user.
+   * @returns the zone id, or `null` when there is none.
+   */
+  readUserTimeZone(userId: string): Promise<string | null>;
 }

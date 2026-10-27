@@ -524,7 +524,16 @@ describe('settings adapter', () => {
   const store = { read: jest.fn(), patch: jest.fn() };
   const users = { getSettings: jest.fn(), patchSettings: jest.fn() };
   const prisma = { systemSettings: { findUnique: jest.fn() } };
-  const adapter = () => new PlatformKvoxSettingsAdapter(store as never, users as never, prisma as never);
+  const resolver = { resolveUserTimeZone: jest.fn() };
+  const adapter = () => new PlatformKvoxSettingsAdapter(store as never, users as never, resolver as never, prisma as never);
+
+  it('answers the stored profile time zone of the user, or null when there is none', async () => {
+    resolver.resolveUserTimeZone.mockReset().mockResolvedValueOnce('America/Chicago').mockResolvedValueOnce(null);
+
+    expect(await adapter().readUserTimeZone('u1')).toBe('America/Chicago');
+    expect(await adapter().readUserTimeZone('u2')).toBeNull();
+    expect(resolver.resolveUserTimeZone).toHaveBeenNthCalledWith(1, 'u1');
+  });
 
   it('verifies a namespace is in the platform registry instead of declaring it', () => {
     expect(() => adapter().registerNamespace({ scope: 'system', name: 'transcription', schema: z.object({}), defaults: {} })).not.toThrow();

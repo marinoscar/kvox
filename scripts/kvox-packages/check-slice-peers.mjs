@@ -64,6 +64,11 @@
 //                    Any kvox-web slice may import exactly
 //                    @marinoscar/platform-web/timezone/headless, the display
 //                    time zone store and formatters (HOST_NEUTRAL_ALLOWED).
+//                    Any kvox-api slice may import exactly
+//                    @marinoscar/platform-contract/timezone, the pure time zone
+//                    math (HOST_NEUTRAL_ALLOWED); the zone itself reaches the
+//                    domain through the settings port, never through
+//                    @marinoscar/platform-api.
 //                    packages/kvox-ai/src/** may import exactly one platform
 //                    specifier, the lean
 //                    @marinoscar/platform-ai-providers (the provider-adapter
@@ -147,6 +152,12 @@ export const HOST_NEUTRAL_ALLOWED = Object.freeze({
   // device's zone. `@marinoscar/platform-web` is therefore a required peer of the
   // universal `core` slice.
   'kvox-web': Object.freeze(['@marinoscar/platform-web/timezone/headless']),
+  // Every kvox-api slice derives calendar days and local midnights in the user's zone
+  // with the pure, framework-free time zone math of the platform contract (no Nest,
+  // no database, no transport). KVox Desktop already installs platform-contract
+  // through `@marinoscar/platform-web`. `@marinoscar/platform-contract` is a required
+  // peer of the universal `core` slice and of every slice that imports it.
+  'kvox-api': Object.freeze(['@marinoscar/platform-contract/timezone']),
   'kvox-ai': Object.freeze(['@marinoscar/platform-ai-providers']),
   'kvox-eval': Object.freeze(['@marinoscar/platform-ai-providers', '@marinoscar/platform-ai-providers/openai']),
 });
@@ -612,7 +623,7 @@ function checkHostNeutral(root, violations) {
             rule: 'host-neutral',
             message:
               allowed.length > 0
-                ? `${toPosix(relative(root, file))} imports '${specifier}'. A ${pkg} slice may import only ${allowed.map((a) => `'${a}'`).join(', ')} of @marinoscar/platform-*: anything else would not install on Desktop.`
+                ? `${toPosix(relative(root, file))} imports '${specifier}'. A ${pkg} slice may import only ${allowed.map((a) => `'${a}'`).join(', ')} of @marinoscar/platform-*: anything else would not install on Desktop. Bind the platform in apps/api/src/platform-kvox (or the web app) behind a port instead.`
                 : `${toPosix(relative(root, file))} imports '${specifier}'. A ${pkg} slice must not import @marinoscar/platform-*: it would not install on Desktop. Bind the platform in apps/api/src/platform-kvox (or the web app) behind a port instead.`,
           });
         }
