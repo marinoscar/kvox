@@ -54,7 +54,7 @@ function renderEntity(id = JOE_ID, user: MockUser = graphWriter) {
   return render(
     <Routes>
       <Route path="/graph/entities/:id" element={<GraphEntityPage />} />
-      <Route path="/graph" element={<GraphIndexPage />} />
+      <Route path="/graph/entities" element={<GraphIndexPage />} />
     </Routes>,
     { wrapperOptions: { route: `/graph/entities/${id}`, user } },
   );
@@ -123,7 +123,7 @@ describe('GraphEntityPage — header', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Not found' })).toBeInTheDocument();
     expect(screen.getByText(/does not exist, or you no longer have access to it/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to Knowledge' })).toHaveAttribute('href', '/graph');
+    expect(screen.getByRole('link', { name: 'Back to Knowledge' })).toHaveAttribute('href', '/graph/entities');
   });
 
   it('offers Retry on any other failure', async () => {
@@ -269,7 +269,7 @@ describe('GraphEntityPage — edit', () => {
 });
 
 describe('GraphEntityPage — forget', () => {
-  it('requires typing FORGET, posts #357 body and lands on /graph with a snackbar', async () => {
+  it('requires typing FORGET, posts #357 body and lands on the entity index with a snackbar', async () => {
     const user = userEvent.setup();
     let body: unknown = null;
     server.use(
@@ -295,7 +295,7 @@ describe('GraphEntityPage — forget', () => {
     expect(confirm).toBeEnabled();
     await user.click(confirm);
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Knowledge' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Entities' })).toBeInTheDocument();
     expect(body).toEqual({ confirmation: 'FORGET' });
     expect(await screen.findByText('Forgetting Joe Rivera… this takes a few seconds')).toBeInTheDocument();
   });

@@ -1,46 +1,37 @@
 /**
- * `/graph` — the knowledge graph's index (#373, epic #347; spec §13).
+ * `/graph/entities` — the knowledge graph's entity index (#373, epic #347;
+ * spec §13). Moved from `/graph` by #782, which made the whole-graph overview
+ * the knowledge landing; the index links back to it from its header.
  *
- * OWNED BY THE `home` DESTINATION, not a bottom-bar tab of its own: the bar is
- * at its four-tab ceiling by design (CLAUDE.md, Navigation Destination Model),
- * and the graph is reached from Home's Knowledge section, library search and
- * transcript speaker chips instead.
+ * OWNED BY THE `knowledge` DESTINATION (#438) through the `/graph` prefix;
+ * also reached from Home's Knowledge section ("All people & organizations").
  *
  * STATE LIVES IN THE URL (`?q=&type=Person,Organization`), so a filtered view
  * survives a reload, a drill-down and back, and can be shared with yourself.
  * An ABSENT `type` means the default selection (Person + Organization); an
  * explicit empty `type=` means every type.
  *
- * The phone treatment (horizontally scrolling chips, buttons folded into an
- * overflow menu) is one PAGE-LEVEL `down('sm')` read — the same kind
- * `LibraryPageFrame` makes. It decides where this page puts its own controls,
- * never whether app chrome mounts, so it is not a sixth coupled breakpoint gate
- * (CLAUDE.md, Settings UI Pattern rule 5).
+ * The phone treatment (horizontally scrolling chips) is one PAGE-LEVEL
+ * `down('sm')` read — the same kind `LibraryPageFrame` makes. It decides where
+ * this page puts its own controls, never whether app chrome mounts, so it is
+ * not a sixth coupled breakpoint gate (CLAUDE.md, Settings UI Pattern rule 5).
  *
- * The header links to Explore, Overview, Review (`/graph/review`, the
- * proposals waiting for review) and Possible duplicates (`/graph/duplicates`,
- * #766, with the number of pairs from one `?limit=50` read). The header's overflow menu (phone and desktop alike) carries
- * "Synonyms" (`/graph/synonyms`, #767, the caller's personal synonym groups), "Export
- * graph…" — `ExportGraphDialog` (#386), an RDF export of the caller's graph —
- * and, for a caller holding `graph:write`, "Import graph…" —
- * `ImportGraphDialog` (#387), which uploads an RDF file as a proposal to
- * review. The caller's last five imports are listed in a small "Imports"
- * section below the entities, shown only when there is one.
+ * The header is the shared `KnowledgeHeader` (#782): links to Overview
+ * (`/graph`), Explore, Review and Possible duplicates, and the overflow menu
+ * with Synonyms, "Export graph…" and, for a caller holding `graph:write`,
+ * "Import graph…". The caller's last five imports are listed in a small
+ * "Imports" section below the entities, shown only when there is one.
  */
 
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import SearchIcon from '@mui/icons-material/Search';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import Chip from '@mui/material/Chip';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
-import Menu from '@mui/material/Menu';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
 import Snackbar from '@mui/material/Snackbar';
@@ -53,12 +44,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { DUPLICATES_BADGE_LIMIT, DuplicatesLink, duplicatesBadgeText } from '../components/DuplicatesLink.js';
 import { EntityListRow } from '../components/EntityListRow.js';
-import { ExportGraphDialog } from '../components/ExportGraphDialog.js';
-import { ImportGraphDialog } from '../components/ImportGraphDialog.js';
+import { KnowledgeHeader } from '../components/KnowledgeHeader.js';
 import { EntityTypeFilter } from '../components/EntityTypeFilter.js';
-import { useGraphDuplicates } from '../../headless/hooks/useGraphDuplicates.js';
 import { useGraphEntities } from '../../headless/hooks/useGraphEntities.js';
 import { useRecentGraphImports } from '../../headless/hooks/useGraphImport.js';
 import { useGraphEffectiveOntology } from '../../headless/hooks/useGraphAttributeDefs.js';
@@ -81,6 +69,9 @@ export interface GraphIndexLocationState {
   /** Message the entity page hands over to show in a snackbar, such as "Forgetting…". */
   snackbar?: string;
 }
+
+/** The entity index's `h1` (#782: `/graph` is now the overview). */
+export const ENTITIES_TITLE = 'Entities';
 
 const SKELETON_ROWS = 6;
 
@@ -133,7 +124,7 @@ export function typesFromQuery(value: string | null): string[] {
 }
 
 /**
- * The `/graph` page: the caller's entities, filtered by type and search text held in the URL, with export and import actions in the header.
+ * The `/graph/entities` page: the caller's entities, filtered by type and search text held in the URL, with export and import actions in the header.
  *
  * @stability experimental
  */
@@ -156,23 +147,8 @@ export function GraphIndexPage() {
   const list = useGraphEntities({ type: selectedTypes, q });
   const searching = q.trim().length > 0;
 
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
   const canImport = useHasPermission('graph:write');
   const recentImports = useRecentGraphImports(canImport);
-  // One cheap read for the "Possible duplicates" badge (#766).
-  const duplicateCount = useGraphDuplicates({ limit: DUPLICATES_BADGE_LIMIT }).pairs.length;
-  const duplicateBadge = duplicatesBadgeText(duplicateCount);
-
-  const openExport = () => {
-    setMenuAnchor(null);
-    setExportOpen(true);
-  };
-  const openImport = () => {
-    setMenuAnchor(null);
-    setImportOpen(true);
-  };
   const [snackbar, setSnackbar] = useState<string | null>(
     () => (location.state as GraphIndexLocationState | null)?.snackbar ?? null,
   );
@@ -195,89 +171,11 @@ export function GraphIndexPage() {
   };
 
   const header = (
-    <Stack
-      direction="row"
-      spacing={2}
-      sx={{ alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}
-    >
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
-          Knowledge
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          People, organizations and projects from your reviewed notes.
-        </Typography>
-      </Box>
-      {isPhone ? (
-        <>
-          <IconButton
-            aria-label="More knowledge views"
-            aria-haspopup="menu"
-            onClick={(event) => setMenuAnchor(event.currentTarget)}
-          >
-            <MoreVertIcon />
-          </IconButton>
-          <Menu
-            anchorEl={menuAnchor}
-            open={Boolean(menuAnchor)}
-            onClose={() => setMenuAnchor(null)}
-          >
-            <MenuItem component={RouterLink} to="/graph/explore" onClick={() => setMenuAnchor(null)}>
-              Explore
-            </MenuItem>
-            <MenuItem component={RouterLink} to="/graph/overview" onClick={() => setMenuAnchor(null)}>
-              Overview
-            </MenuItem>
-            <MenuItem component={RouterLink} to="/graph/review" onClick={() => setMenuAnchor(null)}>
-              Review
-            </MenuItem>
-            <MenuItem
-              component={RouterLink}
-              to="/graph/duplicates"
-              onClick={() => setMenuAnchor(null)}
-              aria-label={duplicateBadge ? `Possible duplicates (${duplicateBadge})` : 'Possible duplicates'}
-            >
-              Possible duplicates
-              {duplicateBadge && (
-                <Chip size="small" color="warning" label={duplicateBadge} aria-hidden="true" sx={{ ml: 1, height: 20 }} />
-              )}
-            </MenuItem>
-            <MenuItem component={RouterLink} to="/graph/synonyms" onClick={() => setMenuAnchor(null)}>
-              Synonyms
-            </MenuItem>
-            <MenuItem onClick={openExport}>Export graph…</MenuItem>
-            {canImport && <MenuItem onClick={openImport}>Import graph…</MenuItem>}
-          </Menu>
-        </>
-      ) : (
-        <Stack direction="row" spacing={1} sx={{ flexShrink: 0, alignItems: 'center' }}>
-          <Button component={RouterLink} to="/graph/explore" variant="outlined">
-            Explore
-          </Button>
-          <Button component={RouterLink} to="/graph/overview" variant="outlined">
-            Overview
-          </Button>
-          <Button component={RouterLink} to="/graph/review" variant="outlined">
-            Review
-          </Button>
-          <DuplicatesLink count={duplicateCount} />
-          <IconButton
-            aria-label="More knowledge actions"
-            aria-haspopup="menu"
-            onClick={(event) => setMenuAnchor(event.currentTarget)}
-          >
-            <MoreVertIcon />
-          </IconButton>
-          <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
-            <MenuItem component={RouterLink} to="/graph/synonyms" onClick={() => setMenuAnchor(null)}>
-              Synonyms
-            </MenuItem>
-            <MenuItem onClick={openExport}>Export graph…</MenuItem>
-            {canImport && <MenuItem onClick={openImport}>Import graph…</MenuItem>}
-          </Menu>
-        </Stack>
-      )}
-    </Stack>
+    <KnowledgeHeader
+      current="entities"
+      title={ENTITIES_TITLE}
+      subtitle="People, organizations and projects from your reviewed notes."
+    />
   );
 
   let body: ReactNode;
@@ -394,9 +292,6 @@ export function GraphIndexPage() {
       {body}
 
       <RecentImports imports={recentImports.imports} />
-
-      <ExportGraphDialog open={exportOpen} onClose={() => setExportOpen(false)} />
-      {canImport && <ImportGraphDialog open={importOpen} onClose={() => setImportOpen(false)} />}
 
       <Snackbar
         open={Boolean(snackbar)}
