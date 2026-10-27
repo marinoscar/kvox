@@ -132,7 +132,7 @@ describeWithDb('GET /api/graph/insights (real Postgres)', () => {
     const ann = await g.entity('Person', 'Ann');
     const bob = await g.entity('Person', 'Bob');
     const cara = await g.entity('Person', 'Cara');
-    const acme = await g.entity('Organization', 'Acme');
+    const kappa = await g.entity('Organization', 'Kappa');
     const atlas = await g.entity('Project', 'Atlas');
 
     const cold = await g.relation('KNOWS', joe, ann);
@@ -141,7 +141,7 @@ describeWithDb('GET /api/graph/insights (real Postgres)', () => {
     await relationEvidenceAt(g, user.id, warm, [100, 120, 150, 5]); // one in the window
     const thin = await g.relation('KNOWS', joe, cara);
     await relationEvidenceAt(g, user.id, thin, [100, 120]); // too little before
-    const org = await g.relation('WORKS_AT', ann, acme);
+    const org = await g.relation('WORKS_AT', ann, kappa);
     await relationEvidenceAt(g, user.id, org, [60, 61, 62]); // newer silence
     const project = await g.relation('WORKS_ON', joe, atlas);
     await relationEvidenceAt(g, user.id, project, [100, 120, 150]); // not People/Organizations
@@ -150,7 +150,7 @@ describeWithDb('GET /api/graph/insights (real Postgres)', () => {
     await relationEvidenceAt(g, user.id, colleague, [90]);
 
     const res = await get(user.id);
-    expect(res.fadingTies.map((f) => [f.from.label, f.to.label].sort().join('+'))).toEqual(['Acme+Ann', 'Ann+Joe']);
+    expect(res.fadingTies.map((f) => [f.from.label, f.to.label].sort().join('+'))).toEqual(['Ann+Kappa', 'Ann+Joe']);
     const annJoe = res.fadingTies[1];
     expect(annJoe.relationTypes).toEqual(['COLLEAGUE_OF', 'KNOWS']);
     expect(annJoe.evidenceBefore).toBe(4);

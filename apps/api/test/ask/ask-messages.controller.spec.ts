@@ -185,7 +185,7 @@ describe('POST /api/ask/conversations/:id/messages (integration)', () => {
     const user = await createMockTestUser(context, { roleName: 'viewer' });
     const assistantId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
     prismaMock.askMessage.create
-      .mockResolvedValueOnce(row({ content: '  What changed   with Acme?  ' }) as never)
+      .mockResolvedValueOnce(row({ content: '  What changed   with Kappa?  ' }) as never)
       .mockResolvedValueOnce(row({ id: assistantId, role: 'assistant', status: 'pending', model: 'gpt-test', provider: 'openai' }) as never);
     prismaMock.job.create.mockResolvedValue({ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' } as never);
     prismaMock.askMessage.update.mockResolvedValue(
@@ -200,14 +200,14 @@ describe('POST /api/ask/conversations/:id/messages (integration)', () => {
     );
     prismaMock.askConversation.updateMany.mockResolvedValue({ count: 1 } as never);
 
-    const res = await post(user.accessToken, { content: '  What changed   with Acme?  ' }).expect(202);
+    const res = await post(user.accessToken, { content: '  What changed   with Kappa?  ' }).expect(202);
     const body = postAskMessageResponseSchema.parse(res.body.data);
     expect(body.userMessage.role).toBe('user');
     expect(body.assistantMessage).toMatchObject({ id: assistantId, role: 'assistant', status: 'pending', model: 'gpt-test' });
 
     // The question is stored trimmed; the assistant row is pending with the model.
     expect(prismaMock.askMessage.create.mock.calls[0][0]).toMatchObject({
-      data: { conversationId: CONV, role: 'user', status: 'complete', content: 'What changed   with Acme?' },
+      data: { conversationId: CONV, role: 'user', status: 'complete', content: 'What changed   with Kappa?' },
     });
     expect(prismaMock.askMessage.create.mock.calls[1][0]).toMatchObject({
       data: { conversationId: CONV, role: 'assistant', status: 'pending', model: 'gpt-test', provider: 'openai' },
@@ -222,7 +222,7 @@ describe('POST /api/ask/conversations/:id/messages (integration)', () => {
     });
     expect(prismaMock.askConversation.updateMany).toHaveBeenCalledWith({
       where: { id: CONV, ownerId: user.id, title: null },
-      data: { title: 'What changed with Acme?' },
+      data: { title: 'What changed with Kappa?' },
     });
   });
 });

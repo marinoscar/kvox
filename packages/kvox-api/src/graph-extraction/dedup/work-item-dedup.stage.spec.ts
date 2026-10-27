@@ -11,7 +11,7 @@ import { KvoxRateLimitError } from '../../ports/index.js';
 
 const SCHEMA = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
 const JOE = 'aaaaaaaa-0000-4000-8000-000000000001';
-const ACME = 'aaaaaaaa-0000-4000-8000-000000000002';
+const KAPPA = 'aaaaaaaa-0000-4000-8000-000000000002';
 const PILOT = 'aaaaaaaa-0000-4000-8000-000000000003';
 const OLD_A = 'bbbbbbbb-0000-4000-8000-00000000000a';
 const OLD_B = 'bbbbbbbb-0000-4000-8000-00000000000b';
@@ -252,7 +252,7 @@ describe('work-item-dedup stage', () => {
       id: 'cccccccc-0000-4000-8000-000000000001',
       type,
       fromId: JOE,
-      toId: ACME,
+      toId: KAPPA,
       props: {},
       valid,
       precision: valid ? 'year' : null,
@@ -262,7 +262,7 @@ describe('work-item-dedup stage', () => {
       ref: 'r1',
       type: 'WORKS_FOR',
       from: { ref: 'e1' },
-      to: { entityId: ACME },
+      to: { entityId: KAPPA },
       props: {},
       validFrom: '2020-01-01',
       validTo: null,
@@ -284,7 +284,7 @@ describe('work-item-dedup stage', () => {
       const attended = { ...edge(null, 'ATTENDED'), toId: meeting };
       const { db, stage } = build({ edges: [attended] });
       db.add('relation', rel({ ref: 'r1', type: 'ATTENDED', to: { entityId: meeting }, validFrom: null, precision: 'unknown' }));
-      db.add('relation', rel({ ref: 'r2', type: 'ATTENDED', to: { entityId: ACME }, validFrom: null, precision: 'unknown' }));
+      db.add('relation', rel({ ref: 'r2', type: 'ATTENDED', to: { entityId: KAPPA }, validFrom: null, precision: 'unknown' }));
       await stage.run(db.ctx());
       expect(db.byRef('r1').payload.dedup).toMatchObject({ verdict: 'known' });
       expect(db.byRef('r2').payload.dedup).toMatchObject({ verdict: 'new', targetRelationId: null });

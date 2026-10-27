@@ -129,7 +129,7 @@ describe('findNamePairs', () => {
       e('2', 'Person', 'avery example'),
       e('3', 'Organization', 'oac'),
       e('4', 'Organization', 'org alpha consulting'),
-      e('5', 'Organization', 'acme', 'roadrunner'),
+      e('5', 'Organization', 'kappa', 'roadrunner'),
       e('6', 'Organization', 'roadrunner inc', 'roadrunner'),
     ]);
     const byKey = new Map(pairs.map((p) => [pairKey(p.aId, p.bId), p.reasons]));
@@ -156,7 +156,7 @@ describe('findSynonymPairs (#767)', () => {
     { id: 'a', type: 'Organization', names: ['oac'] },
     { id: 'b', type: 'Organization', names: ['org alpha consulting', 'o&c'] },
     { id: 'c', type: 'Person', names: ['oac'] },
-    { id: 'd', type: 'Organization', names: ['acme'] },
+    { id: 'd', type: 'Organization', names: ['kappa'] },
   ];
   it('pairs same-type entities that fall in one group', () => {
     expect(findSynonymPairs(ents, [{ normalized: ['oac', 'org alpha consulting'], entityType: null }])).toEqual([

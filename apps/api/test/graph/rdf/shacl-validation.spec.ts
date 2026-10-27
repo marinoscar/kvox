@@ -193,7 +193,7 @@ describe('generated SHACL shapes validate hand-written graph data (rdf-validate-
   it('rejects a URL that is not http(s), and a caller-defined select value outside its choices', async () => {
     const report = await validate(`${PREFIXES}
       ent:a0000000-0000-4000-8000-000000000002 a kv:Organization ;
-        <https://schema.org/url> "ftp://acme.example"^^xsd:anyURI ;
+        <https://schema.org/url> "ftp://kappa.example.test"^^xsd:anyURI ;
         <${NS}attr/${TIER_ID}> "bronze" ;
         prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
     `);

@@ -11,7 +11,7 @@ import type { GraphCanvasProps } from '../../src/graph/ui/components/explorer/Gr
 import { GraphExplorerPage, type GraphExplorerPageSlots } from '../../src/graph/ui/pages/GraphExplorerPage.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
 import {
-  ACME_ID,
+  KAPPA_ID,
   ANA_ID,
   EV_EDGE_GONE,
   EV_EDGE_NOTE,
@@ -146,7 +146,7 @@ function renderExplorer(options: { route?: string; slots?: GraphExplorerPageSlot
 
 async function canvasReady() {
   const canvas = await screen.findByTestId('fake-canvas');
-  await within(canvas).findByRole('button', { name: 'Acme Corp' });
+  await within(canvas).findByRole('button', { name: 'Org Kappa' });
   return canvas;
 }
 
@@ -235,8 +235,8 @@ describe('the Evidence tab of an edge', () => {
     await user.click(within(panel).getByRole('tab', { name: 'Overview' }));
     await waitFor(() => expect(currentUrl().searchParams.get('tab')).toBe('overview'));
 
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
-    await waitFor(() => expect(currentUrl().searchParams.get('sel')).toBe(`n:${ACME_ID}`));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('sel')).toBe(`n:${KAPPA_ID}`));
     expect(currentUrl().searchParams.get('tab')).toBeNull();
 
     await user.click(within(canvas).getByRole('button', { name: 'stage' }));
@@ -244,8 +244,8 @@ describe('the Evidence tab of an edge', () => {
   });
 
   it('restores a selection from the URL once the graph has arrived, and drops one that is not on it', async () => {
-    renderExplorer({ route: `/graph/explore?seed=${JOE_ID}&sel=n:${ACME_ID}&tab=timeline` });
-    const panel = await screen.findByRole('group', { name: 'Acme Corp' });
+    renderExplorer({ route: `/graph/explore?seed=${JOE_ID}&sel=n:${KAPPA_ID}&tab=timeline` });
+    const panel = await screen.findByRole('group', { name: 'Org Kappa' });
     expect(within(panel).getByRole('tab', { name: 'Timeline', selected: true })).toBeInTheDocument();
   });
 
@@ -299,7 +299,7 @@ describe('the Evidence tab of an entity', () => {
     const { asked, timelineCalls } = serveLongTimeline();
     const user = userEvent.setup();
     renderExplorer();
-    const { panel } = await openNode(user, 'Acme Corp');
+    const { panel } = await openNode(user, 'Org Kappa');
     await user.click(within(panel).getByRole('tab', { name: 'Evidence' }));
 
     await waitFor(() => expect(within(panel).getAllByRole('article')).toHaveLength(20));
@@ -381,7 +381,7 @@ describe('the Evidence tab of an entity', () => {
     );
     const user = userEvent.setup();
     renderExplorer();
-    const { panel } = await openNode(user, 'Acme Corp');
+    const { panel } = await openNode(user, 'Org Kappa');
     await user.click(within(panel).getByRole('tab', { name: 'Evidence' }));
     expect(await within(panel).findAllByRole('article')).toHaveLength(1);
     expect(asked.flat()).toEqual([evId(1)]);
@@ -453,7 +453,7 @@ describe('Expand by type', () => {
     });
     const user = userEvent.setup();
     renderExplorer();
-    const { canvas, panel } = await openNode(user, 'Acme Corp');
+    const { canvas, panel } = await openNode(user, 'Org Kappa');
 
     await user.click(await within(panel).findByRole('button', { name: 'Expand by type' }));
     const menu = await screen.findByRole('menu');
@@ -462,9 +462,9 @@ describe('Expand by type', () => {
     expect(within(menu).getByRole('menuitem', { name: 'Person (3)' })).toBeInTheDocument();
 
     await user.click(within(menu).getByRole('menuitem', { name: 'Part of (1)' }));
-    await waitFor(() => expect(expandBodies.at(-1)).toMatchObject({ nodeIds: [ACME_ID], relationTypes: ['PART_OF'] }));
+    await waitFor(() => expect(expandBodies.at(-1)).toMatchObject({ nodeIds: [KAPPA_ID], relationTypes: ['PART_OF'] }));
     expect(expandBodies.at(-1)?.types).toBeUndefined();
-    // Only that relation's neighbour arrived: Atlas, not Dana (who WORKS_FOR Acme).
+    // Only that relation's neighbour arrived: Atlas, not Dana (who WORKS_FOR Kappa).
     expect(await within(canvas).findByRole('button', { name: 'Project Atlas' })).toBeInTheDocument();
     expect(within(canvas).queryByRole('button', { name: 'Dana Li' })).not.toBeInTheDocument();
   });
@@ -473,10 +473,10 @@ describe('Expand by type', () => {
     serveCounts({ relationsByType: { WORKS_FOR: 3, PART_OF: 1 }, relationsByNeighborType: { Person: 3, Project: 1 } });
     const user = userEvent.setup();
     renderExplorer();
-    const { canvas, panel } = await openNode(user, 'Acme Corp');
+    const { canvas, panel } = await openNode(user, 'Org Kappa');
     await user.click(await within(panel).findByRole('button', { name: 'Expand by type' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Person (3)' }));
-    await waitFor(() => expect(expandBodies.at(-1)).toMatchObject({ nodeIds: [ACME_ID], types: ['Person'] }));
+    await waitFor(() => expect(expandBodies.at(-1)).toMatchObject({ nodeIds: [KAPPA_ID], types: ['Person'] }));
     expect(expandBodies.at(-1)?.relationTypes).toBeUndefined();
     expect(await within(canvas).findByRole('button', { name: 'Dana Li' })).toBeInTheDocument();
     expect(within(canvas).queryByRole('button', { name: 'Project Atlas' })).not.toBeInTheDocument();
@@ -485,11 +485,11 @@ describe('Expand by type', () => {
   it('has no menu without per-type counts (an older API), and plain Expand still expands everything', async () => {
     const user = userEvent.setup();
     renderExplorer();
-    const { panel } = await openNode(user, 'Acme Corp');
+    const { panel } = await openNode(user, 'Org Kappa');
     await within(panel).findByRole('button', { name: 'Expand' });
     expect(within(panel).queryByRole('button', { name: 'Expand by type' })).not.toBeInTheDocument();
     await user.click(within(panel).getByRole('button', { name: 'Expand' }));
-    await waitFor(() => expect(expandBodies.at(-1)).toMatchObject({ nodeIds: [ACME_ID] }));
+    await waitFor(() => expect(expandBodies.at(-1)).toMatchObject({ nodeIds: [KAPPA_ID] }));
     expect(expandBodies.at(-1)?.types).toBeUndefined();
     expect(expandBodies.at(-1)?.relationTypes).toBeUndefined();
   });
@@ -518,7 +518,7 @@ describe('the Connections and Timeline tabs', () => {
     await user.click(within(panel).getByRole('button', { name: 'Show Attended on canvas' }));
     await waitFor(() => expect(within(canvas).getByRole('button', { name: 'Q3 planning' })).toHaveAttribute('data-marked', 'true'));
     expect(within(canvas).getByRole('button', { name: 'Weekly sync' })).toHaveAttribute('data-marked', 'true');
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-marked', 'false');
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'false');
 
     // A neighbour is selectable from the list.
     await user.click(within(attended).getByRole('button', { name: /^Weekly sync/ }));
@@ -704,7 +704,7 @@ describe('the Selection view', () => {
     renderExplorer();
     const canvas = await canvasReady();
     await user.click(screen.getByRole('button', { name: 'Select' }));
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
     const group = await screen.findByRole('group', { name: 'Selection' });
     return { canvas, group };
@@ -724,7 +724,7 @@ describe('the Selection view', () => {
     const user = userEvent.setup();
     const { group } = await markTwo(user);
     await user.click(within(group).getByRole('button', { name: 'Expand all' }));
-    await waitFor(() => expect(expandBodies.map((b) => b.nodeIds).slice(-2)).toEqual([[ACME_ID], [ANA_ID]]));
+    await waitFor(() => expect(expandBodies.map((b) => b.nodeIds).slice(-2)).toEqual([[KAPPA_ID], [ANA_ID]]));
     act(() => setViewportWidth(1024));
   });
 
@@ -732,7 +732,7 @@ describe('the Selection view', () => {
     const user = userEvent.setup();
     const { canvas, group } = await markTwo(user);
     await user.click(within(group).getByRole('button', { name: 'Hide' }));
-    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Acme Corp' })).not.toBeInTheDocument());
+    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Org Kappa' })).not.toBeInTheDocument());
     expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('group', { name: 'Selection' })).not.toBeInTheDocument());
     act(() => setViewportWidth(1024));
@@ -743,7 +743,7 @@ describe('the Selection view', () => {
     const { canvas, group } = await markTwo(user);
     await user.click(within(group).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(screen.queryByRole('group', { name: 'Selection' })).not.toBeInTheDocument());
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-marked', 'false');
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'false');
     act(() => setViewportWidth(1024));
   });
 });
@@ -754,11 +754,11 @@ describe('the inspector on a phone', () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     const sheet = await screen.findByRole('region', { name: 'Inspector' });
     expect(sheet).toHaveAttribute('data-snap', 'peek');
 
-    const group = within(sheet).getByRole('group', { name: 'Acme Corp' });
+    const group = within(sheet).getByRole('group', { name: 'Org Kappa' });
     for (const name of ['Focus', 'Expand']) {
       expect(within(group).getByRole('button', { name })).toBeInTheDocument();
     }
@@ -789,9 +789,9 @@ describe('the inspector on a phone', () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
-    const group = await screen.findByRole('group', { name: 'Acme Corp' });
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
+    const group = await screen.findByRole('group', { name: 'Org Kappa' });
     expect(within(group).getByRole('button', { name: 'Focus' })).toHaveStyle({ minHeight: '44px' });
     expect(within(group).getByRole('tab', { name: 'Overview' })).toHaveStyle({ minHeight: '48px' });
     act(() => setViewportWidth(1024));

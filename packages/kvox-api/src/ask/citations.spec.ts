@@ -21,7 +21,7 @@ const EV_OF_ITEM = '66666666-6666-4666-8666-666666666666';
 
 function registry() {
   const r = new HandleRegistry();
-  r.register({ kind: 'ent', id: ENT, label: 'Acme' }); // ent1
+  r.register({ kind: 'ent', id: ENT, label: 'Kappa' }); // ent1
   r.register({ kind: 'ev', id: EV }); // ev1
   r.register({ kind: 'itm', id: ITM, label: 'Send the deck' }); // itm1
   r.register({ kind: 'rel', id: REL, label: 'WORKS_AT' }); // rel1
@@ -83,7 +83,7 @@ describe('mapCitations', () => {
       id: ENT,
       via: null,
       valid: true,
-      label: 'Acme',
+      label: 'Kappa',
       documentKind: null,
       startMs: null,
     });

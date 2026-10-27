@@ -83,7 +83,7 @@ test.describe('Graph overview', () => {
       await openOverview(page, '/graph/overview?cluster=0');
       await canvasReady(page);
       // A right-hand panel from 600px up; a bottom sheet on the phone.
-      await expect(page.getByRole('heading', { level: 2, name: 'Acme Corp' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 2, name: 'Org Kappa' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Explore this cluster' })).toBeVisible();
 
       await expect(page).toHaveScreenshot(`graph-overview-selected-${name}.png`, { mask: [caption(page)] });

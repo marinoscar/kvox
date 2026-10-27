@@ -100,8 +100,8 @@ export interface AskConformanceOptions {
 
 const USER = '11111111-1111-4111-8111-111111111111';
 const ENTITY = '55555555-5555-4555-8555-555555555555';
-const QUESTION = 'What is going on with Acme?';
-const ANSWER = 'Acme is a client of yours and signed the renewal in August. It is led by Sarah Chen.';
+const QUESTION = 'What is going on with Kappa?';
+const ANSWER = 'Kappa is a client of yours and signed the renewal in August. It is led by Sarah Chen.';
 
 /** Graph services that write, which the Ask slice must never reference in code. */
 const WRITE_SERVICES = [
@@ -120,7 +120,7 @@ const WRITE_SERVICES = [
 const answer = (value: string): ScriptedTurn => step([text(value)]);
 
 /** A step that calls the `search` tool. */
-const lookup = (id: string): ScriptedTurn => step([toolCall(id, 'search', { query: 'acme' })]);
+const lookup = (id: string): ScriptedTurn => step([toolCall(id, 'search', { query: 'kappa' })]);
 
 /** Source files of the Ask slice (specs, declarations and the testing folder excluded), comments stripped. */
 function askSources(root: string): Array<{ path: string; code: string }> {
@@ -187,7 +187,7 @@ function stubToolset(onTool: { current: () => void }): AskToolset {
     }),
     execute: async (ctx: { handles: HandleRegistry }) => {
       onTool.current();
-      ctx.handles.register({ kind: 'ent', id: ENTITY, label: 'Acme' });
+      ctx.handles.register({ kind: 'ent', id: ENTITY, label: 'Kappa' });
 
       return {
         ok: true as const,
@@ -326,7 +326,7 @@ export function describeAskConformance(
     describe('a turn', () => {
       it('(a) holds text that precedes a tool call in the same step and discards it', async () => {
         const turn = await run([
-          step([text('Let me look that up for you now, one moment.'), toolCall('c1', 'search', { query: 'acme' })]),
+          step([text('Let me look that up for you now, one moment.'), toolCall('c1', 'search', { query: 'kappa' })]),
           answer(ANSWER),
         ]);
 
@@ -371,7 +371,7 @@ export function describeAskConformance(
       it('(d) a 429 after flushed text fails the turn rate_limit and keeps the text', async () => {
         const long = 'y'.repeat(600);
         const turn = await run([
-          step([text(long), toolCall('c1', 'search', { query: 'acme' })]),
+          step([text(long), toolCall('c1', 'search', { query: 'kappa' })]),
           step([failWith(new KvoxAiError('rate_limit', 'slow down', 1000))]),
         ]);
 

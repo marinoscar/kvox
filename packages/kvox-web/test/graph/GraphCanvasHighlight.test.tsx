@@ -9,7 +9,7 @@ import {
   type ExplorerState,
 } from '../../src/graph/ui/components/explorer/explorerModel.js';
 import { CURVED_ARROW_PROGRAM, PICTOGRAM_PROGRAM } from '../../src/graph/ui/components/explorer/explorerReducers.js';
-import { ACME_ID, ANA_ID, JOE_ID, Q3_MEETING_ID, expandFixture, hubFixture } from './graphData.js';
+import { KAPPA_ID, ANA_ID, JOE_ID, Q3_MEETING_ID, expandFixture, hubFixture } from './graphData.js';
 
 /**
  * `GraphCanvas`'s interaction (#667) with sigma stood in for: hover, the first
@@ -93,7 +93,7 @@ function explorer(): ExplorerState {
   state.seedIds = [JOE_ID];
   mergeSlice(state, slice);
   // A node with no edge to Joe, to be dimmed.
-  state.graph.addNode('lone', { ...state.graph.getNodeAttributes(ACME_ID), label: 'Lone' });
+  state.graph.addNode('lone', { ...state.graph.getNodeAttributes(KAPPA_ID), label: 'Lone' });
   return state;
 }
 
@@ -143,7 +143,7 @@ describe('GraphCanvas — hover', () => {
 
     act(() => handler('enterNode')({ node: JOE_ID }));
     expect(nodeReducer()(JOE_ID, data(state, JOE_ID)).highlighted).toBe(true);
-    expect(nodeReducer()(ACME_ID, data(state, ACME_ID)).forceLabel).toBe(true);
+    expect(nodeReducer()(KAPPA_ID, data(state, KAPPA_ID)).forceLabel).toBe(true);
     const dimmed = nodeReducer()('lone', data(state, 'lone'));
     expect(dimmed.label).toBe('');
     expect(String(dimmed.color)).toContain('0.15');
@@ -173,14 +173,14 @@ describe('GraphCanvas — hover', () => {
   it('a click selects at once with a pointer', () => {
     const state = explorer();
     const { props } = mountCanvas(state);
-    act(() => handler('clickNode')({ node: ACME_ID }));
-    expect(props.onNodeClick).toHaveBeenCalledWith(ACME_ID, { shiftKey: false });
+    act(() => handler('clickNode')({ node: KAPPA_ID }));
+    expect(props.onNodeClick).toHaveBeenCalledWith(KAPPA_ID, { shiftKey: false });
   });
 
   it('the selection lights its neighbours when nothing is hovered', () => {
     const state = explorer();
-    mountCanvas(state, { selectedId: ACME_ID });
-    expect(nodeReducer()(ACME_ID, data(state, ACME_ID)).highlighted).toBe(true);
+    mountCanvas(state, { selectedId: KAPPA_ID });
+    expect(nodeReducer()(KAPPA_ID, data(state, KAPPA_ID)).highlighted).toBe(true);
     expect(nodeReducer()('lone', data(state, 'lone')).label).toBe('');
   });
 
@@ -196,7 +196,7 @@ describe('GraphCanvas — touch: the page decides the first tap (one input-modal
     const state = explorer();
     const { props } = mountCanvas(state, { inputModality: 'touch', previewId: JOE_ID });
     expect(nodeReducer()(JOE_ID, data(state, JOE_ID)).highlighted).toBe(true);
-    expect(nodeReducer()(ACME_ID, data(state, ACME_ID)).forceLabel).toBe(true);
+    expect(nodeReducer()(KAPPA_ID, data(state, KAPPA_ID)).forceLabel).toBe(true);
     expect(nodeReducer()('lone', data(state, 'lone')).label).toBe('');
 
     // The first-tap-versus-select rule lives in the page (`useInputModality` decides); the canvas just reports.
@@ -207,8 +207,8 @@ describe('GraphCanvas — touch: the page decides the first tap (one input-modal
   it('moves the highlight with the preview', () => {
     const state = explorer();
     const { rerender, props } = mountCanvas(state, { inputModality: 'touch', previewId: JOE_ID });
-    rerender(<GraphCanvas {...props} inputModality="touch" previewId={ACME_ID} />);
-    expect(nodeReducer()(ACME_ID, data(state, ACME_ID)).highlighted).toBe(true);
+    rerender(<GraphCanvas {...props} inputModality="touch" previewId={KAPPA_ID} />);
+    expect(nodeReducer()(KAPPA_ID, data(state, KAPPA_ID)).highlighted).toBe(true);
     expect(nodeReducer()(JOE_ID, data(state, JOE_ID)).highlighted).toBeUndefined();
   });
 

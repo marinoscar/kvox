@@ -93,7 +93,7 @@ describe('GraphIndexPage', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Knowledge' })).toBeInTheDocument();
     const joe = await screen.findByRole('link', { name: /Joe Rivera/ });
     expect(joe).toHaveAttribute('href', `/graph/entities/${graphEntitySummaries[0].id}`);
-    expect(screen.getByRole('link', { name: /Acme Corp/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Org Kappa/ })).toBeInTheDocument();
     // Projects and Meetings are not selected by default.
     expect(screen.queryByRole('link', { name: /Project Atlas/ })).not.toBeInTheDocument();
     expect(listRequests[0].searchParams.get('type')).toBe('Person,Organization');
@@ -132,13 +132,13 @@ describe('GraphIndexPage', () => {
     renderIndex();
     await screen.findByRole('link', { name: /Joe Rivera/ });
 
-    await user.type(screen.getByRole('textbox', { name: 'Search people and organizations' }), 'acme');
+    await user.type(screen.getByRole('textbox', { name: 'Search people and organizations' }), 'kappa');
 
-    expect(await screen.findByRole('link', { name: /Acme Corp/ })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /Org Kappa/ })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('link', { name: /Joe Rivera/ })).not.toBeInTheDocument());
     const queries = listRequests.map((url) => url.searchParams.get('q')).filter(Boolean);
-    expect(queries).toEqual(['acme']);
-    expect(screen.getByTestId('location')).toHaveTextContent('q=acme');
+    expect(queries).toEqual(['kappa']);
+    expect(screen.getByTestId('location')).toHaveTextContent('q=kappa');
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
   });
 

@@ -94,7 +94,7 @@ export interface AskStreamStep {
   index: number;
   /** The tool the agent called. */
   name: string;
-  /** A human line, for example "Looked up Acme (Organization)". */
+  /** A human line, for example "Looked up Kappa (Organization)". */
   summary: string;
   /** How many rows the tool returned. */
   resultCount: number;

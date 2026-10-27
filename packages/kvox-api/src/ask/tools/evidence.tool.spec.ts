@@ -9,7 +9,7 @@ import { PERSONAL_SENSITIVITY_TYPES } from './sensitivity.js';
 // mapping, `available: false` sources, and a uuid-free result.
 // =============================================================================
 
-const ACME = uid(1);
+const KAPPA = uid(1);
 const ITEM = uid(2);
 const REL = uid(3);
 const T1 = uid(4);
@@ -18,8 +18,8 @@ const N1 = uid(5);
 const segmentLink = (id: string, available: boolean) => ({
   id,
   subjectKind: 'entity',
-  subjectId: ACME,
-  quote: `Acme signed ${'x'.repeat(400)}`,
+  subjectId: KAPPA,
+  quote: `Kappa signed ${'x'.repeat(400)}`,
   createdAt: '2026-09-01T00:00:00.000Z',
   source: {
     kind: 'segment',
@@ -38,10 +38,10 @@ const segmentLink = (id: string, available: boolean) => ({
 const noteLink = {
   id: uid(31),
   subjectKind: 'entity',
-  subjectId: ACME,
+  subjectId: KAPPA,
   quote: 'From the notes',
   createdAt: '2026-09-01T00:00:00.000Z',
-  source: { kind: 'note', noteId: N1, noteTitle: 'Acme notes', noteVersion: 2, currentNoteVersion: 3, charStart: 0, charEnd: 10, versionChanged: true, available: true, href: `/notes/${N1}?v=2` },
+  source: { kind: 'note', noteId: N1, noteTitle: 'Kappa notes', noteVersion: 2, currentNoteVersion: 3, charStart: 0, charEnd: 10, versionChanged: true, available: true, href: `/notes/${N1}?v=2` },
 };
 
 function build(opts: { entityCount?: number; item?: object | null; relationCount?: number; rows?: object[] } = {}) {
@@ -63,11 +63,11 @@ describe('EvidenceTool', () => {
   it('lists quotes for an entity, newest source first, with handles', async () => {
     const { tool, evidence, prisma } = build();
     const ctx = makeCtx();
-    const h = seedEntity(ctx, ACME, 'Acme');
+    const h = seedEntity(ctx, KAPPA, 'Kappa');
     const res = await tool.run(ctx, tool.input.parse({ subject: h, limit: null }));
     expect(prisma.kgEntity.count).toHaveBeenCalledWith({
       where: {
-        id: ACME,
+        id: KAPPA,
         ownerId: ctx.user.id,
         reviewStatus: { in: ['accepted', 'edited'] },
         mergedIntoId: null,
@@ -75,7 +75,7 @@ describe('EvidenceTool', () => {
         type: { notIn: [...PERSONAL_SENSITIVITY_TYPES] },
       },
     });
-    expect(evidence.listForSubject).toHaveBeenCalledWith(ctx.user.id, 'entity', ACME, 6);
+    expect(evidence.listForSubject).toHaveBeenCalledWith(ctx.user.id, 'entity', KAPPA, 6);
     const data = res.data as Array<Record<string, unknown>>;
     expect(data).toHaveLength(3);
     expect(data[0]).toMatchObject({
@@ -84,10 +84,10 @@ describe('EvidenceTool', () => {
       available: true,
     });
     expect((data[0].quote as string).length).toBeLessThanOrEqual(300);
-    expect(data[1]).toEqual({ ref: 'ev2', quote: 'From the notes', source: { kind: 'note', title: 'Acme notes', at: '2026-02-01', startMs: null }, available: true });
+    expect(data[1]).toEqual({ ref: 'ev2', quote: 'From the notes', source: { kind: 'note', title: 'Kappa notes', at: '2026-02-01', startMs: null }, available: true });
     expect(data[2]).toMatchObject({ ref: 'ev3', source: { kind: 'transcript', title: null, at: null, startMs: null }, available: false });
     expect(ctx.handles.resolve('ev1')).toEqual({ kind: 'ev', id: uid(30), label: 'Weekly sync' });
-    expect(res.summary).toBe('Found 3 quotes for Acme');
+    expect(res.summary).toBe('Found 3 quotes for Kappa');
     expect(res.truncated).toBe(false);
     expectNoUuid(res.data);
   });
@@ -95,7 +95,7 @@ describe('EvidenceTool', () => {
   it('flags truncation when more quotes exist', async () => {
     const { tool } = build();
     const ctx = makeCtx();
-    const res = await tool.run(ctx, tool.input.parse({ subject: seedEntity(ctx, ACME), limit: 2 }));
+    const res = await tool.run(ctx, tool.input.parse({ subject: seedEntity(ctx, KAPPA), limit: 2 }));
     expect((res.data as unknown[]).length).toBe(2);
     expect(res.truncated).toBe(true);
   });
@@ -140,7 +140,7 @@ describe('EvidenceTool', () => {
   it('refuses a merged entity', async () => {
     const { tool } = build({ entityCount: 0 });
     const ctx = makeCtx();
-    await expect(tool.run(ctx, tool.input.parse({ subject: seedEntity(ctx, ACME) }))).rejects.toThrow(AskToolError);
+    await expect(tool.run(ctx, tool.input.parse({ subject: seedEntity(ctx, KAPPA) }))).rejects.toThrow(AskToolError);
   });
 
   it('reports a manual citation (#586) as "Set by hand", available, with no date and no time', async () => {

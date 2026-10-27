@@ -41,7 +41,7 @@ import { createTestDb, type TestDb } from './host/db.js';
 // `npm run test:db -w @marinoscar/kvox-api -- ask`.
 // =============================================================================
 
-const ANSWER = 'Acme renewed in March, according to the sync you recorded last week and the notes that followed it.';
+const ANSWER = 'Kappa renewed in March, according to the sync you recorded last week and the notes that followed it.';
 
 describe('Ask (real PostgreSQL, owner-only defaults)', () => {
   let db: TestDb;
@@ -123,7 +123,7 @@ describe('Ask (real PostgreSQL, owner-only defaults)', () => {
 
   it('isolates owners: another user\'s conversation is never listed and is the same 404 as a missing one', async () => {
     const [a, b] = [await user(), await user()];
-    const mine = await conversations.create(a, { title: 'Acme' });
+    const mine = await conversations.create(a, { title: 'Kappa' });
 
     expect((await conversations.list(b, { limit: 20 })).items).toEqual([]);
     expect((await conversations.list(a, { limit: 20 })).items.map((c) => c.id)).toEqual([mine.id]);
@@ -139,8 +139,8 @@ describe('Ask (real PostgreSQL, owner-only defaults)', () => {
     const owner = await user();
     const older = await conversations.create(owner, { title: 'Older' });
     const newer = await conversations.create(owner, { title: 'Newer' });
-    await db.prisma.askMessage.create({ data: { conversationId: older.id, role: 'user', content: 'Who runs Acme?', status: 'complete' } });
-    await db.prisma.askMessage.create({ data: { conversationId: older.id, role: 'assistant', content: 'Sarah runs Acme.[^ent1]', status: 'complete' } });
+    await db.prisma.askMessage.create({ data: { conversationId: older.id, role: 'user', content: 'Who runs Kappa?', status: 'complete' } });
+    await db.prisma.askMessage.create({ data: { conversationId: older.id, role: 'assistant', content: 'Sarah runs Kappa.[^ent1]', status: 'complete' } });
     await db.prisma.askMessage.create({ data: { conversationId: newer.id, role: 'user', content: 'Still working?', status: 'complete' } });
     await db.prisma.askMessage.create({ data: { conversationId: newer.id, role: 'assistant', status: 'streaming' } });
     await db.prisma.askConversation.update({ where: { id: newer.id }, data: { updatedAt: new Date(Date.now() + 5_000) } });
@@ -150,7 +150,7 @@ describe('Ask (real PostgreSQL, owner-only defaults)', () => {
     expect(page.nextCursor).not.toBeNull();
 
     const next = await conversations.list(owner, { limit: 1, cursor: page.nextCursor ?? undefined });
-    expect(next.items.map((c) => [c.title, c.running, c.lastMessagePreview])).toEqual([['Older', false, 'Sarah runs Acme.']]);
+    expect(next.items.map((c) => [c.title, c.running, c.lastMessagePreview])).toEqual([['Older', false, 'Sarah runs Kappa.']]);
     expect(next.nextCursor).toBeNull();
 
     const detail = await conversations.get(owner, older.id, {});
@@ -180,7 +180,7 @@ describe('Ask (real PostgreSQL, owner-only defaults)', () => {
   it('runs a whole turn: the answer, tokens and finish reason land in the row and the title is derived', async () => {
     const owner = await user();
     const conv = await conversations.create(owner, {});
-    const posted = await messages.post(owner, conv.id, { content: 'When   did Acme renew?' });
+    const posted = await messages.post(owner, conv.id, { content: 'When   did Kappa renew?' });
     expect(posted.assistantMessage).toMatchObject({ status: 'pending', model: 'scripted-model' });
     expect(jobs.jobs.at(-1)?.input).toMatchObject({ type: ASK_RESPOND_JOB_TYPE, subjectId: posted.assistantMessage.id, priority: -10 });
 
@@ -189,7 +189,7 @@ describe('Ask (real PostgreSQL, owner-only defaults)', () => {
 
     const row = await db.prisma.askMessage.findUniqueOrThrow({ where: { id: posted.assistantMessage.id } });
     expect(row).toMatchObject({ status: 'complete', content: ANSWER, finishReason: 'stop', promptTokens: 120, completionTokens: 30, errorClass: null });
-    expect((await db.prisma.askConversation.findUniqueOrThrow({ where: { id: conv.id } })).title).toBe('When did Acme renew?');
+    expect((await db.prisma.askConversation.findUniqueOrThrow({ where: { id: conv.id } })).title).toBe('When did Kappa renew?');
   });
 
   it('deletes a conversation with its messages, audits counts only, and a turn whose conversation vanished is a no-op', async () => {

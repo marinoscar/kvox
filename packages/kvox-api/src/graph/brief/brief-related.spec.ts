@@ -28,7 +28,7 @@ describe('fuseRelatedSources', () => {
     ]);
     const out = fuseRelatedSources({
       text: [
-        { kind: 'transcript', id: T(1), title: 't1', snippetHtml: '<mark>Acme</mark>', startMs: 1500 },
+        { kind: 'transcript', id: T(1), title: 't1', snippetHtml: '<mark>Kappa</mark>', startMs: 1500 },
         { kind: 'transcript', id: T(2), title: 't2', snippetHtml: null, startMs: null },
       ],
       graph: [
@@ -44,7 +44,7 @@ describe('fuseRelatedSources', () => {
     expect(out[1].score).toBeCloseTo(out[2].score);
     expect(out.map((r) => r.inGraph)).toEqual([true, true, false]);
     // Snippets come only from the text arm.
-    expect(out[2]).toMatchObject({ snippetHtml: '<mark>Acme</mark>', startMs: 1500 });
+    expect(out[2]).toMatchObject({ snippetHtml: '<mark>Kappa</mark>', startMs: 1500 });
     expect(out[1]).toMatchObject({ snippetHtml: null, startMs: null });
   });
 

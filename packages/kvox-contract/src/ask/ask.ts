@@ -106,7 +106,7 @@ export const askToolCallSchema = z.object({
   index: z.number().int(),
   name: z.string(),
   arguments: z.record(z.string(), z.unknown()).describe('As the model sent them (handles, not ids).'),
-  summary: z.string().describe('A human line, e.g. "Looked up Acme (Organization)".'),
+  summary: z.string().describe('A human line, e.g. "Looked up Kappa (Organization)".'),
   resultCount: z.number().int(),
   durationMs: z.number().int(),
   error: z.string().nullable(),

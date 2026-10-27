@@ -74,7 +74,7 @@ export function fixtureBatches(): RdfSubjectBlock[][] {
     [b.ontologyHeader(), ...b.attributeDefinitions()],
     blocks([
       b.entity(entity(1, 'Person', 'Sarah "SC" Chen', { aliases: ['Sarah'], outgoing: [works] })),
-      b.entity(entity(2, 'Organization', 'Acme', { props: { website: 'https://acme.example', u_tier000001: 'gold' } })),
+      b.entity(entity(2, 'Organization', 'Kappa', { props: { website: 'https://kappa.example.test', u_tier000001: 'gold' } })),
       b.entity(entity(3, 'Meeting', 'Pilot sync', { occurredAt: new Date('2026-04-02T15:00:00Z') })),
     ]),
     blocks(

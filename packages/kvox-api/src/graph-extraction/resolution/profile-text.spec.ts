@@ -6,24 +6,24 @@ describe('buildEntityProfileText', () => {
       buildEntityProfileText(
         { type: 'Person', label: 'Sarah Chen', aliases: ['Sarah Chen', 'S. Chen', 'sarah'] },
         {
-          orgLabels: ['Northwind Robotics', 'northwind robotics'],
+          orgLabels: ['Org Lambda Robotics', 'org lambda robotics'],
           roleTitles: ['CTO'],
-          coMentioned: ['Joe', 'Pilot', 'Sarah Chen', 'Acme', 'Bob', 'Q2 plan', 'Extra'],
+          coMentioned: ['Joe', 'Pilot', 'Sarah Chen', 'Kappa', 'Bob', 'Q2 plan', 'Extra'],
         },
       ),
     ).toBe(
       [
         'Person: Sarah Chen',
         'Also known as: S. Chen, sarah',
-        'Organization: Northwind Robotics',
+        'Organization: Org Lambda Robotics',
         'Role: CTO',
-        'Often mentioned with: Joe, Pilot, Acme, Bob, Q2 plan',
+        'Often mentioned with: Joe, Pilot, Kappa, Bob, Q2 plan',
       ].join('\n'),
     );
   });
 
   it('omits lines with nothing to say', () => {
-    expect(buildEntityProfileText({ type: 'Organization', label: ' Acme ' })).toBe('Organization: Acme');
+    expect(buildEntityProfileText({ type: 'Organization', label: ' Kappa ' })).toBe('Organization: Kappa');
   });
 });
 

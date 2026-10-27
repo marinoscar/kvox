@@ -296,7 +296,7 @@ describe('ProposalReviewSheet — decisions reach #366 verbatim', () => {
   it('Undo decision sends { decision: "pending" }', async () => {
     renderSheet();
     await draftLoaded();
-    const { user, menu } = await rowMenu('Northwind Robotics');
+    const { user, menu } = await rowMenu('Org Lambda Robotics');
     await user.click(within(menu).getByRole('menuitem', { name: 'Undo decision' }));
     await waitFor(() => expect(lastRequest(/items\//)?.body).toEqual({ decision: 'pending' }));
   });
@@ -332,7 +332,7 @@ describe('ProposalReviewSheet — decisions reach #366 verbatim', () => {
   it('Link to existing on a relation sends relinkTo for one endpoint', async () => {
     renderSheet();
     await draftLoaded();
-    const { user, menu } = await rowMenu('Tom → works for → Northwind Robotics');
+    const { user, menu } = await rowMenu('Tom → works for → Org Lambda Robotics');
     await user.click(within(menu).getByRole('menuitem', { name: 'Link to existing…' }));
     const dialog = await screen.findByRole('dialog', { name: /Re-link Tom/ });
     await user.type(within(dialog).getByRole('combobox', { name: 'Search your graph' }), 'Tom');

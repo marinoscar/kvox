@@ -12,7 +12,7 @@ import type { MockUser } from './helpers.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
 import { graphReader, graphWriter } from './graphTestUsers.js';
 import {
-  ACME_ID,
+  KAPPA_ID,
   JOE_ID,
   SENSITIVE_FACT_STATEMENT,
   briefFixture,
@@ -301,11 +301,11 @@ describe('GraphEntityPage — forget', () => {
   });
 
   it('is not offered for a non-Person', async () => {
-    renderEntity(ACME_ID);
-    await screen.findByRole('heading', { level: 1, name: 'Acme Corp' });
+    renderEntity(KAPPA_ID);
+    await screen.findByRole('heading', { level: 1, name: 'Org Kappa' });
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
     // The menu is there for "Merge into…" (#765), without the Person-only Forget.
-    await userEvent.setup().click(screen.getByRole('button', { name: 'More actions for Acme Corp' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'More actions for Org Kappa' }));
     expect(await screen.findByRole('menuitem', { name: 'Merge into…' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Forget this person…' })).not.toBeInTheDocument();
   });
@@ -434,7 +434,7 @@ describe('GraphEntityPage — connections', () => {
     const section = await screen.findByRole('region', { name: 'Connections' });
 
     expect(await within(section).findByRole('heading', { name: 'Works for' })).toBeInTheDocument();
-    expect(within(section).getByRole('link', { name: 'Acme Corp' })).toHaveAttribute('href', `/graph/entities/${ACME_ID}`);
+    expect(within(section).getByRole('link', { name: 'Org Kappa' })).toHaveAttribute('href', `/graph/entities/${KAPPA_ID}`);
     const attended = within(section).getByRole('heading', { name: 'Attended' });
     expect(attended.nextElementSibling?.querySelectorAll('li')).toHaveLength(2);
     // The item is the SOURCE of ASSIGNED_TO, so the group reads from Joe's side.

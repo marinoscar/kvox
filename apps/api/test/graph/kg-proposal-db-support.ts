@@ -29,7 +29,7 @@ import { createPlatformTranscriptSharing, createTranscriptAccess } from '../help
 export const V = 'test';
 
 export const NOTE_BODY =
-  '# Kickoff\n\nSarah Chen joined Northwind Robotics in March 2026.\n\n' +
+  '# Kickoff\n\nSarah Chen joined Org Lambda Robotics in March 2026.\n\n' +
   'Sarah will send the deck by March 10.\n\nThe pilot budget was cut.\n\n' +
   'Sarah will send the proposal, now by March 13.\n\nThe Pilot project starts soon.';
 
@@ -110,7 +110,7 @@ export async function seedFixture(prisma: PrismaClient, prefix: string) {
     data: { transcriptId: transcript.id, label: 'A', displayName: 'Sarah Chen', colorIndex: 0 },
   });
   const segment = await prisma.transcriptSegment.create({
-    data: { transcriptId: transcript.id, speakerId: speaker.id, startMs: 0, endMs: 4000, ordinal: 1000, text: "Hi, I'm Sarah Chen, now at Northwind Robotics.", words: [] },
+    data: { transcriptId: transcript.id, speakerId: speaker.id, startMs: 0, endMs: 4000, ordinal: 1000, text: "Hi, I'm Sarah Chen, now at Org Lambda Robotics.", words: [] },
   });
   const note = await prisma.note.create({
     data: { ownerId, title: 'Kickoff', body: NOTE_BODY, status: 'ready', sourceType: 'transcript', sourceTranscriptId: transcript.id, currentVersion: 1 },
@@ -154,13 +154,13 @@ export async function seedFixture(prisma: PrismaClient, prefix: string) {
   const temporalNone = { validFrom: null, validTo: null, precision: 'unknown' };
   const rows: Array<{ key: string; kind: 'entity' | 'relation' | 'item' | 'closing'; decision: 'accept' | 'pending'; payload: Record<string, unknown>; resolution?: unknown; quote: string }> = [
     {
-      key: 'e1', kind: 'entity', decision: 'accept', quote: 'Sarah Chen joined Northwind Robotics in March 2026.',
+      key: 'e1', kind: 'entity', decision: 'accept', quote: 'Sarah Chen joined Org Lambda Robotics in March 2026.',
       payload: { ref: 'e1', type: 'Person', label: 'S. Chen', aliases: [], props: {}, occurredAt: null },
       resolution: { ref: sarah, score: 0.97, source: 'alias', candidates: [{ entityId: sarah, label: 'Sarah Chen', type: 'Person', score: 0.97, signals: ['alias'] }], adjudication: null },
     },
     {
-      key: 'e2', kind: 'entity', decision: 'accept', quote: 'Sarah Chen joined Northwind Robotics in March 2026.',
-      payload: { ref: 'e2', type: 'Organization', label: 'Northwind Robotics', aliases: [], props: {}, occurredAt: null },
+      key: 'e2', kind: 'entity', decision: 'accept', quote: 'Sarah Chen joined Org Lambda Robotics in March 2026.',
+      payload: { ref: 'e2', type: 'Organization', label: 'Org Lambda Robotics', aliases: [], props: {}, occurredAt: null },
       resolution: { ref: null, score: null, source: null, candidates: [], adjudication: null },
     },
     {
@@ -172,7 +172,7 @@ export async function seedFixture(prisma: PrismaClient, prefix: string) {
       payload: { ref: 'e3', type: 'Project', label: 'Pilot', aliases: [], props: {}, occurredAt: null },
     },
     {
-      key: 'r1', kind: 'relation', decision: 'accept', quote: 'Sarah Chen joined Northwind Robotics in March 2026.',
+      key: 'r1', kind: 'relation', decision: 'accept', quote: 'Sarah Chen joined Org Lambda Robotics in March 2026.',
       payload: { ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { ref: 'e2' }, props: {}, validFrom: '2026-03-01', validTo: null, precision: 'month' },
     },
     {
@@ -201,7 +201,7 @@ export async function seedFixture(prisma: PrismaClient, prefix: string) {
       },
     },
     {
-      key: 'c1', kind: 'closing', decision: 'accept', quote: 'Sarah Chen joined Northwind Robotics in March 2026.',
+      key: 'c1', kind: 'closing', decision: 'accept', quote: 'Sarah Chen joined Org Lambda Robotics in March 2026.',
       payload: {
         relationId: oldEdge, relationType: 'WORKS_FOR', fromLabel: 'Sarah Chen', toLabel: 'OldCo', roleTitle: null,
         previousValid: { from: '2019-01-01', to: null, precision: 'year' }, closeAt: '2026-03-01', precision: 'month',

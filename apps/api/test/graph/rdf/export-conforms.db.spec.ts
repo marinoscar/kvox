@@ -194,13 +194,13 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
       endMs: 4000,
       charStart: 0,
       charEnd: 5,
-      quote: 'Sarah joined Acme',
+      quote: 'Sarah joined Kappa',
     });
     const marcus = await g.entity('Person', 'Marcus Webb');
     const people = [];
     for (let i = 0; i < 8; i++) people.push(await g.entity('Person', `Person ${i}`));
-    const acme = await g.entity('Organization', 'Acme', { props: { website: 'https://acme.example', u_tier000001: 'gold' } });
-    const globex = await g.entity('Organization', 'Globex');
+    const kappa = await g.entity('Organization', 'Kappa', { props: { website: 'https://kappa.example.test', u_tier000001: 'gold' } });
+    const sigma = await g.entity('Organization', 'Org Sigma');
     const meeting = await g.entity('Meeting', 'Pilot sync', {
       occurredAt: new Date('2026-04-02T15:00:00Z'),
       props: { dateSource: 'stated', topics: ['budget', 'hiring'] },
@@ -222,25 +222,25 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
     const unreviewed = await g.entity('Person', 'Maybe Person', { reviewStatus: 'unreviewed' });
     const rejected = await g.entity('Organization', 'Rejected Org', { reviewStatus: 'rejected' });
 
-    const worksFor = await g.relation('WORKS_FOR', sarah, acme, { valid: '[2019-01-01,2024-06-01)', precision: 'month', confidence: 0.9 });
-    const hasRole = await g.relation('HAS_ROLE', sarah, acme, { valid: '[2024-06-01,)', precision: 'month' });
+    const worksFor = await g.relation('WORKS_FOR', sarah, kappa, { valid: '[2019-01-01,2024-06-01)', precision: 'month', confidence: 0.9 });
+    const hasRole = await g.relation('HAS_ROLE', sarah, kappa, { valid: '[2024-06-01,)', precision: 'month' });
     await prisma.kgRelation.update({ where: { id: hasRole }, data: { props: { title: 'Staff Engineer' } } });
     await g.relation('REPORTS_TO', sarah, marcus, { valid: '[2024-01-01,)', precision: 'day' });
     await g.relation('ATTENDED', sarah, meeting);
     await g.relation('ATTENDED', marcus, meeting);
     for (const p of people.slice(0, 3)) await g.relation('ATTENDED', p, meeting);
-    await g.relation('WORKS_FOR', people[3], globex, { valid: '[2020-01-01,)', precision: 'year' });
+    await g.relation('WORKS_FOR', people[3], sigma, { valid: '[2020-01-01,)', precision: 'year' });
     await g.relation('DISCUSSED', meeting, project);
-    await g.relation('PART_OF', project, acme);
+    await g.relation('PART_OF', project, kappa);
     const toUnreviewed = await g.relation('REPORTS_TO', marcus, unreviewed);
-    const rejectedRel = await g.relation('WORKS_FOR', marcus, globex, { reviewStatus: 'rejected' });
+    const rejectedRel = await g.relation('WORKS_FOR', marcus, sigma, { reviewStatus: 'rejected' });
     const speakerLink = await g.relation('IDENTIFIED_AS', null, sarah, { fromSpeakerId: speakerA.id });
 
     const commitment = await g.item('commitment', {
       title: 'Send the proposal',
       statement: 'Sarah will send the updated proposal by Friday.',
       ownerPersonId: sarah,
-      counterpartyId: acme,
+      counterpartyId: kappa,
       meetingId: meeting,
       subjectId: project,
       dueAt: new Date('2026-04-10T17:00:00Z'),
@@ -255,7 +255,7 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
     });
     const claim = await g.item('claim', {
       statement: 'The pilot budget was cut by 20%.',
-      subjectId: acme,
+      subjectId: kappa,
       valid: '[2026-03-01,)',
       precision: 'month',
     });
@@ -263,11 +263,11 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
     const personal = await g.item('person_fact', { statement: 'Sarah prefers written updates.', subjectId: sarah, sensitivity: 'personal' });
     const sensitive = await g.item('person_fact', { statement: 'SECRET-FACT-STATEMENT', subjectId: sarah, sensitivity: 'sensitive' });
     await g.evidence('item', sensitive, { quote: 'SECRET-FACT-QUOTE' });
-    const unreviewedItem = await g.item('claim', { statement: 'UNREVIEWED-CLAIM', subjectId: acme, reviewStatus: 'unreviewed' });
+    const unreviewedItem = await g.item('claim', { statement: 'UNREVIEWED-CLAIM', subjectId: kappa, reviewStatus: 'unreviewed' });
 
     return {
       user,
-      ids: { trip, interest, milestone, spouseOf, sarah, acme, meeting, tombstone, unreviewed, rejected, worksFor, toUnreviewed, rejectedRel, speakerLink, commitment, newDecision, oldDecision, personal, sensitive, unreviewedItem },
+      ids: { trip, interest, milestone, spouseOf, sarah, kappa, meeting, tombstone, unreviewed, rejected, worksFor, toUnreviewed, rejectedRel, speakerLink, commitment, newDecision, oldDecision, personal, sensitive, unreviewedItem },
       defs: { tier, medical },
     };
   }
@@ -369,7 +369,7 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
 
     // Any committed change moves the fingerprint.
     await prisma.kgEntityAlias.create({
-      data: { entityId: ids.acme, ownerId: user.id, alias: 'Acme Corp', normalized: 'acme corp', source: 'user' },
+      data: { entityId: ids.kappa, ownerId: user.id, alias: 'Org Kappa', normalized: 'org kappa', source: 'user' },
     });
     const changed = await service.requestExport(user.id, 'turtle');
     expect(changed.reused).toBe(false);

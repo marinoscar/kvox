@@ -9,7 +9,7 @@ import { ListCommitmentsTool } from './list-commitments.tool.js';
 // =============================================================================
 
 const SARAH = uid(1);
-const ACME = uid(2);
+const KAPPA = uid(2);
 const C1 = uid(3);
 const C2 = uid(4);
 
@@ -28,7 +28,7 @@ function build(rows?: object[]) {
             dueAt: new Date('2026-10-01T00:00:00Z'),
             occurredAt: new Date('2026-09-10T00:00:00Z'),
             ownerPerson: party(SARAH, 'Sarah'),
-            counterparty: party(ACME, 'Acme'),
+            counterparty: party(KAPPA, 'Kappa'),
           },
           {
             id: C2,
@@ -100,7 +100,7 @@ describe('ListCommitmentsTool', () => {
         status: 'open',
         due: '2026-10-01',
         owner: { ref: 'ent1', label: 'Sarah' },
-        counterparty: { ref: 'ent2', label: 'Acme' },
+        counterparty: { ref: 'ent2', label: 'Kappa' },
         madeOn: '2026-09-10',
         evidence: ['ev1', 'ev2'],
       },

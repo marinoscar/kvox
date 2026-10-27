@@ -14,7 +14,7 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Quarterly account review\n\n**Date:** May 28\n**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Priya Raman (Larkspur Labs)\n\n## Summary\n\nQuarterly review of every Larkspur Labs client account, covering revenue, staffing and risk. Alex reports to Hana for account matters, so Hana chaired.\n\n## Accounts\n\n- **Northwind Robotics** — the strongest account this quarter. Northwind account revenue is up 30 percent over plan, driven by the pilot extension to Building 5.\n- **Halden Freight** — the migration continues without Ravi; JJ now owns the depot integrations. The southern depots cutover is planned for June.\n- **Corvid Health** — designs are signed off and the build is starting at the first walk-in clinic.\n- **Solvane Energy** — integration kickoff went well; demo targeted for early July.\n- **Gullwing Payments** — the discovery gate is close; Felix wants numbers before the build decision.\n- **Varden Insurance** — discovery is under way; Rosa will be out for two weeks in June.\n\n## Decisions\n\n- Larkspur **will not bid on Varden's phase two infrastructure work**; the team lacks the mainframe skills and Hana does not want to subcontract it.\n- The hiring freeze is over; Priya can open two engineering reqs.\n\n## Staffing\n\n- Hana becomes a partner at Larkspur Labs from July. The announcement goes out internally next week.\n- Priya will be on medical leave for two weeks in July. JJ covers engineering management while she is out.\n\n## Action items\n\n- **Hana Sato** — draft the Q3 staffing plan by June 10, including cover for Priya's leave.\n- **Priya Raman** — open two engineering reqs this week.\n- **Alex Rivera** — prepare a one-page account health summary for the partner meeting.\n\n## Risks\n\n- Northwind now represents a large share of revenue; Hana wants a second anchor client before the end of the year.\n"
+    "body": "# Quarterly account review\n\n**Date:** May 28\n**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Priya Raman (Larkspur Labs)\n\n## Summary\n\nQuarterly review of every Larkspur Labs client account, covering revenue, staffing and risk. Alex reports to Hana for account matters, so Hana chaired.\n\n## Accounts\n\n- **Org Lambda Robotics** — the strongest account this quarter. Lambda account revenue is up 30 percent over plan, driven by the pilot extension to Building 5.\n- **Halden Freight** — the migration continues without Ravi; JJ now owns the depot integrations. The southern depots cutover is planned for June.\n- **Corvid Health** — designs are signed off and the build is starting at the first walk-in clinic.\n- **Solvane Energy** — integration kickoff went well; demo targeted for early July.\n- **Gullwing Payments** — the discovery gate is close; Felix wants numbers before the build decision.\n- **Varden Insurance** — discovery is under way; Rosa will be out for two weeks in June.\n\n## Decisions\n\n- Larkspur **will not bid on Varden's phase two infrastructure work**; the team lacks the mainframe skills and Hana does not want to subcontract it.\n- The hiring freeze is over; Priya can open two engineering reqs.\n\n## Staffing\n\n- Hana becomes a partner at Larkspur Labs from July. The announcement goes out internally next week.\n- Priya will be on medical leave for two weeks in July. JJ covers engineering management while she is out.\n\n## Action items\n\n- **Hana Sato** — draft the Q3 staffing plan by June 10, including cover for Priya's leave.\n- **Priya Raman** — open two engineering reqs this week.\n- **Alex Rivera** — prepare a one-page account health summary for the partner meeting.\n\n## Risks\n\n- Lambda now represents a large share of revenue; Hana wants a second anchor client before the end of the year.\n"
   },
   "knownEntities": [
     {
@@ -28,12 +28,12 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-org-northwind-robotics",
+      "id": "g-org-lambda-robotics",
       "type": "Organization",
-      "label": "Northwind Robotics",
+      "label": "Org Lambda Robotics",
       "aliases": [
         "NWR",
-        "Northwind"
+        "Lambda"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -204,14 +204,14 @@
       {
         "key": "nwr",
         "type": "Organization",
-        "label": "Northwind Robotics",
+        "label": "Org Lambda Robotics",
         "aliases": [],
-        "existingId": "g-org-northwind-robotics",
+        "existingId": "g-org-lambda-robotics",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Northwind Robotics** — the strongest account this quarter."
+            "quote": "**Org Lambda Robotics** — the strongest account this quarter."
           }
         ]
       },
@@ -315,8 +315,8 @@
         "subject": "nwr",
         "owner": null,
         "counterparty": null,
-        "title": "Northwind revenue 30 percent over plan",
-        "statement": "Northwind account revenue is up 30 percent over plan.",
+        "title": "Lambda revenue 30 percent over plan",
+        "statement": "Lambda account revenue is up 30 percent over plan.",
         "status": null,
         "occurredAt": "2026-05-28",
         "dueAt": null,
@@ -325,7 +325,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Northwind account revenue is up 30 percent over plan"
+            "quote": "Lambda account revenue is up 30 percent over plan"
           }
         ]
       },

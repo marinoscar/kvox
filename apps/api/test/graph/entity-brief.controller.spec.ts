@@ -148,7 +148,7 @@ describe('GET /api/graph/entities/:id/brief (integration)', () => {
       id: ENTITY,
       ownerId: user.id,
       type: 'Organization',
-      label: 'Acme',
+      label: 'Kappa',
       reviewStatus: 'accepted',
       mergedIntoId: null,
     } as never);
@@ -157,7 +157,7 @@ describe('GET /api/graph/entities/:id/brief (integration)', () => {
     const parsed = entityBriefResponseSchema.safeParse(res.body.data);
     expect(parsed.success).toBe(true);
     expect(res.body.data).toMatchObject({
-      entity: { id: ENTITY, label: 'Acme', type: 'Organization' },
+      entity: { id: ENTITY, label: 'Kappa', type: 'Organization' },
       window: { sinceSource: 'default', lastViewedAt: null },
       digest: null,
       digestPending: false,

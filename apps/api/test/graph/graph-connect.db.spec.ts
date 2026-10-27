@@ -160,9 +160,9 @@ describeWithDb('GraphConnectService (real Postgres)', () => {
     const { user, g } = await owner();
     const ann = await g.entity('Person', 'Ann');
     const bob = await g.entity('Person', 'Bob');
-    const acme = await g.entity('Organization', 'Acme');
-    const r1 = await g.relation('WORKS_FOR', ann, acme);
-    const r2 = await g.relation('WORKS_FOR', bob, acme);
+    const kappa = await g.entity('Organization', 'Kappa');
+    const r1 = await g.relation('WORKS_FOR', ann, kappa);
+    const r2 = await g.relation('WORKS_FOR', bob, kappa);
     const n1 = await g.note();
     const n2 = await g.note();
     await mention(user.id, ann, { noteId: n1.id });
@@ -172,7 +172,7 @@ describeWithDb('GraphConnectService (real Postgres)', () => {
     expect(res.paths).toHaveLength(1);
     const path = res.paths[0];
     expect([path.fromInput, path.toInput].sort()).toEqual([n1.id, n2.id].sort());
-    expect(new Set(path.nodeIds)).toEqual(new Set([ann, acme, bob]));
+    expect(new Set(path.nodeIds)).toEqual(new Set([ann, kappa, bob]));
     expect(new Set(path.edgeIds)).toEqual(new Set([r1, r2]));
     expect(res.slice.edges.map((e) => e.id)).toEqual(expect.arrayContaining([r1, r2]));
   });

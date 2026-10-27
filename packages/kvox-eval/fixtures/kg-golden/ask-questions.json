@@ -5,8 +5,8 @@
     "fixtures": ["m01"],
     "question": "Who does Sarah Chen work for?",
     "expected": {
-      "entities": ["Sarah Chen", "Northwind Robotics"],
-      "answerAll": [["Northwind Robotics"]],
+      "entities": ["Sarah Chen", "Org Lambda Robotics"],
+      "answerAll": [["Org Lambda Robotics"]],
       "citeFrom": ["m01-s002"]
     }
   },
@@ -36,9 +36,9 @@
     "id": "q04",
     "category": "lookup",
     "fixtures": ["m09"],
-    "question": "What is Owen Barker's role at Northwind Robotics?",
+    "question": "What is Owen Barker's role at Org Lambda Robotics?",
     "expected": {
-      "entities": ["Owen Barker", "Northwind Robotics"],
+      "entities": ["Owen Barker", "Org Lambda Robotics"],
       "answerAll": [["Head of Platform"]],
       "citeFrom": ["m09-s002"]
     }
@@ -58,9 +58,9 @@
     "id": "q06",
     "category": "lookup",
     "fixtures": ["m20"],
-    "question": "What is Chloé Dubois's role at Northwind Robotics?",
+    "question": "What is Chloé Dubois's role at Org Lambda Robotics?",
     "expected": {
-      "entities": ["Chloé Dubois", "Northwind Robotics"],
+      "entities": ["Chloé Dubois", "Org Lambda Robotics"],
       "answerAll": [["floor supervisor"]],
       "citeFrom": ["m20-s004"]
     }
@@ -93,8 +93,8 @@
     "fixtures": ["m01"],
     "question": "Which organization is the pick-path pilot part of?",
     "expected": {
-      "entities": ["Pick-path pilot", "Northwind Robotics"],
-      "answerAll": [["Northwind Robotics"]],
+      "entities": ["Pick-path pilot", "Org Lambda Robotics"],
+      "answerAll": [["Org Lambda Robotics"]],
       "citeFrom": ["m01#note"]
     }
   },
@@ -223,7 +223,7 @@
     "id": "q21",
     "category": "decisions",
     "fixtures": ["m01"],
-    "question": "What did the team decide about where to run the Northwind pick-path pilot?",
+    "question": "What did the team decide about where to run the Lambda pick-path pilot?",
     "expected": {
       "entities": ["Pick-path pilot"],
       "answerAll": [["Building 3"]],
@@ -245,7 +245,7 @@
     "id": "q23",
     "category": "decisions",
     "fixtures": ["m05", "m18"],
-    "question": "Where is the Northwind pick-path pilot hosted now?",
+    "question": "Where is the Lambda pick-path pilot hosted now?",
     "expected": {
       "entities": ["Pick-path pilot"],
       "answerAll": [["on-prem"]],
@@ -269,7 +269,7 @@
     "id": "q25",
     "category": "commitments",
     "fixtures": ["m01"],
-    "question": "By when did the team commit to sending the floor plans and location export for the Northwind pilot?",
+    "question": "By when did the team commit to sending the floor plans and location export for the Lambda pilot?",
     "expected": {
       "answerAll": [["January 13"]],
       "citeFrom": ["m01-s014"]
@@ -309,7 +309,7 @@
     "id": "q29",
     "category": "commitments",
     "fixtures": ["m20"],
-    "question": "By when did the team commit to collecting a picker feedback survey after the Northwind pilot went live?",
+    "question": "By when did the team commit to collecting a picker feedback survey after the Lambda pilot went live?",
     "expected": {
       "answerAll": [["June 5"]],
       "citeFrom": ["m20-s013"]
@@ -329,7 +329,7 @@
     "id": "q31",
     "category": "multi_hop",
     "fixtures": ["m20", "m28"],
-    "question": "Who does the floor supervisor in Building 3 at Northwind Robotics report to?",
+    "question": "Who does the floor supervisor in Building 3 at Org Lambda Robotics report to?",
     "expected": {
       "entities": ["Chloé Dubois", "Sarah Chen"],
       "answerAll": [["Sarah"]],

@@ -91,7 +91,7 @@ describe('Graph share non-propagation (integration)', () => {
         subjectId: ENTITY_ID,
         transcriptId: TRANSCRIPT_ID,
         segmentId: SEGMENT_ID,
-        quote: 'Sarah joined Acme',
+        quote: 'Sarah joined Kappa',
         createdAt: now,
       },
     ];

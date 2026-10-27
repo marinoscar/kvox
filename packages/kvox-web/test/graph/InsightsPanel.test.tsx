@@ -19,7 +19,7 @@ import {
   themeSeeds,
   tieSeeds,
 } from '../../src/graph/ui/components/explorer/insights/insightsModel.js';
-import { ANA_ID, ATLAS_ID, GLOBEX_ID, JOE_ID, RISK_ID, ACME_ID, insightsFixture } from './graphData.js';
+import { ANA_ID, ATLAS_ID, SIGMA_ID, JOE_ID, RISK_ID, KAPPA_ID, insightsFixture } from './graphData.js';
 import { graphReader, graphWriter } from './graphTestUsers.js';
 import { render } from './helpers.js';
 import { HttpResponse, http, server } from './msw-compat.js';
@@ -52,8 +52,8 @@ describe('insightsModel', () => {
 
   it('seeds a theme with its members and focuses its label entity', () => {
     const seeds = themeSeeds(data.themes[0]);
-    expect(seeds.seedIds).toContain(ACME_ID);
-    expect(seeds.focusId).toBe(ACME_ID);
+    expect(seeds.seedIds).toContain(KAPPA_ID);
+    expect(seeds.focusId).toBe(KAPPA_ID);
     expect(seeds.markIds).toEqual([]);
   });
 
@@ -61,8 +61,8 @@ describe('insightsModel', () => {
     const seeds = connectorSeeds(data.connectors[0], data.themes);
     expect(seeds.focusId).toBe(JOE_ID);
     expect(seeds.seedIds[0]).toBe(JOE_ID);
-    expect(seeds.markIds).toContain(ACME_ID);
-    expect(seeds.markIds).toContain(GLOBEX_ID);
+    expect(seeds.markIds).toContain(KAPPA_ID);
+    expect(seeds.markIds).toContain(SIGMA_ID);
     expect(seeds.markIds).not.toContain(JOE_ID);
     expect(seeds.seedIds.length).toBeLessThanOrEqual(10);
   });
@@ -94,7 +94,7 @@ describe('InsightsPanel', () => {
     for (const name of ['Connectors', 'Rising', 'Fading ties', 'Open risks']) {
       expect(screen.getByRole('button', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
     }
-    expect(screen.getByText('Joe Rivera connects the Acme Corp group and the Globex group.')).toBeInTheDocument();
+    expect(screen.getByText('Joe Rivera connects the Org Kappa group and the Org Sigma group.')).toBeInTheDocument();
     expect(screen.getByText('Came up in 5 conversations in the last 30 days, up from 1 before.')).toBeInTheDocument();
     expect(screen.getByText("You haven't discussed Joe Rivera with Ana Diaz since May 1, 2026.")).toBeInTheDocument();
     expect(screen.getByText('Legal review')).toBeInTheDocument();
@@ -106,9 +106,9 @@ describe('InsightsPanel', () => {
   it('a theme seeds the canvas with its members', async () => {
     const user = userEvent.setup();
     const { onSelect } = renderPanel();
-    await user.click(await screen.findByRole('button', { name: /^Globex/ }));
+    await user.click(await screen.findByRole('button', { name: /^Org Sigma/ }));
     expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onSelect.mock.calls[0][0].seedIds).toContain(GLOBEX_ID);
+    expect(onSelect.mock.calls[0][0].seedIds).toContain(SIGMA_ID);
   });
 
   it('a connector focuses the node and rings both clusters', async () => {
@@ -118,7 +118,7 @@ describe('InsightsPanel', () => {
     await user.click(within(section).getByRole('button', { name: /Joe Rivera/ }));
     const seeds = onSelect.mock.calls[0][0];
     expect(seeds.focusId).toBe(JOE_ID);
-    expect(seeds.markIds).toEqual(expect.arrayContaining([ACME_ID, GLOBEX_ID]));
+    expect(seeds.markIds).toEqual(expect.arrayContaining([KAPPA_ID, SIGMA_ID]));
   });
 
   it('a rising entity opens that entity', async () => {

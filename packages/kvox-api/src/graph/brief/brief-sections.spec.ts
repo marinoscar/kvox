@@ -3,7 +3,7 @@ import type { BriefEntityRef } from './dto/entity-brief.dto.js';
 
 // Deterministic ids: the section builder is pure, so readable uuids make failures legible.
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-const ACME = id(1);
+const KAPPA = id(1);
 const SARAH = id(2);
 const BOB = id(3);
 const MEETING = id(4);
@@ -42,7 +42,7 @@ function relation(over: Partial<BriefRelationRow>): BriefRelationRow {
     id: id(seq),
     type: 'HAS_ROLE',
     fromId: SARAH,
-    toId: ACME,
+    toId: KAPPA,
     props: {},
     validFrom: null,
     validTo: null,
@@ -53,7 +53,7 @@ function relation(over: Partial<BriefRelationRow>): BriefRelationRow {
 }
 
 const entities = new Map<string, BriefEntityRef>([
-  [ACME, { id: ACME, label: 'Acme', type: 'Organization' }],
+  [KAPPA, { id: KAPPA, label: 'Kappa', type: 'Organization' }],
   [SARAH, { id: SARAH, label: 'Sarah', type: 'Person' }],
   [BOB, { id: BOB, label: 'Bob', type: 'Person' }],
 ]);
@@ -67,7 +67,7 @@ const EXCLUSIVE = exclusiveRelationTypes([
 
 function input(over: Partial<BriefSectionInput>): BriefSectionInput {
   return {
-    entity: { id: ACME, type: 'Organization' },
+    entity: { id: KAPPA, type: 'Organization' },
     since: d('2026-09-01T00:00:00Z'),
     asOf: d('2026-09-20T00:00:00Z'),
     items: [],
@@ -88,10 +88,10 @@ describe('exclusiveRelationTypes', () => {
 
 describe('buildBriefSections', () => {
   it('puts only items about the entity stated inside (since, asOf] in whatChanged, newest first', () => {
-    const inside = item({ subjectId: ACME, occurredAt: d('2026-09-10T00:00:00Z') });
-    const newer = item({ meetingId: ACME, kind: 'decision', occurredAt: d('2026-09-15T00:00:00Z') });
-    const before = item({ subjectId: ACME, occurredAt: d('2026-08-01T00:00:00Z') });
-    const after = item({ subjectId: ACME, occurredAt: d('2026-09-25T00:00:00Z') });
+    const inside = item({ subjectId: KAPPA, occurredAt: d('2026-09-10T00:00:00Z') });
+    const newer = item({ meetingId: KAPPA, kind: 'decision', occurredAt: d('2026-09-15T00:00:00Z') });
+    const before = item({ subjectId: KAPPA, occurredAt: d('2026-08-01T00:00:00Z') });
+    const after = item({ subjectId: KAPPA, occurredAt: d('2026-09-25T00:00:00Z') });
     const elsewhere = item({ subjectId: BOB });
     const s = buildBriefSections(input({ items: [inside, before, after, elsewhere, newer] }));
     expect(s.whatChanged.map((e) => e.itemId)).toEqual([newer.id, inside.id]);
@@ -124,17 +124,17 @@ describe('buildBriefSections', () => {
   it("uses the Organization's current workers for theirs", () => {
     const byWorker = item({ kind: 'commitment', status: 'open', ownerPersonId: SARAH });
     const byStranger = item({ kind: 'commitment', status: 'open', ownerPersonId: BOB });
-    const toAcme = item({ kind: 'commitment', status: 'open', ownerPersonId: BOB, counterpartyId: ACME });
-    const s = buildBriefSections(input({ items: [byWorker, byStranger, toAcme], workerIds: new Set([SARAH]) }));
+    const toKappa = item({ kind: 'commitment', status: 'open', ownerPersonId: BOB, counterpartyId: KAPPA });
+    const s = buildBriefSections(input({ items: [byWorker, byStranger, toKappa], workerIds: new Set([SARAH]) }));
     expect(s.openCommitments.theirs.map((e) => e.itemId)).toEqual([byWorker.id]);
-    expect(s.openCommitments.yours.map((e) => e.itemId)).toEqual([toAcme.id]);
+    expect(s.openCommitments.yours.map((e) => e.itemId)).toEqual([toKappa.id]);
   });
 
   it('flags decisions superseded as of asOf and keeps one superseded only later', () => {
-    const current = item({ kind: 'decision', subjectId: ACME, occurredAt: d('2026-09-12T00:00:00Z') });
+    const current = item({ kind: 'decision', subjectId: KAPPA, occurredAt: d('2026-09-12T00:00:00Z') });
     const laterSuperseded = item({
       kind: 'decision',
-      subjectId: ACME,
+      subjectId: KAPPA,
       occurredAt: d('2026-09-05T00:00:00Z'),
       reviewStatus: 'superseded',
       supersededById: current.id,
@@ -150,16 +150,16 @@ describe('buildBriefSections', () => {
   });
 
   it('shows windowed claims, else the newest valid ones', () => {
-    const old = item({ kind: 'claim', subjectId: ACME, occurredAt: d('2026-01-01T00:00:00Z') });
+    const old = item({ kind: 'claim', subjectId: KAPPA, occurredAt: d('2026-01-01T00:00:00Z') });
     expect(buildBriefSections(input({ items: [old] })).risksClaims.map((e) => e.itemId)).toEqual([old.id]);
-    const fresh = item({ kind: 'claim', subjectId: ACME, occurredAt: d('2026-09-10T00:00:00Z') });
+    const fresh = item({ kind: 'claim', subjectId: KAPPA, occurredAt: d('2026-09-10T00:00:00Z') });
     expect(buildBriefSections(input({ items: [old, fresh] })).risksClaims.map((e) => e.itemId)).toEqual([fresh.id]);
   });
 });
 
 describe('buildBriefSections: Open risks (#664)', () => {
   const risk = (over: Partial<BriefItemRow>) =>
-    item({ kind: 'risk', status: 'open', subjectId: ACME, ...over });
+    item({ kind: 'risk', status: 'open', subjectId: KAPPA, ...over });
 
   it('lists open risks of a Project, Product or Organization, highest severity first, then newest, cited', () => {
     const lowNew = risk({ severity: 'low', occurredAt: d('2026-09-15T00:00:00Z') });
@@ -170,7 +170,7 @@ describe('buildBriefSections: Open risks (#664)', () => {
     expect(s.openRisks?.map((e) => e.itemId)).toEqual([highNew.id, highOld.id, lowNew.id, unstated.id]);
     expect(s.openRisks?.every((e) => e.evidenceIds.length > 0 && e.kind === 'risk')).toBe(true);
     for (const type of ['Project', 'Product']) {
-      const t = buildBriefSections(input({ entity: { id: ACME, type }, openRisksEnabled: true, items: [highNew] }));
+      const t = buildBriefSections(input({ entity: { id: KAPPA, type }, openRisksEnabled: true, items: [highNew] }));
       expect(t.openRisks?.map((e) => e.itemId)).toEqual([highNew.id]);
     }
   });
@@ -204,7 +204,7 @@ describe('buildPeopleChanges', () => {
       ['started', 'Staff Engineer', at.toISOString()],
     ]);
     expect(changes[0].person).toEqual(entities.get(SARAH));
-    expect(changes[0].other).toEqual(entities.get(ACME));
+    expect(changes[0].other).toEqual(entities.get(KAPPA));
   });
 
   it('ignores non-exclusive types, events outside the window, and unreadable ends', () => {

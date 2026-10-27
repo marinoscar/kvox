@@ -20,7 +20,7 @@ import {
   writePathRequest,
 } from '../../src/graph/ui/components/explorer/paths/pathModel.js';
 import { topQuote } from '../../src/graph/ui/components/explorer/paths/useHopQuotes.js';
-import { ACME_ID, JOE_ID } from './graphData.js';
+import { KAPPA_ID, JOE_ID } from './graphData.js';
 import { PRODUCT_X_ID, EDGE_INVOLVED, EDGE_USES, EDGE_WORKS_FOR, pathEvidence, pathsResponse, pathsSlice } from './pathsData.js';
 
 describe('pathStrength', () => {
@@ -69,13 +69,13 @@ describe('buildPathViews', () => {
   it('reads the path as a sentence for a screen reader', () => {
     expect(hopSentence(views[0], 0)).toBe('Joe Rivera, involved in as stakeholder, skeptical, Product X rollout');
     expect(describePath(views[1])).toBe(
-      'Path 2, moderate evidence, 2 hops: Joe Rivera, works for, Acme Corp, uses, pilot, Product X rollout',
+      'Path 2, moderate evidence, 2 hops: Joe Rivera, works for, Org Kappa, uses, pilot, Product X rollout',
     );
   });
 
   it('lists the ids to highlight', () => {
     const ids = pathIds(views[1]);
-    expect([...ids.nodeIds].sort()).toEqual([ACME_ID, PRODUCT_X_ID, JOE_ID].sort());
+    expect([...ids.nodeIds].sort()).toEqual([KAPPA_ID, PRODUCT_X_ID, JOE_ID].sort());
     expect([...ids.edgeIds].sort()).toEqual([EDGE_USES, EDGE_WORKS_FOR].sort());
   });
 });
@@ -145,9 +145,9 @@ describe('path reducers', () => {
     const joe = node(JOE_ID, nodeData(state, JOE_ID));
     expect(joe.highlighted).toBe(true);
     expect(joe.forceLabel).toBe(true);
-    const acme = node(ACME_ID, nodeData(state, ACME_ID));
-    expect(acme.label).toBe('');
-    expect(acme.color).not.toBe(state.graph.getNodeAttribute(ACME_ID, 'color'));
+    const kappa = node(KAPPA_ID, nodeData(state, KAPPA_ID));
+    expect(kappa.label).toBe('');
+    expect(kappa.color).not.toBe(state.graph.getNodeAttribute(KAPPA_ID, 'color'));
 
     const onPath = edge(EDGE_INVOLVED, edgeData(state, EDGE_INVOLVED));
     expect(onPath.zIndex).toBe(3);
@@ -159,8 +159,8 @@ describe('path reducers', () => {
   it('draws as before with an empty path, and a focus takes over from the path', () => {
     const state = loaded();
     const plain = buildNodeReducer(context(state, { pathNodeIds: new Set(), pathEdgeIds: new Set() }));
-    expect(plain(ACME_ID, nodeData(state, ACME_ID)).label).toBe(state.graph.getNodeAttribute(ACME_ID, 'label'));
-    const focused = buildNodeReducer(context(state, { focusId: ACME_ID, pathNodeIds: new Set([JOE_ID]) }));
-    expect(focused(ACME_ID, nodeData(state, ACME_ID)).forceLabel).toBe(true);
+    expect(plain(KAPPA_ID, nodeData(state, KAPPA_ID)).label).toBe(state.graph.getNodeAttribute(KAPPA_ID, 'label'));
+    const focused = buildNodeReducer(context(state, { focusId: KAPPA_ID, pathNodeIds: new Set([JOE_ID]) }));
+    expect(focused(KAPPA_ID, nodeData(state, KAPPA_ID)).forceLabel).toBe(true);
   });
 });

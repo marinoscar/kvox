@@ -49,10 +49,10 @@ describe('ProposalItemRow — chips', () => {
   });
 
   it('shows a new entity, a user-added row and an edited row', () => {
-    const { unmount } = renderRow(row(ITEM.northwind));
+    const { unmount } = renderRow(row(ITEM.lambda));
     expect(screen.getByText('New')).toBeInTheDocument();
     unmount();
-    const second = renderRow(row(ITEM.contoso));
+    const second = renderRow(row(ITEM.theta));
     expect(screen.getByText('Added by you')).toBeInTheDocument();
     second.unmount();
     renderRow({ ...row(ITEM.atlas), decision: 'edit' });
@@ -137,7 +137,7 @@ describe('ProposalItemRow — actions', () => {
   it('disables a row whose endpoint is still undecided and says why', async () => {
     const { container } = renderRow(row(ITEM.tomWorksFor));
     expect(
-      screen.getByRole('checkbox', { name: 'Send Tom → works for → Northwind Robotics to graph' }),
+      screen.getByRole('checkbox', { name: 'Send Tom → works for → Org Lambda Robotics to graph' }),
     ).toBeDisabled();
     expect(screen.getByText('Accept or link Tom first')).toBeInTheDocument();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
@@ -161,6 +161,6 @@ describe('ProposalItemRow — actions', () => {
     const user = userEvent.setup();
     renderRow(row(ITEM.sarah));
     await user.click(screen.getByRole('button', { name: 'Evidence (1)' }));
-    expect(await screen.findByText(/Sarah from Northwind will lead/)).toBeInTheDocument();
+    expect(await screen.findByText(/Sarah from Lambda will lead/)).toBeInTheDocument();
   });
 });

@@ -51,7 +51,7 @@ const row = (overrides: Partial<Row> = {}): Row => ({
 const tool = (index: number, summary = `Step ${index}`): AskToolCall => ({
   index,
   name: index % 2 === 0 ? 'search' : 'get_entity',
-  arguments: { q: 'Acme' },
+  arguments: { q: 'Kappa' },
   summary,
   resultCount: index + 1,
   durationMs: 12,
@@ -135,7 +135,7 @@ describe('AskMessageStreamService', () => {
   // ==========================================================================
 
   it('streams pending → steps → text → done, in that order', async () => {
-    const answer = 'Acme renewed in March [^ev1]. The contract runs two years.';
+    const answer = 'Kappa renewed in March [^ev1]. The contract runs two years.';
     const { prisma } = scripted(
       respondRows(answer, [10, 30], 2, {
         status: 'complete',

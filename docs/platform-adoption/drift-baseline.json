@@ -11633,7 +11633,7 @@
     {
       "area": "api-test",
       "module": "fixtures",
-      "path": "apps/api/test/fixtures/kg-golden/meetings/m01-northwind-pilot-kickoff.json",
+      "path": "apps/api/test/fixtures/kg-golden/meetings/m01-lambda-pilot-kickoff.json",
       "status": "app-only"
     },
     {
@@ -11663,7 +11663,7 @@
     {
       "area": "api-test",
       "module": "fixtures",
-      "path": "apps/api/test/fixtures/kg-golden/meetings/m06-northwind-floor-data-review.json",
+      "path": "apps/api/test/fixtures/kg-golden/meetings/m06-lambda-floor-data-review.json",
       "status": "app-only"
     },
     {
@@ -11681,7 +11681,7 @@
     {
       "area": "api-test",
       "module": "fixtures",
-      "path": "apps/api/test/fixtures/kg-golden/meetings/m09-northwind-platform-org-update.json",
+      "path": "apps/api/test/fixtures/kg-golden/meetings/m09-lambda-platform-org-update.json",
       "status": "app-only"
     },
     {
@@ -11699,7 +11699,7 @@
     {
       "area": "api-test",
       "module": "fixtures",
-      "path": "apps/api/test/fixtures/kg-golden/meetings/m12-northwind-pilot-replan.json",
+      "path": "apps/api/test/fixtures/kg-golden/meetings/m12-lambda-pilot-replan.json",
       "status": "app-only"
     },
     {
@@ -11747,7 +11747,7 @@
     {
       "area": "api-test",
       "module": "fixtures",
-      "path": "apps/api/test/fixtures/kg-golden/meetings/m20-northwind-go-live-retro.json",
+      "path": "apps/api/test/fixtures/kg-golden/meetings/m20-lambda-go-live-retro.json",
       "status": "app-only"
     },
     {
@@ -11795,7 +11795,7 @@
     {
       "area": "api-test",
       "module": "fixtures",
-      "path": "apps/api/test/fixtures/kg-golden/meetings/m28-northwind-building-5-scoping.json",
+      "path": "apps/api/test/fixtures/kg-golden/meetings/m28-lambda-building-5-scoping.json",
       "status": "app-only"
     },
     {

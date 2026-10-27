@@ -33,8 +33,8 @@ describe('findQuoteRange', () => {
   });
 
   it('falls back to a case-insensitive match', () => {
-    const root = body('<p>Northwind Robotics is hiring.</p>');
-    expect(findQuoteRange(root, 'northwind robotics')?.toString()).toBe('Northwind Robotics');
+    const root = body('<p>Org Lambda Robotics is hiring.</p>');
+    expect(findQuoteRange(root, 'org lambda robotics')?.toString()).toBe('Org Lambda Robotics');
   });
 
   it('returns null when the quote is absent', () => {

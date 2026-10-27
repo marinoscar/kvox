@@ -47,7 +47,7 @@
       "startMs": 6550,
       "endMs": 14750,
       "rev": 1,
-      "text": "The committed-use pricing from Estuary finally came in, and it's about 40 percent above the budget we agreed with Northwind."
+      "text": "The committed-use pricing from Estuary finally came in, and it's about 40 percent above the budget we agreed with Lambda."
     },
     {
       "id": "m18-s003",
@@ -63,7 +63,7 @@
       "startMs": 23450,
       "endMs": 32410,
       "rev": 1,
-      "text": "I've looked at it. It has everything the pilot needs, and the floor data never leaves Northwind's network, which security will love."
+      "text": "I've looked at it. It has everything the pilot needs, and the floor data never leaves Lambda's network, which security will love."
     },
     {
       "id": "m18-s005",
@@ -103,7 +103,7 @@
       "startMs": 51640,
       "endMs": 59460,
       "rev": 1,
-      "text": "Then I think we reverse the February decision. The pilot moves off Estuary Cloud to Northwind's own on-prem cluster."
+      "text": "Then I think we reverse the February decision. The pilot moves off Estuary Cloud to Lambda's own on-prem cluster."
     },
     {
       "id": "m18-s010",
@@ -135,7 +135,7 @@
       "startMs": 64540,
       "endMs": 69700,
       "rev": 1,
-      "text": "I'll migrate the pilot services to the Northwind cluster by May 29."
+      "text": "I'll migrate the pilot services to the Lambda cluster by May 29."
     },
     {
       "id": "m18-s014",
@@ -212,7 +212,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Pilot hosting decision revisited\n\n**Date:** May 7\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Northwind Robotics)\n\n## Summary\n\nThe team revisited February's hosting decision for the Northwind pick-path pilot after Estuary Cloud's committed-use pricing arrived.\n\n## Discussion\n\n- Estuary's pricing came in about 40 percent above the budget agreed with Northwind. Owen called it a non-starter.\n- Since Owen joined, Northwind has built out an on-prem cluster that is half empty. JJ has reviewed it: it has everything the pilot needs, and floor data would never leave Northwind's network.\n- The services are already containerised; JJ estimates three weeks to move, including testing.\n- Owen's team supports the cluster and would rather the pilot runs there.\n\n## Decisions\n\n- **Reverse the February decision.** The pilot moves off Estuary Cloud to **Northwind's own on-prem cluster**, avoiding the Estuary contract entirely.\n\n## Action items\n\n- **JJ** — migrate the pilot services to the Northwind cluster by May 29.\n- **Owen Barker** — provide namespaces and access by Monday, and read access to the monitoring stack for JJ.\n- **Priya Raman** — tell Theo at Estuary about the change this week.\n\n## Notes\n\n- For the go-live lunch, choose a place with good vegetarian options.\n"
+    "body": "# Pilot hosting decision revisited\n\n**Date:** May 7\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Org Lambda Robotics)\n\n## Summary\n\nThe team revisited February's hosting decision for the Lambda pick-path pilot after Estuary Cloud's committed-use pricing arrived.\n\n## Discussion\n\n- Estuary's pricing came in about 40 percent above the budget agreed with Lambda. Owen called it a non-starter.\n- Since Owen joined, Lambda has built out an on-prem cluster that is half empty. JJ has reviewed it: it has everything the pilot needs, and floor data would never leave Lambda's network.\n- The services are already containerised; JJ estimates three weeks to move, including testing.\n- Owen's team supports the cluster and would rather the pilot runs there.\n\n## Decisions\n\n- **Reverse the February decision.** The pilot moves off Estuary Cloud to **Lambda's own on-prem cluster**, avoiding the Estuary contract entirely.\n\n## Action items\n\n- **JJ** — migrate the pilot services to the Lambda cluster by May 29.\n- **Owen Barker** — provide namespaces and access by Monday, and read access to the monitoring stack for JJ.\n- **Priya Raman** — tell Theo at Estuary about the change this week.\n\n## Notes\n\n- For the go-live lunch, choose a place with good vegetarian options.\n"
   },
   "knownEntities": [
     {
@@ -226,12 +226,12 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-org-northwind-robotics",
+      "id": "g-org-lambda-robotics",
       "type": "Organization",
-      "label": "Northwind Robotics",
+      "label": "Org Lambda Robotics",
       "aliases": [
         "NWR",
-        "Northwind"
+        "Lambda"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -403,7 +403,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Owen Barker (Northwind Robotics)"
+            "quote": "Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -425,14 +425,14 @@
       {
         "key": "nwr",
         "type": "Organization",
-        "label": "Northwind Robotics",
+        "label": "Org Lambda Robotics",
         "aliases": [],
-        "existingId": "g-org-northwind-robotics",
+        "existingId": "g-org-lambda-robotics",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Owen Barker (Northwind Robotics)"
+            "quote": "Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -446,7 +446,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "the Northwind pick-path pilot"
+            "quote": "the Lambda pick-path pilot"
           }
         ]
       }
@@ -463,7 +463,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -478,7 +478,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -493,7 +493,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -508,7 +508,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -523,7 +523,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "the Northwind pick-path pilot"
+            "quote": "the Lambda pick-path pilot"
           }
         ]
       }
@@ -534,8 +534,8 @@
         "subject": "pilot",
         "owner": null,
         "counterparty": null,
-        "title": "Move pilot to Northwind's on-prem cluster",
-        "statement": "The pilot moves off Estuary Cloud to Northwind's own on-prem cluster.",
+        "title": "Move pilot to Lambda's on-prem cluster",
+        "statement": "The pilot moves off Estuary Cloud to Lambda's own on-prem cluster.",
         "status": null,
         "occurredAt": "2026-05-07",
         "dueAt": null,
@@ -545,7 +545,7 @@
           {
             "source": "segment",
             "segmentId": "m18-s009",
-            "quote": "The pilot moves off Estuary Cloud to Northwind's own on-prem cluster."
+            "quote": "The pilot moves off Estuary Cloud to Lambda's own on-prem cluster."
           }
         ]
       },
@@ -555,7 +555,7 @@
         "owner": null,
         "counterparty": null,
         "title": "Estuary pricing 40 percent over budget",
-        "statement": "Estuary's committed-use pricing came in about 40 percent above the budget agreed with Northwind.",
+        "statement": "Estuary's committed-use pricing came in about 40 percent above the budget agreed with Lambda.",
         "status": null,
         "occurredAt": "2026-05-07",
         "dueAt": null,
@@ -565,7 +565,7 @@
           {
             "source": "segment",
             "segmentId": "m18-s002",
-            "quote": "it's about 40 percent above the budget we agreed with Northwind"
+            "quote": "it's about 40 percent above the budget we agreed with Lambda"
           }
         ]
       },
@@ -574,8 +574,8 @@
         "subject": "pilot",
         "owner": "jj",
         "counterparty": null,
-        "title": "Migrate pilot services to the Northwind cluster",
-        "statement": "JJ will migrate the pilot services to the Northwind cluster by May 29.",
+        "title": "Migrate pilot services to the Lambda cluster",
+        "statement": "JJ will migrate the pilot services to the Lambda cluster by May 29.",
         "status": "open",
         "occurredAt": "2026-05-07",
         "dueAt": "2026-05-29",
@@ -585,7 +585,7 @@
           {
             "source": "segment",
             "segmentId": "m18-s013",
-            "quote": "I'll migrate the pilot services to the Northwind cluster by May 29."
+            "quote": "I'll migrate the pilot services to the Lambda cluster by May 29."
           }
         ]
       },

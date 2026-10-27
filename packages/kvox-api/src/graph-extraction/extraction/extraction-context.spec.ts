@@ -36,7 +36,7 @@ describe('buildExtractionContext (#363)', () => {
       const ctx = makeContext();
       expect(ctx.knownEntities.map((k) => k.alias)).toEqual(['k1', 'k2', 'k3']);
       expect(ctx.knownAlias.get('k1')).toBe(IDS.sarah);
-      expect(ctx.knownById.get(IDS.northwind)?.alias).toBe('k2');
+      expect(ctx.knownById.get(IDS.lambda)?.alias).toBe('k2');
     });
 
     it('links an identified speaker to its known alias', () => {
@@ -53,12 +53,12 @@ describe('buildExtractionContext (#363)', () => {
         knownEntityCandidates: {
           pinned: [known('p-pin', 'Project', 'Pinned project')],
           speakerPersons: [known(IDS.sarah, 'Person', 'Sarah Chen')],
-          organizations: [known(IDS.northwind, 'Organization', 'Northwind Robotics'), known(IDS.sarah, 'Person', 'Sarah Chen')],
+          organizations: [known(IDS.lambda, 'Organization', 'Org Lambda Robotics'), known(IDS.sarah, 'Person', 'Sarah Chen')],
           contextPool: [known(IDS.pilot, 'Project', 'Pick-path pilot', { aliases: ['pilot'] }), known('x', 'Person', 'Nobody Here')],
           recentlyMentioned: [known('r1', 'Organization', 'Recent Org'), known('p-pin', 'Project', 'Pinned project')],
         },
       });
-      expect(selectKnownEntities(input).map((r) => r.id)).toEqual(['p-pin', IDS.sarah, IDS.northwind, IDS.pilot, 'r1']);
+      expect(selectKnownEntities(input).map((r) => r.id)).toEqual(['p-pin', IDS.sarah, IDS.lambda, IDS.pilot, 'r1']);
     });
 
     it(`caps the list at ${MAX_KNOWN_ENTITIES}`, () => {
@@ -85,16 +85,16 @@ describe('buildExtractionContext (#363)', () => {
 
     it('matches Context text whole-word and normalized, never as a substring', () => {
       const input = makeInput({
-        note: { ...makeInput().note, contextText: 'Follow-up with ACME, not acmeCorp.' },
+        note: { ...makeInput().note, contextText: 'Follow-up with KAPPA, not kappaCorp.' },
         knownEntityCandidates: {
           pinned: [],
           speakerPersons: [],
           organizations: [],
-          contextPool: [known('acme', 'Organization', 'Acme'), known('acm', 'Organization', 'Acm')],
+          contextPool: [known('kappa', 'Organization', 'Kappa'), known('kapp', 'Organization', 'Kapp')],
           recentlyMentioned: [],
         },
       });
-      expect(selectKnownEntities(input).map((r) => r.id)).toEqual(['acme']);
+      expect(selectKnownEntities(input).map((r) => r.id)).toEqual(['kappa']);
     });
   });
 
@@ -148,7 +148,7 @@ describe('buildExtractionContext (#363)', () => {
 
     it('is stated when the Context text names a date', () => {
       const input = makeInput();
-      input.note = { ...input.note, contextText: 'Call held on March 2nd with Northwind.' };
+      input.note = { ...input.note, contextText: 'Call held on March 2nd with Lambda.' };
       expect(buildExtractionContext(input).dateSource).toBe('stated');
       expect(namesADate('see you 2026-03-02')).toBe(true);
       expect(namesADate('3/2/2026')).toBe(true);
@@ -191,7 +191,7 @@ describe('buildExtractionContext (#363)', () => {
     });
 
     it('carries the raw Context on the context the prompt and validator read', () => {
-      expect(makeContext().note.contextText).toBe('Kickoff with Northwind about the pilot.');
+      expect(makeContext().note.contextText).toBe('Kickoff with Lambda about the pilot.');
     });
   });
 });

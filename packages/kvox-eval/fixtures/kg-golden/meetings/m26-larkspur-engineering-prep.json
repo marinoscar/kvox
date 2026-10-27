@@ -141,7 +141,7 @@
       "startMs": 51240,
       "endMs": 53740,
       "rev": 1,
-      "text": "Include the Northwind rotation, please."
+      "text": "Include the Lambda rotation, please."
     },
     {
       "id": "m26-s014",
@@ -258,7 +258,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Larkspur engineering all-hands prep\n\n**Date:** June 25\n**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks\n\n## Summary\n\nPriya locked the agenda for next week's Larkspur Labs engineering all-hands.\n\n## Agenda\n\n1. **Promotion:** JJ's promotion to Staff Engineer takes effect July 1.\n2. **Branching:** adopt trunk-based development across client repos.\n3. **On-call:** the guide is out of date; a new one is coming, including the Northwind rotation.\n4. **Hiring:** three open engineering reqs now that the freeze is over.\n5. **Design demo:** five minutes on the Corvid intake.\n\n## Decisions\n\n- **Adopt trunk-based development across client repos**, with short-lived branches and feature flags. The Gullwing repo is already trunk-based and is the calmest.\n- AI code review stays off the agenda: it keeps coming up, but it is a topic, not a project.\n\n## Action items\n\n- **Priya Raman** — publish the new on-call guide by July 3, including the Northwind rotation; present the branching decision; send a handover note before her leave.\n- **JJ** — cover team questions while Priya is out in July.\n\n## Notes\n\n- Kwame is better at pairing in the afternoons; mornings he is on the Gullwing stand-ups.\n- The agenda is final; Priya will circulate it to the whole engineering group before Monday so people can add questions.\n"
+    "body": "# Larkspur engineering all-hands prep\n\n**Date:** June 25\n**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks\n\n## Summary\n\nPriya locked the agenda for next week's Larkspur Labs engineering all-hands.\n\n## Agenda\n\n1. **Promotion:** JJ's promotion to Staff Engineer takes effect July 1.\n2. **Branching:** adopt trunk-based development across client repos.\n3. **On-call:** the guide is out of date; a new one is coming, including the Lambda rotation.\n4. **Hiring:** three open engineering reqs now that the freeze is over.\n5. **Design demo:** five minutes on the Corvid intake.\n\n## Decisions\n\n- **Adopt trunk-based development across client repos**, with short-lived branches and feature flags. The Gullwing repo is already trunk-based and is the calmest.\n- AI code review stays off the agenda: it keeps coming up, but it is a topic, not a project.\n\n## Action items\n\n- **Priya Raman** — publish the new on-call guide by July 3, including the Lambda rotation; present the branching decision; send a handover note before her leave.\n- **JJ** — cover team questions while Priya is out in July.\n\n## Notes\n\n- Kwame is better at pairing in the afternoons; mornings he is on the Gullwing stand-ups.\n- The agenda is final; Priya will circulate it to the whole engineering group before Monday so people can add questions.\n"
   },
   "knownEntities": [
     {

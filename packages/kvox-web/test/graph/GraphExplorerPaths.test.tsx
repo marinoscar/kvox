@@ -9,7 +9,7 @@ import 'vitest-axe/extend-expect';
 import type { GraphCanvasProps } from '../../src/graph/ui/components/explorer/GraphCanvas.js';
 import { GraphExplorerPage } from '../../src/graph/ui/pages/GraphExplorerPage.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
-import { ACME_ID, JOE_ID, entityDetail, expandFixture, graphEntitySummaries, type ExpandFixtureRequest } from './graphData.js';
+import { KAPPA_ID, JOE_ID, entityDetail, expandFixture, graphEntitySummaries, type ExpandFixtureRequest } from './graphData.js';
 import { PRODUCT_X_ID, PRODUCT_X_SUMMARY, EDGE_INVOLVED, EDGE_USES, pathEvidence, pathsResponse } from './pathsData.js';
 import { graphReader } from './graphTestUsers.js';
 import { render } from './helpers.js';
@@ -109,7 +109,7 @@ beforeEach(() => {
     }),
     http.get('*/api/graph/entities/:id', ({ params }) =>
       params.id === PRODUCT_X_ID
-        ? HttpResponse.json({ data: { ...entityDetail(ACME_ID), id: PRODUCT_X_ID, label: 'Product X rollout', type: 'Project' } })
+        ? HttpResponse.json({ data: { ...entityDetail(KAPPA_ID), id: PRODUCT_X_ID, label: 'Product X rollout', type: 'Project' } })
         : HttpResponse.json({ data: entityDetail(String(params.id)) }),
     ),
     http.get('*/api/graph/entities', ({ request }) => {
@@ -166,7 +166,7 @@ describe('path mode — results', () => {
 
     await userEvent.setup().click(screen.getByRole('button', { name: /^Path 2, moderate evidence$/ }));
     const second = await screen.findByRole('list', { name: /^Path 2, moderate evidence, 2 hops/ });
-    expect(await within(second).findByText(/Acme is piloting Product X/)).toBeInTheDocument();
+    expect(await within(second).findByText(/Kappa is piloting Product X/)).toBeInTheDocument();
     expect(within(second).getByText('Pilot')).toBeInTheDocument();
   });
 
@@ -197,15 +197,15 @@ describe('path mode — on the canvas', () => {
     renderExplorer(`/graph/explore?${PAIR}`);
     await pathReady();
     const canvas = await screen.findByTestId('fake-canvas');
-    await within(canvas).findByRole('button', { name: 'Acme Corp' });
+    await within(canvas).findByRole('button', { name: 'Org Kappa' });
     expect(within(canvas).queryByRole('button', { name: 'Product X rollout' })).not.toBeInTheDocument();
     expect(canvas).toHaveAttribute('data-path-nodes', '');
 
     await user.click(screen.getByRole('button', { name: 'Show on canvas' }));
 
     await within(canvas).findByRole('button', { name: 'Product X rollout' });
-    // Merge, not replace: Acme was already there.
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toBeInTheDocument();
+    // Merge, not replace: Kappa was already there.
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toBeInTheDocument();
     await waitFor(() => expect(canvas).toHaveAttribute('data-path-nodes', [JOE_ID, PRODUCT_X_ID].sort().join(',')));
     expect(canvas).toHaveAttribute('data-path-edges', EDGE_INVOLVED);
     await waitFor(() => expect(mocks.fitTo).toHaveBeenCalledWith([JOE_ID, PRODUCT_X_ID]));
@@ -219,7 +219,7 @@ describe('path mode — on the canvas', () => {
     await waitFor(() => expect(mocks.fitTo).toHaveBeenCalledTimes(1));
 
     await user.click(screen.getByRole('button', { name: /^Path 2, moderate evidence$/ }));
-    await waitFor(() => expect(mocks.fitTo).toHaveBeenCalledWith([JOE_ID, ACME_ID, PRODUCT_X_ID]));
+    await waitFor(() => expect(mocks.fitTo).toHaveBeenCalledWith([JOE_ID, KAPPA_ID, PRODUCT_X_ID]));
     expect(screen.getByTestId('fake-canvas')).toHaveAttribute('data-path-edges', expect.stringContaining(EDGE_USES));
   });
 

@@ -95,7 +95,7 @@ function listItem(
 
 const LIST_ITEMS = [
   listItem('t1', 'Weekly engineering standup'),
-  listItem('t2', 'Customer discovery — Northwind', {
+  listItem('t2', 'Customer discovery — Lambda', {
     status: 'processing',
     transcriptionStatus: 'processing',
     playbackStatus: 'ready',

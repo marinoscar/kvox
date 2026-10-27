@@ -681,7 +681,7 @@ describe('GraphWriteService', () => {
   // ===========================================================================
 
   describe('manual evidence (#586)', () => {
-    const manual = () => new ManualEvidence('  Set by hand: Sarah Chen works for Acme  ');
+    const manual = () => new ManualEvidence('  Set by hand: Sarah Chen works for Kappa  ');
 
     it('createRelation stores a ManualEvidence with no anchor and the reserved IRI, without the validator', async () => {
       const { service, tx, asTx, validator } = setup();
@@ -691,7 +691,7 @@ describe('GraphWriteService', () => {
         expect.objectContaining({
           subjectKind: 'relation',
           subjectId: 'new-relation',
-          quote: 'Set by hand: Sarah Chen works for Acme',
+          quote: 'Set by hand: Sarah Chen works for Kappa',
           sourceIri: MANUAL_EVIDENCE_SOURCE_IRI,
           transcriptId: null,
           segmentId: null,

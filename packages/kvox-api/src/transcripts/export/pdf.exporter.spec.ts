@@ -15,7 +15,7 @@ import { fixtureDocument, longDocument, renderToBuffer } from '../testing/export
 const FONT_DIR = defaultPdfFontDir();
 
 /** The host's name, as it passes it through `KVOX_BRAND`. */
-const APP_NAME = 'Acme Notes';
+const APP_NAME = 'Kappa Notes';
 
 // =============================================================================
 // The PDF export (issue #28, epic #19, spec §8.4)
@@ -51,7 +51,7 @@ const APP_NAME = 'Acme Notes';
 // =============================================================================
 
 function exporter(): PdfTranscriptExporter {
-  const instance = new PdfTranscriptExporter(new TranscriptExporterRegistry(), { appName: APP_NAME, appSlug: 'acme-notes' });
+  const instance = new PdfTranscriptExporter(new TranscriptExporterRegistry(), { appName: APP_NAME, appSlug: 'kappa-notes' });
 
   instance.onModuleInit();
 

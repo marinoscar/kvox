@@ -258,12 +258,12 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     const user = await createUser();
     const note = await createNote(user.id);
     const joe = await entity(user.id, 'Person', 'Joe');
-    const acme = await entity(user.id, 'Organization', 'Acme');
-    const engineer = await relation(user.id, 'HAS_ROLE', joe, acme, '[2019-01-01,)', 'year', { title: 'Engineer' });
+    const kappa = await entity(user.id, 'Organization', 'Kappa');
+    const engineer = await relation(user.id, 'HAS_ROLE', joe, kappa, '[2019-01-01,)', 'year', { title: 'Engineer' });
 
     const p = await proposal(user.id, note.id);
     await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
-    await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Acme'), { resolution: linked(acme) });
+    await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Kappa'), { resolution: linked(kappa) });
     await row(p.id, user.id, 'relation', relPayload({ type: 'HAS_ROLE', props: { title: 'Staff Engineer' }, validFrom: '2026-03-01', precision: 'month' }), {
       quote: 'Joe was promoted to Staff Engineer this month',
     });
@@ -277,7 +277,7 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
       relationId: engineer,
       relationType: 'HAS_ROLE',
       fromLabel: 'Joe',
-      toLabel: 'Acme',
+      toLabel: 'Kappa',
       roleTitle: 'Engineer',
       previousValid: { from: '2019-01-01', to: null, precision: 'year' },
       closeAt: '2026-03-01',
@@ -337,12 +337,12 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     const user = await createUser();
     const note = await createNote(user.id);
     const joe = await entity(user.id, 'Person', 'Joe');
-    const acme = await entity(user.id, 'Organization', 'Acme');
-    const works = await relation(user.id, 'WORKS_FOR', joe, acme, '[2019-01-01,2026-01-01)', 'year');
+    const kappa = await entity(user.id, 'Organization', 'Kappa');
+    const works = await relation(user.id, 'WORKS_FOR', joe, kappa, '[2019-01-01,2026-01-01)', 'year');
 
     const p = await proposal(user.id, note.id);
     await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
-    await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Acme'), { resolution: linked(acme) });
+    await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Kappa'), { resolution: linked(kappa) });
     await row(p.id, user.id, 'relation', relPayload({ validFrom: '2020-01-01', precision: 'year' }));
 
     await runAll(ctx(p.id, user.id, note.id));
@@ -382,13 +382,13 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     const user = await createUser();
     const note = await createNote(user.id);
     const joe = await entity(user.id, 'Person', 'Joe');
-    const acme = await entity(user.id, 'Organization', 'Acme');
-    const globex = await entity(user.id, 'Organization', 'Globex');
-    await relation(user.id, 'WORKS_FOR', joe, acme, '[2019-01-01,2024-01-01)', 'year');
+    const kappa = await entity(user.id, 'Organization', 'Kappa');
+    const sigma = await entity(user.id, 'Organization', 'Org Sigma');
+    await relation(user.id, 'WORKS_FOR', joe, kappa, '[2019-01-01,2024-01-01)', 'year');
 
     const p = await proposal(user.id, note.id);
     await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
-    await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Globex'), { resolution: linked(globex) });
+    await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Org Sigma'), { resolution: linked(sigma) });
     await row(p.id, user.id, 'relation', relPayload({ validFrom: '2023-01-01', validTo: '2025-01-01', precision: 'year' }));
     await runAll(ctx(p.id, user.id, note.id));
     const rel = (await rows(p.id)).find((i) => i.kind === 'relation')!;
@@ -400,16 +400,16 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     const user = await createUser();
     const note = await createNote(user.id);
     const joe = await entity(user.id, 'Person', 'Joe');
-    const acme = await entity(user.id, 'Organization', 'Acme');
-    const globex = await entity(user.id, 'Organization', 'Globex');
+    const kappa = await entity(user.id, 'Organization', 'Kappa');
+    const sigma = await entity(user.id, 'Organization', 'Org Sigma');
     const project = await entity(user.id, 'Project', 'Vendor migration');
-    const works = await relation(user.id, 'WORKS_FOR', joe, acme, '[2019-01-01,)', 'year');
+    const works = await relation(user.id, 'WORKS_FOR', joe, kappa, '[2019-01-01,)', 'year');
     const open = await item(user.id, { kind: 'commitment', subjectId: project, statement: 'Joe finishes the vendor migration.', status: 'open', ownerPersonId: joe });
     await item(user.id, { kind: 'commitment', subjectId: project, statement: 'Joe files the old report.', status: 'done', ownerPersonId: joe });
 
     const p = await proposal(user.id, note.id);
     await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
-    await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Globex'), { resolution: linked(globex) });
+    await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Org Sigma'), { resolution: linked(sigma) });
     await row(p.id, user.id, 'relation', relPayload({ validFrom: '2026-03-01', precision: 'month' }));
     await runAll(ctx(p.id, user.id, note.id));
 
@@ -418,7 +418,7 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     expect(c.payload).toMatchObject({
       relationId: works,
       relationType: 'WORKS_FOR',
-      toLabel: 'Acme',
+      toLabel: 'Kappa',
       roleTitle: null,
       closeAt: '2026-03-01',
       affectedCommitments: [{ itemId: open, title: 'Joe finishes the vendor migration.', role: 'owner' }],
@@ -480,9 +480,9 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     const noteA = await createNote(user.id);
     const noteB = await createNote(user.id);
     const joe = await entity(user.id, 'Person', 'Joe');
-    const acme = await entity(user.id, 'Organization', 'Acme');
+    const kappa = await entity(user.id, 'Organization', 'Kappa');
     const fact = itemPayload({ ref: 'f1', kind: 'person_fact', statement: 'Joe is training for a marathon.', subject: { ref: 'e1' }, sensitivity: 'personal' });
-    const claim = itemPayload({ ref: 'c1', kind: 'claim', statement: 'Joe runs the Acme account.', subject: { ref: 'e1' } });
+    const claim = itemPayload({ ref: 'c1', kind: 'claim', statement: 'Joe runs the Kappa account.', subject: { ref: 'e1' } });
 
     // Note A, committed: the person fact was rejected.
     const oldA = await proposal(user.id, noteA.id, 'committed');
@@ -495,13 +495,13 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     // Note B, discarded: a WORKS_FOR was "rejected" — that "no" was never committed.
     const discarded = await proposal(user.id, noteB.id, 'discarded');
     await row(discarded.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
-    await row(discarded.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Acme'), { resolution: linked(acme) });
+    await row(discarded.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Kappa'), { resolution: linked(kappa) });
     await row(discarded.id, user.id, 'relation', relPayload({ type: 'ATTENDED' }), { decision: 'reject' });
 
     // Now note B is extracted again.
     const p = await proposal(user.id, noteB.id);
     await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
-    await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Acme'), { resolution: linked(acme) });
+    await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Kappa'), { resolution: linked(kappa) });
     await row(p.id, user.id, 'item', fact, { quote: 'Joe mentioned the marathon' });
     await row(p.id, user.id, 'item', claim);
     await row(p.id, user.id, 'relation', relPayload({ type: 'ATTENDED' }));

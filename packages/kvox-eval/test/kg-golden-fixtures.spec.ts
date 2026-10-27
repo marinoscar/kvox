@@ -475,8 +475,8 @@ describe('kg golden set (issue #362)', () => {
         fixtures.some((f) => f.knownEntities.some((k) => k.id === 'g-person-jonah-jimenez' && k.aliases.includes('JJ'))),
       ).toBe(true);
       expect(citesLinked('g-person-jonah-jimenez', /\bJJ\b/)).toBe(true);
-      // An organization abbreviation ("NWR" / "Northwind Robotics").
-      expect(citesLinked('g-org-northwind-robotics', /\bNWR\b/)).toBe(true);
+      // An organization abbreviation ("NWR" / "Org Lambda Robotics").
+      expect(citesLinked('g-org-lambda-robotics', /\bNWR\b/)).toBe(true);
     });
 
     it('has supersedes chains: a decision reversed later, and "moved to Q2" after "in Q1"', () => {

@@ -292,7 +292,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
     it('rejects a relation with both from_id and from_speaker_id set', async () => {
       const owner = await createUser('relation-both-sources');
       const from = await createEntity(owner.id);
-      const to = await createEntity(owner.id, { label: 'Acme Corp', type: 'organization' });
+      const to = await createEntity(owner.id, { label: 'Org Kappa', type: 'organization' });
       const source = await createStorageObject(prisma, {
         data: {
           name: 'r.m4a',
@@ -330,7 +330,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
 
     it('rejects a non-IDENTIFIED_AS relation with from_speaker_id set', async () => {
       const owner = await createUser('relation-wrong-type-speaker');
-      const to = await createEntity(owner.id, { label: 'Acme Corp', type: 'organization' });
+      const to = await createEntity(owner.id, { label: 'Org Kappa', type: 'organization' });
       const source = await createStorageObject(prisma, {
         data: {
           name: 'r.m4a',
@@ -433,7 +433,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
     async function insertRelation(valid: 'range' | 'none', precision: string | null) {
       const owner = await createUser(`valid-precision-${valid}-${precision ?? 'null'}`);
       const from = await createEntity(owner.id);
-      const to = await createEntity(owner.id, { label: 'Acme' });
+      const to = await createEntity(owner.id, { label: 'Kappa' });
       const range = valid === 'range' ? '[2019-01-01,2026-03-01)' : null;
       return prisma.$executeRaw`
         INSERT INTO "kg_relations"
@@ -870,7 +870,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
     it('uses kg_relations_valid_gist_idx for a range-containment query', async () => {
       const owner = await createUser('explain-gist');
       const from = await createEntity(owner.id);
-      const to = await createEntity(owner.id, { label: 'Acme Corp', type: 'organization' });
+      const to = await createEntity(owner.id, { label: 'Org Kappa', type: 'organization' });
       const relation = await prisma.kgRelation.create({
         data: { reviewStatus: 'unreviewed', ownerId: owner.id, type: 'WORKS_AT', fromId: from.id, toId: to.id, ontologyVersion: 'test-v1' },
       });
@@ -900,7 +900,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
     it('round-trips through lower()/upper()/upper_inf()', async () => {
       const owner = await createUser('tstzrange-roundtrip');
       const from = await createEntity(owner.id);
-      const to = await createEntity(owner.id, { label: 'Acme Corp', type: 'organization' });
+      const to = await createEntity(owner.id, { label: 'Org Kappa', type: 'organization' });
       const relation = await prisma.kgRelation.create({
         data: { reviewStatus: 'unreviewed', ownerId: owner.id, type: 'WORKS_AT', fromId: from.id, toId: to.id, ontologyVersion: 'test-v1' },
       });
@@ -945,7 +945,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       const alias = await prisma.kgEntityAlias.create({
         data: { entityId: entity.id, ownerId: owner.id, alias: 'S. Chen', normalized: 's chen', source: 'user' },
       });
-      const to = await createEntity(owner.id, { label: 'Acme Corp', type: 'organization' });
+      const to = await createEntity(owner.id, { label: 'Org Kappa', type: 'organization' });
       const relation = await prisma.kgRelation.create({
         data: { reviewStatus: 'unreviewed', ownerId: owner.id, type: 'WORKS_AT', fromId: entity.id, toId: to.id, ontologyVersion: 'test-v1' },
       });

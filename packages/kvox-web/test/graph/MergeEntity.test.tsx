@@ -7,7 +7,7 @@ import { http, HttpResponse, server } from './msw-compat.js';
 import { render } from './helpers.js';
 import type { MockUser } from './helpers.js';
 import { graphReader, graphWriter } from './graphTestUsers.js';
-import { ACME_ID, ANA_ID, BEN_ID, JOE_ID, entityDetail, gid, graphEntitySummaries } from './graphData.js';
+import { KAPPA_ID, ANA_ID, BEN_ID, JOE_ID, entityDetail, gid, graphEntitySummaries } from './graphData.js';
 import { GraphEntityPage } from '../../src/graph/ui/pages/GraphEntityPage.js';
 import { defaultSurvivorId, mergeConfirmation } from '../../src/graph/ui/components/MergeEntityDialog.js';
 import { clearEvidenceCache } from '../../src/graph/headless/hooks/useGraphEvidence.js';
@@ -99,8 +99,8 @@ async function pick(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElemen
 describe('EntityHeader — Merge into…', () => {
   it('is offered for every type to a writer', async () => {
     const user = userEvent.setup();
-    renderEntity(ACME_ID);
-    expect(await openMergeDialog(user, 'Acme Corp')).toBeInTheDocument();
+    renderEntity(KAPPA_ID);
+    expect(await openMergeDialog(user, 'Org Kappa')).toBeInTheDocument();
   });
 
   it('is hidden from a read-only viewer, like Edit', async () => {
@@ -118,7 +118,7 @@ describe('MergeEntityDialog', () => {
       http.get('*/api/graph/entities', () =>
         HttpResponse.json({
           data: {
-            items: graphEntitySummaries.filter((row) => [JOE_ID, ANA_ID, ACME_ID].includes(row.id)),
+            items: graphEntitySummaries.filter((row) => [JOE_ID, ANA_ID, KAPPA_ID].includes(row.id)),
             nextCursor: null,
           },
         }),
@@ -131,7 +131,7 @@ describe('MergeEntityDialog', () => {
 
     expect(await screen.findByRole('option', { name: /Ana Diaz/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Joe Rivera/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /Acme Corp/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Org Kappa/ })).not.toBeInTheDocument();
     const search = requests.find((r) => r.url.pathname.endsWith('/graph/entities') && r.url.searchParams.get('q'));
     expect(search?.url.searchParams.get('type')).toBe('Person');
   });

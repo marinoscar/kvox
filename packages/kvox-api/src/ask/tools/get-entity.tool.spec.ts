@@ -8,7 +8,7 @@ import { GetEntityTool } from './get-entity.tool.js';
 // =============================================================================
 
 const SARAH = uid(1);
-const ACME = uid(2);
+const KAPPA = uid(2);
 const FOREIGN = uid(3);
 
 const attr = (key: string, label: string, over: Record<string, unknown> = {}) => ({
@@ -67,7 +67,7 @@ function build(props: Record<string, unknown>) {
   const prisma = {
     kgEntity: {
       findMany: jest.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
-        where.id.in.includes(ACME) ? [{ id: ACME, label: 'Acme', type: 'Organization' }] : [],
+        where.id.in.includes(KAPPA) ? [{ id: KAPPA, label: 'Kappa', type: 'Organization' }] : [],
       ),
     },
   };
@@ -78,8 +78,8 @@ const PROPS = {
   title: 'CTO',
   u_home000001: 'Lisbon',
   u_health0001: 'something private',
-  u_employer01: ACME,
-  u_mentors001: [ACME, FOREIGN],
+  u_employer01: KAPPA,
+  u_mentors001: [KAPPA, FOREIGN],
   u_level00001: 'sr',
   u_external01: uid(99),
   u_empty00001: '',
@@ -103,8 +103,8 @@ describe('GetEntityTool', () => {
       aliases: ['S. Chen'],
       attributes: {
         'Job title': 'CTO',
-        Employer: { ref: 'ent2', label: 'Acme', type: 'Organization' },
-        Mentors: [{ ref: 'ent2', label: 'Acme', type: 'Organization' }],
+        Employer: { ref: 'ent2', label: 'Kappa', type: 'Organization' },
+        Mentors: [{ ref: 'ent2', label: 'Kappa', type: 'Organization' }],
         Level: 'Senior',
       },
       counts: { relations: 4, commitments: 2, decisions: 1, claims: 0, openCommitments: 1 },

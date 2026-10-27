@@ -1,6 +1,6 @@
 {
   "id": "m09",
-  "title": "Northwind platform org update",
+  "title": "Lambda platform org update",
   "tags": [
     "client",
     "promotion",
@@ -8,7 +8,7 @@
     "negative-on-call"
   ],
   "recordedAt": "2026-03-05T15:00:00Z",
-  "contextText": "Sarah wants to walk us through changes in the Northwind engineering org.",
+  "contextText": "Sarah wants to walk us through changes in the Lambda engineering org.",
   "hasTranscript": true,
   "speakers": [
     {
@@ -228,7 +228,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Northwind platform org update\n\n**Date:** March 5\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)\n\n## Summary\n\nSarah Chen walked us through three changes in the Northwind Robotics engineering organisation and what they mean for the pick-path pilot.\n\n## Changes\n\n1. **Owen Barker** joined Northwind in February as **Head of Platform**.\n2. **Tomás Aguilar** was promoted to **Staff Engineer** this month. Day-to-day work is unchanged, but he will have more say in architecture.\n3. **Lena Park** is moving to lead the robotics research group. Tomás reported to Lena until the end of March; from April he reports to Owen.\n\n## Decisions\n\n- The pilot's platform work moves under Owen's team from April. Owen becomes Larkspur's escalation point; Tomás stays technical lead.\n\n## Action items\n\n- **Owen Barker** — set up a joint on-call rotation between Larkspur and the platform team by April 1.\n- **Alex Rivera** — add Lena Park to the Friday update distribution; send Owen written pre-reads before meetings.\n\n## Notes\n\n- Until the rotation exists, whoever's on call on the platform team handles anything urgent.\n- Owen prefers a written proposal a day before any meeting rather than being walked through slides.\n- Lena's research group is on the same floor, and she will want to hear how the pilot goes since it started under her.\n"
+    "body": "# Lambda platform org update\n\n**Date:** March 5\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)\n\n## Summary\n\nSarah Chen walked us through three changes in the Org Lambda Robotics engineering organisation and what they mean for the pick-path pilot.\n\n## Changes\n\n1. **Owen Barker** joined Lambda in February as **Head of Platform**.\n2. **Tomás Aguilar** was promoted to **Staff Engineer** this month. Day-to-day work is unchanged, but he will have more say in architecture.\n3. **Lena Park** is moving to lead the robotics research group. Tomás reported to Lena until the end of March; from April he reports to Owen.\n\n## Decisions\n\n- The pilot's platform work moves under Owen's team from April. Owen becomes Larkspur's escalation point; Tomás stays technical lead.\n\n## Action items\n\n- **Owen Barker** — set up a joint on-call rotation between Larkspur and the platform team by April 1.\n- **Alex Rivera** — add Lena Park to the Friday update distribution; send Owen written pre-reads before meetings.\n\n## Notes\n\n- Until the rotation exists, whoever's on call on the platform team handles anything urgent.\n- Owen prefers a written proposal a day before any meeting rather than being walked through slides.\n- Lena's research group is on the same floor, and she will want to hear how the pilot goes since it started under her.\n"
   },
   "knownEntities": [
     {
@@ -242,12 +242,12 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-org-northwind-robotics",
+      "id": "g-org-lambda-robotics",
       "type": "Organization",
-      "label": "Northwind Robotics",
+      "label": "Org Lambda Robotics",
       "aliases": [
         "NWR",
-        "Northwind"
+        "Lambda"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -325,14 +325,14 @@
       {
         "key": "meeting",
         "type": "Meeting",
-        "label": "Northwind platform org update",
+        "label": "Lambda platform org update",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Northwind platform org update"
+            "quote": "Lambda platform org update"
           }
         ]
       },
@@ -412,14 +412,14 @@
       {
         "key": "nwr",
         "type": "Organization",
-        "label": "Northwind Robotics",
+        "label": "Org Lambda Robotics",
         "aliases": [],
-        "existingId": "g-org-northwind-robotics",
+        "existingId": "g-org-lambda-robotics",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "changes in the Northwind Robotics engineering organisation"
+            "quote": "changes in the Org Lambda Robotics engineering organisation"
           }
         ]
       },
@@ -450,7 +450,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -465,7 +465,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -480,7 +480,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -495,7 +495,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },

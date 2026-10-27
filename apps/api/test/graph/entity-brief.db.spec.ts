@@ -129,20 +129,20 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
   }
 
   /**
-   * Sarah at Acme: §5.4's manager change (Jane until 2026-03-01, then Will),
+   * Sarah at Kappa: §5.4's manager change (Jane until 2026-03-01, then Will),
    * a role, commitments in both directions, a decision, a claim and a
    * sensitive fact.
    */
   async function seedSarah(g: GraphFixture) {
-    const acme = await g.entity('Organization', 'Acme');
+    const kappa = await g.entity('Organization', 'Kappa');
     const sarah = await g.entity('Person', 'Sarah Chen');
     const jane = await g.entity('Person', 'Jane');
     const will = await g.entity('Person', 'Will');
     const bob = await g.entity('Person', 'Bob');
-    await g.relation('WORKS_FOR', sarah, acme, { valid: '[2019-01-01,)', precision: 'year' });
+    await g.relation('WORKS_FOR', sarah, kappa, { valid: '[2019-01-01,)', precision: 'year' });
     await g.relation('REPORTS_TO', sarah, jane, { valid: '[2020-01-01,2026-03-01)', precision: 'month', reviewStatus: 'superseded' });
     await g.relation('REPORTS_TO', sarah, will, { valid: '[2026-03-01,)', precision: 'month' });
-    const role = await g.relation('HAS_ROLE', sarah, acme, { valid: '[2019-01-01,)', precision: 'year' });
+    const role = await g.relation('HAS_ROLE', sarah, kappa, { valid: '[2019-01-01,)', precision: 'year' });
     await prisma.$executeRaw`UPDATE kg_relations SET props = '{"title":"Engineer"}'::jsonb WHERE id = ${role}::uuid`;
 
     const recent = new Date(Date.now() - 5 * 86_400_000);
@@ -156,7 +156,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
       sensitivity: 'sensitive',
       occurredAt: recent,
     });
-    return { acme, sarah, jane, will, bob, role, theirs, yours, decision, claim, sensitive };
+    return { kappa, sarah, jane, will, bob, role, theirs, yours, decision, claim, sensitive };
   }
 
   const get = (reader: never, id: string, opts: Partial<Parameters<EntityBriefService['getBrief']>[2]> = {}) =>
@@ -198,7 +198,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
 
   it('adds a cited "Open risks" section for a Project, Product or Organization, and omits it when empty (#664)', async () => {
     const { reader, g } = await owner();
-    const acme = await g.entity('Organization', 'Acme');
+    const kappa = await g.entity('Organization', 'Kappa');
     const project = await g.entity('Project', 'Product X rollout');
     const sarah = await g.entity('Person', 'Sarah Chen');
     const recent = new Date(Date.now() - 5 * 86_400_000);
@@ -211,7 +211,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     await mk(project, 'Draft one', { reviewStatus: 'unreviewed', props: { severity: 'high' }, occurredAt: recent });
     const gone = await mk(project, 'Superseded one', { reviewStatus: 'superseded', status: 'superseded', supersededById: highNew, occurredAt: recent });
     await mk(sarah, 'A risk about a person', { props: { severity: 'high' }, occurredAt: recent });
-    await mk(acme, 'Acme may not renew', { props: { severity: 'medium' }, occurredAt: recent });
+    await mk(kappa, 'Kappa may not renew', { props: { severity: 'medium' }, occurredAt: recent });
 
     const forProject = await get(reader, project, { enqueueStaleDigest: false, since: '2020-01-01' });
     expect(entityBriefResponseSchema.safeParse(forProject).success).toBe(true);
@@ -220,7 +220,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     // History keeps a superseded risk (flagged) in "what changed", but it is never an open risk.
     expect(forProject.sections.openRisks?.map((e) => e.itemId)).not.toContain(gone);
 
-    const forOrg = await get(reader, acme, { enqueueStaleDigest: false, since: '2020-01-01' });
+    const forOrg = await get(reader, kappa, { enqueueStaleDigest: false, since: '2020-01-01' });
     expect(forOrg.sections.openRisks).toHaveLength(1);
 
     // A Person never carries the section, whatever risks name them; an entity with none has no key at all.
@@ -270,10 +270,10 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     const { user, reader, g } = await owner();
     const s = await seedSarah(g);
 
-    const first = await get(reader, s.acme, { enqueueStaleDigest: false });
+    const first = await get(reader, s.kappa, { enqueueStaleDigest: false });
     expect(first.window.sinceSource).toBe('default');
     const view = await prisma.kgEntityView.findUniqueOrThrow({
-      where: { userId_entityId: { userId: user.id, entityId: s.acme } },
+      where: { userId_entityId: { userId: user.id, entityId: s.kappa } },
     });
 
     // The promotion: the closing rule closes the Engineer role and opens Staff Engineer.
@@ -281,11 +281,11 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     const at = new Date();
     await prisma.$executeRaw`UPDATE kg_relations SET valid = tstzrange(lower(valid), ${at}::timestamptz, '[)'),
       review_status = 'superseded' WHERE id = ${s.role}::uuid`;
-    const promoted = await g.relation('HAS_ROLE', s.sarah, s.acme, { valid: `[${at.toISOString()},)`, precision: 'day' });
+    const promoted = await g.relation('HAS_ROLE', s.sarah, s.kappa, { valid: `[${at.toISOString()},)`, precision: 'day' });
     await prisma.$executeRaw`UPDATE kg_relations SET props = '{"title":"Staff Engineer"}'::jsonb WHERE id = ${promoted}::uuid`;
     await sleep(10);
 
-    const second = await get(reader, s.acme, { enqueueStaleDigest: false });
+    const second = await get(reader, s.kappa, { enqueueStaleDigest: false });
     expect(second.window).toMatchObject({
       since: view.lastViewedAt.toISOString(),
       sinceSource: 'last_viewed',
@@ -297,13 +297,13 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
       ['started', 'Staff Engineer', promoted],
     ]);
     expect(hasRole[0].person.id).toBe(s.sarah);
-    expect(hasRole[0].other.id).toBe(s.acme);
+    expect(hasRole[0].other.id).toBe(s.kappa);
 
     // For an Organization, "theirs" is what its current workers owe.
     expect(second.sections.openCommitments.theirs.map((e) => e.itemId)).toEqual([s.theirs]);
 
     const moved = await prisma.kgEntityView.findUniqueOrThrow({
-      where: { userId_entityId: { userId: user.id, entityId: s.acme } },
+      where: { userId_entityId: { userId: user.id, entityId: s.kappa } },
     });
     expect(moved.lastViewedAt.getTime()).toBeGreaterThan(view.lastViewedAt.getTime());
   });
@@ -328,16 +328,16 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
 
   it('fuses a text-only transcript (inGraph: false) with the documents the graph cites', async () => {
     const { reader, g } = await owner();
-    const acme = await g.entity('Organization', 'Acme');
-    // Mentions "Acme" in its segment, and nothing in the graph cites it.
+    const kappa = await g.entity('Organization', 'Kappa');
+    // Mentions "Kappa" in its segment, and nothing in the graph cites it.
     const textOnly = await g.transcript({ title: 'Weekly sync' });
     // Cited by the graph, and does not mention the label at all.
     const cited = await g.transcript({ title: 'Board meeting' });
     await prisma.transcriptSegment.updateMany({ where: { transcriptId: cited.transcript.id }, data: { text: 'Unrelated words' } });
-    const decision = await g.item('decision', { subjectId: acme, statement: 'Go with the blue plan', occurredAt: new Date() });
+    const decision = await g.item('decision', { subjectId: kappa, statement: 'Go with the blue plan', occurredAt: new Date() });
     await g.evidence('item', decision, { transcriptId: cited.transcript.id, segmentId: cited.segment.id });
 
-    const brief = await get(reader, acme, { enqueueStaleDigest: false });
+    const brief = await get(reader, kappa, { enqueueStaleDigest: false });
     const byId = new Map(brief.related.map((r) => [r.id, r]));
     expect(byId.get(textOnly.transcript.id)).toMatchObject({ kind: 'transcript', inGraph: false, title: 'Weekly sync' });
     expect(byId.get(textOnly.transcript.id)?.snippetHtml).toContain('<mark>');

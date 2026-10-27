@@ -59,7 +59,7 @@ const done = (
   ...(finishReason === 'length' || finishReason === 'content_filter' ? { finishReason } : {}),
 });
 const text = (t: string): KvoxChatEvent => ({ type: 'delta', text: t });
-const call = (id: string, name = 'search', args = '{"query":"acme"}'): KvoxChatEvent => {
+const call = (id: string, name = 'search', args = '{"query":"kappa"}'): KvoxChatEvent => {
   let parsed: unknown = args;
   try {
     parsed = JSON.parse(args);
@@ -69,7 +69,7 @@ const call = (id: string, name = 'search', args = '{"query":"acme"}'): KvoxChatE
 
   return { type: 'tool_call', id, name, arguments: parsed };
 };
-const LONG = 'Acme is a client of yours and signed the renewal in August.[^ev1] It is led by Sarah.[^ent1]';
+const LONG = 'Kappa is a client of yours and signed the renewal in August.[^ev1] It is led by Sarah.[^ent1]';
 
 function payload(over: Partial<AskRespondPayload> = {}): AskRespondPayload {
   return {
@@ -162,7 +162,7 @@ function setup(opts: SetupOptions = {}) {
         // newest first, as queried
         [
           { id: MSG, role: 'assistant', status: 'streaming', content: '' },
-          { id: QUESTION_ID, role: 'user', status: 'complete', content: 'What is going on with Acme?' },
+          { id: QUESTION_ID, role: 'user', status: 'complete', content: 'What is going on with Kappa?' },
           ...(opts.history ?? []),
         ],
       ),
@@ -205,7 +205,7 @@ function setup(opts: SetupOptions = {}) {
       opts.execute ??
       jest.fn(async (ctx: { handles: HandleRegistry }) => {
         ctx.handles.register({ kind: 'ev', id: EVIDENCE });
-        ctx.handles.register({ kind: 'ent', id: ENTITY, label: 'Acme' });
+        ctx.handles.register({ kind: 'ent', id: ENTITY, label: 'Kappa' });
         return {
           ok: true,
           result: { data: { entities: [] }, resultCount: 2, summary: 'Found 2 things', truncated: false },
@@ -293,7 +293,7 @@ describe('AskRespondHandler (#378)', () => {
       expect(t.requests[0].messages[0].role).toBe('system');
       expect(t.requests[0].messages[t.requests[0].messages.length - 1]).toEqual({
         role: 'user',
-        content: 'What is going on with Acme?',
+        content: 'What is going on with Kappa?',
       });
     });
 
@@ -315,7 +315,7 @@ describe('AskRespondHandler (#378)', () => {
 
       const final = t.final();
       expect(final.toolCalls).toEqual([
-        { index: 0, name: 'search', arguments: { query: 'acme' }, summary: 'Found 2 things', resultCount: 2, durationMs: 0, error: null },
+        { index: 0, name: 'search', arguments: { query: 'kappa' }, summary: 'Found 2 things', resultCount: 2, durationMs: 0, error: null },
         {
           index: 1,
           name: 'get_entity',
@@ -328,7 +328,7 @@ describe('AskRespondHandler (#378)', () => {
       ]);
       expect(final.citations).toEqual([
         expect.objectContaining({ marker: 'ev1', kind: 'evidence', id: EVIDENCE, valid: true, label: 'Sync', startMs: 4000 }),
-        expect.objectContaining({ marker: 'ent1', kind: 'entity', id: ENTITY, valid: true, label: 'Acme' }),
+        expect.objectContaining({ marker: 'ent1', kind: 'entity', id: ENTITY, valid: true, label: 'Kappa' }),
       ]);
 
       // The second request replays the preamble to the MODEL, and the tool result.
@@ -336,7 +336,7 @@ describe('AskRespondHandler (#378)', () => {
       expect(second).toContainEqual({
         role: 'assistant',
         content: 'Let me check.',
-        toolCalls: [{ id: 'c1', name: 'search', arguments: { query: 'acme' } }],
+        toolCalls: [{ id: 'c1', name: 'search', arguments: { query: 'kappa' } }],
       });
       expect(second).toContainEqual({ role: 'tool', toolCallId: 'c1', content: '{"entities":[{"ref":"ent1"}],"truncated":false}' });
     });
@@ -344,7 +344,7 @@ describe('AskRespondHandler (#378)', () => {
     it('never lets text emitted before a tool call reach content', async () => {
       const t = setup({
         scripts: [
-          [text('Looking up Acme'), text(' for you now…'), call('c1'), done('tool_calls')],
+          [text('Looking up Kappa'), text(' for you now…'), call('c1'), done('tool_calls')],
           [text(LONG), done()],
         ],
       });
@@ -486,15 +486,15 @@ describe('AskRespondHandler (#378)', () => {
     it('replays earlier complete turns as history, markers stripped', async () => {
       const t = setup({
         history: [
-          { id: 'a0', role: 'assistant', status: 'complete', content: 'Acme is a client.[^ev3]' },
-          { id: 'u0', role: 'user', status: 'complete', content: 'Who is Acme?' },
+          { id: 'a0', role: 'assistant', status: 'complete', content: 'Kappa is a client.[^ev3]' },
+          { id: 'u0', role: 'user', status: 'complete', content: 'Who is Kappa?' },
         ],
       });
       await t.handler.process(job());
       expect(t.requests[0].messages.slice(1)).toEqual([
-        { role: 'user', content: 'Who is Acme?' },
-        { role: 'assistant', content: 'Acme is a client.' },
-        { role: 'user', content: 'What is going on with Acme?' },
+        { role: 'user', content: 'Who is Kappa?' },
+        { role: 'assistant', content: 'Kappa is a client.' },
+        { role: 'user', content: 'What is going on with Kappa?' },
       ]);
     });
 

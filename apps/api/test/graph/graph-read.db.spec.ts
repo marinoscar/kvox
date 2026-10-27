@@ -87,10 +87,10 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
       // Microsecond-distinct timestamps: the cursor must round-trip exactly.
       made.push(await g.entity('Person', `Person ${i}`, { updatedAt: new Date(base + i * 1000) }));
     }
-    const live = await g.entity('Organization', 'Acme', { updatedAt: new Date(base + 10_000) });
+    const live = await g.entity('Organization', 'Kappa', { updatedAt: new Date(base + 10_000) });
     await g.entity('Person', 'Draft', { reviewStatus: 'unreviewed' });
     await g.entity('Person', 'Nope', { reviewStatus: 'rejected' });
-    await g.entity('Person', 'Old Acme', { reviewStatus: 'merged', mergedIntoId: live });
+    await g.entity('Person', 'Old Kappa', { reviewStatus: 'merged', mergedIntoId: live });
 
     const expected = [live, ...[...made].reverse()];
     const first = await list(user.id, { limit: 4 });
@@ -177,7 +177,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     const { user, g } = await owner();
     const sarah = await g.entity('Person', 'Sarah Chen', { aliases: ['S. Chen'] });
     const bob = await g.entity('Person', 'Robert Tables', { aliases: ['Bobby Tables'] });
-    await g.entity('Organization', 'Acme Corporation');
+    await g.entity('Organization', 'Org Kappa Holdings');
 
     const byLabel = await list(user.id, { q: 'Sara Chen' });
     expect(byLabel.items[0].id).toBe(sarah);
@@ -187,8 +187,8 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     expect(byAlias.items.map((i) => i.id)).toEqual([bob]);
     expect(byAlias.items[0].aliases).toEqual(['Bobby Tables']);
 
-    const substring = await list(user.id, { q: 'Corp' });
-    expect(substring.items.map((i) => i.label)).toEqual(['Acme Corporation']);
+    const substring = await list(user.id, { q: 'Hold' });
+    expect(substring.items.map((i) => i.label)).toEqual(['Org Kappa Holdings']);
   });
 
   it('filters Persons identified as a speaker in a transcript', async () => {
@@ -227,11 +227,11 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
       props: { noteId: note.id },
     });
     const joe = await g.entity('Person', 'Joe', { aliases: ['Joseph'] });
-    const acme = await g.entity('Organization', 'Acme');
+    const kappa = await g.entity('Organization', 'Kappa');
     await g.evidence('entity', joe, { transcriptId: transcript.id, quote: 'Joe said' });
     await g.evidence('entity', joe, { noteId: note.id, noteVersion: 1, quote: 'Joe wrote' });
-    await g.relation('WORKS_FOR', joe, acme, { valid: '[2019-01-01,)', precision: 'year' });
-    await g.relation('WORKS_FOR', joe, acme, { valid: '[2010-01-01,2012-01-01)', precision: 'year' }); // not valid now
+    await g.relation('WORKS_FOR', joe, kappa, { valid: '[2019-01-01,)', precision: 'year' });
+    await g.relation('WORKS_FOR', joe, kappa, { valid: '[2010-01-01,2012-01-01)', precision: 'year' }); // not valid now
     await g.relation('ATTENDED', joe, meeting);
     await g.item('commitment', { ownerPersonId: joe, status: 'open' });
     await g.item('commitment', { counterpartyId: joe, status: 'done' });
@@ -301,14 +301,14 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     const ana = await g.entity('Person', 'Ana');
     const ben = await g.entity('Person', 'Ben');
     const cy = await g.entity('Person', 'Cy');
-    const acme = await g.entity('Organization', 'Acme');
+    const kappa = await g.entity('Organization', 'Kappa');
     const atlas = await g.entity('Project', 'Atlas');
     await g.relation('REPORTS_TO', ana, ben); // out
     await g.relation('REPORTS_TO', cy, ana); // in
-    await g.relation('WORKS_FOR', ana, acme);
+    await g.relation('WORKS_FOR', ana, kappa);
     await g.relation('INVOLVED_IN', ana, atlas, { props: { role: 'stakeholder', stance: 'skeptical' } });
     // None of these is counted: not valid now, not reviewed, rejected, or a merged-away end.
-    await g.relation('WORKS_FOR', ana, acme, { valid: '[2010-01-01,2012-01-01)', precision: 'year' });
+    await g.relation('WORKS_FOR', ana, kappa, { valid: '[2010-01-01,2012-01-01)', precision: 'year' });
     await g.relation('REPORTS_TO', ana, cy, { reviewStatus: 'unreviewed' });
     await g.relation('REPORTS_TO', ana, ben, { reviewStatus: 'rejected' });
     const gone = await g.entity('Person', 'Gone', { reviewStatus: 'merged', mergedIntoId: ben });
@@ -335,14 +335,14 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     const { user, g } = await owner();
     const { user: other } = await owner('b');
     const joe = await g.entity('Person', 'Joe');
-    const acme = await g.entity('Organization', 'Acme');
-    const relation = await g.relation('WORKS_FOR', joe, acme);
+    const kappa = await g.entity('Organization', 'Kappa');
+    const relation = await g.relation('WORKS_FOR', joe, kappa);
     const older = await g.note();
     const newer = await g.note();
     await prisma.note.update({ where: { id: older.id }, data: { createdAt: new Date('2026-01-01T00:00:00Z') } });
     await prisma.note.update({ where: { id: newer.id }, data: { createdAt: new Date('2026-06-01T00:00:00Z') } });
-    await g.evidence('relation', relation, { noteId: older.id, noteVersion: 1, quote: 'Joe joined Acme' });
-    await g.evidence('relation', relation, { noteId: newer.id, noteVersion: 1, quote: 'Joe is still at Acme' });
+    await g.evidence('relation', relation, { noteId: older.id, noteVersion: 1, quote: 'Joe joined Kappa' });
+    await g.evidence('relation', relation, { noteId: newer.id, noteVersion: 1, quote: 'Joe is still at Kappa' });
     const claim = await g.item('claim', { subjectId: joe });
     const personal = await g.item('person_fact', { subjectId: joe, sensitivity: 'personal' });
     const sensitive = await g.item('person_fact', { subjectId: joe, sensitivity: 'sensitive' });
@@ -350,7 +350,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
 
     const forRelation = await evidence.forSubject(user.id, 'relation', relation);
     // The relation's own seed row ('WORKS_FOR') plus the two notes; the newest source comes first.
-    expect(forRelation.map((link) => link.quote).slice(0, 2)).toEqual(['Joe is still at Acme', 'Joe joined Acme']);
+    expect(forRelation.map((link) => link.quote).slice(0, 2)).toEqual(['Joe is still at Kappa', 'Joe joined Kappa']);
     expect(forRelation.every((link) => link.subjectKind === 'relation' && link.subjectId === relation)).toBe(true);
 
     expect((await evidence.forSubject(user.id, 'entity', joe)).map((link) => link.quote)).toEqual(['Joe']);
@@ -487,7 +487,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
       segmentRev: 1,
       startMs: 1500,
       endMs: 4000,
-      quote: 'Sarah joined Acme',
+      quote: 'Sarah joined Kappa',
     });
     const fromNote = await bobGraph.evidence('entity', person, {
       noteId: note.id,
@@ -541,7 +541,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     // Alice revokes the share: the link goes, the quote stays.
     await prisma.grant.delete({ where: { id: share.id } });
     const revoked = await evidence.getOne(bob.id, fromSegment.id);
-    expect(revoked.quote).toBe('Sarah joined Acme');
+    expect(revoked.quote).toBe('Sarah joined Kappa');
     expect(revoked.source).toMatchObject({
       kind: 'segment',
       available: false,

@@ -112,7 +112,7 @@ describe('AskToolset definitions through z.fromJSONSchema and toJsonSchema (#476
     const search = definitions.find((d) => d.name === 'search')!;
     const [tool] = toPlatformTools([search]);
 
-    expect(tool.parameters.safeParse({ query: 'Acme', scope: 'entities', limit: null }).success).toBe(true);
-    expect(tool.parameters.safeParse({ query: 'Acme', scope: 'entities', limit: null, extra: 1 }).success).toBe(false);
+    expect(tool.parameters.safeParse({ query: 'Kappa', scope: 'entities', limit: null }).success).toBe(true);
+    expect(tool.parameters.safeParse({ query: 'Kappa', scope: 'entities', limit: null, extra: 1 }).success).toBe(false);
   });
 });

@@ -72,7 +72,7 @@ const DO_NOT_RENAME = [
 const USAGE = `
 Rebrand this template.
 
-  node scripts/rename.mjs --name "Acme Hub" [options]
+  node scripts/rename.mjs --name "Kappa Hub" [options]
 
 Options:
   --name <string>        Product display name. The one value most surfaces derive from.
@@ -488,7 +488,7 @@ function warnAboutCliRename(from, to) {
   RENAMING THE CLI BINARY: ${from} -> ${to}
 
   This is a bigger change than renaming the product, and it is deliberately a
-  separate decision — a product called "Acme" may still ship a binary called
+  separate decision — a product called "Kappa" may still ship a binary called
   "${from}".
 
   It will leave work behind that this script does not do:

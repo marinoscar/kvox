@@ -8,7 +8,7 @@ function fact(over: Partial<DigestItemFact>): DigestItemFact {
   return {
     kind: 'decision',
     title: null,
-    statement: 'Acme chose the blue plan',
+    statement: 'Kappa chose the blue plan',
     status: 'active',
     occurredAt: new Date('2026-03-04T10:00:00Z'),
     dueAt: null,
@@ -38,12 +38,12 @@ describe('itemAllowedInPrompt', () => {
 
 describe('the digest prompt', () => {
   const list = buildDigestFactList({
-    previous: [{ text: 'Acme is evaluating vendors', evidenceIds: [E(10), E(11)] }],
+    previous: [{ text: 'Kappa is evaluating vendors', evidenceIds: [E(10), E(11)] }],
     relations: [
       {
         typeLabel: 'Has role',
         fromLabel: 'Sarah',
-        toLabel: 'Acme',
+        toLabel: 'Kappa',
         title: 'Staff Engineer',
         validFrom: new Date('2026-02-01T00:00:00Z'),
         validTo: null,
@@ -58,17 +58,17 @@ describe('the digest prompt', () => {
     ],
     includePersonalFacts: false,
   });
-  const prompt = buildDigestPrompt({ entity: { label: 'Acme', type: 'Organization' }, facts: list.facts, previousHandles: list.previousHandles });
+  const prompt = buildDigestPrompt({ entity: { label: 'Kappa', type: 'Organization' }, facts: list.facts, previousHandles: list.previousHandles });
 
   it('numbers facts with F<n> handles and keeps every evidence id server-side', () => {
     expect(list.facts.map((f) => f.handle)).toEqual(['F1', 'F2', 'F3', 'F4']);
     expect(list.previousHandles).toEqual(['F1']);
     expect(list.evidenceByHandle.get('F1')).toEqual([E(10), E(11)]);
     expect(list.evidenceByHandle.get('F4')).toEqual([E(40)]);
-    expect(prompt.userContent).toMatch(/^F1: Acme is evaluating vendors$/m);
-    expect(prompt.userContent).toMatch(/^F3: \[2026-03-04, decision\] Acme chose the blue plan$/m);
+    expect(prompt.userContent).toMatch(/^F1: Kappa is evaluating vendors$/m);
+    expect(prompt.userContent).toMatch(/^F3: \[2026-03-04, decision\] Kappa chose the blue plan$/m);
     expect(prompt.userContent).toContain('F4: [2026-03-04, commitment] Send the contract (status: open, due 2026-04-01)');
-    expect(prompt.userContent).toContain('Sarah — Has role — Acme (Staff Engineer), since 2026-02-01');
+    expect(prompt.userContent).toContain('Sarah — Has role — Kappa (Staff Engineer), since 2026-02-01');
   });
 
   it('contains no uuid anywhere', () => {

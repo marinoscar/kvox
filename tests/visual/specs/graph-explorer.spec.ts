@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { harnessUrl, waitForInter } from '../support/harness';
-import { ACME_ID, ANA_ID, GRAPH_PERMS, JOE_ID, REPORTS_TO_EDGE_ID, installGraphApi } from '../support/graphApi';
+import { KAPPA_ID, ANA_ID, GRAPH_PERMS, JOE_ID, REPORTS_TO_EDGE_ID, installGraphApi } from '../support/graphApi';
 
 /**
  * The graph explorer (`/graph/explore`, issue #374, epic #347) and the entity
@@ -64,7 +64,7 @@ async function canvasReady(page: Page, count: number, cap?: number) {
 
 test.describe('Graph explorer', () => {
   // #667: the visual language (type colour and pictogram, size, curved parallel
-  // edges: Joe to Acme is both WORKS_FOR and HAS_ROLE) at the four widths, in
+  // edges: Joe to Kappa is both WORKS_FOR and HAS_ROLE) at the four widths, in
   // both themes.
   for (const [name, viewport] of WIDTHS) {
     for (const theme of THEMES) {
@@ -86,13 +86,13 @@ test.describe('Graph explorer', () => {
     await openExplorer(page);
     const app = await canvasReady(page, 6);
 
-    // Keyboard order is degree then label: Joe, then Acme Corp.
+    // Keyboard order is degree then label: Joe, then Org Kappa.
     await app.focus();
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
-    await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Org Kappa' })).toBeVisible();
     await page.keyboard.press('Enter');
-    // Acme adds Ben Okafor, Dana Li and Project Atlas.
+    // Kappa adds Ben Okafor, Dana Li and Project Atlas.
     await canvasReady(page, 9);
     await expect(page.getByRole('button', { name: 'Expand again' })).toBeVisible();
 
@@ -129,7 +129,7 @@ test.describe('Graph explorer', () => {
       await openExplorer(page, `${EXPLORE}&view=list`);
 
       const list = page.getByRole('region', { name: 'Graph as a list' });
-      await expect(list.getByText('Acme Corp')).toBeVisible();
+      await expect(list.getByText('Org Kappa')).toBeVisible();
       if (viewport.width < 600) {
         // On a phone the view controls are in the overflow menu.
         await page.getByRole('button', { name: 'More actions' }).click();
@@ -199,14 +199,14 @@ async function openShell(page: Page, route: string, theme: 'light' | 'dark') {
 }
 
 /**
- * Selects Acme Corp by clicking its node and waits for the inspector. By click, not by keyboard: on a
+ * Selects Org Kappa by clicking its node and waits for the inspector. By click, not by keyboard: on a
  * phone the bottom sheet takes focus when it opens (so a second ArrowRight would go to the sheet).
  */
-async function selectAcme(page: Page) {
+async function selectKappa(page: Page) {
   await cameraSettled(page);
-  const at = await nodePoint(page, ACME_ID);
+  const at = await nodePoint(page, KAPPA_ID);
   await page.mouse.click(at.x, at.y);
-  await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Org Kappa' })).toBeVisible();
 }
 
 test.describe('Insight Canvas shell — baselines', () => {
@@ -218,7 +218,7 @@ test.describe('Insight Canvas shell — baselines', () => {
         await openShell(page, '/graph/explore?layout=static', theme);
         await expect(page.getByRole('heading', { name: 'Where do you want to start?' })).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Themes' })).toBeVisible();
-        await expect(page.getByRole('button', { name: /Globex/ }).first()).toBeVisible();
+        await expect(page.getByRole('button', { name: /Org Sigma/ }).first()).toBeVisible();
         await expect(page.getByRole('region', { name: 'Person' })).toBeVisible();
         await expect(page.getByRole('progressbar')).toHaveCount(0);
         // 1, 2 and 3 columns, and never a horizontal page scroll.
@@ -248,7 +248,7 @@ test.describe('Insight Canvas shell — baselines', () => {
         await page.setViewportSize(viewport);
         await openShell(page, EXPLORE, theme);
         await canvasReady(page, 6);
-        await selectAcme(page);
+        await selectKappa(page);
         await expect(page.getByRole('region', { name: 'Inspector' })).toBeVisible();
         // The camera pans the selection clear of the overlay or the sheet; let it settle.
         await page.waitForTimeout(400);
@@ -287,7 +287,7 @@ test.describe('Insight Canvas shell — baselines', () => {
         await page.setViewportSize(PHONE);
         await openShell(page, EXPLORE, theme);
         await canvasReady(page, 6);
-        await selectAcme(page);
+        await selectKappa(page);
 
         const sheet = page.getByRole(snap === 'full' ? 'dialog' : 'region', { name: 'Inspector' });
         // The handle is a button: arrow up goes up one snap.
@@ -314,7 +314,7 @@ test.describe('Insight Canvas shell — panes', () => {
     await page.setViewportSize(DESKTOP);
     await openShell(page, EXPLORE, 'dark');
     await canvasReady(page, 6);
-    await selectAcme(page);
+    await selectKappa(page);
 
     const facets = page.getByRole('separator', { name: 'Resize filters' });
     await expect(facets).toHaveAttribute('aria-valuenow', '280');
@@ -451,16 +451,16 @@ test.describe('Insight Canvas shell — touch', () => {
     await canvasReady(page, 6, TOUCH_CAP);
     await cameraSettled(page);
 
-    const at = await nodePoint(page, ACME_ID);
+    const at = await nodePoint(page, KAPPA_ID);
     await page.touchscreen.tap(at.x, at.y);
-    await expect(page.getByRole('status').filter({ hasText: 'Tap again to open details' })).toContainText('Acme Corp');
+    await expect(page.getByRole('status').filter({ hasText: 'Tap again to open details' })).toContainText('Org Kappa');
     await expect(page.getByRole('region', { name: 'Inspector' })).toHaveCount(0);
 
     await page.touchscreen.tap(at.x, at.y);
     const sheet = page.getByRole('region', { name: 'Inspector' });
     await expect(sheet).toBeVisible();
     await expect(sheet).toHaveAttribute('data-snap', 'peek');
-    await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Org Kappa' })).toBeVisible();
   });
 
   test('a long-press opens the context menu', async ({ page }) => {
@@ -485,7 +485,7 @@ test.describe('Insight Canvas shell — touch', () => {
     await canvasReady(page, 6, TOUCH_CAP);
     await cameraSettled(page);
 
-    const at = await nodePoint(page, ACME_ID);
+    const at = await nodePoint(page, KAPPA_ID);
     await page.touchscreen.tap(at.x, at.y);
     await page.touchscreen.tap(at.x, at.y);
     const sheet = page.getByRole('region', { name: 'Inspector' });
@@ -545,7 +545,7 @@ test.describe('Insight Canvas shell — touch', () => {
 
     await page.getByRole('button', { name: 'Select' }).click();
     await expect(page.getByRole('button', { name: 'Select', pressed: true })).toBeVisible();
-    const at = await nodePoint(page, ACME_ID);
+    const at = await nodePoint(page, KAPPA_ID);
     await page.touchscreen.tap(at.x, at.y);
     await expect(page.getByText('1 selected')).toBeVisible();
     await expect(page.getByRole('region', { name: 'Inspector' })).toHaveCount(0);
@@ -568,9 +568,9 @@ test.describe('Insight Canvas shell — rotation', () => {
     await app.focus();
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
-    await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Org Kappa' })).toBeVisible();
     const before = await cameraSettled(page);
-    const inspectorTitle = page.getByRole('group', { name: 'Acme Corp' });
+    const inspectorTitle = page.getByRole('group', { name: 'Org Kappa' });
     await expect(inspectorTitle).toBeVisible();
 
     await page.setViewportSize(LAPTOP_LANDSCAPE);
@@ -703,8 +703,8 @@ test.describe('Inspector — baselines', () => {
         await page.setViewportSize(viewport);
         await openShell(page, EXPLORE, theme);
         await canvasReady(page, 6);
-        await selectAcme(page);
-        await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
+        await selectKappa(page);
+        await expect(page.getByRole('group', { name: 'Org Kappa' })).toBeVisible();
         await liftSheet(page, viewport);
         await page.waitForTimeout(400);
 
@@ -741,7 +741,7 @@ test.describe('Inspector — selection view baselines', () => {
         await cameraSettled(page);
 
         await page.getByRole('button', { name: 'Select' }).click();
-        for (const nodeId of [ACME_ID, ANA_ID]) {
+        for (const nodeId of [KAPPA_ID, ANA_ID]) {
           const at = await nodePoint(page, nodeId);
           await page.touchscreen.tap(at.x, at.y);
         }
@@ -786,7 +786,7 @@ test.describe('Inspector — behaviour', () => {
     await page.setViewportSize(DESKTOP);
     await openShell(page, EXPLORE, 'dark');
     await canvasReady(page, 6);
-    await selectAcme(page);
+    await selectKappa(page);
 
     await page.getByRole('button', { name: 'Expand by type' }).click();
     const menu = page.getByRole('menu');
@@ -800,7 +800,7 @@ test.describe('Inspector — behaviour', () => {
     await page.setViewportSize(PHONE);
     await openShell(page, EXPLORE, 'dark');
     await canvasReady(page, 6);
-    await selectAcme(page);
+    await selectKappa(page);
     await liftSheet(page, PHONE);
 
     const tablist = page.getByRole('tablist');
@@ -819,7 +819,7 @@ test.describe('Inspector — behaviour', () => {
     await page.setViewportSize(PHONE);
     await openShell(page, EXPLORE, 'dark');
     await canvasReady(page, 6);
-    await selectAcme(page);
+    await selectKappa(page);
 
     const sheet = page.getByRole('region', { name: 'Inspector' });
     await expect(sheet).toHaveAttribute('data-snap', 'peek');
