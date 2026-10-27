@@ -157,7 +157,7 @@ describe('proposal view mapper', () => {
         {
           relationType: 'HAS_ROLE',
           fromLabel: 'Joe',
-          toLabel: 'Microsoft',
+          toLabel: 'Org Beta',
           roleTitle: 'VP',
           roleBusinessUnit: 'Supply Chain',
           previousValid: { from: '2019-01-01', to: null, precision: 'year' },
@@ -168,7 +168,7 @@ describe('proposal view mapper', () => {
         refs,
         lookups(),
       );
-      expect(d.title).toBe('Closes: Joe has role Microsoft, as VP, Supply Chain, 2019 → Mar 2026');
+      expect(d.title).toBe('Closes: Joe has role Org Beta, as VP, Supply Chain, 2019 → Mar 2026');
     });
   });
 

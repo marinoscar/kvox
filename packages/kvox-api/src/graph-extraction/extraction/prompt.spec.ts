@@ -173,12 +173,12 @@ describe('assembleExtractionPrompt (#363)', () => {
 
   it('puts the Context in its own section after # Meeting, framed and verbatim, citable as C', () => {
     const input = makeInput();
-    input.note.contextText = '  Oscar – EY, Consulting, Managing Director\nSarah is our sponsor.  ';
+    input.note.contextText = '  Avery – OAC, Consulting, Managing Director\nSarah is our sponsor.  ';
     const { userContent } = assembleExtractionPrompt(buildExtractionContext(input));
     expect(CONTEXT_FRAMING).toContain('Cite it as `C`.');
     expect(userContent).toContain(
       `# Meeting\nDate: 2026-03-02\nTitle: Pilot kickoff call\n\n${HEADING_CONTEXT}\n${CONTEXT_FRAMING}\n` +
-        'Oscar – EY, Consulting, Managing Director\nSarah is our sponsor.\n\n# Known entities',
+        'Avery – OAC, Consulting, Managing Director\nSarah is our sponsor.\n\n# Known entities',
     );
     // No longer a one-line meeting field.
     expect(userContent).not.toContain('Context: ');
@@ -208,7 +208,7 @@ describe('assembleExtractionPrompt (#363)', () => {
     const { systemPrompt } = assembleExtractionPrompt(makeContext());
     expect(systemPrompt).toContain(
       "11. Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity), and their role and business unit there as HAS_ROLE to the same Organization with `title` and `businessUnit` whenever the Context, note or transcript states them — " +
-        'e.g. "Joe, VP of Supply Chain at Microsoft" is Joe WORKS_FOR Microsoft and Joe HAS_ROLE Microsoft {title: "VP", businessUnit: "Supply Chain"}.',
+        'e.g. "Joe, VP of Supply Chain at Org Beta" is Joe WORKS_FOR Org Beta and Joe HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.',
     );
     // A company, unit or role is never a Person attribute (#440): the retired
     // Person.title is not offered, and nothing asks for a `company`.
@@ -232,14 +232,14 @@ describe('assembleExtractionPrompt (#363)', () => {
     ).toBeNull();
     // WORKS_FOR alone: the employer only.
     expect(only(['WORKS_FOR'])).toBe(
-      "Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity) whenever the Context, note or transcript states it — e.g. \"Joe works for Microsoft\" is Joe WORKS_FOR Microsoft.",
+      "Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity) whenever the Context, note or transcript states it — e.g. \"Joe works for Org Beta\" is Joe WORKS_FOR Org Beta.",
     );
     // HAS_ROLE alone: the role and unit only.
     expect(only(['HAS_ROLE'])).toBe(
       "Record each person's role and business unit at a company as HAS_ROLE from the person to that company's Organization (create the Organization if it is not a known entity), with `title` and `businessUnit` whenever the Context, note or transcript states them — " +
-        'e.g. "Joe, VP of Supply Chain at Microsoft" is Joe HAS_ROLE Microsoft {title: "VP", businessUnit: "Supply Chain"}.',
+        'e.g. "Joe, VP of Supply Chain at Org Beta" is Joe HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.',
     );
-    expect(only(['WORKS_FOR', 'HAS_ROLE'])).toContain('Joe WORKS_FOR Microsoft and Joe HAS_ROLE Microsoft');
+    expect(only(['WORKS_FOR', 'HAS_ROLE'])).toContain('Joe WORKS_FOR Org Beta and Joe HAS_ROLE Org Beta');
   });
 
   it('keeps the rule numbers sequential whichever optional rules are present', () => {
@@ -281,34 +281,34 @@ describe('assembleExtractionPrompt (#363)', () => {
     const rule = subjectBoundaryRule(makeContext());
     expect(rule).toBe(
       'Keep Project, Topic and Product apart: a Project is an effort with an owner and an expected end, a Topic is a recurring subject with neither, ' +
-        'a Product is a named thing an organization buys, uses or offers; "Copilot rollout" is a Project, "licensing cost" is a Topic, "Microsoft Copilot" is a Product. ' +
+        'a Product is a named thing an organization buys, uses or offers; "Product X rollout" is a Project, "licensing cost" is a Topic, "Product X" is a Product. ' +
         'Never fold two of them into one row.',
     );
     // Guidance narrows the offer: a type that is not offered is not named.
     const noProduct = makeContext({ guidance: { pinnedEntityIds: [], entityTypes: ['Project', 'Topic', 'Person'], instructions: '' } });
     expect(subjectBoundaryRule(noProduct)).toContain('Keep Project and Topic apart');
-    expect(subjectBoundaryRule(noProduct)).not.toContain('Product');
+    expect(subjectBoundaryRule(noProduct)).not.toMatch(/\bProduct\b(?! X)/);
     // One type of the three is no boundary; `core` alone offers only Topic.
     expect(subjectBoundaryRule(makeContext({ effectiveSchema: schemaFor(['core']) }))).toBeNull();
   });
 
-  it('adds the Joe / Company A / Copilot example once, with the role, stance and stage vocabulary the registry offers', () => {
+  it('adds the Joe / Company A / Product X example once, with the role, stance and stage vocabulary the registry offers', () => {
     const { systemPrompt } = assembleExtractionPrompt(makeContext());
     expect(systemPrompt.split('Worked example:')).toHaveLength(2);
     const example = stakeholderExampleRule(makeContext())!;
-    expect(example).toContain('"Joe from Company A said he\'s skeptical about the Copilot rollout; Company A is piloting Microsoft Copilot; the licence budget isn\'t approved."');
+    expect(example).toContain('"Joe from Company A said he\'s skeptical about the Product X rollout; Company A is piloting Product X; the licence budget isn\'t approved."');
     for (const row of [
       'Person Joe',
       'Organization Company A',
-      'Organization Microsoft',
-      'Product Microsoft Copilot',
-      'Project Copilot rollout',
+      'Organization Org Beta',
+      'Product Product X',
+      'Project Product X rollout',
       'Joe WORKS_FOR Company A',
-      'Joe INVOLVED_IN Copilot rollout {role: stakeholder, stance: skeptical}',
-      'Company A USES Microsoft Copilot {stage: piloting}',
-      'Microsoft Copilot OFFERED_BY Microsoft',
-      'Copilot rollout CONCERNS Microsoft Copilot',
-      'the fact Risk "licence budget not approved" {riskKind: blocker} about Copilot rollout',
+      'Joe INVOLVED_IN Product X rollout {role: stakeholder, stance: skeptical}',
+      'Company A USES Product X {stage: piloting}',
+      'Product X OFFERED_BY Org Beta',
+      'Product X rollout CONCERNS Product X',
+      'the fact Risk "licence budget not approved" {riskKind: blocker} about Product X rollout',
     ]) {
       expect(example).toContain(row);
     }
@@ -331,7 +331,7 @@ describe('assembleExtractionPrompt (#363)', () => {
     expect(spine).not.toContain('OFFERED_BY');
     expect(spine).not.toContain('WORKS_FOR');
     expect(spine).not.toContain('CONCERNS');
-    expect(spine).not.toContain('Organization Microsoft');
+    expect(spine).not.toContain('Organization Org Beta');
     // `core` alone has no Project, Product or INVOLVED_IN.
     expect(stakeholderExampleRule(makeContext({ effectiveSchema: schemaFor(['core']) }))).toBeNull();
     // Without the Risk fact kind the example does not name a Risk.

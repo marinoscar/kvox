@@ -51,7 +51,7 @@ describe('tokenize', () => {
 
 describe('buildTargets', () => {
   it('adds each full name and the ≥3-char tokens of multi-word names', () => {
-    expect(buildTargets(['Oscar Marín']).map((t) => t.text)).toEqual(['Oscar Marín', 'Oscar', 'Marín']);
+    expect(buildTargets(['Avery Example']).map((t) => t.text)).toEqual(['Avery Example', 'Avery', 'Example']);
     expect(buildTargets(['Jo Ann Li']).map((t) => t.text)).toEqual(['Jo Ann Li', 'Ann']);
   });
 
@@ -60,8 +60,8 @@ describe('buildTargets', () => {
   });
 
   it('dedupes case- and diacritic-insensitively, first spelling wins', () => {
-    const t = buildTargets(['Óscar', 'oscar', 'OSCAR', 'Oscar Marín', 'Marin']);
-    expect(t.map((x) => x.text)).toEqual(['Óscar', 'Oscar Marín', 'Marín']);
+    const t = buildTargets(['Ávery', 'avery', 'AVERY', 'Avery Exámple', 'Example']);
+    expect(t.map((x) => x.text)).toEqual(['Ávery', 'Avery Exámple', 'Exámple']);
   });
 
   it('caps the list at 200', () => {
@@ -111,7 +111,7 @@ describe('findCandidates — Oscar', () => {
   });
 
   it('does not let a window swallow a correct name next to a misspelling', () => {
-    expect(originals(['Oscar Marín'], 'Oscar Marine said so.')).toEqual(['Marine']);
+    expect(originals(['Avery Example'], 'Avery Examplee said so.')).toEqual(['Examplee']);
   });
 
   it('yields nothing for ordinary English and Spanish prose', () => {

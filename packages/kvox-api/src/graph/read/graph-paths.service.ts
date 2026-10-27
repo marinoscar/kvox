@@ -2,7 +2,7 @@
 // GraphPathsService (GIC-12, #673; docs/specs/ontology.md §12, §22)
 // =============================================================================
 //
-// "How is Joe connected to the Copilot rollout?" — the top k evidence-weighted
+// "How is Joe connected to the Product X rollout?" — the top k evidence-weighted
 // paths between two nodes, as ids plus the graph slice they cover.
 //
 // THE SEARCH IS A BIDIRECTIONAL BFS, one SQL statement per level:

@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // The caller's personal synonym dictionary: groups of names that mean the same
-// thing ("EY" = "Ernst & Young"), consulted by entity resolution, the
+// thing ("OAC" = "Org Alpha Consulting"), consulted by entity resolution, the
 // possible-duplicates pass and the entity search.
 //
 // ⚠ THIS IS A USER DICTIONARY, NOT A GRAPH WRITE. A synonym group is not a

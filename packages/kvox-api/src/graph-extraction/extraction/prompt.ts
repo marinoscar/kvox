@@ -108,7 +108,7 @@ export function affiliationRule(ctx: ExtractionContext): string | null {
   if (!worksFor && !hasRole) return null;
   const sources = offeredContextText(ctx.note.contextText) !== null ? 'the Context, note or transcript' : 'the note or transcript';
   const unit = hasRole !== undefined && offeredAttributes(hasRole.type.props).some((a) => a.key === 'businessUnit');
-  const quoted = unit ? 'Joe, VP of Supply Chain at Microsoft' : 'Joe, VP at Microsoft';
+  const quoted = unit ? 'Joe, VP of Supply Chain at Org Beta' : 'Joe, VP at Org Beta';
   const roleProps = unit ? '{title: "VP", businessUnit: "Supply Chain"}' : '{title: "VP"}';
   const create = '(create the Organization if it is not a known entity)';
   const roleWhat = unit ? 'role and business unit' : 'role';
@@ -116,23 +116,23 @@ export function affiliationRule(ctx: ExtractionContext): string | null {
   if (worksFor && hasRole) {
     return (
       `Record each person's employer as WORKS_FOR from the person to that company's Organization ${create}, and their ${roleWhat} there as HAS_ROLE to the same Organization with ${roleHow} whenever ${sources} states them — ` +
-      `e.g. "${quoted}" is Joe WORKS_FOR Microsoft and Joe HAS_ROLE Microsoft ${roleProps}.`
+      `e.g. "${quoted}" is Joe WORKS_FOR Org Beta and Joe HAS_ROLE Org Beta ${roleProps}.`
     );
   }
   if (worksFor) {
-    return `Record each person's employer as WORKS_FOR from the person to that company's Organization ${create} whenever ${sources} states it — e.g. "Joe works for Microsoft" is Joe WORKS_FOR Microsoft.`;
+    return `Record each person's employer as WORKS_FOR from the person to that company's Organization ${create} whenever ${sources} states it — e.g. "Joe works for Org Beta" is Joe WORKS_FOR Org Beta.`;
   }
   return (
     `Record each person's ${roleWhat} at a company as HAS_ROLE from the person to that company's Organization ${create}, with ${roleHow} whenever ${sources} states them — ` +
-    `e.g. "${quoted}" is Joe HAS_ROLE Microsoft ${roleProps}.`
+    `e.g. "${quoted}" is Joe HAS_ROLE Org Beta ${roleProps}.`
   );
 }
 
 /** What each of the three "subject of work" types is, in one clause (the boundary rule, #665). */
 const SUBJECT_BOUNDARIES: ReadonlyArray<{ key: string; clause: string; example: string }> = [
-  { key: 'Project', clause: 'an effort with an owner and an expected end', example: '"Copilot rollout"' },
+  { key: 'Project', clause: 'an effort with an owner and an expected end', example: '"Product X rollout"' },
   { key: 'Topic', clause: 'a recurring subject with neither', example: '"licensing cost"' },
-  { key: 'Product', clause: 'a named thing an organization buys, uses or offers', example: '"Microsoft Copilot"' },
+  { key: 'Product', clause: 'a named thing an organization buys, uses or offers', example: '"Product X"' },
 ];
 
 /** The offered type keys of one run. */
@@ -142,7 +142,7 @@ function offeredTypeKeys(ctx: ExtractionContext): Set<string> {
 
 /**
  * The boundary rule (#665, epic #661): Project, Topic and Product differ, so a
- * "Copilot rollout" is never folded into "Microsoft Copilot" or "licensing
+ * "Product X rollout" is never folded into "Product X" or "licensing
  * cost". DERIVED from the offered schema: only the offered types among the
  * three are named, and null unless at least two are offered.
  */
@@ -158,7 +158,7 @@ export function subjectBoundaryRule(ctx: ExtractionContext): string | null {
 }
 
 /**
- * The worked example (#665): the Joe / Company A / Copilot scenario, once.
+ * The worked example (#665): the Joe / Company A / Product X scenario, once.
  * Every piece is DERIVED from the offered schema — a type, relation or fact
  * kind the run does not offer is never named, and a property value is printed
  * only when the offered relation carries it as a choice — so a disabled domain
@@ -187,21 +187,21 @@ export function stakeholderExampleRule(ctx: ExtractionContext): string | null {
   const entities = [
     'Person Joe',
     'Organization Company A',
-    ...(offeredBy ? ['Organization Microsoft'] : []),
-    'Product Microsoft Copilot',
-    'Project Copilot rollout',
+    ...(offeredBy ? ['Organization Org Beta'] : []),
+    'Product Product X',
+    'Project Product X rollout',
   ];
   const rows = [
     ...(relation('WORKS_FOR') ? ['Joe WORKS_FOR Company A'] : []),
-    `Joe INVOLVED_IN Copilot rollout${props('INVOLVED_IN', { role: 'stakeholder', stance: 'skeptical' })}`,
-    `Company A USES Microsoft Copilot${props('USES', { stage: 'piloting' })}`,
-    ...(offeredBy ? ['Microsoft Copilot OFFERED_BY Microsoft'] : []),
-    ...(relation('CONCERNS') ? ['Copilot rollout CONCERNS Microsoft Copilot'] : []),
+    `Joe INVOLVED_IN Product X rollout${props('INVOLVED_IN', { role: 'stakeholder', stance: 'skeptical' })}`,
+    `Company A USES Product X${props('USES', { stage: 'piloting' })}`,
+    ...(offeredBy ? ['Product X OFFERED_BY Org Beta'] : []),
+    ...(relation('CONCERNS') ? ['Product X rollout CONCERNS Product X'] : []),
   ];
   const blocker = risk && offeredAttributes(risk.attributes).some((a) => a.key === 'riskKind' && a.options?.choices?.some((c) => c.value === 'blocker'));
-  const fact = risk ? `; the fact Risk "licence budget not approved"${blocker ? ' {riskKind: blocker}' : ''} about Copilot rollout` : '';
+  const fact = risk ? `; the fact Risk "licence budget not approved"${blocker ? ' {riskKind: blocker}' : ''} about Product X rollout` : '';
   return (
-    'Worked example: "Joe from Company A said he\'s skeptical about the Copilot rollout; Company A is piloting Microsoft Copilot; the licence budget isn\'t approved." ' +
+    'Worked example: "Joe from Company A said he\'s skeptical about the Product X rollout; Company A is piloting Product X; the licence budget isn\'t approved." ' +
     `proposes the entities ${entities.join(', ')}; the relations ${rows.join('; ')}${fact}. ` +
     'Propose a stance only when the source states one, as Joe\'s "skeptical" here; a person with no stated position gets no stance.'
   );

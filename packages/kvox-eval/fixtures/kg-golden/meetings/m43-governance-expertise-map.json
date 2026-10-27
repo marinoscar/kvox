@@ -13,7 +13,7 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Governance and expertise map\n\n**Date:** September 15\n**Attendees:** Maria Okafor, Daniel Reyes, Sofia Marin, Greta Holm\n\n## Summary\n\nFenwick Retail is moving from a pilot to a full deployment of Zephyr Suite, and the working group met to record who knows what, so that questions from the stores reach the right person. The group also set up the Governance framework, the project that will write the internal rules for using the suite's forecasting features.\n\n## Where the expertise sits\n\n- Maria Okafor is the group's expert on AI governance and has written two policies on the subject for previous employers.\n- Daniel Reyes is a practitioner with Zephyr Suite: he configured the pilot stores and still answers their questions.\n- Sofia Marin is aware of Data residency requirements but said she is not an expert and would want legal review of anything binding.\n\n## Adoption status\n\n- Fenwick Retail has moved Zephyr Suite from a pilot to adopted across the northern region, so the earlier pilot status no longer applies.\n- The Governance framework concerns AI governance and will be reviewed by the legal team before it is published.\n\n## Roles in the Governance framework\n\n- Maria Okafor advises the Governance framework and does not own its delivery.\n- Greta Holm owns the budget for the Governance framework and said she is supportive of the approach.\n\n## Observations\n\n- Daniel Reyes asked many questions about the draft timeline, but said nothing about whether he agrees with the plan.\n- The group agreed that the framework should stay short enough for store managers to read.\n\n## Open points\n\nThe schedule for legal review is not set. Whether the framework will also cover the supplier forecasting data has not been decided.\n"
+    "body": "# Governance and expertise map\n\n**Date:** September 15\n**Attendees:** Maria Okafor, Daniel Reyes, Sofia Marlow, Greta Holm\n\n## Summary\n\nFenwick Retail is moving from a pilot to a full deployment of Zephyr Suite, and the working group met to record who knows what, so that questions from the stores reach the right person. The group also set up the Governance framework, the project that will write the internal rules for using the suite's forecasting features.\n\n## Where the expertise sits\n\n- Maria Okafor is the group's expert on AI governance and has written two policies on the subject for previous employers.\n- Daniel Reyes is a practitioner with Zephyr Suite: he configured the pilot stores and still answers their questions.\n- Sofia Marlow is aware of Data residency requirements but said she is not an expert and would want legal review of anything binding.\n\n## Adoption status\n\n- Fenwick Retail has moved Zephyr Suite from a pilot to adopted across the northern region, so the earlier pilot status no longer applies.\n- The Governance framework concerns AI governance and will be reviewed by the legal team before it is published.\n\n## Roles in the Governance framework\n\n- Maria Okafor advises the Governance framework and does not own its delivery.\n- Greta Holm owns the budget for the Governance framework and said she is supportive of the approach.\n\n## Observations\n\n- Daniel Reyes asked many questions about the draft timeline, but said nothing about whether he agrees with the plan.\n- The group agreed that the framework should stay short enough for store managers to read.\n\n## Open points\n\nThe schedule for legal review is not set. Whether the framework will also cover the supplier forecasting data has not been decided.\n"
   },
   "knownEntities": [
     {
@@ -73,7 +73,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Maria Okafor, Daniel Reyes, Sofia Marin, Greta Holm"
+            "quote": "Maria Okafor, Daniel Reyes, Sofia Marlow, Greta Holm"
           }
         ]
       },
@@ -87,21 +87,21 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Maria Okafor, Daniel Reyes, Sofia Marin, Greta Holm"
+            "quote": "Maria Okafor, Daniel Reyes, Sofia Marlow, Greta Holm"
           }
         ]
       },
       {
         "key": "sofia",
         "type": "Person",
-        "label": "Sofia Marin",
+        "label": "Sofia Marlow",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Maria Okafor, Daniel Reyes, Sofia Marin, Greta Holm"
+            "quote": "Maria Okafor, Daniel Reyes, Sofia Marlow, Greta Holm"
           }
         ]
       },
@@ -115,7 +115,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Maria Okafor, Daniel Reyes, Sofia Marin, Greta Holm"
+            "quote": "Maria Okafor, Daniel Reyes, Sofia Marlow, Greta Holm"
           }
         ]
       },
@@ -238,7 +238,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Sofia Marin is aware of Data residency requirements"
+            "quote": "Sofia Marlow is aware of Data residency requirements"
           }
         ]
       },

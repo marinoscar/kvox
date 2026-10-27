@@ -466,7 +466,7 @@ describe('AskRespondHandler (#378)', () => {
     it('registers the selection of the turn as handles and names them as starting points (GIC-17)', async () => {
       const t = setup({
         selectionEntities: [{ id: ENTITY, label: 'Joe', type: 'Person' }],
-        scripts: [[text('Joe is involved in the Copilot rollout, per the notes you reviewed.[^ent1]'), done()]],
+        scripts: [[text('Joe is involved in the Product X rollout, per the notes you reviewed.[^ent1]'), done()]],
       });
       await t.handler.process(job(payload({ scope: { entityIds: [ENTITY] } })));
       const system = t.requests[0].messages[0].content as string;

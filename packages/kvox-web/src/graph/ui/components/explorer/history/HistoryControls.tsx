@@ -6,7 +6,7 @@
  *   - Compact (phone): ONE back chevron in the top bar, drawn only while there is an earlier focus;
  *     Undo and Redo live in the overflow menu, and an Undo snackbar follows Hide and Expand.
  *
- * Breadcrumbs show the focus trail (Joe › Company A › Copilot rollout): every crumb is a button on
+ * Breadcrumbs show the focus trail (Joe › Company A › Product X rollout): every crumb is a button on
  * expanded, the middle is collapsed on medium, and a phone shows the current item only.
  */
 

@@ -1,21 +1,21 @@
 {
   "id": "m57",
-  "title": "Copilot rollout pilot check-in",
+  "title": "Product X rollout pilot check-in",
   "tags": [
     "internal",
     "note-only",
     "stakeholders-market",
     "risks",
-    "copilot-rollout"
+    "product-x-rollout"
   ],
   "recordedAt": "2026-10-20T15:00:00Z",
-  "contextText": "Pilot check-in for the Copilot rollout at Company A; notes only.",
+  "contextText": "Pilot check-in for the Product X rollout at Company A; notes only.",
   "hasTranscript": false,
   "speakers": [],
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Copilot rollout pilot check-in\n\n**Date:** October 20\n**Attendees:** Maya Ibsen, Joe Hartigan, Ilse Brandvold\n\n## Summary\n\nA check-in on the Copilot rollout at Company A, two weeks after the first call. Ilse Brandvold joined this time as the executive sponsor of the rollout, and Joe Hartigan came again from the Company A claims side. The session reviewed the pilot of Microsoft Copilot and what the group still needs before a decision on the second wave.\n\n## The sponsor's view\n\nIlse Brandvold is the executive sponsor of the Copilot rollout. She said she will not sign off the second wave until the licence budget is settled, and she was direct that she is not willing to move earlier. Joe agreed that the budget has to come first and repeated that he wants the hours saved set against the licensing cost.\n\n## Pilot findings\n\nPilot users report slow responses when a long case file is open, and the claims team has started to avoid the assistant for the largest files. The smaller drafting tasks are working well, and the team lead said the letters are now written in half the time.\n\n## Actions\n\nJoe will bring the finance contact from Company A to the next review. The group will look at the pilot usage summary together then.\n\n## Open points\n\nThe licensing cost is still the main open subject. Nobody has yet asked Microsoft for an extension of the trial licences, and that is the first thing to settle with the vendor.\n"
+    "body": "# Product X rollout pilot check-in\n\n**Date:** October 20\n**Attendees:** Maya Ibsen, Joe Hartigan, Ilse Brandvold\n\n## Summary\n\nA check-in on the Product X rollout at Company A, two weeks after the first call. Ilse Brandvold joined this time as the executive sponsor of the rollout, and Joe Hartigan came again from the Company A claims side. The session reviewed the pilot of Product X and what the group still needs before a decision on the second wave.\n\n## The sponsor's view\n\nIlse Brandvold is the executive sponsor of the Product X rollout. She said she will not sign off the second wave until the licence budget is settled, and she was direct that she is not willing to move earlier. Joe agreed that the budget has to come first and repeated that he wants the hours saved set against the licensing cost.\n\n## Pilot findings\n\nPilot users report slow responses when a long case file is open, and the claims team has started to avoid the assistant for the largest files. The smaller drafting tasks are working well, and the team lead said the letters are now written in half the time.\n\n## Actions\n\nJoe will bring the finance contact from Company A to the next review. The group will look at the pilot usage summary together then.\n\n## Open points\n\nThe licensing cost is still the main open subject. Nobody has yet asked Org Beta for an extension of the trial licences, and that is the first thing to settle with the vendor.\n"
   },
   "knownEntities": [
     {
@@ -49,27 +49,27 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-org-microsoft",
+      "id": "g-org-org-beta",
       "type": "Organization",
-      "label": "Microsoft",
+      "label": "Org Beta",
       "aliases": [],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-product-microsoft-copilot",
+      "id": "g-product-product-x",
       "type": "Product",
-      "label": "Microsoft Copilot",
+      "label": "Product X",
       "aliases": [
-        "Copilot"
+        "Product X"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-project-copilot-rollout",
+      "id": "g-project-product-x-rollout",
       "type": "Project",
-      "label": "Copilot rollout",
+      "label": "Product X rollout",
       "aliases": [],
       "props": {},
       "attendedFixtureIds": []
@@ -89,14 +89,14 @@
       {
         "key": "meeting",
         "type": "Meeting",
-        "label": "Copilot rollout pilot check-in",
+        "label": "Product X rollout pilot check-in",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Copilot rollout pilot check-in"
+            "quote": "Product X rollout pilot check-in"
           }
         ]
       },
@@ -140,7 +140,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Ilse Brandvold is the executive sponsor of the Copilot rollout"
+            "quote": "Ilse Brandvold is the executive sponsor of the Product X rollout"
           }
         ]
       },
@@ -154,53 +154,53 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "A check-in on the Copilot rollout at Company A"
+            "quote": "A check-in on the Product X rollout at Company A"
           }
         ]
       },
       {
-        "key": "microsoft",
+        "key": "orgbeta",
         "type": "Organization",
-        "label": "Microsoft",
+        "label": "Org Beta",
         "aliases": [],
-        "existingId": "g-org-microsoft",
+        "existingId": "g-org-org-beta",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "asked Microsoft for an extension of the trial licences"
+            "quote": "asked Org Beta for an extension of the trial licences"
           }
         ]
       },
       {
-        "key": "copilot",
+        "key": "productx",
         "type": "Product",
-        "label": "Microsoft Copilot",
+        "label": "Product X",
         "aliases": [
-          "Copilot"
+          "Product X"
         ],
-        "existingId": "g-product-microsoft-copilot",
+        "existingId": "g-product-product-x",
         "props": {
           "category": "ai_model"
         },
         "evidence": [
           {
             "source": "note",
-            "quote": "The session reviewed the pilot of Microsoft Copilot"
+            "quote": "The session reviewed the pilot of Product X"
           }
         ]
       },
       {
         "key": "rollout",
         "type": "Project",
-        "label": "Copilot rollout",
+        "label": "Product X rollout",
         "aliases": [],
-        "existingId": "g-project-copilot-rollout",
+        "existingId": "g-project-product-x-rollout",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "A check-in on the Copilot rollout at Company A"
+            "quote": "A check-in on the Product X rollout at Company A"
           }
         ]
       },
@@ -249,7 +249,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Ilse Brandvold is the executive sponsor of the Copilot rollout"
+            "quote": "Ilse Brandvold is the executive sponsor of the Product X rollout"
           },
           {
             "source": "note",
@@ -268,14 +268,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "A check-in on the Copilot rollout at Company A"
+            "quote": "A check-in on the Product X rollout at Company A"
           }
         ]
       },
       {
         "type": "DISCUSSED",
         "from": "meeting",
-        "to": "copilot",
+        "to": "productx",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -283,7 +283,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "The session reviewed the pilot of Microsoft Copilot"
+            "quote": "The session reviewed the pilot of Product X"
           }
         ]
       }
@@ -291,7 +291,7 @@
     "items": [
       {
         "kind": "risk",
-        "subject": "copilot",
+        "subject": "productx",
         "owner": null,
         "counterparty": null,
         "title": "Slow responses on long case files",

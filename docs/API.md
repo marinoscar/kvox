@@ -3328,7 +3328,7 @@ it.
   "title": "Board meeting, 3 March",
   "language": "en",
   "speakersExpected": 4,
-  "keyterms": ["Oscar Marín", "Kubernetes"],
+  "keyterms": ["Avery Example", "Kubernetes"],
   "source": { "name": "meeting.m4a", "size": 148372910, "mimeType": "audio/mp4" }
 }
 ```
@@ -6473,9 +6473,9 @@ Query: `type` (only that entity type), `limit` (1 to 200, default 50). Pairs are
 always the same type, and a pair you recorded as "not the same" is left out.
 
 Two sources. `name_pass` is a fast, deterministic pass: one name is a whole-word
-run inside the other (`name_contained`: "Oscar" / "Oscar Marin"; "Al" is not
-inside "Alan"), one is the initials of the other (`initials`: "EY" / "Ernst &
-Young"), two entities share a normalized name or alias (`alias_match`), or the
+run inside the other (`name_contained`: "Avery" / "Avery Example"; "Al" is not
+inside "Alan"), one is the initials of the other (`initials`: "OAC" / "Org Alpha
+Consulting"), two entities share a normalized name or alias (`alias_match`), or the
 labels are trigram-similar at 0.6 or more (`similar_name`), or the names of the two
 fall in one group of your personal synonym dictionary (`synonym`, issue #767,
 [`/graph/synonyms`](#get-graphsynonyms)). It reads the 2 000
@@ -6487,8 +6487,8 @@ A pair found by both is listed once, with `source: "resolution_proposal"`.
 **Response:** `200`
 ```json
 { "pairs": [ {
-  "a": { "id": "…", "type": "Person", "label": "Oscar", "aliases": [], "mentionCount": 4 },
-  "b": { "id": "…", "type": "Person", "label": "Oscar Marin", "aliases": [], "mentionCount": 9 },
+  "a": { "id": "…", "type": "Person", "label": "Avery", "aliases": [], "mentionCount": 4 },
+  "b": { "id": "…", "type": "Person", "label": "Avery Example", "aliases": [], "mentionCount": 9 },
   "score": 0.8,
   "reasons": ["name_contained"],
   "source": "name_pass",
@@ -6519,14 +6519,14 @@ same thing, oldest first. `graph:read`. Always your own groups.
 
 **Response:** `200`
 ```json
-{ "groups": [ { "id": "…", "terms": ["EY", "Ernst & Young"], "entityType": null,
+{ "groups": [ { "id": "…", "terms": ["OAC", "Org Alpha Consulting"], "entityType": null,
                 "createdAt": "…", "updatedAt": "…" } ] }
 ```
 
 What a group does (it never creates or merges an entity; it is not a graph write):
 - **Resolution** (`kg.resolve`, the extraction resolution stage): a mention is also
   matched, by exact alias, against every other term of a group that contains one
-  of its names, so "EY" finds the entity "Ernst & Young".
+  of its names, so "OAC" finds the entity "Org Alpha Consulting".
 - **Possible duplicates**: two same-type live entities with names in one group are
   listed with reason `synonym` (score 0.9).
 - **Entity search** (`GET /graph/entities?q=`): the whole query or one of its words
@@ -6535,7 +6535,7 @@ What a group does (it never creates or merges an entity; it is not a graph write
 
 ##### POST /graph/synonyms
 
-`graph:write`. Body `{ "terms": ["EY", "Ernst & Young"], "entityType": "Organization" }`:
+`graph:write`. Body `{ "terms": ["OAC", "Org Alpha Consulting"], "entityType": "Organization" }`:
 2 to 20 `terms` of 1 to 120 characters; `entityType` is optional (omit or `null`
 for every type). Terms are compared with the alias normalization (case, spacing and
 edge punctuation ignored) and de-duplicated; the first spelling is kept.
@@ -7305,7 +7305,7 @@ merged · `503` `graph_query_timeout`.
 ##### GET /graph/paths
 
 The top `k` evidence-weighted paths between two nodes, with the graph slice
-they cover — the answer to "how is Joe connected to the Copilot rollout?"
+they cover — the answer to "how is Joe connected to the Product X rollout?"
 (GIC-12, #673). A synchronous read with the neighbourhood's 3 s budget, not a
 queue job.
 
@@ -7416,7 +7416,7 @@ transcript on its own is also accepted and answers "what this note touches"):
   "data": {
     "inputs": [
       { "kind": "note", "id": "5d27…", "title": "Company A call", "entityIds": ["0b6f…", "4a9e…"] },
-      { "kind": "note", "id": "8b13…", "title": "Microsoft call", "entityIds": ["0b6f…", "7e4d…"] }
+      { "kind": "note", "id": "8b13…", "title": "Org Beta call", "entityIds": ["0b6f…", "7e4d…"] }
     ],
     "shared": [
       { "entityId": "0b6f…", "inputIds": ["5d27…", "8b13…"], "mentionCount": 7 }

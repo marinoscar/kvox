@@ -70,7 +70,7 @@ describeWithDb('GraphActivityService (real Postgres)', () => {
   it('buckets entity and relation evidence by month, stacked by type, and per entity', async () => {
     const { user, g } = await owner();
     const joe = await g.entity('Person', 'Joe');
-    const proj = await g.entity('Project', 'Copilot');
+    const proj = await g.entity('Project', 'Product X');
     const rel = await g.relation('INVOLVED_IN', joe, proj);
     await dateEvidence(joe, '2026-01-10T12:00:00Z');
     await dateEvidence(proj, '2026-02-03T12:00:00Z');
@@ -98,7 +98,7 @@ describeWithDb('GraphActivityService (real Postgres)', () => {
   it('counts a relation only when both ends are requested', async () => {
     const { user, g } = await owner();
     const joe = await g.entity('Person', 'Joe');
-    const proj = await g.entity('Project', 'Copilot');
+    const proj = await g.entity('Project', 'Product X');
     const rel = await g.relation('INVOLVED_IN', joe, proj);
     await dateEvidence(joe, '2026-03-05T00:00:00Z');
     await dateEvidence(proj, '2026-03-05T00:00:00Z');
@@ -122,7 +122,7 @@ describeWithDb('GraphActivityService (real Postgres)', () => {
   it('excludes sensitive person facts and unreadable relations; a readable item counts as its kind', async () => {
     const { user, g } = await owner();
     const joe = await g.entity('Person', 'Joe');
-    const proj = await g.entity('Project', 'Copilot');
+    const proj = await g.entity('Project', 'Product X');
     const sensitive = await g.item('person_fact', { sensitivity: 'sensitive', subjectId: joe });
     const decision = await g.item('decision', { subjectId: joe });
     const rejected = await g.relation('INVOLVED_IN', joe, proj, { reviewStatus: 'rejected' });

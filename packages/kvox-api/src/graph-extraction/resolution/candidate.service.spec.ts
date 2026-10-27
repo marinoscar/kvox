@@ -9,7 +9,7 @@ describe('CandidateService synonym expansion (#767)', () => {
       $queryRaw: jest.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
         calls.push([strings.join('?'), ...values]);
         const sql = strings.join('?');
-        if (sql.includes('FROM kg_synonyms')) return [{ normalized: ['ey', 'ernst & young'], entity_type: null }];
+        if (sql.includes('FROM kg_synonyms')) return [{ normalized: ['oac', 'org alpha consulting'], entity_type: null }];
         if (sql.includes('a.normalized = ANY')) return [];
         return [];
       }),
@@ -17,11 +17,11 @@ describe('CandidateService synonym expansion (#767)', () => {
       kgEntity: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = new CandidateService(db as never);
-    await service.forMention(OWNER, { type: 'Organization', label: 'EY', aliases: [] }, db as never);
+    await service.forMention(OWNER, { type: 'Organization', label: 'OAC', aliases: [] }, db as never);
     const exact = calls.find((c) => String(c[0]).includes('a.normalized = ANY'))!;
     expect(exact).toContain(OWNER);
-    expect(exact.some((v) => Array.isArray(v) && v.includes('ey') && v.includes('ernst & young'))).toBe(true);
+    expect(exact.some((v) => Array.isArray(v) && v.includes('oac') && v.includes('org alpha consulting'))).toBe(true);
     const syn = calls.find((c) => String(c[0]).includes('FROM kg_synonyms'))!;
-    expect(syn.some((v) => Array.isArray(v) && v.length === 1 && v[0] === 'ey')).toBe(true);
+    expect(syn.some((v) => Array.isArray(v) && v.length === 1 && v[0] === 'oac')).toBe(true);
   });
 });

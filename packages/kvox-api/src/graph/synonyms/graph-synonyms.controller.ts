@@ -60,7 +60,7 @@ export class GraphSynonymsController {
   @ApiOperation({
     summary: 'Add a synonym group',
     description:
-      'Names that mean the same thing, for example "EY" and "Ernst & Young". Resolution matches a mention to an entity ' +
+      'Names that mean the same thing, for example "OAC" and "Org Alpha Consulting". Resolution matches a mention to an entity ' +
       'known by any name of the group, the possible-duplicates list proposes entities whose names share a group, and ' +
       'entity search finds them under any name. Optional `entityType` limits the group to one type. Terms are compared ' +
       `case-, spacing- and edge-punctuation-insensitively. At most ${SYNONYM_MAX_GROUPS} groups. Requires \`graph:write\`.`,

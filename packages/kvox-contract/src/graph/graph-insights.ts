@@ -118,7 +118,7 @@ export const graphInsightConnectorSchema = z.object({
     .array(z.object({ id: z.number().int(), label: z.string() }))
     .max(4)
     .describe('The groups it connects: its own first, then those of its neighbours.'),
-  reason: z.string().describe('Plain-language sentence, e.g. "Joe connects the Copilot group and the Finance group."'),
+  reason: z.string().describe('Plain-language sentence, e.g. "Joe connects the Product X group and the Finance group."'),
 });
 
 /**

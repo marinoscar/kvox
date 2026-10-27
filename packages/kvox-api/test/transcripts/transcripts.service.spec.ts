@@ -293,13 +293,13 @@ describe('TranscriptsService', () => {
     });
 
     it('stores keyterms in provider_options whatever the provider supports (#327)', async () => {
-      await service.create({ ...dto, keyterms: ['Kvox', 'Oscar Marín'] }, USER);
+      await service.create({ ...dto, keyterms: ['Kvox', 'Avery Example'] }, USER);
 
       expect(prisma.transcript.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             providerOptions: expect.objectContaining({
-              keyterms: ['Kvox', 'Oscar Marín'],
+              keyterms: ['Kvox', 'Avery Example'],
             }),
           }),
         }),

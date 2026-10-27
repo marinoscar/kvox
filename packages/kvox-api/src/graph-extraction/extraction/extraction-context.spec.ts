@@ -184,7 +184,7 @@ describe('buildExtractionContext (#363)', () => {
     });
 
     it('is offered trimmed, and only when it is not blank', () => {
-      expect(offeredContextText('  Oscar – EY, Consulting \n')).toBe('Oscar – EY, Consulting');
+      expect(offeredContextText('  Avery – OAC, Consulting \n')).toBe('Avery – OAC, Consulting');
       expect(offeredContextText(null)).toBeNull();
       expect(offeredContextText(undefined)).toBeNull();
       expect(offeredContextText(' \n\t ')).toBeNull();

@@ -639,9 +639,9 @@ describe('AssemblyAiProvider job lifecycle', () => {
     });
 
     it('sends keyterms_prompt when there are terms', async () => {
-      const body = await submitBody(['Oscar Marín', 'Kubernetes']);
+      const body = await submitBody(['Avery Example', 'Kubernetes']);
 
-      expect(body.keyterms_prompt).toEqual(['Oscar Marín', 'Kubernetes']);
+      expect(body.keyterms_prompt).toEqual(['Avery Example', 'Kubernetes']);
     });
 
     it('never sends the deprecated word_boost / boost_param', async () => {

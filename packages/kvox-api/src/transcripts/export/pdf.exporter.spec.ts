@@ -222,7 +222,7 @@ describe('PdfTranscriptExporter', () => {
       expect(capture.calls).toContain('Participants');
       expect(capture.calls.some((call) => call.includes('66.7%'))).toBe(true);
       expect(capture.calls.some((call) => call.startsWith('2026-09-10'))).toBe(true);
-      expect(capture.calls).toContain('Edited by Oscar Marin');
+      expect(capture.calls).toContain('Edited by Avery Example');
     } finally {
       capture.restore();
     }

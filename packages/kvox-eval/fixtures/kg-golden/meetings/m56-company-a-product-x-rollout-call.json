@@ -1,21 +1,21 @@
 {
   "id": "m56",
-  "title": "Company A Copilot rollout call",
+  "title": "Company A Product X rollout call",
   "tags": [
     "internal",
     "note-only",
     "stakeholders-market",
     "risks",
-    "copilot-rollout"
+    "product-x-rollout"
   ],
   "recordedAt": "2026-10-06T15:00:00Z",
-  "contextText": "Call with Joe from Company A ahead of the pilot review of the Copilot rollout; notes only.",
+  "contextText": "Call with Joe from Company A ahead of the pilot review of the Product X rollout; notes only.",
   "hasTranscript": false,
   "speakers": [],
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Company A Copilot rollout call\n\n**Date:** October 6\n**Attendees:** Maya Ibsen, Joe Hartigan, Nadia Okoye\n\n## Summary\n\nI talked to Joe from Company A about the Copilot rollout at Company A. Joe Hartigan works for Company A, a regional insurer, and sits on the group that will decide whether the rollout goes ahead. Company A is piloting Microsoft Copilot with a single claims team, and the call was meant to hear where Joe stands before the pilot review. The mood was constructive but careful.\n\n## Where Joe stands\n\nJoe is a stakeholder in the Copilot rollout. He said he is skeptical about the Copilot rollout, because the pilot users have not yet shown a time saving that justifies the price. He did not object to the pilot itself, only to widening it before the numbers are in. He asked for a plain comparison of hours saved against the cost per seat.\n\n## The pilot and the product\n\nCompany A is piloting Microsoft Copilot with a single claims team of about twelve people. Microsoft Copilot is offered by Microsoft, and the pilot runs on the trial licences Microsoft granted for ninety days. The Copilot rollout concerns Microsoft Copilot itself and the question of licensing cost. The claims team uses it mostly for drafting letters and summarising long case files.\n\n## What is blocking\n\n- The licence budget isn't approved, so the rollout cannot move past the pilot until finance signs it off. Joe called it the first thing that has to be settled.\n- Joe expects the licensing cost to be the main subject of the next review, ahead of any question about quality.\n\n## Other attendees\n\nNadia Okoye from the IT team at Company A joined for the last ten minutes and only took notes. She did not state a position on the rollout. Her team will help with the licence assignment if the budget is approved.\n\n## Next steps\n\nMaya will send Joe the pilot usage summary after the second month closes. The group meets again once the pilot review has taken place, and the summary of this call goes to the programme office.\n"
+    "body": "# Company A Product X rollout call\n\n**Date:** October 6\n**Attendees:** Maya Ibsen, Joe Hartigan, Nadia Okoye\n\n## Summary\n\nI talked to Joe from Company A about the Product X rollout at Company A. Joe Hartigan works for Company A, a regional insurer, and sits on the group that will decide whether the rollout goes ahead. Company A is piloting Product X with a single claims team, and the call was meant to hear where Joe stands before the pilot review. The mood was constructive but careful.\n\n## Where Joe stands\n\nJoe is a stakeholder in the Product X rollout. He said he is skeptical about the Product X rollout, because the pilot users have not yet shown a time saving that justifies the price. He did not object to the pilot itself, only to widening it before the numbers are in. He asked for a plain comparison of hours saved against the cost per seat.\n\n## The pilot and the product\n\nCompany A is piloting Product X with a single claims team of about twelve people. Product X is offered by Org Beta, and the pilot runs on the trial licences Org Beta granted for ninety days. The Product X rollout concerns Product X itself and the question of licensing cost. The claims team uses it mostly for drafting letters and summarising long case files.\n\n## What is blocking\n\n- The licence budget isn't approved, so the rollout cannot move past the pilot until finance signs it off. Joe called it the first thing that has to be settled.\n- Joe expects the licensing cost to be the main subject of the next review, ahead of any question about quality.\n\n## Other attendees\n\nNadia Okoye from the IT team at Company A joined for the last ten minutes and only took notes. She did not state a position on the rollout. Her team will help with the licence assignment if the budget is approved.\n\n## Next steps\n\nMaya will send Joe the pilot usage summary after the second month closes. The group meets again once the pilot review has taken place, and the summary of this call goes to the programme office.\n"
   },
   "knownEntities": [
     {
@@ -33,14 +33,14 @@
       {
         "key": "meeting",
         "type": "Meeting",
-        "label": "Company A Copilot rollout call",
+        "label": "Company A Product X rollout call",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Company A Copilot rollout call"
+            "quote": "Company A Product X rollout call"
           }
         ]
       },
@@ -103,25 +103,25 @@
         ]
       },
       {
-        "key": "microsoft",
+        "key": "orgbeta",
         "type": "Organization",
-        "label": "Microsoft",
+        "label": "Org Beta",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Microsoft Copilot is offered by Microsoft"
+            "quote": "Product X is offered by Org Beta"
           }
         ]
       },
       {
-        "key": "copilot",
+        "key": "productx",
         "type": "Product",
-        "label": "Microsoft Copilot",
+        "label": "Product X",
         "aliases": [
-          "Copilot"
+          "Product X"
         ],
         "existingId": null,
         "props": {
@@ -130,21 +130,21 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Company A is piloting Microsoft Copilot with a single claims team"
+            "quote": "Company A is piloting Product X with a single claims team"
           }
         ]
       },
       {
         "key": "rollout",
         "type": "Project",
-        "label": "Copilot rollout",
+        "label": "Product X rollout",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "I talked to Joe from Company A about the Copilot rollout at Company A"
+            "quote": "I talked to Joe from Company A about the Product X rollout at Company A"
           }
         ]
       },
@@ -193,18 +193,18 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Joe is a stakeholder in the Copilot rollout"
+            "quote": "Joe is a stakeholder in the Product X rollout"
           },
           {
             "source": "note",
-            "quote": "He said he is skeptical about the Copilot rollout"
+            "quote": "He said he is skeptical about the Product X rollout"
           }
         ]
       },
       {
         "type": "USES",
         "from": "companya",
-        "to": "copilot",
+        "to": "productx",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -214,14 +214,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Company A is piloting Microsoft Copilot with a single claims team of about twelve people"
+            "quote": "Company A is piloting Product X with a single claims team of about twelve people"
           }
         ]
       },
       {
         "type": "OFFERED_BY",
-        "from": "copilot",
-        "to": "microsoft",
+        "from": "productx",
+        "to": "orgbeta",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -229,14 +229,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Microsoft Copilot is offered by Microsoft"
+            "quote": "Product X is offered by Org Beta"
           }
         ]
       },
       {
         "type": "CONCERNS",
         "from": "rollout",
-        "to": "copilot",
+        "to": "productx",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -244,7 +244,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "The Copilot rollout concerns Microsoft Copilot itself"
+            "quote": "The Product X rollout concerns Product X itself"
           }
         ]
       },
@@ -274,7 +274,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "the Copilot rollout at Company A"
+            "quote": "the Product X rollout at Company A"
           }
         ]
       },
@@ -289,7 +289,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "I talked to Joe from Company A about the Copilot rollout"
+            "quote": "I talked to Joe from Company A about the Product X rollout"
           }
         ]
       },

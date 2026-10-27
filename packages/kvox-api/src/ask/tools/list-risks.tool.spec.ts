@@ -22,7 +22,7 @@ const row = (over: Record<string, unknown> = {}) => ({
   mitigation: 'Escalate to the CFO',
   occurred_at: new Date('2026-09-10T00:00:00Z'),
   subject_id: PROJECT,
-  subject_label: 'Copilot rollout',
+  subject_label: 'Product X rollout',
   subject_review_status: 'accepted',
   subject_merged_into_id: null,
   ...over,
@@ -85,7 +85,7 @@ describe('ListRisksTool', () => {
   it('filters by subject, status and severity; "any" drops the status filter', async () => {
     const { tool, prisma } = build();
     const ctx = makeCtx();
-    const h = seedEntity(ctx, PROJECT, 'Copilot rollout');
+    const h = seedEntity(ctx, PROJECT, 'Product X rollout');
     await tool.run(ctx, tool.input.parse({ subject: h, status: 'any', severity: 'high', limit: 5 }));
     const q = sqlOf(prisma);
     expect(flat(q)).toContain("i.props->>'severity' =");
@@ -106,7 +106,7 @@ describe('ListRisksTool', () => {
       raisedOn: string | null;
     }[];
     expect(data).toHaveLength(2);
-    expect(data[0]).toMatchObject({ severity: 'high', mitigation: 'Escalate to the CFO', raisedOn: '2026-09-10', subject: { label: 'Copilot rollout' } });
+    expect(data[0]).toMatchObject({ severity: 'high', mitigation: 'Escalate to the CFO', raisedOn: '2026-09-10', subject: { label: 'Product X rollout' } });
     expect(data[0].evidence).toHaveLength(2);
     expect(data[1].subject).toBeNull();
     expect(data[1]).not.toHaveProperty('mitigation');

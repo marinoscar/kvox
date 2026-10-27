@@ -5,8 +5,8 @@ import { validateExtraction, type ProposedRow, type ValidationResult } from './v
 
 // =============================================================================
 // The reference scenario of the Graph Insight Canvas epic (#661, story #665):
-// "Joe from Company A said he's skeptical about the Copilot rollout; Company A
-// is piloting Microsoft Copilot; the licence budget isn't approved."
+// "Joe from Company A said he's skeptical about the Product X rollout; Company A
+// is piloting Product X; the licence budget isn't approved."
 //
 // A STUBBED model answers (no provider call); the REAL prompt, output schema
 // validator and registry-derived vocabularies decide what survives. So the
@@ -17,16 +17,16 @@ import { validateExtraction, type ProposedRow, type ValidationResult } from './v
 // =============================================================================
 
 const NOTE_BODY = [
-  '# Copilot rollout call',
+  '# Product X rollout call',
   '',
-  "Joe from Company A said he's skeptical about the Copilot rollout.",
-  'Company A is piloting Microsoft Copilot.',
+  "Joe from Company A said he's skeptical about the Product X rollout.",
+  'Company A is piloting Product X.',
   "The licence budget isn't approved.",
-  'Microsoft Copilot is offered by Microsoft.',
-  'The rollout concerns Microsoft Copilot and licensing cost.',
+  'Product X is offered by Org Beta.',
+  'The rollout concerns Product X and licensing cost.',
   'Nadia from Company A joined for the last ten minutes and only took notes.',
   'Ilse Brandvold is the executive sponsor and said she will not sign off the second wave.',
-  'Northgate Partners is the integration partner of Microsoft.',
+  'Northgate Partners is the integration partner of Org Beta.',
 ].join('\n');
 
 function noteOnlyContext(body = NOTE_BODY) {
@@ -89,21 +89,21 @@ function referenceAnswer() {
     entities: [
       entity('e1', 'Person', 'Joe', 'Joe from Company A'),
       entity('e2', 'Organization', 'Company A', 'Joe from Company A'),
-      entity('e3', 'Organization', 'Microsoft', 'offered by Microsoft'),
-      entity('e4', 'Product', 'Microsoft Copilot', 'piloting Microsoft Copilot'),
-      entity('e5', 'Project', 'Copilot rollout', 'skeptical about the Copilot rollout'),
+      entity('e3', 'Organization', 'Org Beta', 'offered by Org Beta'),
+      entity('e4', 'Product', 'Product X', 'piloting Product X'),
+      entity('e5', 'Project', 'Product X rollout', 'skeptical about the Product X rollout'),
       entity('e6', 'Topic', 'licensing cost', 'licensing cost'),
     ],
     relations: [
       relation('WORKS_FOR', 'e1', 'e2', 'Joe from Company A'),
-      relation('INVOLVED_IN', 'e1', 'e5', "Joe from Company A said he's skeptical about the Copilot rollout", {
+      relation('INVOLVED_IN', 'e1', 'e5', "Joe from Company A said he's skeptical about the Product X rollout", {
         role: 'stakeholder',
         stance: 'skeptical',
       }),
-      relation('USES', 'e2', 'e4', 'Company A is piloting Microsoft Copilot', { stage: 'piloting' }),
-      relation('OFFERED_BY', 'e4', 'e3', 'Microsoft Copilot is offered by Microsoft'),
-      relation('CONCERNS', 'e5', 'e4', 'The rollout concerns Microsoft Copilot and licensing cost'),
-      relation('CONCERNS', 'e5', 'e6', 'The rollout concerns Microsoft Copilot and licensing cost'),
+      relation('USES', 'e2', 'e4', 'Company A is piloting Product X', { stage: 'piloting' }),
+      relation('OFFERED_BY', 'e4', 'e3', 'Product X is offered by Org Beta'),
+      relation('CONCERNS', 'e5', 'e4', 'The rollout concerns Product X and licensing cost'),
+      relation('CONCERNS', 'e5', 'e6', 'The rollout concerns Product X and licensing cost'),
     ],
     items: [
       risk('e5', 'Licence budget not approved', "The licence budget isn't approved.", "The licence budget isn't approved.", {
@@ -143,24 +143,24 @@ function view(rows: ProposedRow[]) {
   });
 }
 
-describe('the Joe / Company A / Copilot reference scenario (#665)', () => {
+describe('the Joe / Company A / Product X reference scenario (#665)', () => {
   it('proposes exactly the expected rows from the stubbed model answer', () => {
     const result = ok(validateExtraction(referenceAnswer(), noteOnlyContext()));
     expect(result.stats.dropped).toEqual({ uncited: 0, invalid: 0, unknownType: 0, dangling: 0 });
     expect(view(result.rows).filter((v) => !v.startsWith('entity Meeting'))).toEqual([
       'entity Person Joe',
       'entity Organization Company A',
-      'entity Organization Microsoft',
-      'entity Product Microsoft Copilot',
-      'entity Project Copilot rollout',
+      'entity Organization Org Beta',
+      'entity Product Product X',
+      'entity Project Product X rollout',
       'entity Topic licensing cost',
       'relation Joe WORKS_FOR Company A',
-      'relation Joe INVOLVED_IN Copilot rollout {role=stakeholder,stance=skeptical}',
-      'relation Company A USES Microsoft Copilot {stage=piloting}',
-      'relation Microsoft Copilot OFFERED_BY Microsoft',
-      'relation Copilot rollout CONCERNS Microsoft Copilot',
-      'relation Copilot rollout CONCERNS licensing cost',
-      'item risk "Licence budget not approved" about Copilot rollout {riskKind=blocker}',
+      'relation Joe INVOLVED_IN Product X rollout {role=stakeholder,stance=skeptical}',
+      'relation Company A USES Product X {stage=piloting}',
+      'relation Product X OFFERED_BY Org Beta',
+      'relation Product X rollout CONCERNS Product X',
+      'relation Product X rollout CONCERNS licensing cost',
+      'item risk "Licence budget not approved" about Product X rollout {riskKind=blocker}',
     ]);
   });
 
@@ -181,15 +181,15 @@ describe('the Joe / Company A / Copilot reference scenario (#665)', () => {
       }),
     );
     const rows = view(ok(validateExtraction(answer, noteOnlyContext())).rows);
-    expect(rows).toContain('relation Ilse Brandvold INVOLVED_IN Copilot rollout {role=sponsor,stance=resistant}');
+    expect(rows).toContain('relation Ilse Brandvold INVOLVED_IN Product X rollout {role=sponsor,stance=resistant}');
   });
 
   it('variant: a vendor partner is a symmetric Organization pair, recorded once', () => {
     const answer = referenceAnswer();
     answer.entities.push(entity('e7', 'Organization', 'Northgate Partners', 'Northgate Partners'));
-    answer.relations.push(relation('PARTNER_OF', 'e7', 'e3', 'Northgate Partners is the integration partner of Microsoft'));
+    answer.relations.push(relation('PARTNER_OF', 'e7', 'e3', 'Northgate Partners is the integration partner of Org Beta'));
     const rows = view(ok(validateExtraction(answer, noteOnlyContext())).rows);
-    expect(rows).toContain('relation Northgate Partners PARTNER_OF Microsoft');
+    expect(rows).toContain('relation Northgate Partners PARTNER_OF Org Beta');
   });
 
   describe('negative: no stance language, no stance', () => {
@@ -267,7 +267,7 @@ describe('the Joe / Company A / Copilot reference scenario (#665)', () => {
         const good = dropped((a) => {
           a.relations.find((r) => r.type === 'USES')!.props = { stage } as never;
         });
-        expect(view(good.rows)).toContain(`relation Company A USES Microsoft Copilot {stage=${stage}}`);
+        expect(view(good.rows)).toContain(`relation Company A USES Product X {stage=${stage}}`);
       }
     });
   });

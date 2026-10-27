@@ -149,7 +149,7 @@ describe('buildSelection', () => {
       asOf: '2026-09-26T00:00:00.000Z',
       nodes: [
         { id: JOE_ID, nodeKind: 'entity', type: 'Person', label: 'Joe', depth: 0, degree: 1, status: null, occurredAt: null },
-        { id: ATLAS_COMMITMENT_ID, nodeKind: 'entity', type: 'Project', label: 'Copilot rollout', depth: 1, degree: 1, status: null, occurredAt: null },
+        { id: ATLAS_COMMITMENT_ID, nodeKind: 'entity', type: 'Project', label: 'Product X rollout', depth: 1, degree: 1, status: null, occurredAt: null },
       ],
       edges: [
         {

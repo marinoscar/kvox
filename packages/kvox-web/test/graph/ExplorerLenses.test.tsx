@@ -145,7 +145,7 @@ function Harness(props: Partial<ExplorerLensMenuProps>) {
       windowClass="expanded"
       inputModality="pointer"
       builtIn={builtInLenses(NODE_KEYS, REL_KEYS)}
-      lenses={[lens('u1', 'Copilot map')]}
+      lenses={[lens('u1', 'Product X map')]}
       activeId={null}
       modified={false}
       busy={false}
@@ -174,7 +174,7 @@ describe('ExplorerLensMenu', () => {
     await user.click(screen.getByRole('button', { name: 'Lens' }));
     const panel = await screen.findByRole('dialog', { name: 'Lenses' });
     expect(within(panel).getByText('Stakeholders & stance')).toBeInTheDocument();
-    expect(within(panel).getByText('Copilot map')).toBeInTheDocument();
+    expect(within(panel).getByText('Product X map')).toBeInTheDocument();
 
     await user.click(within(panel).getByText('Stakeholders & stance'));
     expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ id: 'builtin:stakeholders-stance' }));
@@ -202,13 +202,13 @@ describe('ExplorerLensMenu', () => {
     render(<Harness onRename={onRename} onDelete={onDelete} />);
     await user.click(screen.getByRole('button', { name: 'Lens' }));
 
-    await user.click(await screen.findByRole('button', { name: 'Delete Copilot map' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete Product X map' }));
     expect(onDelete).toHaveBeenCalledWith('u1');
 
-    await user.click(screen.getByRole('button', { name: 'Rename Copilot map' }));
+    await user.click(screen.getByRole('button', { name: 'Rename Product X map' }));
     const dialog = await screen.findByRole('dialog', { name: 'Rename lens' });
     const field = within(dialog).getByRole('textbox', { name: 'Name' });
-    expect(field).toHaveValue('Copilot map');
+    expect(field).toHaveValue('Product X map');
     await user.clear(field);
     await user.type(field, 'Rollout');
     await user.click(within(dialog).getByRole('button', { name: 'Rename' }));
@@ -232,8 +232,8 @@ describe('ExplorerLensMenu', () => {
   it('marks the active lens as changed once the view drifts from it', async () => {
     const user = userEvent.setup();
     render(<Harness activeId="u1" modified />);
-    expect(screen.getByRole('button', { name: 'Copilot map (changed)' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Copilot map (changed)' }));
+    expect(screen.getByRole('button', { name: 'Product X map (changed)' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Product X map (changed)' }));
     expect(await screen.findByText('Changed since applied')).toBeInTheDocument();
   });
 

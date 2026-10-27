@@ -93,7 +93,7 @@ describeWithDb('GET /api/graph/insights (real Postgres)', () => {
   it('rising: needs 3 conversations in the window and twice the window before; leaves out meetings and other owners', async () => {
     const { user, g } = await owner('rising');
     const other = await owner('rising-other');
-    const hot = await g.entity('Project', 'Copilot rollout');
+    const hot = await g.entity('Project', 'Product X rollout');
     const fresh = await g.entity('Topic', 'Pricing');
     const steady = await g.entity('Person', 'Steady Sam');
     const few = await g.entity('Person', 'Few Fiona');
@@ -108,7 +108,7 @@ describeWithDb('GET /api/graph/insights (real Postgres)', () => {
     await mentions(other.user.id, foreign, [1, 2, 3, 4]);
 
     const res = await get(user.id);
-    expect(res.rising.map((r) => r.entity.label)).toEqual(['Copilot rollout', 'Pricing']);
+    expect(res.rising.map((r) => r.entity.label)).toEqual(['Product X rollout', 'Pricing']);
     expect(res.rising[0]).toMatchObject({ count: 4, previous: 1 });
     expect(res.rising[0].reason).toBe('Came up in 4 conversations in the last 30 days, up from 1 before.');
     expect(res.rising[1]).toMatchObject({ count: 3, previous: 0 });
@@ -160,7 +160,7 @@ describeWithDb('GET /api/graph/insights (real Postgres)', () => {
 
   it('open risks: open and readable only, high severity first, merged subject dropped, sensitive facts never shown', async () => {
     const { user, g } = await owner('risks');
-    const project = await g.entity('Project', 'Copilot rollout');
+    const project = await g.entity('Project', 'Product X rollout');
     const gone = await g.entity('Project', 'Merged away', { reviewStatus: 'merged', mergedIntoId: project });
     const low = await g.item('risk', { subjectId: project, statement: 'Budget may slip', props: { severity: 'low' }, occurredAt: daysAgo(3) });
     const high = await g.item('risk', { subjectId: project, title: 'Legal review', statement: 'Legal has not signed off', props: { severity: 'high' }, occurredAt: daysAgo(9) });
@@ -171,7 +171,7 @@ describeWithDb('GET /api/graph/insights (real Postgres)', () => {
 
     const res = await get(user.id);
     expect(res.openRisks.map((r) => r.id)).toEqual([high, orphan, low]);
-    expect(res.openRisks[0]).toMatchObject({ title: 'Legal review', severity: 'high', subject: { id: project, label: 'Copilot rollout', type: 'Project' } });
+    expect(res.openRisks[0]).toMatchObject({ title: 'Legal review', severity: 'high', subject: { id: project, label: 'Product X rollout', type: 'Project' } });
     expect(res.openRisks[1].subject).toBeNull();
     expect(JSON.stringify(res)).not.toContain('SECRET-HEALTH-FACT');
   });

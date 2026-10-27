@@ -261,7 +261,7 @@ export class GraphReadController {
     summary: 'Paths between two entities',
     description:
       'The top `k` evidence-weighted paths from one node to another, with the graph slice they ' +
-      'cover: "how is Joe connected to the Copilot rollout?".\n\n' +
+      'cover: "how is Joe connected to the Product X rollout?".\n\n' +
       '- A path has at most **`maxHops`** edges and passes only through entities: an item ' +
       '(commitment, decision, claim, person fact) can be an endpoint, never a stop on the way.\n' +
       '- **Score** = the mean of `log(1 + evidenceCount)` over the path\'s edges, discounted for ' +

@@ -7,7 +7,7 @@
 //
 // What it proves:
 //   - trigram pairs (>= 0.6) come back with `similar_name`, same type only;
-//   - containment ("Oscar" / "Oscar Marin") and initials ("EY" / "Ernst & Young");
+//   - containment ("Avery" / "Avery Example") and initials ("OAC" / "Org Alpha Consulting");
 //   - merged and unreviewed entities never appear; another owner's never do;
 //   - a `kg_distinct_pairs` row removes the pair;
 //   - an open resolution proposal item maps to a `resolution_proposal` pair;
@@ -54,18 +54,18 @@ describeWithDb('GET /api/graph/duplicates (real Postgres)', () => {
 
   it('finds containment, initials and similar spelling, same type only', async () => {
     const { user, g } = await owner('names');
-    await g.entity('Person', 'Oscar');
-    await g.entity('Person', 'Oscar Marin');
-    await g.entity('Organization', 'EY');
-    await g.entity('Organization', 'Ernst & Young');
+    await g.entity('Person', 'Avery');
+    await g.entity('Person', 'Avery Example');
+    await g.entity('Organization', 'OAC');
+    await g.entity('Organization', 'Org Alpha Consulting');
     await g.entity('Organization', 'Acme Corporation');
     await g.entity('Organization', 'Acme Corporatio');
     await g.entity('Person', 'Al');
     await g.entity('Person', 'Alan');
-    await g.entity('Topic', 'Oscar Marin');
+    await g.entity('Topic', 'Avery Example');
 
     const out = await service.list(actor(user.id), { limit: 50 });
-    expect(labels(out)).toEqual(['Acme Corporatio | Acme Corporation', 'EY | Ernst & Young', 'Oscar | Oscar Marin']);
+    expect(labels(out)).toEqual(['Acme Corporatio | Acme Corporation', 'OAC | Org Alpha Consulting', 'Avery | Avery Example']);
     const acme = out.pairs.find((p) => p.a.label.startsWith('Acme'))!;
     expect(acme.reasons).toContain('similar_name');
     expect(acme.source).toBe('name_pass');

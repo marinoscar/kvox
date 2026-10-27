@@ -318,7 +318,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
     const user = await createUser();
     const s = await entity(user.id, 'Person', 'Joe Doe');
     const m = await entity(user.id, 'Person', 'J. Doe');
-    const org = await entity(user.id, 'Organization', 'Microsoft');
+    const org = await entity(user.id, 'Organization', 'Org Beta');
     const ids = {
       sVP: await relation(user.id, 'HAS_ROLE', s, org, randomUUID(), { title: 'VP' }),
       mSVP: await relation(user.id, 'HAS_ROLE', m, org, randomUUID(), { title: 'SVP' }), // a different role → kept

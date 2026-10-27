@@ -1,6 +1,6 @@
 /**
  * Lenses (GIC-17, #678): a named bundle of what the explorer shows, so a user can
- * come back to "my stakeholder map for the Copilot rollout" (the Bloom "perspective").
+ * come back to "my stakeholder map for the Product X rollout" (the Bloom "perspective").
  *
  * A lens holds the seeds, the node and relation types SHOWN, the layout and the pinned
  * positions (a time range joins when the TimeBar lands). Everything a lens sets is URL

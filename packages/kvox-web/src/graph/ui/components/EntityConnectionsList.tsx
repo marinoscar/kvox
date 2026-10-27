@@ -71,7 +71,7 @@ const MANUAL_TYPES: ReadonlySet<string> = new Set(MANUAL_RELATION_TYPES);
 
 /**
  * One row: the other end of an edge plus that edge's own props (#442), e.g.
- * EY with Role "Managing Director", Business unit "Consulting". The same node
+ * OAC with Role "Managing Director", Business unit "Consulting". The same node
  * appears twice in a group only when two edges to it carry different props
  * (two roles at one organization are two facts).
  */

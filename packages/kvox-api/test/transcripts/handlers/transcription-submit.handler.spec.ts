@@ -216,7 +216,7 @@ describe('TranscriptionSubmitHandler', () => {
     it('passes the stored keyterms out of provider_options (#327)', async () => {
       pipeline.loadForJob.mockResolvedValue(
         transcriptRow({
-          providerOptions: { speakersExpected: 3, keyterms: ['Kvox', 'Oscar Marín'] },
+          providerOptions: { speakersExpected: 3, keyterms: ['Kvox', 'Avery Example'] },
         }),
       );
 
@@ -225,7 +225,7 @@ describe('TranscriptionSubmitHandler', () => {
       expect(provider.submit).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          options: expect.objectContaining({ keyterms: ['Kvox', 'Oscar Marín'] }),
+          options: expect.objectContaining({ keyterms: ['Kvox', 'Avery Example'] }),
         }),
       );
     });

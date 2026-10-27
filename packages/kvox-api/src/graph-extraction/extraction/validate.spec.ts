@@ -94,15 +94,15 @@ describe('validateExtraction (#363)', () => {
     });
 
     describe('the Context (`C`, #440)', () => {
-      const CONTEXT = 'Oscar – EY, Consulting, Managing Director. Sarah is our exec sponsor.';
-      const oscar = () => ({
+      const CONTEXT = 'Avery – OAC, Consulting, Managing Director. Sarah is our exec sponsor.';
+      const avery = () => ({
         ref: 'e2',
         type: 'Person',
-        label: 'Oscar',
+        label: 'Avery',
         aliases: [],
         // A company, unit and role are relations (#440), never Person props.
         props: {},
-        evidence: [{ source: 'C', quote: 'oscar – ey,  consulting, Managing Director' }],
+        evidence: [{ source: 'C', quote: 'avery – oac,  consulting, Managing Director' }],
       });
       const withContext = (contextText: string | null) => {
         const input = makeInput();
@@ -112,7 +112,7 @@ describe('validateExtraction (#363)', () => {
 
       it('a located Context quote becomes a note citation with NULL offsets, quoting the Context itself', () => {
         const answer = goodAnswer();
-        answer.entities.push(oscar());
+        answer.entities.push(avery());
         const result = ok(validateExtraction(answer, withContext(`  ${CONTEXT}\n`)));
         const row = byRef(result.rows, 'e2')!;
         expect(row).toBeDefined();
@@ -124,7 +124,7 @@ describe('validateExtraction (#363)', () => {
             noteVersion: 2,
             charStart: null,
             charEnd: null,
-            quote: 'Oscar – EY, Consulting, Managing Director',
+            quote: 'Avery – OAC, Consulting, Managing Director',
           },
         ]);
         expect(row.flags).not.toContain('quote_not_located');
@@ -132,23 +132,23 @@ describe('validateExtraction (#363)', () => {
 
       it('deduplicates the same Context span cited twice, but keeps a body cite beside it', () => {
         const answer = goodAnswer();
-        const e = oscar();
+        const e = avery();
         e.evidence = [
-          { source: 'C', quote: 'EY, Consulting' },
-          { source: ' C ', quote: 'EY, Consulting' },
+          { source: 'C', quote: 'OAC, Consulting' },
+          { source: ' C ', quote: 'OAC, Consulting' },
           { source: 'C', quote: 'Sarah is our exec sponsor' },
         ];
         answer.entities.push(e);
         const result = ok(validateExtraction(answer, withContext(CONTEXT)));
         expect(byRef(result.rows, 'e2')!.evidence.map((ev) => ev.quote)).toEqual([
-          'EY, Consulting',
+          'OAC, Consulting',
           'Sarah is our exec sponsor',
         ]);
       });
 
       it('drops a Context quote that is not in the Context (even when it is in the note body)', () => {
         const answer = goodAnswer();
-        const e = oscar();
+        const e = avery();
         e.evidence = [{ source: 'C', quote: 'Decision: use Postgres.' }];
         answer.entities.push(e);
         const result = ok(validateExtraction(answer, withContext(CONTEXT)));
@@ -159,7 +159,7 @@ describe('validateExtraction (#363)', () => {
       it('drops a `C` cite when the note has no Context, or only a blank one', () => {
         for (const contextText of [null, '   \n ']) {
           const answer = goodAnswer();
-          answer.entities.push(oscar());
+          answer.entities.push(avery());
           const result = ok(validateExtraction(answer, withContext(contextText)));
           expect(byRef(result.rows, 'e2')).toBeUndefined();
           expect(result.stats.dropped.uncited).toBe(1);

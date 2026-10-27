@@ -257,7 +257,7 @@ function makeTarget(text: string, tokens: string[]): NameTarget {
  * Build comparison targets from speaker display names and user-supplied terms.
  *
  * Each full name is a target, and so is every token of at least three
- * characters of a multi-word name ("Oscar Marín" → "Oscar Marín", "Oscar",
+ * characters of a multi-word name ("Avery Example" → "Avery Example", "Oscar",
  * "Marín"). Generic labels ("Speaker A", "Unknown") are dropped, duplicates are
  * removed case- and diacritic-insensitively (first spelling wins), and the list
  * is capped at {@link MAX_TARGETS}.

@@ -55,15 +55,15 @@ function harness(o: Opts = {}) {
 describe('DuplicatesService.list', () => {
   it('returns name pairs with aliases, mention counts and a deterministic score', async () => {
     const { service, prisma } = harness({
-      entities: [ent(A, 'Person', 'Oscar', ['Oz']), ent(B, 'Person', 'Oscar Marin'), ent(C, 'Organization', 'EY'), ent(D, 'Organization', 'Ernst & Young')],
+      entities: [ent(A, 'Person', 'Avery', ['Av']), ent(B, 'Person', 'Avery Example'), ent(C, 'Organization', 'OAC'), ent(D, 'Organization', 'Org Alpha Consulting')],
       mentions: [{ entityId: A, _count: { _all: 4 } }],
     });
     const out = await service.list(user, { limit: 50 });
     expect(out.pairs.map((p) => [p.a.label, p.b.label, p.score, p.reasons, p.source])).toEqual([
-      ['Oscar', 'Oscar Marin', 0.8, ['name_contained'], 'name_pass'],
-      ['EY', 'Ernst & Young', 0.75, ['initials'], 'name_pass'],
+      ['Avery', 'Avery Example', 0.8, ['name_contained'], 'name_pass'],
+      ['OAC', 'Org Alpha Consulting', 0.75, ['initials'], 'name_pass'],
     ]);
-    expect(out.pairs[0].a).toEqual({ id: A, type: 'Person', label: 'Oscar', aliases: ['Oz'], mentionCount: 4 });
+    expect(out.pairs[0].a).toEqual({ id: A, type: 'Person', label: 'Avery', aliases: ['Av'], mentionCount: 4 });
     expect(out.pairs[0].b.mentionCount).toBe(0);
     expect(prisma.kgEntity.findMany.mock.calls[0][0].where).toEqual(
       expect.objectContaining({ ownerId: OWNER, mergedIntoId: null, reviewStatus: { in: ['accepted', 'edited'] } }),
@@ -72,16 +72,16 @@ describe('DuplicatesService.list', () => {
 
   it('proposes two same-type entities whose names share a synonym group (reason synonym, 0.9)', async () => {
     const { service } = harness({
-      entities: [ent(A, 'Organization', 'KPMG'), ent(B, 'Organization', 'Klynveld Peat'), ent(C, 'Person', 'Klynveld Peat')],
-      synonyms: [{ normalized: ['kpmg', 'klynveld peat'], entityType: null }],
+      entities: [ent(A, 'Organization', 'OGX'), ent(B, 'Organization', 'Gamma Xi'), ent(C, 'Person', 'Gamma Xi')],
+      synonyms: [{ normalized: ['ogx', 'gamma xi'], entityType: null }],
     });
     const { pairs } = await service.list(user, { limit: 50 });
-    expect(pairs.map((p) => [p.a.label, p.b.label, p.reasons, p.score])).toEqual([['KPMG', 'Klynveld Peat', ['synonym'], 0.9]]);
+    expect(pairs.map((p) => [p.a.label, p.b.label, p.reasons, p.score])).toEqual([['OGX', 'Gamma Xi', ['synonym'], 0.9]]);
   });
 
   it('merges a trigram hit with a name signal and takes the higher base', async () => {
     const { service } = harness({
-      entities: [ent(A, 'Person', 'Oscar'), ent(B, 'Person', 'Oscar Marin')],
+      entities: [ent(A, 'Person', 'Avery'), ent(B, 'Person', 'Avery Example')],
       trigram: [{ a_id: A, b_id: B, sim: 0.9 }],
     });
     const [pair] = (await service.list(user, { limit: 50 })).pairs;
@@ -91,7 +91,7 @@ describe('DuplicatesService.list', () => {
 
   it('drops a pair the owner marked distinct, and any pair with a missing or non-live side', async () => {
     const { service } = harness({
-      entities: [ent(A, 'Person', 'Oscar'), ent(B, 'Person', 'Oscar Marin')],
+      entities: [ent(A, 'Person', 'Avery'), ent(B, 'Person', 'Avery Example')],
       trigram: [{ a_id: A, b_id: C, sim: 0.7 }],
       distinct: [{ aId: A, bId: B }],
     });
@@ -100,7 +100,7 @@ describe('DuplicatesService.list', () => {
 
   it('maps open resolution proposal items and merges them with a name pair', async () => {
     const { service } = harness({
-      entities: [ent(A, 'Person', 'Oscar'), ent(B, 'Person', 'Oscar Marin'), ent(C, 'Person', 'Sara Chen'), ent(D, 'Person', 'S. Chen')],
+      entities: [ent(A, 'Person', 'Avery'), ent(B, 'Person', 'Avery Example'), ent(C, 'Person', 'Sara Chen'), ent(D, 'Person', 'S. Chen')],
       items: [
         { id: 'i1', payload: { existingEntityId: B }, resolution: { ref: A, score: 0.9, candidates: [] }, mergeIntoId: null },
         { id: 'i2', payload: { existingEntityId: C }, resolution: { ref: null, score: null, candidates: [{ entityId: D, score: 0.66 }] }, mergeIntoId: null },
@@ -108,8 +108,8 @@ describe('DuplicatesService.list', () => {
       ],
     });
     const { pairs } = await service.list(user, { limit: 50 });
-    const oscar = pairs.find((p) => p.a.id === A)!;
-    expect(oscar).toMatchObject({ source: 'resolution_proposal', proposalItemId: 'i1', reasons: ['name_contained', 'resolution_proposal'], score: 0.95 });
+    const avery = pairs.find((p) => p.a.id === A)!;
+    expect(avery).toMatchObject({ source: 'resolution_proposal', proposalItemId: 'i1', reasons: ['name_contained', 'resolution_proposal'], score: 0.95 });
     const sara = pairs.find((p) => p.a.id === C)!;
     expect(sara).toMatchObject({ source: 'resolution_proposal', proposalItemId: 'i2', reasons: ['resolution_proposal'], score: 0.7 });
     expect(pairs).toHaveLength(2);
@@ -117,7 +117,7 @@ describe('DuplicatesService.list', () => {
 
   it('filters by type, sorts best first and applies the limit', async () => {
     const { service, tx } = harness({
-      entities: [ent(A, 'Person', 'Oscar'), ent(B, 'Person', 'Oscar Marin'), ent(C, 'Person', 'Sara Chen'), ent(D, 'Person', 'Sara Chen Jr')],
+      entities: [ent(A, 'Person', 'Avery'), ent(B, 'Person', 'Avery Example'), ent(C, 'Person', 'Sara Chen'), ent(D, 'Person', 'Sara Chen Jr')],
       trigram: [{ a_id: C, b_id: D, sim: 0.98 }],
     });
     const out = await service.list(user, { type: 'Person', limit: 1 });

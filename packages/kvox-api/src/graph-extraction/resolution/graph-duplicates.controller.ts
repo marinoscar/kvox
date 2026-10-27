@@ -46,7 +46,7 @@ export class GraphDuplicatesController {
     summary: 'List possible duplicate entities',
     description:
       'Pairs of your own reviewed entities that probably are one thing, best first. Two sources: a fast ' +
-      'name pass (one name inside the other, "EY" for "Ernst & Young", a shared name or alias, similar ' +
+      'name pass (one name inside the other, "OAC" for "Org Alpha Consulting", a shared name or alias, similar ' +
       'spelling), same type only, and the merges your open resolution proposals already suggest ' +
       '(`source: "resolution_proposal"`, with `proposalItemId`). Pairs you marked "not the same" are ' +
       'left out. Each pair names every signal that fired in `reasons`.\n\n' +

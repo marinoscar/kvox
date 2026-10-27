@@ -25,10 +25,10 @@ describe('createTranscriptSchema — keyterms (#327)', () => {
   });
 
   it('trims, collapses whitespace and drops empties', () => {
-    const result = parse(['  Kvox  ', '', '   ', 'Oscar   Marín']);
+    const result = parse(['  Kvox  ', '', '   ', 'Avery   Example']);
 
     expect(result.success).toBe(true);
-    expect(result.data?.keyterms).toEqual(['Kvox', 'Oscar Marín']);
+    expect(result.data?.keyterms).toEqual(['Kvox', 'Avery Example']);
   });
 
   it('de-duplicates case-insensitively, keeping the first spelling', () => {
