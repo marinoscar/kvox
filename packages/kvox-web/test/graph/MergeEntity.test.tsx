@@ -165,7 +165,7 @@ describe('MergeEntityDialog', () => {
     expect(defaultSurvivorId(ana, joe)).toBe(JOE_ID);
     // A tie keeps the entity picked in the search ("into").
     expect(defaultSurvivorId(joe, entityDetail(BEN_ID, { counts: joe.counts }))).toBe(BEN_ID);
-    expect(mergeConfirmation('Oscar', 'Avery Example')).toBe('“Oscar” will become an alias of “Avery Example”.');
+    expect(mergeConfirmation('Avery', 'Avery Example')).toBe('“Avery” will become an alias of “Avery Example”.');
   });
 
   it('merges the other entity into the kept one and opens the survivor, replacing the tombstone', async () => {

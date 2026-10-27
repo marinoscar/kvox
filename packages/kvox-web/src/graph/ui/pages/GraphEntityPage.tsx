@@ -49,6 +49,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { EntityBriefCard } from '../components/EntityBriefCard.js';
+import { GRAPH_ENTITIES_PATH } from '../paths.js';
 import { EntityConnectionsList } from '../components/EntityConnectionsList.js';
 import { EntityEditDialog } from '../components/EntityEditDialog.js';
 import { EntityHeader } from '../components/EntityHeader.js';
@@ -351,7 +352,7 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           {GRAPH_NOT_FOUND_MESSAGE}.
         </Typography>
-        <Button component={RouterLink} to="/graph" variant="contained">
+        <Button component={RouterLink} to={GRAPH_ENTITIES_PATH} variant="contained">
           Back to Knowledge
         </Button>
       </Paper>
@@ -482,7 +483,7 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
               const state: GraphIndexLocationState = {
                 snackbar: `Forgetting ${detail.label}… this takes a few seconds`,
               };
-              navigate('/graph', { state });
+              navigate(GRAPH_ENTITIES_PATH, { state });
             }}
           />
         )}

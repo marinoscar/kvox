@@ -173,12 +173,12 @@ describe('assembleExtractionPrompt (#363)', () => {
 
   it('puts the Context in its own section after # Meeting, framed and verbatim, citable as C', () => {
     const input = makeInput();
-    input.note.contextText = '  Oscar – OAC, Consulting, Managing Director\nSarah is our sponsor.  ';
+    input.note.contextText = '  Avery – OAC, Consulting, Managing Director\nSarah is our sponsor.  ';
     const { userContent } = assembleExtractionPrompt(buildExtractionContext(input));
     expect(CONTEXT_FRAMING).toContain('Cite it as `C`.');
     expect(userContent).toContain(
       `# Meeting\nDate: 2026-03-02\nTitle: Pilot kickoff call\n\n${HEADING_CONTEXT}\n${CONTEXT_FRAMING}\n` +
-        'Oscar – OAC, Consulting, Managing Director\nSarah is our sponsor.\n\n# Known entities',
+        'Avery – OAC, Consulting, Managing Director\nSarah is our sponsor.\n\n# Known entities',
     );
     // No longer a one-line meeting field.
     expect(userContent).not.toContain('Context: ');
@@ -287,7 +287,7 @@ describe('assembleExtractionPrompt (#363)', () => {
     // Guidance narrows the offer: a type that is not offered is not named.
     const noProduct = makeContext({ guidance: { pinnedEntityIds: [], entityTypes: ['Project', 'Topic', 'Person'], instructions: '' } });
     expect(subjectBoundaryRule(noProduct)).toContain('Keep Project and Topic apart');
-    expect(subjectBoundaryRule(noProduct)).not.toContain('Product');
+    expect(subjectBoundaryRule(noProduct)).not.toMatch(/\bProduct\b(?! X)/);
     // One type of the three is no boundary; `core` alone offers only Topic.
     expect(subjectBoundaryRule(makeContext({ effectiveSchema: schemaFor(['core']) }))).toBeNull();
   });

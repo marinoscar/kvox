@@ -87,7 +87,7 @@ kv:CREATED_IN
 
 kv:CUSTOMER_OF
     a owl:ObjectProperty ;
-    rdfs:comment "An organization buys from another organization: \\"Company A is a Org Beta customer\\" is Company A CUSTOMER_OF Org Beta. Direction matters: customer first, supplier second. Using a specific product is USES; CUSTOMER_OF is the commercial relationship between the two organizations. A partner, reseller or integrator is PARTNER_OF, not CUSTOMER_OF." ;
+    rdfs:comment "An organization buys from another organization: \\"Company A is an Org Beta customer\\" is Company A CUSTOMER_OF Org Beta. Direction matters: customer first, supplier second. Using a specific product is USES; CUSTOMER_OF is the commercial relationship between the two organizations. A partner, reseller or integrator is PARTNER_OF, not CUSTOMER_OF." ;
     rdfs:domain kv:Organization ;
     rdfs:label "Customer of" ;
     rdfs:range kv:Organization .

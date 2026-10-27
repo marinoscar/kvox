@@ -149,7 +149,10 @@ describe('createKvoxNavigation', () => {
     const owner = (path: string) => resolveActiveDestination(routes, path);
     expect(owner('/notes/abc/history')).toBe('notes');
     expect(owner('/graph')).toBe('knowledge');
+    expect(owner('/graph/entities')).toBe('knowledge');
     expect(owner('/graph/entities/e1')).toBe('knowledge');
+    expect(owner('/graph/explore')).toBe('knowledge');
+    expect(owner('/graph/overview')).toBe('knowledge');
     expect(owner('/graph/review')).toBe('review');
     expect(owner('/ask')).toBe('ask');
     expect(owner('/ask/c1')).toBe('ask');
@@ -163,6 +166,10 @@ describe('createKvoxNavigation', () => {
     const { navigation } = createKvoxNavigation();
     const routes = shellDestinationRoutes(navigation);
     expect(resolveActiveDestination(routes, '/ask/c1')).toBe('knowledge');
+    // #782: the overview landing, the entity index and the explorer all light Knowledge.
+    for (const path of ['/graph', '/graph/entities', '/graph/explore', '/graph/review']) {
+      expect(resolveActiveDestination(routes, path)).toBe('knowledge');
+    }
   });
 
   it('gives host rows their own path as prefix unless extraRoutes says more', () => {

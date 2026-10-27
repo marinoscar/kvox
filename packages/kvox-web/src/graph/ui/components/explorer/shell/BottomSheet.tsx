@@ -1,7 +1,7 @@
 /**
  * `BottomSheet` — the compact (phone) inspector (GIC-08, #669; epic #661).
  *
- * Three snap points, like the Google and Apple Maps sheets:
+ * Three snap points, like a map app's bottom sheet:
  *
  *   - `peek`: 25% of the canvas area (never under 148px): the title and the
  *     actions, over the canvas, which stays usable above it;

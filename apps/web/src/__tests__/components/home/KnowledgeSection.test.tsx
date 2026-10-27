@@ -35,7 +35,7 @@ describe('KnowledgeSection', () => {
       'href',
       `/graph/entities/${graphEntitySummaries[0].id}`,
     );
-    expect(within(section).getByRole('link', { name: /All people & organizations/ })).toHaveAttribute('href', '/graph');
+    expect(within(section).getByRole('link', { name: /All people & organizations/ })).toHaveAttribute('href', '/graph/entities');
     expect(within(section).getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/graph/explore');
 
     const asked = graphRequests[0].searchParams;
