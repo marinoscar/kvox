@@ -186,6 +186,15 @@ The path is: same OpenAI-compatible endpoint, different server.
 
 OpenCode differs between versions (for example in how nested `AGENTS.md` files and compaction settings are handled). **Verify** with the version you run: check that a nested `AGENTS.md` loads when you open a file in its folder, and that the settings in `opencode.json` are accepted without a warning.
 
+## No real people, companies or user material
+
+The root `AGENTS.md` carries the short rule; this is the full text.
+
+- **Material a user shares is never reused.** Never use the content of documents, notes, transcripts, screenshots or any other material the user shares with an assistant, or anything derived from it (names, numbers, quotes, structure that identifies it), in code, tests, fixtures, evaluation sets, prompts, documentation, examples, issues, pull requests or commit messages. Shared material is used only to diagnose the problem in the conversation.
+- **No real names as examples.** Never use the name of a real person, or a real company, organization, product or brand, as an example anywhere in the repository: code comments, prompts, test data, fixtures, evaluation scenarios, docs, issue and PR text. Use clearly invented placeholders: `Person A`, `Avery Example`, `Org Alpha`, `Org Beta`, `Product X`, `Project P1`, and `@example.test` email addresses. Do not borrow well-known fictional brands either (Contoso, Acme, Northwind, Initech).
+- **Exempt, and only these:** a real vendor or service a feature integrates by name (for example a provider adapter calling that vendor's API, its SDK package names, its documented endpoints), and legal or authorship metadata (package `author`, copyright lines, code-signing publisher name).
+- **Fix what you find.** When you find a real name used as an example, replace it with a placeholder in the same change, or open a follow-up if it changes recorded snapshots.
+
 ## 6. Maintenance
 
 | Change | Do this |
