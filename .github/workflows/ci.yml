@@ -140,8 +140,16 @@ jobs:
     # No `needs:` — runs concurrently with `build`. Split out of `Build & Test`
     # because this suite alone was 7.5-8.4 min (see the note atop this file).
     # `jest --shard` splits by test FILE.
+    #
+    # NODE_OPTIONS raises the V8 heap above its ~4 GB default for jest and the
+    # workers it forks (they inherit it): with the graph explorer and Ask suites
+    # a worker could pass 4 GB within one file, before `workerIdleMemoryLimit`
+    # (2 GB, test/jest.config.js) recycles it, and die with "Jest worker ran out
+    # of memory" on whichever suite landed there, on main as well as on PRs.
+    # Three workers at 5 GB stay inside the runner's 16 GB.
     env:
       NODE_ENV: test
+      NODE_OPTIONS: --max-old-space-size=5120
     strategy:
       fail-fast: false
       matrix:
@@ -225,7 +233,12 @@ jobs:
       - run: npm run lint:packages
       - run: npm run build:packages
       - run: npm run typecheck:packages
+      # NODE_OPTIONS for the same reason as the DB tests below: the package
+      # suites passed every test and then exited 134 (heap out of memory) at
+      # teardown.
       - run: npm run test:packages
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
       # The domain fragments and migrations live in packages/kvox-db (issue
       # #489) and reach the app as installed copies. The composed schema equals
       # a fresh compose, and `db:check` runs `platform db check` and then
