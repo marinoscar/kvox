@@ -313,9 +313,9 @@ describe('Synonyms entry points', () => {
     const user = userEvent.setup();
     render(
       <Routes>
-        <Route path="/graph" element={<GraphIndexPage />} />
+        <Route path="/graph/entities" element={<GraphIndexPage />} />
       </Routes>,
-      { wrapperOptions: { route: '/graph', user: graphWriter } },
+      { wrapperOptions: { route: '/graph/entities', user: graphWriter } },
     );
     await user.click(await screen.findByRole('button', { name: /More knowledge actions|Knowledge actions/ }));
     expect(await screen.findByRole('menuitem', { name: 'Synonyms' })).toHaveAttribute('href', '/graph/synonyms');

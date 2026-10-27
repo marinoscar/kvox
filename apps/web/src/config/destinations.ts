@@ -92,8 +92,8 @@
  * hits — never from a tab. That made the product's third primary noun one tap
  * below a row named after something else, which is exactly the debt #106 paid
  * back for Notes. #438 reverses §13's decision: `knowledge` is its own
- * destination, owning `/graph` (index, entity pages, explorer, overview,
- * imports) and `/ask`.
+ * destination, owning `/graph` (the overview landing since #782, the entity
+ * index at `/graph/entities`, entity pages, explorer, imports) and `/ask`.
  *
  * The ceiling did not move, so the slot came from `settings`, on the precedent
  * #106 set for Console: a user's own settings are a place you SWITCH INTO to

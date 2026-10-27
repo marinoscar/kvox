@@ -262,9 +262,9 @@ describe('Possible duplicates entry point on the Knowledge index', () => {
   function renderIndex() {
     return render(
       <Routes>
-        <Route path="/graph" element={<GraphIndexPage />} />
+        <Route path="/graph/entities" element={<GraphIndexPage />} />
       </Routes>,
-      { wrapperOptions: { route: '/graph', user: graphWriter } },
+      { wrapperOptions: { route: '/graph/entities', user: graphWriter } },
     );
   }
 

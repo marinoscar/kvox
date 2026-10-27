@@ -1922,8 +1922,10 @@ below.
 
 **`knowledge` (path `/graph`, issue #438) is a destination of its own,
 gated on `graph:read` *and* `GET /api/ai-tasks/config`'s `graphEnabled`.** It
-owns `DESTINATION_ROUTES` prefixes `['/graph', '/ask']`, so `/graph`,
-`/graph/explore`, `/graph/overview`, `/graph/entities/:id`,
+owns `DESTINATION_ROUTES` prefixes `['/graph', '/ask']`, so `/graph` (the
+whole-graph overview, the landing since issue #782), the entity index
+`/graph/entities`, `/graph/explore`, the `/graph/overview` redirect,
+`/graph/entities/:id`,
 `/graph/imports/:proposalId` (issue #387), the grouped Review Queue
 `/graph/review-queue` (epic #708) and `/ask`/`/ask/:conversationId`
 (issue #380, epic #348) are all reached through it. `home` owns only `['/']`

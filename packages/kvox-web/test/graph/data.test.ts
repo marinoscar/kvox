@@ -35,11 +35,12 @@ describe('kvoxGraphDestinations', () => {
 });
 
 describe('kvoxGraphRoutes', () => {
-  it('declares the eight graph routes and the settings route, with the exact gates', () => {
+  it('declares the graph routes and the settings route, with the exact gates', () => {
     expect(
       kvoxGraphRoutes.map(({ path, permission, redirectTo }) => ({ path, permission, redirectTo })),
     ).toEqual([
       { path: '/graph', permission: 'graph:read', redirectTo: undefined },
+      { path: '/graph/entities', permission: 'graph:read', redirectTo: undefined },
       { path: '/graph/entities/:id', permission: 'graph:read', redirectTo: undefined },
       { path: '/graph/explore', permission: 'graph:read', redirectTo: undefined },
       { path: '/graph/overview', permission: 'graph:read', redirectTo: undefined },
