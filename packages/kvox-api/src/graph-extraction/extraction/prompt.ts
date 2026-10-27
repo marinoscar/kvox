@@ -158,7 +158,7 @@ export function subjectBoundaryRule(ctx: ExtractionContext): string | null {
 }
 
 /**
- * The worked example (#665): the Joe / Company A / Copilot scenario, once.
+ * The worked example (#665): the Joe / Company A / Product X scenario, once.
  * Every piece is DERIVED from the offered schema — a type, relation or fact
  * kind the run does not offer is never named, and a property value is printed
  * only when the offered relation carries it as a choice — so a disabled domain

@@ -63,8 +63,8 @@ describeWithDb('Ask turn scope (real Postgres)', () => {
     const mine = new GraphFixture(prisma, user.id);
     const theirs = new GraphFixture(prisma, stranger.id);
     const joe = await mine.entity('Person', 'Joe Rivera');
-    const copilot = await mine.entity('Project', 'Product X rollout');
-    const involved = await mine.relation('INVOLVED_IN', joe, copilot);
+    const productx = await mine.entity('Project', 'Product X rollout');
+    const involved = await mine.relation('INVOLVED_IN', joe, productx);
     const fact = await mine.item('person_fact', { subjectId: joe, statement: SECRET, sensitivity: 'sensitive' });
     const merged = await mine.entity('Person', 'Joe (duplicate)', { reviewStatus: 'merged', mergedIntoId: joe });
     const foreign = await theirs.entity('Person', 'Not yours');
@@ -75,7 +75,7 @@ describeWithDb('Ask turn scope (real Postgres)', () => {
     return {
       user,
       joe,
-      copilot,
+      productx,
       merged,
       foreign,
       conversation,
@@ -91,12 +91,12 @@ describeWithDb('Ask turn scope (real Postgres)', () => {
     const w = await world();
     const posted = await service.post(w.user.id, w.conversation.id, {
       content: 'How is Joe involved in the rollout?',
-      scope: { entityIds: [w.joe, w.copilot], evidenceIds: [w.relationEvidence] },
+      scope: { entityIds: [w.joe, w.productx], evidenceIds: [w.relationEvidence] },
     });
     const row = await prisma.askMessage.findUniqueOrThrow({ where: { id: posted.assistantMessage.id } });
     const job = await prisma.job.findUniqueOrThrow({ where: { id: row.jobId! } });
     expect((job.payload as { scope: unknown }).scope).toEqual({
-      entityIds: [w.joe, w.copilot],
+      entityIds: [w.joe, w.productx],
       evidenceIds: [w.relationEvidence],
     });
 
@@ -110,7 +110,7 @@ describeWithDb('Ask turn scope (real Postgres)', () => {
     expect(system).toContain('rel1 (INVOLVED_IN, INVOLVED_IN)');
     expect(system).toContain('starting points only, not evidence');
     // Ids and the evidence's quote never reach the model through the prompt.
-    for (const id of [w.joe, w.copilot, w.relationEvidence]) expect(JSON.stringify(stream.requests)).not.toContain(id);
+    for (const id of [w.joe, w.productx, w.relationEvidence]) expect(JSON.stringify(stream.requests)).not.toContain(id);
     const answered = await prisma.askMessage.findUniqueOrThrow({ where: { id: posted.assistantMessage.id } });
     expect(answered.status).toBe('complete');
     expect(answered.citations).toEqual([expect.objectContaining({ marker: 'ent1', valid: true, id: w.joe })]);
@@ -148,10 +148,10 @@ describeWithDb('Ask turn scope (real Postgres)', () => {
     const w = await world();
     const posted = await service.post(w.user.id, w.conversation.id, {
       content: 'How is Joe involved?',
-      scope: { entityIds: [w.joe, w.copilot] },
+      scope: { entityIds: [w.joe, w.productx] },
     });
     // Merged away between the POST and the job.
-    await prisma.kgEntity.update({ where: { id: w.copilot }, data: { mergedIntoId: w.joe, reviewStatus: 'merged' } });
+    await prisma.kgEntity.update({ where: { id: w.productx }, data: { mergedIntoId: w.joe, reviewStatus: 'merged' } });
     const row = await prisma.askMessage.findUniqueOrThrow({ where: { id: posted.assistantMessage.id } });
     const job = await prisma.job.findUniqueOrThrow({ where: { id: row.jobId! } });
     stream.enqueue([text('Joe is in your graph.[^ent1]'), done('stop', 100, 20)]);

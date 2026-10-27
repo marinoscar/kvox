@@ -16,7 +16,7 @@
  *
  * KEYBOARD AND SCREEN READER. Tab walks the connectors (and each quote's source
  * link) in order; Enter on a connector opens the edge. Each connector's name is
- * the hop as a sentence ("Joe, involved in as stakeholder, skeptical, Copilot
+ * the hop as a sentence ("Joe, involved in as stakeholder, skeptical, Product X
  * rollout"), and the list's name is the whole path.
  */
 

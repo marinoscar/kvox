@@ -49,7 +49,7 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-org-orgbeta",
+      "id": "g-org-org-beta",
       "type": "Organization",
       "label": "Org Beta",
       "aliases": [],
@@ -163,7 +163,7 @@
         "type": "Organization",
         "label": "Org Beta",
         "aliases": [],
-        "existingId": "g-org-orgbeta",
+        "existingId": "g-org-org-beta",
         "props": {},
         "evidence": [
           {
