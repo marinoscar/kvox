@@ -113,10 +113,12 @@ describe('destinations — route ownership', () => {
         '/notes/import-batches/:batchId',
         // #373, epic #347 — the knowledge graph, owned by `knowledge` since #438.
         '/graph',
+        // #782 — the entity index, moved from `/graph` (now the overview).
+        '/graph/entities',
         '/graph/entities/:id',
         // #374 — the explorer, owned by `home` through the `/graph` prefix.
         '/graph/explore',
-        // #375 — the whole-graph overview, likewise.
+        // #375 — the whole-graph overview's old address, a redirect to `/graph` since #782.
         '/graph/overview',
         // #387 — one RDF import, likewise.
         '/graph/imports/:proposalId',
@@ -199,6 +201,7 @@ describe('destinations — route ownership', () => {
 describe('destinations — the knowledge graph (#373, #438)', () => {
   it('lets `knowledge` own every /graph and /ask route, as a bottom-bar tab', () => {
     expect(resolveActiveDestination('/graph')).toBe('knowledge');
+    expect(resolveActiveDestination('/graph/entities')).toBe('knowledge');
     expect(resolveActiveDestination('/graph/entities/abc')).toBe('knowledge');
     expect(resolveActiveDestination('/graph/explore')).toBe('knowledge');
     expect(resolveActiveDestination('/graph/overview')).toBe('knowledge');

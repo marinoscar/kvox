@@ -105,6 +105,8 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   '@marinoscar/kvox-web:notes/ui/pages/NewNotePage.tsx': WHY.page,
   '@marinoscar/kvox-web:graph/ui/pages/GraphIndexPage.tsx': WHY.page,
   '@marinoscar/kvox-web:graph/ui/pages/GraphOverviewPage.tsx': WHY.page,
+  // #782: the header the overview and the entity index share; it folds its links into a menu on a phone.
+  '@marinoscar/kvox-web:graph/ui/components/KnowledgeHeader.tsx': WHY.page,
   '@marinoscar/kvox-web:ask/ui/pages/AskPage.tsx': WHY.page,
   // `up('md')`: whether the transcript page lays its player beside the text.
   '@marinoscar/kvox-web:transcripts/ui/pages/TranscriptPage.tsx': WHY.page,
