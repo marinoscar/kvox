@@ -154,7 +154,7 @@ jobs:
     # Quoted: an unquoted `#` after a space starts a YAML comment, which would
     # silently truncate this to "Deploy end-to-end (issue".
     name: "Deploy end-to-end (issue #118)"
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 45
 
     services:
