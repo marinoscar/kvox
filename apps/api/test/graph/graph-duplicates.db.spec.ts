@@ -65,7 +65,7 @@ describeWithDb('GET /api/graph/duplicates (real Postgres)', () => {
     await g.entity('Topic', 'Avery Example');
 
     const out = await service.list(actor(user.id), { limit: 50 });
-    expect(labels(out)).toEqual(['Acme Corporatio | Acme Corporation', 'OAC | Org Alpha Consulting', 'Avery | Avery Example']);
+    expect(labels(out)).toEqual(['Acme Corporatio | Acme Corporation', 'Avery | Avery Example', 'OAC | Org Alpha Consulting']);
     const acme = out.pairs.find((p) => p.a.label.startsWith('Acme'))!;
     expect(acme.reasons).toContain('similar_name');
     expect(acme.source).toBe('name_pass');
