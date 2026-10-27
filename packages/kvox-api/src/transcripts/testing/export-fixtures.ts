@@ -129,7 +129,7 @@ export function fixtureDocument(overrides: Partial<ExportDocument> = {}): Export
       createdAt: FIXED_CREATED_AT,
       exportedAt: FIXED_EXPORTED_AT,
       recordedAt: FIXED_RECORDED_AT,
-      author: { displayName: 'Avery Example', email: 'oscar@example.test' },
+      author: { displayName: 'Avery Example', email: 'avery@example.test' },
       provider: { id: 'assemblyai', model: 'best' },
       state: { speakers, segments },
     }),

@@ -89,7 +89,11 @@ jobs:
       # The check scripts themselves, against fixtures (including a file that
       # breaks the host-neutral rule).
       - run: npm run test:kvox-scripts
+      # NODE_OPTIONS: the suites passed every test and then exited 134 (heap
+      # out of memory) at teardown; same remedy as ci.yml's package tests.
       - run: npm run test:kvox-packages
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
       # Asks npm what each package would publish and compares it with the
       # manifest. Needs the build above.
       - run: npm run check:kvox-pack

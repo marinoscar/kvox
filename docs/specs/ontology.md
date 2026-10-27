@@ -882,7 +882,7 @@ about that specific pattern does not apply to this job type at all).
 - **Two rules derived from the offered schema** (#665, ontology 1.3.0).
   A *boundary rule* tells the model that a Project is an effort with an
   owner and an expected end, a Topic a recurring subject with neither and a
-  Product a named thing an organization buys, uses or offers ("Copilot
+  Product a named thing an organization buys, uses or offers ("Product X
   rollout", "licensing cost", "Product X"), and never to fold two
   of them into one row; it names only the offered types among the three and
   is absent when fewer than two are offered. A *worked example* shows the
@@ -892,7 +892,7 @@ about that specific pattern does not apply to this job type at all).
   Org Beta, Product Product X, Project Product X rollout; Joe
   `WORKS_FOR` Company A; Joe `INVOLVED_IN` Product X rollout `{role:
   stakeholder, stance: skeptical}`; Company A `USES` Product X
-  `{stage: piloting}`; Product X `OFFERED_BY` Org Beta; Copilot
+  `{stage: piloting}`; Product X `OFFERED_BY` Org Beta; Product X
   rollout `CONCERNS` Product X; a `risk` fact `{riskKind:
   blocker}` about the rollout) and ends with "propose a stance only when the
   source states one". Every entity, relation, fact kind and property value
@@ -1142,7 +1142,7 @@ attendee/speaker match** (strong — the two "Sarah"s were in the same room),
 **organization co-mention** (strong — both "Sarah"s work at Acme; for a
 `Product` the organization is its vendor, so `OFFERED_BY` counts like
 `WORKS_FOR` and `HAS_ROLE`, and a mention's stated `vendorName` counts as
-the vendor named in the proposal even with no Organization row — "Product X",
+the vendor named in the proposal even with no Organization row — "PX",
 "PX Suite" and "Product X" resolve to one Product when the
 vendor Org Beta is co-mentioned, #665),
 **shared-neighbour overlap** (medium — both connect to the same `Project`),
@@ -3877,7 +3877,7 @@ groups rather than an LLM judge, deliberately: crude, but deterministic and
 reviewable without a second model's variance. `citeFrom` reuses the
 fixtures' own segment ids (`"m01-s009"`) or `"mNN#note"` verbatim; with
 `citeFromMin: N` (default 1) valid citations must reach at least N
-distinct listed sources. q43 (#665), *"How is Joe connected to the Copilot
+distinct listed sources. q43 (#665), *"How is Joe connected to the Product X
 rollout?"*, is grounded in the Joe / Company A / Product X rollout notes
 (m56, m57; the extraction golden set holds their labels: Joe `WORKS_FOR`
 Company A and `INVOLVED_IN` the rollout `{stakeholder, skeptical}`, Company A

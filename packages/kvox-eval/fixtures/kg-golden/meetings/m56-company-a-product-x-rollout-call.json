@@ -120,9 +120,7 @@
         "key": "productx",
         "type": "Product",
         "label": "Product X",
-        "aliases": [
-          "Product X"
-        ],
+        "aliases": [],
         "existingId": null,
         "props": {
           "category": "ai_model"

@@ -6473,7 +6473,7 @@ Query: `type` (only that entity type), `limit` (1 to 200, default 50). Pairs are
 always the same type, and a pair you recorded as "not the same" is left out.
 
 Two sources. `name_pass` is a fast, deterministic pass: one name is a whole-word
-run inside the other (`name_contained`: "Oscar" / "Avery Example"; "Al" is not
+run inside the other (`name_contained`: "Avery" / "Avery Example"; "Al" is not
 inside "Alan"), one is the initials of the other (`initials`: "OAC" / "Org Alpha
 Consulting"), two entities share a normalized name or alias (`alias_match`), or the
 labels are trigram-similar at 0.6 or more (`similar_name`), or the names of the two
@@ -6487,7 +6487,7 @@ A pair found by both is listed once, with `source: "resolution_proposal"`.
 **Response:** `200`
 ```json
 { "pairs": [ {
-  "a": { "id": "…", "type": "Person", "label": "Oscar", "aliases": [], "mentionCount": 4 },
+  "a": { "id": "…", "type": "Person", "label": "Avery", "aliases": [], "mentionCount": 4 },
   "b": { "id": "…", "type": "Person", "label": "Avery Example", "aliases": [], "mentionCount": 9 },
   "score": 0.8,
   "reasons": ["name_contained"],

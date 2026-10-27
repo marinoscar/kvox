@@ -112,7 +112,7 @@ const VERSIONS: TranscriptVersionOption[] = [
     version: 3,
     kind: 'edit',
     summary: 'Renamed a speaker',
-    author: { id: 'u1', name: 'Avery Example', email: 'oscar@example.test' },
+    author: { id: 'u1', name: 'Avery Example', email: 'avery@example.test' },
     createdAt: '2026-09-12T09:00:00.000Z',
   },
   {

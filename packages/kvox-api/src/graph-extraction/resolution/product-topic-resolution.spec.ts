@@ -13,8 +13,8 @@ import { computeEffectiveSchema } from '@marinoscar/kvox-contract/ontology';
 //
 // The product "Product X" is already in the graph, OFFERED_BY
 // Org Beta. Three notes name it three ways. The Product's vendor is the
-// context feature that tells "Product X" (a weak trigram match on its own) from
-// an unrelated "Product X": a vendor named in the same proposal lifts it into
+// context feature that tells "PX" (a weak trigram match on its own) from
+// an unrelated "PX": a vendor named in the same proposal lifts it into
 // adjudication. The fakes stand in for Prisma, the candidate arms and the
 // model; the scoring, context features and decisions are the real ones.
 // =============================================================================
@@ -59,12 +59,12 @@ function build(options: { items: Row[]; candidates: Record<string, RawCandidate[
     },
     kgEvidence: { findFirst: jest.fn(async () => null), findMany: jest.fn(async () => []) },
     kgEntity: { findMany: jest.fn(async () => []) },
-    // The graph: the Product is OFFERED_BY Org Beta; Org Beta is also known as "orgbeta".
+    // The graph: the Product is OFFERED_BY Org Beta; Org Beta is also known as "org beta".
     kgRelation: {
       findMany: jest.fn(async () => [{ type: 'OFFERED_BY', fromId: PRODUCT, toId: ORG_BETA }]),
     },
     kgEntityAlias: {
-      findMany: jest.fn(async () => [{ entityId: ORG_BETA, normalized: 'orgbeta' }]),
+      findMany: jest.fn(async () => [{ entityId: ORG_BETA, normalized: 'org beta' }]),
     },
   };
   const candidates = {
@@ -99,24 +99,24 @@ function build(options: { items: Row[]; candidates: Record<string, RawCandidate[
   return { service, ctx, updates, adjudicate };
 }
 
-const orgbetaRow = () => entityItem('org', 'e2', 'Organization', 'Org Beta');
+const orgBetaRow = () => entityItem('org', 'e2', 'Organization', 'Org Beta');
 
 describe('Product resolution (#665)', () => {
   it('treats the vendor relation as an organization affiliation, like WORKS_FOR and HAS_ROLE', () => {
     expect(ORG_AFFILIATION_RELATIONS).toEqual(expect.arrayContaining(['WORKS_FOR', 'HAS_ROLE', 'OFFERED_BY']));
   });
 
-  it('"Product X", "PX Suite" and "Product X" resolve to the one Product when OFFERED_BY Org Beta matches', async () => {
+  it('"PX", "PX Suite" and "Product X" resolve to the one Product when OFFERED_BY Org Beta matches', async () => {
     const mentions = [
       { label: 'Product X', arm: { aliasExact: true } },
       // A learned alias (an earlier accepted link) is an exact alias hit.
       { label: 'PX Suite', arm: { aliasExact: true } },
       // A weak name match on its own: trigram 0.5 scores 0.47, below the 0.55 new threshold.
-      { label: 'Product X', arm: { trigram: 0.5 } },
+      { label: 'PX', arm: { trigram: 0.5 } },
     ];
     for (const [i, mention] of mentions.entries()) {
       const t = build({
-        items: [entityItem(`p${i}`, 'e1', 'Product', mention.label), orgbetaRow()],
+        items: [entityItem(`p${i}`, 'e1', 'Product', mention.label), orgBetaRow()],
         candidates: { [mention.label]: [raw(PRODUCT, 'Product', 'Product X', mention.arm)] },
       });
       await t.service.resolveProposal(t.ctx, 'kg.extract');
@@ -126,14 +126,14 @@ describe('Product resolution (#665)', () => {
     }
   });
 
-  it('the vendor is what lifts "Product X" into adjudication: without Org Beta in the proposal it is a new product', async () => {
-    const candidates = { Product X: [raw(PRODUCT, 'Product', 'Product X', { trigram: 0.5 })] };
-    const withVendor = build({ items: [entityItem('p', 'e1', 'Product', 'Product X'), orgbetaRow()], candidates });
+  it('the vendor is what lifts "PX" into adjudication: without Org Beta in the proposal it is a new product', async () => {
+    const candidates = { PX: [raw(PRODUCT, 'Product', 'Product X', { trigram: 0.5 })] };
+    const withVendor = build({ items: [entityItem('p', 'e1', 'Product', 'PX'), orgBetaRow()], candidates });
     await withVendor.service.resolveProposal(withVendor.ctx, 'kg.extract');
     expect(withVendor.adjudicate).toHaveBeenCalledTimes(1);
     expect(withVendor.updates.find((u) => u.id === 'p')!.resolution).toMatchObject({ ref: PRODUCT, source: 'adjudication' });
 
-    const alone = build({ items: [entityItem('p', 'e1', 'Product', 'Product X')], candidates });
+    const alone = build({ items: [entityItem('p', 'e1', 'Product', 'PX')], candidates });
     await alone.service.resolveProposal(alone.ctx, 'kg.extract');
     expect(alone.adjudicate).not.toHaveBeenCalled();
     expect(alone.updates.find((u) => u.id === 'p')!.resolution).toMatchObject({ ref: null });
@@ -141,8 +141,8 @@ describe('Product resolution (#665)', () => {
 
   it("a Product's stated vendorName counts as the vendor named in the proposal, with no Organization row", async () => {
     const t = build({
-      items: [entityItem('p', 'e1', 'Product', 'Product X', { vendorName: 'Org Beta' })],
-      candidates: { Product X: [raw(PRODUCT, 'Product', 'Product X', { trigram: 0.5 })] },
+      items: [entityItem('p', 'e1', 'Product', 'PX', { vendorName: 'Org Beta' })],
+      candidates: { PX: [raw(PRODUCT, 'Product', 'Product X', { trigram: 0.5 })] },
     });
     await t.service.resolveProposal(t.ctx, 'kg.extract');
     expect(t.updates[0].resolution).toMatchObject({ ref: PRODUCT });
@@ -151,17 +151,17 @@ describe('Product resolution (#665)', () => {
 
   it('a different vendor is no co-mention: the same weak name match stays new', async () => {
     const t = build({
-      items: [entityItem('p', 'e1', 'Product', 'Product X', { vendorName: 'Acme Software' })],
-      candidates: { Product X: [raw(PRODUCT, 'Product', 'Product X', { trigram: 0.5 })] },
+      items: [entityItem('p', 'e1', 'Product', 'PX', { vendorName: 'Org Gamma' })],
+      candidates: { PX: [raw(PRODUCT, 'Product', 'Product X', { trigram: 0.5 })] },
     });
     await t.service.resolveProposal(t.ctx, 'kg.extract');
     expect(t.updates[0].resolution.ref).toBeNull();
   });
 
-  it('the adjudicator can still say a same-vendor product is different (Product X vs another Org Beta product)', async () => {
+  it('the adjudicator can still say a same-vendor product is different (PX vs another Org Beta product)', async () => {
     const t = build({
-      items: [entityItem('p', 'e1', 'Product', 'Product X Studio'), orgbetaRow()],
-      candidates: { 'Product X Studio': [raw(PRODUCT, 'Product', 'Product X', { trigram: 0.5 })] },
+      items: [entityItem('p', 'e1', 'Product', 'PX Studio'), orgBetaRow()],
+      candidates: { 'PX Studio': [raw(PRODUCT, 'Product', 'Product X', { trigram: 0.5 })] },
       verdict: 'different',
     });
     await t.service.resolveProposal(t.ctx, 'kg.extract');
@@ -177,13 +177,13 @@ describe('Product resolution (#665)', () => {
   it('the context features report the vendor as an organization co-mention by id and by name', async () => {
     const prisma = {
       kgRelation: { findMany: jest.fn(async () => [{ type: 'OFFERED_BY', fromId: PRODUCT, toId: ORG_BETA }]) },
-      kgEntityAlias: { findMany: jest.fn(async () => [{ entityId: ORG_BETA, normalized: 'orgbeta' }]) },
+      kgEntityAlias: { findMany: jest.fn(async () => [{ entityId: ORG_BETA, normalized: 'org beta' }]) },
       kgEvidence: { findMany: jest.fn(async () => []) },
     };
     const features = new ContextFeatureService(prisma as never);
     const byId = await features.features(USER, [PRODUCT], { ...emptyContext(), orgIds: new Set([ORG_BETA]) });
     expect(byId.get(PRODUCT)!.orgCoMention).toBe(true);
-    const byName = await features.features(USER, [PRODUCT], { ...emptyContext(), orgNames: new Set(['orgbeta']) });
+    const byName = await features.features(USER, [PRODUCT], { ...emptyContext(), orgNames: new Set(['org beta']) });
     expect(byName.get(PRODUCT)!.orgCoMention).toBe(true);
     const none = await features.features(USER, [PRODUCT], { ...emptyContext(), orgIds: new Set([OTHER_VENDOR]) });
     expect(none.get(PRODUCT)!.orgCoMention).toBe(false);
@@ -202,7 +202,7 @@ describe('Topic resolution (#665)', () => {
   });
 
   it('only candidates of the same type are asked for: a Topic is never matched against a Product', async () => {
-    const t = build({ items: [entityItem('t', 'e1', 'Topic', 'Product X')], candidates: {} });
+    const t = build({ items: [entityItem('t', 'e1', 'Topic', 'PX')], candidates: {} });
     await t.service.resolveProposal(t.ctx, 'kg.extract');
     expect(t.updates[0].resolution.ref).toBeNull();
   });
