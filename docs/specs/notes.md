@@ -1982,7 +1982,7 @@ PowerPoint off) and
 
 | Table | Holds |
 |---|---|
-| `note_libraries` | One library per root folder, owned by a user (`owner_id` cascades); the policy flags `auto_extract` (default true) and `auto_commit` (default false, the opt-in of ADR-0007); `last_scan_at`. |
+| `note_libraries` | One library per root folder, owned by a user (`owner_id` cascades); the policy flags `auto_extract` (default true) and `auto_commit` (nullable: `null` follows the owner's graph preference `review.autoCommitSafeRows`, on by default; `true` or `false` is the library's own choice and overrides it; ADR-0007, #779); `last_scan_at`. |
 | `note_library_files` | One row per file in a library; unique `(library_id, relative_path)`; status, size, mtime, content hash, the note it became, `imported_version` and `extracted_version`. |
 | `note_import_batches` | One batch per scan or drop; `library_id` is nullable (an ad-hoc drop) and `SET NULL` when the library is deleted. |
 | `note_import_batch_items` | One row per file in a batch: action, status, failure reason, the note and version it wrote, `diverged`. The `job_id` is a plain uuid with no foreign key (the queue purges finished jobs). |

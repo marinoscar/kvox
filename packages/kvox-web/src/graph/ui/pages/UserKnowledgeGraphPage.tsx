@@ -353,6 +353,22 @@ export function UserKnowledgeGraphPage() {
 
       {/* 3b. Batch review (#721): the safe policy's confidence floor. */}
       <Section title="Batch review" id="kg-review-heading">
+        {/* #779: the default for every note; a note library that sets its own overrides it. */}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={preferences.review.autoCommitSafeRows}
+              onChange={(event) => void update({ review: { autoCommitSafeRows: event.target.checked } })}
+            />
+          }
+          label="Commit confident rows automatically"
+        />
+        <FormHelperText sx={{ mt: 0, mb: 2, ml: 0 }}>
+          When a note&apos;s proposal is ready, rows the AI is confident about go into your graph without a visit
+          to the review sheet, using the confidence floor below. Rows about sensitive personal facts, closings,
+          ambiguous or possible-duplicate matches, and anything below the floor always wait for you in the Review
+          Queue. A note library with its own Auto-commit setting overrides this for that library&apos;s notes.
+        </FormHelperText>
         <Typography id="kg-min-confidence-label" gutterBottom>
           Accept in a batch only at {percent(minConfidence)} confidence or more
         </Typography>

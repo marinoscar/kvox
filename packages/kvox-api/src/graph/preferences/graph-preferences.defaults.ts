@@ -79,6 +79,14 @@ export interface GraphPreferences {
      * `autoLinkThreshold` (0.9): a link a person would still glance at waits.
      */
     readonly minConfidence: number;
+    /**
+     * Whether the confident rows of every note's draft are committed without a visit to the
+     * review sheet (#779, ADR-0007). On by default. A note library that explicitly sets its own
+     * auto-commit overrides this for that library's notes. Rows the safe policy holds back
+     * (ambiguous, possible duplicate, model-claimed match, closings, sensitive PersonFacts)
+     * always wait for a person.
+     */
+    readonly autoCommitSafeRows: boolean;
   };
   /** `core` is always on and never stored; it is here so callers need no special case. */
   readonly domains: {
@@ -110,7 +118,7 @@ export const GRAPH_PREFERENCE_DEFAULTS: GraphPreferences = Object.freeze({
     newThreshold: 0.55,
     adjudication: 'llm' as const,
   }),
-  review: Object.freeze({ minConfidence: 0.7 }),
+  review: Object.freeze({ minConfidence: 0.7, autoCommitSafeRows: true }),
   domains: Object.freeze({ core: true as const, work: true, personal: false }),
 });
 
@@ -156,6 +164,7 @@ export function resolveGraphPreferences(
     },
     review: {
       minConfidence: value?.review?.minConfidence ?? d.review.minConfidence,
+      autoCommitSafeRows: value?.review?.autoCommitSafeRows ?? d.review.autoCommitSafeRows,
     },
     domains: {
       core: true,
@@ -195,4 +204,22 @@ export function changedGraphSections(
     const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
     return [...keys].some((key) => a[key] !== b[key]);
   });
+}
+
+/**
+ * Whether a note's draft is auto-committed: the library's own setting when it has one
+ * (`true` or `false`), else the owner's `review.autoCommitSafeRows` preference (#779, ADR-0007).
+ * `null` or `undefined` for the library means "follow my graph setting" (or: the note has no
+ * library).
+ *
+ * @param libraryAutoCommit - the note's library `auto_commit`, or null/undefined when unset or no library.
+ * @param preferences - the owner's resolved preferences.
+ * @returns whether `kg.autocommit` should commit the safe rows.
+ * @stability experimental
+ */
+export function effectiveAutoCommit(
+  libraryAutoCommit: boolean | null | undefined,
+  preferences: Pick<GraphPreferences, 'review'>,
+): boolean {
+  return libraryAutoCommit ?? preferences.review.autoCommitSafeRows;
 }

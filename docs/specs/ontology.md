@@ -314,14 +314,20 @@ not a permission check that a future flag could disable — it is the only
 write path into `kg_entities`/`kg_relations`/`kg_items` that exists at all,
 with two narrow, explicitly named exceptions (the speaker-naming write and a
 manual edit on an entity page, §8).
-Commit has two initiators besides the per-note review: `commit-batch`, run by
-a person over many drafts, and `kg.autocommit`, an opt-in, default-off
-per-library job; both commit each proposal through the same commit service
+**Rows enter the graph only through a proposal commit, made by the person or by
+the auto-commit policy.** Commit has two initiators besides the per-note
+review: `commit-batch`, run by a person over many drafts, and `kg.autocommit`,
+a job that runs the same **safe policy** over every note's fresh draft. It is
+on by default (the user preference `graph.review.autoCommitSafeRows`) and a
+note library's own `auto_commit` overrides the preference for that library's
+notes. Both initiators commit each proposal through the same commit service,
+so evidence and the no-orphans trigger apply to every row
 ([ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)).
-A design that made auto-commit *possible* and merely defaulted it off would
-be one config change away from silently reintroducing the exact
-unsupported-assertion failure §3.3 rules out; a design where the write path
-itself does not exist cannot be misconfigured into that state.
+The safe policy is the gate that stays: a sensitive `PersonFact`, a closing, an
+ambiguous or possible-duplicate resolution, a model-claimed match and any row
+below `review.minConfidence` are never committed without a person, whatever the
+setting. There is still no write path other than a proposal commit, so
+auto-commit cannot be misconfigured into writing an unsupported assertion.
 
 ## 4. The workflow
 
@@ -1812,7 +1818,8 @@ graph?: {
                  newThreshold: number;       /* 0.30–0.94, ≥ 0.05 below auto-link */ // default 0.55
                  adjudication: 'llm' | 'off' };                   // default llm
   domains?: { work: boolean; personal: boolean };                 // core is never stored (always on); personal default false
-  review?: { minConfidence: number };                             // 0–1, default 0.7: the lowest confidence the safe policy accepts (§19.2)
+  review?: { minConfidence: number;                               // 0–1, default 0.7: the lowest confidence the safe policy accepts (§19.2)
+           autoCommitSafeRows?: boolean };                      // default true: commit the safe rows of every note's draft automatically (ADR-0007); a library's own auto_commit overrides it
 }
 ```
 
@@ -1855,7 +1862,7 @@ directory:
 | `kg.export` | `{ maxRuntimeMs: 10m, maxAttempts: 3 }` | **No** | §18.2 — server-only for the identical "the renderers live in the API" reason `note.export` gives (`docs/specs/notes.md`): the RDF/JSON-LD serializers live in `apps/api`, and a second copy anywhere else would mean one export request producing byte-for-byte different files depending on which codebase rendered it |
 | `kg.import` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | §18.3 — server-only, one attempt: a half-applied import must surface as a failed job a person looks at, never silently resume minutes later, the identical reasoning `user.data.purge` gives for its own `maxAttempts: 1` |
 | `kg.library_reconcile` | `{ maxRuntimeMs: 2m, maxAttempts: 2 }` | **No** | Note libraries ([notes §8.8](notes.md#88-note-libraries-and-import-batches-epic-708), [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)). Queues `kg.extract` again for library notes the graph has not read at their current version: a note edited in the product, an import that finished after `note_ready` was missed or declined, a model that was not configured at the time. Selection is pure (`selectReconcileNotes`): the owner's library files whose note is `ready` with `current_version > coalesce(extracted_version, 0)`, whose library has `auto_extract` on, with no extraction in flight and no proposal already covering that version. Each is queued through `GraphExtractionService.enqueueForReadyNote(…, { bulk: true })`, which holds the gates (graph enabled, `graph:write`, the `autoExtract` preference, a resolvable model). At most 500 per run; a longer tail is a continuation run 30 s later. Subject `user`/ownerId (one pending run per owner), payload `{ ownerId, libraryId?, batchId? }`. Triggered by `kvox.notes.import_batch_settled` (a subscriber that only enqueues), the retry route and its own continuation. It only enqueues; it makes no AI call itself |
-| `kg.autocommit` | `{ maxRuntimeMs: 5m, maxAttempts: 2 }` | **No** | The opt-in auto-commit of [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md). Commits the **safe** rows of one freshly drafted extraction proposal through `ProposalBatchCommitService.commitSafe` (the safe policy, then `ProposalCommitService` and `GraphWriteService`): no new write path. Subject `kg_proposal`/proposalId, payload `{ proposalId, ownerId }`. Triggered by `kvox.graph.proposal_drafted`, raised by `kg.extract` after the draft committed; its only listener enqueues this job. It no-ops (returns normally, nothing retried) when the proposal is not an `extraction` draft of the owner, the note moved on (stale), the note has no library or the library's `auto_commit` is off, the graph is disabled, or the owner no longer holds `graph:write`. Audit `graph:autocommit` carries ids and counts, never a statement or evidence text. Server-only: no AI key is involved here, and the job writes the graph |
+| `kg.autocommit` | `{ maxRuntimeMs: 5m, maxAttempts: 2 }` | **No** | The auto-commit of [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md). Commits the **safe** rows of one freshly drafted extraction proposal through `ProposalBatchCommitService.commitSafe` (the safe policy, then `ProposalCommitService` and `GraphWriteService`): no new write path. Subject `kg_proposal`/proposalId, payload `{ proposalId, ownerId }`. Triggered by `kvox.graph.proposal_drafted`, raised by `kg.extract` after the draft committed; its only listener enqueues this job. It applies to **every note's** draft: it is on when the note's library has set `auto_commit` (true or false, which wins), else when the owner's `graph.review.autoCommitSafeRows` preference is on (the default; a note outside any library follows the preference). It no-ops (returns normally, nothing retried) when the proposal is not an open `extraction` draft of the owner (so a repeated run after the commit is harmless), the note moved on (stale), auto-commit is off for the note, the graph is disabled, or the owner no longer holds `graph:write`. Audit `graph:autocommit` carries ids and counts, never a statement or evidence text. Server-only: no AI key is involved here, and the job writes the graph |
 | `ask.respond` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §21.3 — identical reasoning to `kg.extract`: the user's own AI key, `maxAttempts: 1` because a retried agent turn would silently re-spend the user's provider credit to produce a different, non-deterministic answer to a question the user already saw partway through. Throttled on `aiProviderThrottleKey(userId)` exactly like every other AI-calling type in this table. **Built, issue #378** (`apps/api/src/ask/handlers/ask-respond.handler.ts`), enqueued at priority −10 with the assistant message as its subject (`ask_message`) |
 
 **Priorities.** `kg.extract` runs at priority **−5** — someone is plausibly
@@ -3201,8 +3208,12 @@ already describes, each recorded as the item's `decision`/`edited_payload`/
     they are and `remainderProposalId` is `null`. The waiting rows therefore
     stay available for a person, as ADR-0007 requires.
   - **Auto-commit** is the same safe commit run by the `kg.autocommit` job
-    (§11) for a library whose owner turned `auto_commit` on; the audit action is
-    `graph:autocommit`. Bulk extraction and reconcile of library notes: §11.
+    (§11) for every note's fresh draft while the owner's `autoCommitSafeRows`
+    preference is on (the default), unless the note's library set `auto_commit`
+    itself (true or false), which overrides the preference; the audit action is
+    `graph:autocommit`. Rows the policy holds back remain in a draft for a
+    person (the remainder draft above). Bulk extraction and reconcile of
+    library notes: §11.
 - **Add a missing item from a text selection** — §19.3, below.
 
 ### 19.3 "Add to graph" from a text selection
@@ -4358,10 +4369,12 @@ printed in a brief).
   but the write path that makes review skippable does not exist in this
   design at all, which is the point. That narrow door is now taken by
   [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md):
-  an opt-in, default-off, per-library `kg.autocommit` job that applies only the
-  safe policy (never a sensitive `PersonFact`, closing, ambiguous resolution or
-  merge, low-confidence row or stale proposal) through the ordinary commit
-  service. Full auto-commit stays rejected.
+  a `kg.autocommit` job that applies only the safe policy (never a sensitive
+  `PersonFact`, closing, ambiguous or possible-duplicate resolution, merge,
+  low-confidence row or stale proposal) through the ordinary commit service.
+  It began opt-in per library and, because a graph that waits for a review
+  nobody does stays empty, is now on by default per user, with the library's
+  own setting as an override. Full auto-commit stays rejected.
 - **Bidirectional relation storage** — storing `EMPLOYS` beside `WORKS_FOR`,
   and similarly for every pair. Rejected per §5.2: Postgres joins are
   symmetric, so the only effect of storing both directions is a second row

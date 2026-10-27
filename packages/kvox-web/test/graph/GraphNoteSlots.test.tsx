@@ -210,6 +210,32 @@ describe('NotePage — guide the graph and add from a selection (issue #368)', (
     expect(extract[0].body).toEqual({});
   });
 
+  it('"Re-run extraction" in the note header re-extracts over the open draft (#779)', async () => {
+    const user = userEvent.setup();
+    renderNote('/notes/n1', graphUser);
+    await user.click(await screen.findByRole('button', { name: 'Re-run extraction' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Extract again' });
+    await within(dialog).findByText(/input tokens/);
+    await user.click(within(dialog).getByRole('button', { name: 'Extract again' }));
+    await waitFor(() =>
+      expect(proposalMock.requests.filter((request) => request.path.endsWith('/extract'))).toHaveLength(1),
+    );
+  });
+
+  it('"Re-run extraction" starts a first extraction when the note has none', async () => {
+    proposalMock.reset(null);
+    const user = userEvent.setup();
+    renderNote('/notes/n1', graphUser);
+    await user.click(await screen.findByRole('button', { name: 'Re-run extraction' }));
+    expect(await screen.findByRole('dialog', { name: 'Extract to your graph' })).toBeInTheDocument();
+  });
+
+  it('offers no "Re-run extraction" without graph:write', async () => {
+    renderNote('/notes/n1', { ...mockAdminUser, permissions: [...mockAdminUser.permissions, 'graph:read'] });
+    await screen.findByRole('button', { name: /^Graph proposal/ });
+    expect(screen.queryByRole('button', { name: 'Re-run extraction' })).not.toBeInTheDocument();
+  });
+
   it('shows the guidance summary and Edit guidance re-opens the dialog pre-filled', async () => {
     const detail = mockProposalDetail('draft');
     detail.proposal = {

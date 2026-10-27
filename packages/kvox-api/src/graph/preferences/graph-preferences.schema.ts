@@ -97,6 +97,11 @@ const graphReviewSchema = z
      * The lowest confidence at which the safe policy accepts a row on its own (#717, ADR-0007).
      */
     minConfidence: graphMinConfidenceSchema,
+    /**
+     * Commit the confident rows of every note's draft automatically (#779, ADR-0007). Optional in
+     * the stored value: a row written before #779 has none, and absent means the default (on).
+     */
+    autoCommitSafeRows: z.boolean().optional(),
   })
   .strict();
 
@@ -234,7 +239,10 @@ export const graphPreferencesPatchSchema = z
       .nullable()
       .optional(),
     review: z
-      .object({ minConfidence: graphMinConfidenceSchema.nullable().optional() })
+      .object({
+        minConfidence: graphMinConfidenceSchema.nullable().optional(),
+        autoCommitSafeRows: z.boolean().nullable().optional(),
+      })
       .strict()
       .nullable()
       .optional(),

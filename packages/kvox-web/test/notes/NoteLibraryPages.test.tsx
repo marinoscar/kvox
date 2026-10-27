@@ -15,6 +15,7 @@ import { NotesPage } from '../../src/notes/ui/pages/NotesPage.js';
 import { ScanConfirmDialog } from '../../src/notes/ui/components/ScanConfirmDialog.js';
 import { NoteImportBatchPage, importCompletionSentence } from '../../src/notes/ui/pages/NoteImportBatchPage.js';
 import { NoteLibrariesPage } from '../../src/notes/ui/pages/NoteLibrariesPage.js';
+import { NoteLibraryPage } from '../../src/notes/ui/pages/NoteLibraryPage.js';
 import { mockUser, render } from '../transcripts/helpers.js';
 import { REF, batchOf, fakePort, libraryOf, scanAnswer } from './libraryFakes.js';
 
@@ -178,6 +179,55 @@ describe('NoteLibrariesPage', () => {
     expect(await screen.findByRole('link', { name: 'Work notes' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /rescan/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /add folder/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('NoteLibraryPage auto-commit (#779, ADR-0007)', () => {
+  function libraryHost(autoCommit: boolean | null) {
+    const host = hostFor(WRITER, {
+      'GET /notes/libraries/lib-1': libraryOf({ autoCommit }),
+      'GET /notes/import-batches': { items: [] },
+      'PATCH /notes/libraries/lib-1': libraryOf({ autoCommit: false }),
+    });
+    host.files = fakePort({});
+    return host;
+  }
+  const open = (host: FakeKvoxWebHost) =>
+    render(
+      <Routes>
+        <Route path="/notes/libraries/:libraryId" element={<NoteLibraryPage />} />
+      </Routes>,
+      { host, wrapperOptions: { route: '/notes/libraries/lib-1' } },
+    );
+
+  it('a library that has not chosen follows the Knowledge graph setting, and says where it is', async () => {
+    open(libraryHost(null));
+    const select = await screen.findByRole('combobox', { name: 'Auto-commit' });
+    expect(select).toHaveTextContent('Follow my Knowledge graph setting');
+    expect(screen.getByRole('link', { name: /settings, knowledge graph/i })).toHaveAttribute('href', '/settings/knowledge-graph');
+  });
+
+  it('choosing Off sends autoCommit: false; choosing Follow sends null', async () => {
+    const host = libraryHost(true);
+    open(host);
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Auto-commit' }));
+    fireEvent.click(within(await screen.findByRole('listbox')).getByRole('option', { name: 'Off for this library' }));
+    await waitFor(() => expect(host.callsTo('PATCH /notes/libraries/lib-1')).toHaveLength(1));
+    expect(host.callsTo('PATCH /notes/libraries/lib-1')[0]).toMatchObject({ body: { autoCommit: false } });
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Auto-commit' }));
+    fireEvent.click(within(await screen.findByRole('listbox')).getByRole('option', { name: 'Follow my Knowledge graph setting' }));
+    await waitFor(() => expect(host.callsTo('PATCH /notes/libraries/lib-1')).toHaveLength(2));
+    expect(host.callsTo('PATCH /notes/libraries/lib-1')[1]).toMatchObject({ body: { autoCommit: null } });
+  });
+
+  it('choosing On asks first', async () => {
+    const host = libraryHost(null);
+    open(host);
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Auto-commit' }));
+    fireEvent.click(within(await screen.findByRole('listbox')).getByRole('option', { name: 'On for this library' }));
+    expect(await screen.findByRole('dialog', { name: /without review/i })).toBeInTheDocument();
+    expect(host.callsTo('PATCH /notes/libraries/lib-1')).toHaveLength(0);
   });
 });
 

@@ -52,7 +52,7 @@ export function createLibraryFakeDb() {
   const db: Record<string, any> = {
     note: table(() => ({ deletedAt: null, status: 'ready' })),
     noteVersion: table(),
-    noteLibrary: table(() => ({ autoExtract: true, autoCommit: false })),
+    noteLibrary: table(() => ({ autoExtract: true, autoCommit: null })),
     noteLibraryFile: table(() => ({ importedVersion: null, noteId: null, contentHash: null })),
     noteImportBatch: table(() => ({ libraryId: null, status: 'running', finishedAt: null })),
     noteImportBatchItem: table(() => ({ fileId: null, noteId: null, noteVersion: null, diverged: false, failureReason: null, jobId: null })),
