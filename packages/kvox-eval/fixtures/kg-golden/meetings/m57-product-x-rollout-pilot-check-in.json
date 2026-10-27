@@ -60,9 +60,7 @@
       "id": "g-product-product-x",
       "type": "Product",
       "label": "Product X",
-      "aliases": [
-        "Product X"
-      ],
+      "aliases": [],
       "props": {},
       "attendedFixtureIds": []
     },
@@ -176,9 +174,7 @@
         "key": "productx",
         "type": "Product",
         "label": "Product X",
-        "aliases": [
-          "Product X"
-        ],
+        "aliases": [],
         "existingId": "g-product-product-x",
         "props": {
           "category": "ai_model"
