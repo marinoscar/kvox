@@ -13,8 +13,8 @@
  * EMPTY AND SPARSE (#782): with no snapshot yet, or no clusters, or fewer
  * than {@link SPARSE_ENTITY_COUNT} entities, the page says the map fills in
  * as notes are processed and offers Browse entities and Explore. A sparse map
- * is still drawn under the message. The caption reads "Updated <relative
- * time>" from the snapshot's `computedAt`.
+ * is still drawn under the message. The caption reads "Updated" and the
+ * relative time, from the snapshot's `computedAt`.
  *
  * DRAWN FROM A STORED SNAPSHOT, NEVER LAID OUT HERE. `GET /api/graph/overview`
  * returns the latest `kg.graph_layout` snapshot (#371) — clusters and 2-D
