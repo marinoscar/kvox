@@ -112,7 +112,7 @@ function KnowledgeSectionContent() {
           <Button size="small" component={RouterLink} to="/graph/explore">
             Explore
           </Button>
-          <Button size="small" endIcon={<ChevronRightIcon />} component={RouterLink} to="/graph">
+          <Button size="small" endIcon={<ChevronRightIcon />} component={RouterLink} to="/graph/entities">
             All people &amp; organizations
           </Button>
         </Stack>

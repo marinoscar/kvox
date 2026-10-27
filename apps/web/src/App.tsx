@@ -405,8 +405,10 @@ function AppRoutes() {
                   {/* Knowledge graph (#373, epic #347; spec §13), the routes
                       of `@marinoscar/kvox-web/graph/ui`: their paths, their lazy
                       pages and the permission each is gated on come from
-                      `kvoxGraphRoutes` (`/graph`, `/graph/entities/:id`,
-                      `/graph/explore`, `/graph/overview`,
+                      `kvoxGraphRoutes` (`/graph`, the overview landing since
+                      #782; the entity index `/graph/entities`;
+                      `/graph/entities/:id`, `/graph/explore`, the
+                      `/graph/overview` redirect,
                       `/graph/imports/:proposalId` and the Knowledge graph
                       settings page `/settings/knowledge-graph`), with the
                       entity page swapped for this app's wrapper that fills

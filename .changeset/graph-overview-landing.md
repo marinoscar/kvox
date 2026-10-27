@@ -1,0 +1,5 @@
+---
+'@marinoscar/kvox-web': minor
+---
+
+Opening the knowledge graph now lands on the whole-graph overview. The graph route table serves `GraphOverviewPage` at `/graph` (clusters layer by default; `?layer=`, `?cluster=` and `?view=list` unchanged), moves the entity index (`GraphIndexPage`, URL state `q` and `type`) to `/graph/entities`, and turns `/graph/overview` into a redirect to `/graph` that keeps the query string (`GraphOverviewRedirect`). Both pages share the new `KnowledgeHeader` (links to the other view, Explore, Review and Possible duplicates; Synonyms, Export graph and, with `graph:write`, Import graph in the overflow menu). The overview gains empty and sparse states with Browse entities and Explore actions, and its caption reads "Updated <relative time>". New exports: `KnowledgeHeader`, `GraphOverviewRedirect`, `GRAPH_OVERVIEW_PATH`, `GRAPH_ENTITIES_PATH`. The entity page's back links and Home's "All people & organizations" now go to `/graph/entities`. Hosts that replace a route's `Component` by path keep working: `/graph/entities/:id` and `/graph/explore` are unchanged.

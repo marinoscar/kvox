@@ -2053,7 +2053,9 @@ already accepted or rejected); an import also answers `graph_disabled`, and
 
 ## 13. Web surfaces
 
-**Built** (issue #373, epic #347): `/graph` (the index) and
+**Built** (issue #373, epic #347): the entity index (`/graph` until issue
+#782, `/graph/entities` since, when `/graph` became the whole-graph overview
+of §22.3) and
 `/graph/entities/:id` (the entity page — header with edit and "Forget this
 person…", the cited brief card, the connections list, the timeline with its
 sensitive-facts toggle, and mentions), `EvidenceChip`, speaker-chip person
@@ -2110,7 +2112,7 @@ widget's own library unstated without also leaving the overview's unstated.
 
 **Route ownership.** Every route this epic adds is still a route, and
 `apps/web/src/config/destinations.ts`'s own route-ownership test (verified
-above) fails an unowned one — so `/graph`, `/graph/entities/:id`,
+above) fails an unowned one — so `/graph`, `/graph/entities`, `/graph/entities/:id`,
 `/graph/explore`, `/graph/overview`, `/graph/imports/:proposalId` (#387,
 §18.3), `/ask`, and `/ask/:conversationId` (§21.5, §22) are all declared
 under a `DESTINATION_ROUTES` prefix. **Since issue #438** that prefix is the
@@ -3054,16 +3056,17 @@ server-only, `{ 30 min, 1 attempt }`):
   pre-check and `extracting → draft`. Every failure above is `failed` with
   `stats.failureReason` and writes no proposal row and no graph row.
 
-The web side is `ImportGraphDialog` ("Import graph…" in `/graph`'s overflow
-menu, `graph:write` only) and `/graph/imports/:proposalId`
+The web side is `ImportGraphDialog` ("Import graph…" in the overflow menu of
+the knowledge header, on the overview `/graph` and the entity index
+`/graph/entities` alike since issue #782, `graph:write` only) and `/graph/imports/:proposalId`
 (`GraphImportPage`, owned by `knowledge` since issue #438, `home` before it,
 gated `graph:write`): "Checking your
 file…" while `extracting`, the failure copy (and for `shacl_violations` a
 table of the first 200 problems), and for a draft the **Unknown properties**
 panel above #367's `ProposalReviewSheet` rendered **inline**
 (`variant="inline"`, `source={{ proposalId }}`), import evidence reading
-"From the imported file" with nothing to play. `/graph` lists the last five
-imports. The uploaded file is deleted by `kg.purge` (both scopes, an
+"From the imported file" with nothing to play. The entity index (`/graph/entities`) lists the last
+five imports. The uploaded file is deleted by `kg.purge` (both scopes, an
 `imports` step after `exports`), like an export.
 
 **Use cases**, stated concretely because "interoperability" alone
@@ -4119,7 +4122,7 @@ connections" on 2–10 selected notes) and the note page ("Explore in graph",
 is Shift-click, a lasso (Shift+drag, or a plain drag with the Select tool),
 Select mode taps on touch, and Space on the focused node in Select mode.
 
-### 22.3 Whole-graph overview (`/graph/overview`)
+### 22.3 Whole-graph overview (`/graph`)
 
 **Built (issue #371, epic #347).** `packages/kvox-api/src/graph/layout/` holds the
 whole thing: `computeLayout` (Louvain clustering + ForceAtlas2 positions,
@@ -4187,7 +4190,7 @@ straight to the explorer** (§22.2) as its seed set, so the transition from
 it" is one click, sharing the same graphology graph object (§22.1) rather
 than a second fetch.
 
-**As built (issue #375).** `/graph/overview` (`packages/kvox-web/src/graph/ui/pages/GraphOverviewPage.tsx`,
+**As built (issue #375; served at `/graph` since issue #782).** `/graph/overview` (`packages/kvox-web/src/graph/ui/pages/GraphOverviewPage.tsx`,
 owned by `knowledge` through the `/graph` prefix since issue #438 (`home` before it), gated
 on `graph:read`) draws the stored snapshot
 through the explorer's own `GraphCanvas` with `layout="static"` — it never moves a node. The
@@ -4207,6 +4210,24 @@ never refreshed on read; *Refresh* (`POST /api/graph/overview/refresh`) is offer
 `graph:write` holders, and the page polls every 10 s while a layout is pending, for at most
 15 minutes. `tooLarge` and an empty graph render a message and no canvas; a cluster list view
 (`?view=list`) is the accessible alternative and the only view without WebGL.
+
+**The knowledge landing (issue #782).** Opening Knowledge lands on this overview: it is
+served at `/graph` (clusters layer by default; `?layer=`, `?cluster=` and `?view=list`
+unchanged), and its old address `/graph/overview` redirects to `/graph` keeping the query
+string and hash (`GraphOverviewRedirect`; a route's `redirectTo` is only the permission
+fallback and keeps no search). The entity index moved to `/graph/entities` with its URL
+state (`q`, `type`); the static segment never clashes with `/graph/entities/:id`. Both
+pages share one header, `KnowledgeHeader`: links to the other view (Entities from the
+overview, Overview from the index), Explore, Review and Possible duplicates (with its
+`?limit=50` count), and an overflow menu with Synonyms, *Export graph…* and, for
+`graph:write`, *Import graph…*. On a phone (`down('sm')`, a page-level read, not a shell
+gate) every link folds into that menu. With no snapshot yet (building or none), no
+clusters, or fewer than five entities, the page says the map fills in as notes are
+processed and offers *Browse entities* (`/graph/entities`) and *Explore*; a sparse map is
+still drawn under that message. The caption reads "Updated <relative time>" from the
+snapshot's `computedAt`. The entity page's back links and Home's "All people &
+organizations" go to `/graph/entities`; the Home journey's "Open knowledge" and the
+`knowledge` destination stay `/graph`, now the overview.
 
 **Insights (GIC-16, issue #677, epic #661).** The explorer's Insights panel and
 `GET /api/graph/insights?window=30d|90d|365d` (`graph:read`, owner-only) say what
