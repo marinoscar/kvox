@@ -2,7 +2,7 @@
 
 exports[`assembleExtractionPrompt (#363) matches the snapshot of a small context 1`] = `
 {
-  "systemPrompt": "You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Precision matters more than completeness.
+  "systemPrompt": "You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Cover everything the text supports with a citation.
 
 ## Rules
 1. Cite only ids you were given: \`s#\` for a transcript line, \`N\` for the note, \`C\` for the Context. Each citation copies an exact quote of at most 200 characters from that line, from the note or from the Context.
@@ -85,7 +85,7 @@ s1 [00:00:00] Sarah Chen: Hi everyone, I'm Sarah Chen, VP of Operations at North
 `;
 
 exports[`assembleExtractionPrompt (#363) matches the snapshot of the core + work system prompt, which carries Topic, Product, Risk, the stakeholder relations and the worked example (#665) 1`] = `
-"You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Precision matters more than completeness.
+"You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Cover everything the text supports with a citation.
 
 ## Rules
 1. Cite only ids you were given: \`s#\` for a transcript line, \`N\` for the note, \`C\` for the Context. Each citation copies an exact quote of at most 200 characters from that line, from the note or from the Context.

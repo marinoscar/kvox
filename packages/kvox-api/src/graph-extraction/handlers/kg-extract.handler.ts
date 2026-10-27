@@ -8,13 +8,15 @@
 //   load → resolve the model (the payload's model, RE-VALIDATED against today's
 //   policy) → plan (budget + row caps sized from the output this call will
 //   get, #435/#436) → record the prompt on the proposal BEFORE the call →
-//   register the per-user throttle key → ONE `generateStructured` call (plus,
+//   register the per-user throttle key → ONE `generateStructured` call PER CHUNK of the note
+//   (#777: a short note is one chunk; a long one is split, run in order, each finished chunk
+//   saved so a re-run resumes, then merged) (plus,
 //   only when that answer was TRUNCATED, one re-ask with every row cap halved
 //   and the prompt re-recorded) → validate → persist items + evidence → run
 //   the registered stages in order → pre-check → `extracting → draft`,
 //   superseding an older draft.
 //
-//   profile       { maxRuntimeMs: 20 min, maxAttempts: 1 } — a retry would
+//   profile       { maxRuntimeMs: 96 min (12 chunks x 8), maxAttempts: 1 } — a retry would
 //                 re-spend the user's own key for a DIFFERENT, non-deterministic
 //                 answer; re-extracting is a person pressing a button
 //   node-eligible NO — no `nodeResultSchema`/`persistNodeResult`: the credential
@@ -55,6 +57,10 @@ import { applyPrecheck, reviewOnlyTypes, type PrecheckItem } from '../extraction
 import { ProposalStageRegistry } from '../extraction/proposal-stage.js';
 import { ProposalWriter } from '../extraction/proposal-writer.service.js';
 import { halveRowCaps } from '../extraction/row-caps.js';
+import { chunkContext, chunksFor, promptChunk, shiftToNote } from '../extraction/chunked-run.js';
+import { newResume, readResume } from '../extraction/chunk-resume.js';
+import { mergeChunkResults, type ChunkOutcome } from '../extraction/merge-chunks.js';
+import { MAX_CHUNKS } from '../extraction/chunker.js';
 import { addDeterministicRows, validateExtraction } from '../extraction/validate.js';
 import type {
   ExtractionFailureClass,
@@ -73,9 +79,10 @@ import {
   type KvoxJobsPort,
 } from '../../ports/index.js';
 
-// 20 minutes (#435): room for the one truncation re-ask after a full-length
-// first answer.
-export const KG_EXTRACT_MAX_RUNTIME_MS = 20 * 60_000;
+// #777: up to `MAX_CHUNKS` (12) sequential calls, each with room for the one truncation
+// re-ask (#435): 12 chunks x 8 minutes. A note needing more chunks gets larger chunks, never
+// more calls, so this bounds the job.
+export const KG_EXTRACT_MAX_RUNTIME_MS = MAX_CHUNKS * 8 * 60_000;
 
 const payloadSchema = z.object({
   proposalId: z.guid(),
@@ -251,28 +258,61 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
     const input = await this.loader.load({ userId, noteId, noteVersion: payload.noteVersion, guidance });
     const ctx = buildExtractionContext(input);
 
-    let plan = planExtraction(resolution, ctx);
-    let result;
-    try {
-      result = await this.callPlanned(resolution, userId, proposalId, jobId, plan, stats);
-    } catch (error) {
-      if (!isTruncation(error)) throw error;
-      // #435: ONE re-ask in the same job, every row cap halved and the prompt
-      // re-recorded — a smaller question, not a retry of the same one.
-      stats.truncationRetry = true;
-      plan = planExtraction(resolution, ctx, halveRowCaps(plan.caps));
-      try {
-        result = await this.callPlanned(resolution, userId, proposalId, jobId, plan, stats);
-      } catch (retryError) {
-        if (isTruncation(retryError)) {
-          throw new TerminalExtractionError('truncated', truncatedMessage(plan.maxOutputTokens));
-        }
-        throw retryError;
+    // #777: a long note is several chunks, one structured call each, run in order. A short
+    // note is one chunk covering the whole body: the request is the single-call one.
+    const chunks = chunksFor(ctx, resolution.countTokens);
+    const multi = chunks.length > 1;
+    let resume = newResume(payload.noteVersion, chunks);
+    if (multi) {
+      const row = await this.prisma.kgProposal.findUnique({ where: { id: proposalId }, select: { commitLog: true } });
+      const saved = readResume(row?.commitLog ?? null, payload.noteVersion, chunks);
+      if (saved) {
+        resume = saved;
+        stats.usage = { ...saved.usage };
+        if (saved.truncationRetry) stats.truncationRetry = true;
       }
+      stats.chunks = { total: chunks.length, completed: resume.done.length };
     }
 
-    const validated = validateExtraction(result.value, ctx);
-    if (!validated.ok) throw new TerminalExtractionError('invalid_output', validated.message);
+    const outcomes: ChunkOutcome[] = [...resume.done];
+    for (let i = outcomes.length; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const chunkCtx = chunkContext(ctx, chunk);
+      const part = promptChunk(chunk);
+      let plan = planExtraction(resolution, chunkCtx, undefined, part);
+      let result;
+      try {
+        result = await this.callPlanned(resolution, userId, proposalId, jobId, plan, stats);
+      } catch (error) {
+        if (!isTruncation(error)) throw error;
+        // #435: ONE re-ask for THIS chunk, every row cap halved and the prompt
+        // re-recorded — a smaller question, not a retry of the same one.
+        stats.truncationRetry = true;
+        plan = planExtraction(resolution, chunkCtx, halveRowCaps(plan.caps), part);
+        try {
+          result = await this.callPlanned(resolution, userId, proposalId, jobId, plan, stats);
+        } catch (retryError) {
+          if (isTruncation(retryError)) {
+            throw new TerminalExtractionError('truncated', truncatedMessage(plan.maxOutputTokens));
+          }
+          throw retryError;
+        }
+      }
+
+      const validated = validateExtraction(result.value, chunkCtx);
+      if (!validated.ok) throw new TerminalExtractionError('invalid_output', validated.message);
+      outcomes.push(shiftToNote(validated, chunk));
+
+      if (multi && i < chunks.length - 1) {
+        stats.chunks = { total: chunks.length, completed: outcomes.length };
+        resume = { ...resume, done: outcomes, usage: { ...stats.usage }, truncationRetry: stats.truncationRetry === true };
+        await this.writer.saveChunkProgress(proposalId, stats, resume as unknown as Record<string, unknown>);
+      }
+    }
+    if (multi) stats.chunks = { total: chunks.length, completed: chunks.length };
+
+    // Reduce: merge the chunks, then add the one deterministic Meeting row over the whole note.
+    const validated = multi ? mergeChunkResults(outcomes) : { ok: true as const, ...outcomes[0] };
     const withMeeting = addDeterministicRows(ctx, validated);
     stats.proposed = withMeeting.stats.proposed;
     stats.dropped = withMeeting.stats.dropped;

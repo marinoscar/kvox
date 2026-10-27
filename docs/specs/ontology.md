@@ -965,7 +965,7 @@ call returns, so a failed extraction still records what was asked, and a
 reviewer questioning why a particular item was (or wasn't) proposed can see
 the exact context the model reasoned from.
 
-**Job execution profile:** `{ maxRuntimeMs: 20 * 60_000, maxAttempts: 1 }`
+**Job execution profile:** `{ maxRuntimeMs: 96 * 60_000 (12 chunks x 8 min, §6.6), maxAttempts: 1 }`
 (raised from 10 minutes by #435 to make room for the one truncation re-ask
 below). One attempt, for the identical reason `note.generate` carries `maxAttempts:
 1` (`docs/specs/notes.md` §1.3 decision 3, restated by
@@ -1109,6 +1109,51 @@ full. #435 fixes all three:
   included**, into `stats.usage`: a truncated answer still spent the user's
   tokens and is billed all the same, so recording it as zero (the pre-#435
   behaviour) understated what the run actually cost.
+
+### 6.6 Long notes: chunked extraction (issue #777)
+
+One answer can carry only so many rows (§6, row caps), so a long note, above all an imported
+document (a note whose body is the whole document), is read in **chunks**, inside the same
+`kg.extract` job. The code is `extraction/chunker.ts`, `chunked-run.ts`, `merge-chunks.ts` and
+`chunk-resume.ts`, all pure except the handler.
+
+- **Threshold and split.** A body of at most 3,000 tokens (the model's own `countTokens`) is one
+  chunk covering the whole body: its request is the single-call request. A longer body is split on
+  Markdown heading boundaries first, then blank-line paragraphs, then lines (a table row or a list
+  item with its continuation lines is never cut), then sentences, and packed up to about 2,000
+  tokens per chunk. Fenced code blocks are not split at headings or paragraphs. A note that came
+  from a transcript is never chunked (its body is a summary and its lines are cited by id).
+- **Bound.** At most 12 chunks. A longer body gets larger chunks, never more calls, and a chunk the
+  model's window cannot hold is refused as before (per chunk). `profile.maxRuntimeMs` is
+  12 x 8 minutes = 96 minutes (each chunk keeps room for its one truncation re-ask); `maxAttempts`
+  stays 1.
+- **Map.** One `generateStructured` call per chunk, sequential. Row caps apply per chunk (§6, row
+  caps), and a truncation re-ask halves the caps for that chunk only. The prompt adds `Part i of n
+  of one note; propose only what this part supports.` and, from the second part on, the previous
+  part's last paragraph marked `[context only — do not cite]`. The known-entities list, the meeting
+  header and the Context are shared by every chunk. The role line asks for everything the text
+  supports with a citation; rule 2 (never propose a row you cannot cite) is unchanged.
+- **Citations.** Each chunk is validated against its own text, so a quote is found only if it is in
+  that part (the lead-in is not citable). A located note quote's offsets are shifted by the chunk's
+  start, so evidence spans are absolute offsets into the note version's body.
+- **Reduce.** Entities merge by type and normalized label or alias (the resolution stage's
+  `normalizedNames`; a re-stated known `k#` entity merges by ref), with evidence and aliases
+  unioned; local refs are renumbered and relations and items re-pointed; identical relations (type,
+  endpoints, dates, props) and items (kind, statement hash, subject) are one row with unioned
+  evidence; a relation whose endpoints merged into one entity is dropped. Validation counts are
+  summed. The deterministic Meeting row is added once, over the whole note. Resolution and the other
+  stages run on the merged rows as before.
+- **Resume.** After each chunk but the last, the validated outcomes so far are saved in
+  `kg_proposals.commit_log` (internal, never serialized, empty until a commit) with the usage so
+  far; a job the queue runs again (a deferred rate limit, a reaped lease) continues after the last
+  completed chunk when the note version and the split are the same. The state is cleared on
+  `draft` and on `failed`. `stats.chunks = { total, completed }` is the client-visible progress.
+  No schema change.
+- **Estimate.** `requests` is the number of chunks; `inputTokens` sums the chunk prompts; `fits`
+  needs every chunk to fit.
+- **Cost.** Input tokens grow with the note (each chunk repeats the system prompt, the known
+  entities and a lead-in of at most 800 characters), and the user's own key is spent N times.
+  A note of about 6,000 words is four to five requests.
 
 ## 7. Entity resolution (`kg.resolve`)
 
@@ -1843,7 +1888,7 @@ directory:
 
 | Job type | Profile | Node-eligible? | Reasoning |
 |---|---|---|---|
-| `kg.extract` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §6 — user's own AI key, `maxAttempts: 1` for the identical reason `note.generate` carries it; raised from 10 to 20 minutes by #435 to make room for the one truncation re-ask |
+| `kg.extract` | `{ maxRuntimeMs: 96m, maxAttempts: 1 }` | **No** | §6 — user's own AI key, `maxAttempts: 1` for the identical reason `note.generate` carries it; raised from 10 to 20 minutes by #435 to make room for the one truncation re-ask |
 | `kg.resolve` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §7 — same credential reasoning; a bulk re-scan spends the same per-user key |
 | `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — **built, issue #372** (`packages/kvox-api/src/graph/brief/entity-digest.handler.ts`, not `graph/handlers/` — the same "extraction lives beside its module" deviation `kg.extract` already takes); same credential reasoning; deduplicated per entity |
 | `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Embeds through `KvoxAi.embed` (feature `graph_embed`, via `GraphEmbedder`) on the user's own key, resolved by the platform; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
