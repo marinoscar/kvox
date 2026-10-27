@@ -48,7 +48,7 @@ Required by every entry (`core/headless` and everything that builds on it):
 | `@marinoscar/kvox-contract` | `>=0.0.0-0 \|\| >=0.1.0-0` (any release; the four packages ship together, see [the contract peer range](../../docs/PACKAGES.md#the-contract-peer-range)) |
 | `react` | `^19.2.7` |
 | `react-dom` | `^19.2.7` |
-| `@marinoscar/platform-web` | `0.1.0-next.18` (exact). Every slice formats times, and groups feeds by day, in the user's display time zone through `@marinoscar/platform-web/timezone/headless` (the user's zone when the host mounts the platform's `UserTimeZoneSync`, else the device's). The `brand`, `shell` and `copilot/ui` entries import more of it: `shell/headless` (`createShellTheme`), the shell and identity entries, and `ai/ui` (`AccountSignInProviderCard`, `aiErrorText`). |
+| `@marinoscar/platform-web` | `0.1.0-next.19` (exact). Every slice formats times, and groups feeds by day, in the user's display time zone through `@marinoscar/platform-web/timezone/headless` (the user's zone when the host mounts the platform's `UserTimeZoneSync`, else the device's). The `brand`, `shell` and `copilot/ui` entries import more of it: `shell/headless` (`createShellTheme`), the shell and identity entries, and `ai/ui` (`AccountSignInProviderCard`, `aiErrorText`). |
 
 Optional peers, installed for the entries that need them. A host that uses only the `headless` entries installs none of them:
 

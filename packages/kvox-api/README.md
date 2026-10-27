@@ -45,7 +45,7 @@ Required by every slice (`ports`, `core`, `transcription`, `search`, `transcript
 | Package | Range |
 |---|---|
 | `@marinoscar/kvox-contract` | `>=0.0.0-0 \|\| >=0.1.0-0` (any release; the four packages ship together, see [the contract peer range](../../docs/PACKAGES.md#the-contract-peer-range)) |
-| `@marinoscar/platform-contract` | `0.1.0-next.18` (a peer of `core` and so of every slice but `ports`; pinned with the other platform packages; only its pure `timezone` subpath is imported, see [the host-neutral rule](../../docs/PACKAGES.md#the-host-neutral-rule); KVox Desktop already installs it through `@marinoscar/platform-web`) |
+| `@marinoscar/platform-contract` | `0.1.0-next.19` (a peer of `core` and so of every slice but `ports`; pinned with the other platform packages; only its pure `timezone` subpath is imported, see [the host-neutral rule](../../docs/PACKAGES.md#the-host-neutral-rule); KVox Desktop already installs it through `@marinoscar/platform-web`) |
 | `@nestjs/common` | `^11.1.12` |
 | `@nestjs/core` | `^11.1.12` |
 | `reflect-metadata` | `^0.2.2` |
