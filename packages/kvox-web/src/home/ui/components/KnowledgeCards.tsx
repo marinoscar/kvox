@@ -47,6 +47,7 @@ import { countPhrase, useGraphEntities, useGraphOverview, useReviewQueue } from 
 import { entityPath } from '../../../graph/ui/index.js';
 import { summarizeLibraries } from '../../headless/imports.js';
 import type { UseHomeImportsResult } from '../../headless/imports.js';
+import { formatDateTime, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 /**
  * How many recently changed entities the graph card lists.
@@ -384,12 +385,23 @@ const BATCH_STATUS: Record<NoteImportBatchStatus, { label: string; color: ChipPr
   cancelled: { label: 'Cancelled', color: 'default' },
 };
 
-function batchLabel(batch: NoteImportBatch, libraries: readonly NoteLibrary[] | null): string {
+function batchLabel(
+  batch: NoteImportBatch,
+  libraries: readonly NoteLibrary[] | null,
+  timeZone: string,
+): string {
   const library = batch.libraryId ? libraries?.find((l) => l.id === batch.libraryId) : undefined;
   if (library) return library.name;
-  const at = new Date(batch.createdAt);
-  if (Number.isNaN(at.getTime())) return 'Import';
-  return `Import of ${at.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+  // When the import started, in the reader's display zone.
+  const at = formatDateTime(batch.createdAt, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone,
+    fallback: '',
+  });
+  return at === '' ? 'Import' : `Import of ${at}`;
 }
 
 /**
@@ -402,6 +414,7 @@ function batchLabel(batch: NoteImportBatch, libraries: readonly NoteLibrary[] | 
  * @stability experimental
  */
 export function RecentImportsHomeCard({ imports }: { imports: UseHomeImportsResult }) {
+  const zone = useDisplayTimeZone();
   if (imports.isLoading && !imports.batches) return <CardSkeleton label="Loading your recent imports" />;
   if (imports.batchesFailed || !imports.batches || imports.batches.length === 0) return null;
   return (
@@ -424,7 +437,7 @@ export function RecentImportsHomeCard({ imports }: { imports: UseHomeImportsResu
                   noWrap
                   sx={{ display: 'block' }}
                 >
-                  {batchLabel(batch, imports.libraries)}
+                  {batchLabel(batch, imports.libraries, zone)}
                 </Link>
                 {counts && (
                   <Typography variant="caption" color="text.secondary" noWrap component="p">

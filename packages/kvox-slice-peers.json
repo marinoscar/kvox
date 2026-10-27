@@ -180,7 +180,7 @@
   },
   "kvox-web": {
     "core": {
-      "peers": ["@marinoscar/kvox-contract", "react", "react-dom"],
+      "peers": ["@marinoscar/kvox-contract", "@marinoscar/platform-web", "react", "react-dom"],
       "entries": {
         "ui": ["@mui/icons-material", "@mui/material", "react-router-dom"],
         "testing": ["@mui/material", "@testing-library/react", "react-router-dom"]

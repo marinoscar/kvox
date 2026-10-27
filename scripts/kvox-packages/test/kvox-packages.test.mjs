@@ -232,9 +232,26 @@ test('host-neutral: only the kvox-web copilot slice may import @marinoscar/platf
     assert.equal(violations.length, 2);
     const text = violations.map((v) => v.message).join('\n');
     assert.match(text, /copilot\/ui\/hub\.ts imports '@marinoscar\/platform-web\/settings\/ui'/);
-    assert.match(text, /may import only '@marinoscar\/platform-web\/ai\/ui'/);
+    assert.match(text, /may import only .*'@marinoscar\/platform-web\/ai\/ui'/);
     assert.match(text, /core\/card\.ts imports '@marinoscar\/platform-web\/ai\/ui'/);
     assert.doesNotMatch(text, /copilot\/ui\/card\.ts/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-neutral: every kvox-web slice may import exactly @marinoscar/platform-web/timezone/headless', () => {
+  const dir = fixtureCopy();
+  try {
+    plant(dir, 'host-neutral/kvox-web-timezone-allowed.ts', 'packages/kvox-web/src/core/when.ts');
+    plant(dir, 'host-neutral/kvox-web-timezone-ui-forbidden.ts', 'packages/kvox-web/src/core/picker.ts');
+    plant(dir, 'host-neutral/kvox-web-timezone-allowed.ts', 'packages/kvox-api/src/core/when.ts');
+    const violations = hostNeutralOf(dir);
+    const text = violations.map((v) => v.message).join('\n');
+    assert.equal(violations.length, 2, text);
+    assert.match(text, /kvox-web\/src\/core\/picker\.ts imports '@marinoscar\/platform-web\/timezone\/ui'/);
+    assert.match(text, /kvox-api\/src\/core\/when\.ts imports '@marinoscar\/platform-web\/timezone\/headless'/);
+    assert.doesNotMatch(text, /kvox-web\/src\/core\/when\.ts/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

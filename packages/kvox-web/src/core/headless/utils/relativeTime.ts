@@ -14,7 +14,16 @@
  * Falls back to the ISO string on an unparseable input rather than rendering
  * `NaN minutes ago` — a timestamp this code cannot read is still information,
  * and `Invalid Date` in a notification list looks like data loss.
+ *
+ * An interval does not depend on a time zone; `formatShortDate` below does, and
+ * reads the platform's display zone.
  */
+
+import {
+  formatDate,
+  getDisplayTimeZone,
+  zonedDateKey,
+} from '@marinoscar/platform-web/timezone/headless';
 
 /**
  * Thresholds, largest unit first. The first entry whose `limit` the elapsed
@@ -90,21 +99,34 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
  * three-year-old note is a sentence that quietly lies about when the meeting
  * happened.
  *
- * `Intl.DateTimeFormat` with no locale, like `formatRelativeTime` above: the
- * browser's own ordering ("12 March" or "March 12") is the one its user expects,
- * and hardcoding either is how this becomes untranslatable.
+ * No locale, like `formatRelativeTime` above: the browser's own ordering
+ * ("12 March" or "March 12") is the one its user expects, and hardcoding either
+ * is how this becomes untranslatable.
+ *
+ * THE DAY IS THE READER'S, in their display time zone (the platform's
+ * display-zone store: the zone chosen in their profile, else the device's), so a
+ * meeting at 11pm in Costa Rica is not dated the next day for a reader there.
+ * A component that renders it calls `useDisplayTimeZone()` so a saved profile
+ * re-renders it.
+ *
+ * @param iso - An ISO-8601 timestamp.
+ * @param now - The instant "this year" is judged against.
+ * @param timeZone - The IANA zone the date is read in; default the display zone.
+ * @returns The date, or `iso` itself when it does not parse.
  *
  * @stability experimental
  */
-export function formatShortDate(iso: string, now: Date = new Date()): string {
-  const then = new Date(iso);
-  if (Number.isNaN(then.getTime())) return iso;
+export function formatShortDate(iso: string, now: Date = new Date(), timeZone?: string): string {
+  const zone = timeZone ?? getDisplayTimeZone();
+  const thenKey = zonedDateKey(iso, zone);
+  if (thenKey === null) return iso;
 
-  const sameYear = then.getFullYear() === now.getFullYear();
+  const sameYear = thenKey.slice(0, 4) === zonedDateKey(now, zone)?.slice(0, 4);
 
-  return new Intl.DateTimeFormat(undefined, {
+  return formatDate(iso, {
+    timeZone: zone,
     day: 'numeric',
     month: 'long',
     ...(sameYear ? {} : { year: 'numeric' }),
-  }).format(then);
+  });
 }

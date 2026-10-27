@@ -12,6 +12,12 @@
  *     spinner, product name and identity client (`identityAdapters.ts`). It sits
  *     INSIDE the auth provider and OUTSIDE the routes: the login page renders
  *     outside the signed-in shell.
+ *   - `UserTimeZoneSync` puts the signed-in user's `profile.timezone` in the
+ *     platform's display-zone store (one `GET /user-settings` per sign-in,
+ *     cleared on sign-out), so every packaged and `@marinoscar/kvox-web` time
+ *     renders in it. Directly inside `AuthProvider` (it watches the session),
+ *     outside the shell and the platform host, hence the explicit transport
+ *     (`appPlatformApi`), as the platform's reference app mounts it.
  *
  * Mount it once, inside the router.
  */
@@ -23,11 +29,14 @@ import {
 } from '@marinoscar/platform-web/identity/headless';
 import { api } from '../services/api';
 import { removePushSubscription } from '@marinoscar/platform-web/notifications/headless';
+import { UserTimeZoneSync } from '@marinoscar/platform-web/timezone/headless';
 import { appIdentityAdapters } from './identityAdapters';
+import { appPlatformApi } from '../platform/platformHost';
 
 export function IdentityProviders({ children }: { children: ReactNode }) {
   return (
     <AuthProvider client={api} onBeforeLogout={removePushSubscription}>
+      <UserTimeZoneSync api={appPlatformApi} />
       <IdentityWebAdaptersProvider adapters={appIdentityAdapters}>
         {children}
       </IdentityWebAdaptersProvider>

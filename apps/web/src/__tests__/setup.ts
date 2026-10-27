@@ -3,6 +3,7 @@ import { cleanup, configure } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
 import { clearFeedCache } from '@marinoscar/kvox-web/core/headless';
+import { setPreferredTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 // Set base URL for fetch
 const BASE_URL = 'http://localhost:3000';
@@ -353,6 +354,10 @@ afterEach(() => {
   server.resetHandlers();
   resetViewportWidth();
   mediaQueryListRegistry.clear();
+  // A display zone chosen by a test (or loaded by `UserTimeZoneSync` from a
+  // mocked profile) must not leak into the next one: back to the device's (UTC,
+  // `vitest.config.ts`).
+  setPreferredTimeZone(null);
 });
 
 afterAll(() => {

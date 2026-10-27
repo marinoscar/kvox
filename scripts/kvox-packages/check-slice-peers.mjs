@@ -61,6 +61,9 @@
 //                    may import exactly @marinoscar/platform-web/shell/headless,
 //                    and the copilot slice, which may import exactly
 //                    @marinoscar/platform-web/ai/ui (HOST_NEUTRAL_SLICE_ALLOWED).
+//                    Any kvox-web slice may import exactly
+//                    @marinoscar/platform-web/timezone/headless, the display
+//                    time zone store and formatters (HOST_NEUTRAL_ALLOWED).
 //                    packages/kvox-ai/src/** may import exactly one platform
 //                    specifier, the lean
 //                    @marinoscar/platform-ai-providers (the provider-adapter
@@ -138,6 +141,12 @@ export const HOST_NEUTRAL_PACKAGES = Object.freeze(['kvox-api', 'kvox-web', 'kvo
  * `@marinoscar/platform-api` (and every other platform specifier) stays a violation.
  */
 export const HOST_NEUTRAL_ALLOWED = Object.freeze({
+  // Every kvox-web slice renders times in the user's display time zone through the
+  // platform's headless time zone entry (the zone store and the formatters, no UI,
+  // no transport). A host that mounts no `UserTimeZoneSync` (KVox Desktop) gets the
+  // device's zone. `@marinoscar/platform-web` is therefore a required peer of the
+  // universal `core` slice.
+  'kvox-web': Object.freeze(['@marinoscar/platform-web/timezone/headless']),
   'kvox-ai': Object.freeze(['@marinoscar/platform-ai-providers']),
   'kvox-eval': Object.freeze(['@marinoscar/platform-ai-providers', '@marinoscar/platform-ai-providers/openai']),
 });

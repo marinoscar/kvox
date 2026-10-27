@@ -50,6 +50,7 @@ import type { GraphOntology } from '../../headless/clients/graph.js';
 import { SearchSnippet } from '../../../search/ui/index.js';
 import { EvidenceChips } from './EvidenceChip.js';
 import { entityPath } from './EntityListRow.js';
+import { formatDate, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 export interface EntityBriefCardProps {
   brief: EntityBrief;
@@ -76,14 +77,24 @@ export const BRIEF_SECTION_TITLES = [
 /** The optional sixth section (#664): shown between "Risks / claims" and "People changes" only when the brief carries open risks. */
 export const BRIEF_OPEN_RISKS_TITLE = 'Open risks';
 
-function formatDay(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+/** A bare calendar date (`2026-03-01`, a due date): no instant, so no zone shifts it. */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A day for the brief: an instant in the reader's display zone, a bare
+ * calendar date as written (read in UTC, where `new Date('2026-03-01')` puts
+ * it), or `iso` itself when it does not parse.
+ */
+function formatDay(iso: string, timeZone: string): string {
+  return formatDate(iso, {
+    dateStyle: 'medium',
+    timeZone: DATE_ONLY.test(iso) ? 'UTC' : timeZone,
+    fallback: iso,
+  });
 }
 
 function EntryRow({ entry }: { entry: BriefEntry }) {
+  const zone = useDisplayTimeZone();
   const heading = entry.title ?? entry.statement;
   return (
     <Box component="li" sx={{ py: 1, listStyle: 'none' }}>
@@ -109,7 +120,7 @@ function EntryRow({ entry }: { entry: BriefEntry }) {
           {formatPrecisionDate(entry.occurredAt, entry.precision)}
         </Typography>
         {entry.superseded && <Chip size="small" label="Superseded" />}
-        {entry.dueAt && <Chip size="small" variant="outlined" label={`Due ${formatDay(entry.dueAt)}`} />}
+        {entry.dueAt && <Chip size="small" variant="outlined" label={`Due ${formatDay(entry.dueAt, zone)}`} />}
         {entry.ownerPerson && (
           <Link component={RouterLink} to={entityPath(entry.ownerPerson.id)} variant="caption">
             {entry.ownerPerson.label}
@@ -204,6 +215,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
 }
 
 function DigestSummary({ brief, onRefresh }: { brief: EntityBrief; onRefresh: () => void }) {
+  const zone = useDisplayTimeZone();
   const { digest, digestPending, digestStale, digestUnavailable } = brief;
 
   let status: ReactNode = null;
@@ -258,7 +270,7 @@ function DigestSummary({ brief, onRefresh }: { brief: EntityBrief; onRefresh: ()
             ))}
           </Box>
           <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
-            Summary as of {formatDay(digest.generatedAt)}
+            Summary as of {formatDay(digest.generatedAt, zone)}
           </Typography>
         </>
       )}
@@ -268,8 +280,9 @@ function DigestSummary({ brief, onRefresh }: { brief: EntityBrief; onRefresh: ()
 }
 
 export function EntityBriefCard({ brief, ontology, onRefresh }: EntityBriefCardProps) {
+  const zone = useDisplayTimeZone();
   const { sections, window } = brief;
-  const since = window.since ? formatDay(window.since) : null;
+  const since = window.since ? formatDay(window.since, zone) : null;
   const sinceLine = since
     ? `Since ${since}${window.sinceSource === 'last_viewed' ? ' — since you last looked' : ''}`
     : 'Everything so far';

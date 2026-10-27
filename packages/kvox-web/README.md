@@ -4,7 +4,7 @@ The React side of the KVox domain: pages, components and hooks built on MUI, exp
 
 ## Purpose and scope
 
-The web slices of the domain. Every slice reads its host (the app that mounts it) through ONE port, `KvoxWebHost`, and exports its settings cards, destinations and routes as DATA that the app spreads into its own registries. The package does not own the app's router, shell or settings hub; it does own the KVox look (the `brand` entry: theme, tokens, mark, fonts), so every host paints the same. It imports no `@marinoscar/platform-*` package (rule `host-neutral`, [PACKAGES.md](../../docs/PACKAGES.md#the-host-neutral-rule)), so it runs in a host that is not the KVox web edition (KVox Desktop). The exceptions are the `brand` entry, which imports exactly `@marinoscar/platform-web/shell/headless` (`createShellTheme`), and the `shell` entry, which imports the platform's `shell/ui`, `shell/headless` and `identity/headless`.
+The web slices of the domain. Every slice reads its host (the app that mounts it) through ONE port, `KvoxWebHost`, and exports its settings cards, destinations and routes as DATA that the app spreads into its own registries. The package does not own the app's router, shell or settings hub; it does own the KVox look (the `brand` entry: theme, tokens, mark, fonts), so every host paints the same. It imports no `@marinoscar/platform-*` package but a few web entries (rule `host-neutral`, [PACKAGES.md](../../docs/PACKAGES.md#the-host-neutral-rule)), so it runs in a host that is not the KVox web edition (KVox Desktop). Every slice may import `@marinoscar/platform-web/timezone/headless`, so times render in the user's display time zone (the zone of their profile when the host mounts the platform's `UserTimeZoneSync`, else the device's); the `brand` entry imports exactly `@marinoscar/platform-web/shell/headless` (`createShellTheme`), and the `shell` entry the platform's `shell/ui`, `shell/headless` and `identity/headless`.
 
 Status: filled (Epic 7, issues 7.1 to 7.6). All the domain slices are in: `core`, `transcription`, `search`, `transcripts`, `notes`, `graph` and `ask`, with `home` (the Home page and its journey) on top. The web edition's `apps/web/src` keeps only composition (routes, registries, the shell, the host binding and the non-domain pages).
 
@@ -48,6 +48,7 @@ Required by every entry (`core/headless` and everything that builds on it):
 | `@marinoscar/kvox-contract` | `>=0.0.0-0 \|\| >=0.1.0-0` (any release; the four packages ship together, see [the contract peer range](../../docs/PACKAGES.md#the-contract-peer-range)) |
 | `react` | `^19.2.7` |
 | `react-dom` | `^19.2.7` |
+| `@marinoscar/platform-web` | `0.1.0-next.17` (exact). Every slice formats times, and groups feeds by day, in the user's display time zone through `@marinoscar/platform-web/timezone/headless` (the user's zone when the host mounts the platform's `UserTimeZoneSync`, else the device's). The `brand`, `shell` and `copilot/ui` entries import more of it: `shell/headless` (`createShellTheme`), the shell and identity entries, and `ai/ui` (`AccountSignInProviderCard`, `aiErrorText`). |
 
 Optional peers, installed for the entries that need them. A host that uses only the `headless` entries installs none of them:
 
@@ -69,7 +70,6 @@ Optional peers, installed for the entries that need them. A host that uses only 
 | `graphology-layout-forceatlas2` | `^0.10.1` | `graph/ui` (the canvas, loaded lazily) |
 | `graphology-layout-noverlap` | `^0.4.2` | `graph/ui` (the canvas's layout worker, loaded lazily) |
 | `@testing-library/react` | `^16.3.2` | `core/testing` |
-| `@marinoscar/platform-web` | `0.1.0-next.7` (exact) | `brand` (`createKvoxTheme` builds on `createShellTheme` of `@marinoscar/platform-web/shell/headless`); `copilot/ui` (`AccountSignInProviderCard` and `aiErrorText` from `@marinoscar/platform-web/ai/ui`); no other entry |
 
 The per-slice data is `packages/kvox-slice-peers.json` (a slice's `entries` list the peers only one entry may import); `node scripts/kvox-packages/check-slice-peers.mjs --table` prints it.
 
@@ -232,7 +232,7 @@ None. No slice logs or measures anything in the browser.
 
 ## Conformance suite
 
-`describeKvoxWebConformance(harness, options)` from `@marinoscar/kvox-web/core/testing` registers two suites: `kvox-web.host-neutral` (a static scan of the package sources: no `@marinoscar/platform-*` import anywhere except `@marinoscar/platform-web/shell/headless` in the `brand` slice, and no headless file importing `@mui/*`, `@emotion/*`, a router or a `ui` folder) and `kvox-web.host` (the shape of a host: every port present, links that return paths, a viewer that is null or has a permission set). `packages/kvox-web/test/core/conformance.test.ts` runs both against the package and its fake host; `npm run check:kvox-slice-peers` enforces the same import rules.
+`describeKvoxWebConformance(harness, options)` from `@marinoscar/kvox-web/core/testing` registers two suites: `kvox-web.host-neutral` (a static scan of the package sources: no `@marinoscar/platform-*` import anywhere except `@marinoscar/platform-web/timezone/headless` in any slice and the declared entries of the `brand`, `shell` and `copilot/ui` slices, and no headless file importing `@mui/*`, `@emotion/*`, a router or a `ui` folder) and `kvox-web.host` (the shape of a host: every port present, links that return paths, a viewer that is null or has a permission set). `packages/kvox-web/test/core/conformance.test.ts` runs both against the package and its fake host; `npm run check:kvox-slice-peers` enforces the same import rules.
 
 ## Upgrade notes
 

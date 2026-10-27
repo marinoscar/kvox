@@ -167,9 +167,6 @@
     "sigma": "^3.0.3"
   },
   "peerDependenciesMeta": {
-    "@marinoscar/platform-web": {
-      "optional": true
-    },
     "@mui/icons-material": {
       "optional": true
     },
