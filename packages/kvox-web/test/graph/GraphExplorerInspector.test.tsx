@@ -3,6 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { useImperativeHandle, type ReactElement } from 'react';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setPreferredTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
 
@@ -608,6 +609,25 @@ describe('the node header and the Overview tab', () => {
     expect(await within(panel).findByText('Also known as One, Two, Three +2')).toBeInTheDocument();
     expect(within(panel).getByText(/First seen .* · Last seen .* · 14 mentions/)).toBeInTheDocument();
     expect(within(panel).getByText('Person')).toBeInTheDocument();
+  });
+
+  it('shows first and last seen as instants in the display zone (Tokyo, near midnight UTC)', async () => {
+    setPreferredTimeZone('Asia/Tokyo');
+    server.use(
+      http.get('*/api/graph/entities/:id', ({ params }) =>
+        HttpResponse.json({
+          data: entityDetail(String(params.id), {
+            firstSeenAt: '2026-03-01T20:00:00.000Z',
+            lastSeenAt: '2026-09-20T22:30:00.000Z',
+          }),
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderExplorer();
+    const { panel } = await openNode(user, 'Joe Rivera');
+    // 20:00Z on 1 Mar is already 2 Mar in Tokyo; UTC would have said 1 Mar.
+    expect(await within(panel).findByText(/First seen Mar 2, 2026 · Last seen Sep 21, 2026/)).toBeInTheDocument();
   });
 
   it('reads the brief without marking the entity viewed', async () => {

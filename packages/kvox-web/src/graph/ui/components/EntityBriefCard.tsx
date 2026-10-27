@@ -77,24 +77,27 @@ export const BRIEF_SECTION_TITLES = [
 /** The optional sixth section (#664): shown between "Risks / claims" and "People changes" only when the brief carries open risks. */
 export const BRIEF_OPEN_RISKS_TITLE = 'Open risks';
 
-/** A bare calendar date (`2026-03-01`, a due date): no instant, so no zone shifts it. */
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+/** A calendar value on the wire: a bare date (`2026-03-01`) or that date at UTC midnight. */
+const UTC_MIDNIGHT = /^\d{4}-\d{2}-\d{2}(T00:00(:00(\.0+)?)?(Z|\+00:00))?$/;
 
 /**
- * A day for the brief: an instant in the reader's display zone, a bare
- * calendar date as written (read in UTC, where `new Date('2026-03-01')` puts
- * it), or `iso` itself when it does not parse.
+ * An INSTANT (`digest.generatedAt`, a last-viewed `since`) as a day in the
+ * reader's display zone, or `iso` itself when it does not parse.
  */
-function formatDay(iso: string, timeZone: string): string {
-  return formatDate(iso, {
-    dateStyle: 'medium',
-    timeZone: DATE_ONLY.test(iso) ? 'UTC' : timeZone,
-    fallback: iso,
-  });
+function formatInstantDay(iso: string, timeZone: string): string {
+  return formatDate(iso, { dateStyle: 'medium', timeZone, fallback: iso });
+}
+
+/**
+ * A CALENDAR value (a due date: the API sends `Date.toISOString()` of a
+ * `date` column, so UTC midnight) as the day it names. Read in UTC, so no
+ * display zone moves it a day either way.
+ */
+function formatCalendarDay(iso: string): string {
+  return formatDate(iso, { dateStyle: 'medium', timeZone: 'UTC', fallback: iso });
 }
 
 function EntryRow({ entry }: { entry: BriefEntry }) {
-  const zone = useDisplayTimeZone();
   const heading = entry.title ?? entry.statement;
   return (
     <Box component="li" sx={{ py: 1, listStyle: 'none' }}>
@@ -120,7 +123,7 @@ function EntryRow({ entry }: { entry: BriefEntry }) {
           {formatPrecisionDate(entry.occurredAt, entry.precision)}
         </Typography>
         {entry.superseded && <Chip size="small" label="Superseded" />}
-        {entry.dueAt && <Chip size="small" variant="outlined" label={`Due ${formatDay(entry.dueAt, zone)}`} />}
+        {entry.dueAt && <Chip size="small" variant="outlined" label={`Due ${formatCalendarDay(entry.dueAt)}`} />}
         {entry.ownerPerson && (
           <Link component={RouterLink} to={entityPath(entry.ownerPerson.id)} variant="caption">
             {entry.ownerPerson.label}
@@ -270,7 +273,7 @@ function DigestSummary({ brief, onRefresh }: { brief: EntityBrief; onRefresh: ()
             ))}
           </Box>
           <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
-            Summary as of {formatDay(digest.generatedAt, zone)}
+            Summary as of {formatInstantDay(digest.generatedAt, zone)}
           </Typography>
         </>
       )}
@@ -282,7 +285,13 @@ function DigestSummary({ brief, onRefresh }: { brief: EntityBrief; onRefresh: ()
 export function EntityBriefCard({ brief, ontology, onRefresh }: EntityBriefCardProps) {
   const zone = useDisplayTimeZone();
   const { sections, window } = brief;
-  const since = window.since ? formatDay(window.since, zone) : null;
+  // `since` is an instant (last viewed, digest coverage, default window), except
+  // a `?since=` the reader typed as a bare date, which the API echoes at UTC midnight.
+  const since = window.since
+    ? window.sinceSource === 'query' && UTC_MIDNIGHT.test(window.since)
+      ? formatCalendarDay(window.since)
+      : formatInstantDay(window.since, zone)
+    : null;
   const sinceLine = since
     ? `Since ${since}${window.sinceSource === 'last_viewed' ? ' — since you last looked' : ''}`
     : 'Everything so far';
