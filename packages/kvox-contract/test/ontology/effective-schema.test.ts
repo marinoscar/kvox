@@ -15,7 +15,7 @@ describe('computeEffectiveSchema', () => {
 
     it('contains only core types', () => {
       const keys = schema.entityTypes.map((t) => t.key).sort();
-      expect(keys).toEqual(['Claim', 'Meeting', 'Organization', 'Person', 'PersonFact', 'Topic'].sort());
+      expect(keys).toEqual(['Claim', 'Document', 'Meeting', 'Organization', 'Person', 'PersonFact', 'Topic'].sort());
     });
 
     it('has no relation referencing Project, Commitment or Decision', () => {
@@ -79,7 +79,7 @@ describe('computeEffectiveSchema', () => {
     it('includes both core and work types', () => {
       const keys = schema.entityTypes.map((t) => t.key).sort();
       expect(keys).toEqual(
-        ['Claim', 'Commitment', 'Decision', 'Meeting', 'Organization', 'Person', 'PersonFact', 'Product', 'Project', 'Risk', 'Topic'].sort(),
+        ['Claim', 'Commitment', 'Decision', 'Document', 'Meeting', 'Opportunity', 'Organization', 'Person', 'PersonFact', 'Product', 'Project', 'Risk', 'Topic'].sort(),
       );
     });
 
@@ -104,6 +104,7 @@ describe('computeEffectiveSchema', () => {
         ['Project', 'Organization'],
         ['Meeting', 'Project'],
         ['Topic', 'Project'],
+        ['Organization', 'Organization'],
       ]);
     });
 

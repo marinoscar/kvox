@@ -113,6 +113,33 @@ describe('buildExtractionContext (#363)', () => {
       expect(discussed?.from).toEqual(['Meeting']);
     });
 
+    it('offers a Meeting only when the host opts in with proposeTypes, and still honours guidance', () => {
+      const on = makeContext({ proposeTypes: ['Meeting'] });
+      expect(on.offered.entityTypes.map((t) => t.key)).toContain('Meeting');
+      expect(makeContext({ proposeTypes: [] }).offered.entityTypes.map((t) => t.key)).not.toContain('Meeting');
+      const guided = makeContext({
+        proposeTypes: ['Meeting'],
+        guidance: { pinnedEntityIds: [], entityTypes: ['Person'], relationTypes: undefined, instructions: '' },
+      });
+      expect(guided.offered.entityTypes.map((t) => t.key)).toEqual(['Person']);
+    });
+
+    it('ignores an opt-in for any other system-created type', () => {
+      const ctx = makeContext({ proposeTypes: ['Document', 'Speaker', 'Nope'] });
+      expect(ctx.offered.entityTypes.map((t) => t.key)).not.toContain('Document');
+      expect(ctx.offered.entityTypes.map((t) => t.key)).toEqual(makeContext().offered.entityTypes.map((t) => t.key));
+    });
+
+    it('offers the Opportunity types with work on, and none of them with work off', () => {
+      const keys = (ctx: ReturnType<typeof makeContext>) => ctx.offered.relationTypes.map((r) => r.type.key);
+      const on = makeContext();
+      expect(on.offered.entityTypes.map((t) => t.key)).toContain('Opportunity');
+      expect(keys(on)).toEqual(expect.arrayContaining(['WITH_CLIENT', 'PURSUED_BY', 'COMPETING_FOR', 'ORGANIZED']));
+      const off = makeContext({ effectiveSchema: schemaFor(['core']) });
+      expect(off.offered.entityTypes.map((t) => t.key)).not.toContain('Opportunity');
+      for (const k of ['WITH_CLIENT', 'PURSUED_BY', 'COMPETING_FOR', 'ORGANIZED']) expect(keys(off)).not.toContain(k);
+    });
+
     it('offers only edge relations that are extractable', () => {
       const keys = makeContext().offered.relationTypes.map((r) => r.type.key);
       expect(keys).toEqual(expect.arrayContaining(['WORKS_FOR', 'HAS_ROLE', 'REPORTS_TO', 'ATTENDED', 'DISCUSSED', 'PART_OF']));

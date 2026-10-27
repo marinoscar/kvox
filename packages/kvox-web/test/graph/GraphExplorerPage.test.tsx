@@ -783,7 +783,7 @@ describe('GraphExplorerPage — filters and time', () => {
     const canvas = await canvasReady();
     await user.click(await screen.findByRole('button', { name: 'Work domain', pressed: false }));
     expect(await screen.findByRole('button', { name: 'Work domain', pressed: true })).toBeInTheDocument();
-    expect(currentUrl().searchParams.get('types')).toBe('Project,Product,commitment,decision,risk');
+    expect(currentUrl().searchParams.get('types')).toBe('Project,Product,Opportunity,commitment,decision,risk');
     expect(currentUrl().searchParams.get('relTypes')).toBeNull();
     await waitFor(() =>
       expect(within(canvas).queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument(),

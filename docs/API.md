@@ -5747,6 +5747,17 @@ Ontology 1.3.0 (`docs/specs/ontology.md` §5.1, §5.2) adds the entity types
 response has no `Product` or `Risk`, and the relations that need them are
 pruned. Nothing about the response shape changes.
 
+Ontology 1.4.0 (`docs/specs/ontology.md` §5.1, §5.2) adds the entity types
+`Opportunity` (`work`) and `Document` (`core`, system-created, never
+extracted), and the relations `ORGANIZED`, `WITH_CLIENT`, `PURSUED_BY` and
+`COMPETING_FOR` (`work`) and `RECORDED_IN` and `PREPARED_FOR` (`core`). It also
+adds attributes to `Meeting` (`occurredOn`, `meetingKind`) and `Claim`
+(`claimKind`, `value`, `unit`), the props `ATTENDED.attendance` and
+`USES.scale`, the `Opportunity` target and four roles on `INVOLVED_IN`, and
+`Organization` to `Organization` under `PART_OF`. With the `work` domain off
+the response has no `Opportunity` and the relations that need it are pruned.
+Nothing about the response shape changes.
+
 A relation prop may carry `identity: true`, **only when set** (#440): the
 prop takes part in the relation's identity alongside its `required` props,
 a null/absent value matching anything. Today only `HAS_ROLE.businessUnit`:

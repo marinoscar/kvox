@@ -313,7 +313,7 @@ describe('assembleExtractionPrompt (#363)', () => {
       expect(example).toContain(row);
     }
     // The vocabularies come from the registry's own relation lines.
-    expect(systemPrompt).toContain('role (select, sponsor|owner|lead|contributor|stakeholder|approver|end_user|advisor)');
+    expect(systemPrompt).toContain('role (select, sponsor|owner|lead|contributor|stakeholder|approver|end_user|advisor|decision_maker|influencer|evaluator|account_lead)');
     expect(systemPrompt).toContain('stance (select, champion|supportive|neutral|skeptical|resistant)');
     expect(systemPrompt).toContain('stage (select, evaluating|piloting|rolling_out|adopted|retired)');
     // Stance is only proposed when the source states one.
