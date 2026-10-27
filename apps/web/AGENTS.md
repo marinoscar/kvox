@@ -29,7 +29,7 @@ Change all five together or none; the boundary is `sm` (600px), never `md`. Sinc
 - **`pinned` means a MODE, not a peer**: at the rail's foot and in the avatar menu, not on the bottom bar. `settings` and `console` are pinned. The package's bar would draw them plus a "More" tab, so `KvoxAppShell` gives the bar `withoutPinned(KVOX_NAVIGATION)` (non-pinned only), never `KVOX_NAVIGATION`. Shell glue is `@marinoscar/kvox-web/shell`.
 - **Four bottom-bar tabs is the ceiling** (`BOTTOM_BAR_DESTINATIONS = DESTINATIONS.filter((d) => !d.pinned)`). A fifth non-pinned destination is a redesign of the bar, not an addition.
 - `knowledge` (`/graph`, `/ask`) gates on `graph:read` **and** `feature: 'graph'` (`config/settingsFeatures.ts`, fed by `GET /api/ai-tasks/config`'s `graphEnabled` through `platform/GraphFeatureBinding.tsx`); while unknown or loading the item is hidden, never shown then removed.
-- Graph drawing goes through `GraphCanvas.tsx`, the one file that imports sigma.
+- Graph drawing goes through `GraphCanvas.tsx` (in `@marinoscar/kvox-web`), the one file that imports `@antv/g6`; it is reached only through the lazy `canvasLoaders`, and no G6 layout may set `enableWorker` (the CSP refuses `blob:` workers).
 
 ## Frontend conventions
 

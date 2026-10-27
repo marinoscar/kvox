@@ -33,7 +33,7 @@ export const COMPACT_HIDE_EDGES_ON_MOVE_ABOVE = 500;
 export const DEFAULT_HIDE_EDGES_ON_MOVE_ABOVE = 1000;
 /** Smallest hit target (CSS px) on a coarse pointer. */
 export const COARSE_HIT_TARGET_PX = 44;
-/** Sigma `labelDensity` per label-density budget. */
+/** Label density per label-density budget (a reduced density raises the level-of-detail zoom). */
 export const LABEL_DENSITY = { reduced: 0.35, default: 1 } as const;
 
 /**
@@ -48,7 +48,7 @@ export interface ExplorerBudgets {
   visibleNodeCap: number;
   /** Longest a layout settle may run, in ms. */
   layoutTimeBoxMs: number;
-  /** Cap on sigma's `devicePixelRatio`, or `null` for the native one. */
+  /** Cap on the canvas's `devicePixelRatio`, or `null` for the native one. */
   pixelRatioCap: number | null;
   /** Edge count above which edges are hidden while the camera moves. */
   hideEdgesOnMoveAbove: number;
@@ -58,7 +58,7 @@ export interface ExplorerBudgets {
   hitTargetPx: number;
   /** Visible nodes above which the list view is the default (compact windows only). */
   listViewDefaultAbove: number;
-  /** Rendered node size (px) below which sigma draws no label; absent: 12 constrained, 8 otherwise. The full view raises it (#768). */
+  /** Rendered node radius (px) below which the canvas draws no label; absent: 12 constrained, 8 otherwise. The full view raises it (#768). */
   labelSizeThreshold?: number;
 }
 

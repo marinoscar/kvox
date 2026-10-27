@@ -22,7 +22,7 @@
  * URL and nowhere else — never persisted.
  *
  * URL STATE: `layer`, `cluster`, `view=list`. The list view is also the only
- * view without WebGL, and the canvas (sigma) is lazy-loaded a second time
+ * view without a drawing canvas, and the canvas (G6) is lazy-loaded a second time
  * inside this lazy page, so the list view never downloads it.
  */
 
@@ -81,7 +81,7 @@ export const OVERVIEW_TITLE = 'Overview';
 export const BUILDING_TEXT = 'Building your overview…';
 export const EMPTY_TITLE = 'Nothing to show yet';
 export const OVERVIEW_NO_WEBGL_TEXT =
-  "Your browser can't draw the graph (WebGL is unavailable), so it is shown as a list.";
+  "Your browser can't draw the graph (canvas drawing is unavailable), so it is shown as a list.";
 
 type Layer = 'clusters' | 'nodes';
 

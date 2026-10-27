@@ -1,78 +1,95 @@
 /**
- * `GraphCanvas` — the ONE file that imports sigma (#374, epic #347; spec §22.1).
+ * `GraphCanvas` — the ONE file that imports `@antv/g6` (#775; was sigma, #374).
  *
- * A thin wrapper over `@react-sigma/core`'s `SigmaContainer`, deliberately
- * generic so the whole-graph overview (#375) can reuse it: it renders the
- * `x`, `y`, `size`, `color` and `label` attributes ALREADY on each graphology
- * node and edge (written by `explorerModel`, or by the overview's model) and
- * computes no styling of its own. What it adds:
+ * Generic on purpose, so the explorer, the whole-graph overview and the entity
+ * page's neighbourhood widget share it: it draws the graphology graph it is
+ * given (`x`, `y`, `size`, `color`, `label`, `image` written by `explorerModel`
+ * or the overview's model) and computes no styling of its own beyond the
+ * mapping in `g6/canvasData.ts`. What it adds:
  *
- *   - reducers (`explorerReducers.ts`) that hide nodes outside `visibleIds`,
- *     light the hovered node (on a touch screen, the first-tapped one, else the
- *     selection) with its neighbours and dim the rest, draw rings, and label only
- *     what is lit (#667);
- *   - three sigma programs: nodes with a pictogram draw as a ringed disc with
- *     the type's glyph (`@sigma/node-border` + `@sigma/node-image`), parallel
- *     edges as curves (`@sigma/edge-curve`);
- *   - click / double-click / stage / edge events, and dragging (a dragged node
- *     becomes `fixed`, so the layout leaves it where it was put);
- *   - after each `version` change with `layout === 'forceatlas'`, an INCREMENTAL
- *     ForceAtlas2 run (#668): nodes already laid out are fixed and only new ones
- *     move; `concentric` rings the nodes by hop; `static` never moves a node,
- *     which is what the visual baselines rely on. Pinned nodes persist per view
- *     in `sessionStorage`.
+ *   - element STATES from the explorer's reducers (`explorerReducers.ts`): the
+ *     hovered node (on a touch screen, the first-tapped one, else the
+ *     selection) lights up with its neighbours and the rest dims; rings for
+ *     seed, pin, selection and the user's own node; labels by level of detail
+ *     (`LABEL_LOD_ZOOM`);
+ *   - the camera: wheel and pinch zoom (`zoom-canvas`, range 0.1 to 6), pan
+ *     (`drag-canvas`), drag a node to pin it (`drag-element`), a fit after the
+ *     first draw and after every layout UNLESS the user has moved the camera
+ *     since (`g6/viewport.ts`), and the on-screen `ZoomControls`;
+ *   - the layouts (`layout/canvasLayouts.ts`): `forceatlas` runs an
+ *     INCREMENTAL `d3-force` (laid-out nodes fixed with `fx`/`fy`, only new ones
+ *     move), `concentric` a `radial` around the first seed, `static` none;
+ *   - plugins: `minimap` (into `minimapContainer`, never on a compact window)
+ *     and `tooltip` (fine pointers only).
  *
- * ⚠ THE LAYOUT RUNS IN A SAME-ORIGIN MODULE WORKER (`layout/layout.worker.ts`),
- * NOT IN `graphology-layout-forceatlas2/worker`: that supervisor spawns its
- * worker from a `blob:` URL, and production's CSP is `worker-src 'self'`
- * (`infra/nginx/csp.conf`). Without `Worker` the same engine runs on the main
- * thread in 8 ms slices (`layout/layoutClient.ts`).
+ * ⚠ CSP. G6 draws with its Canvas renderer (no WebGL, no `eval`). NEVER set
+ * `enableWorker` on a layout: G6 would start a `blob:` worker, which the
+ * production and Desktop CSPs refuse. Icons are `data:` URLs; no remote asset.
  *
- * jsdom has no WebGL: tests `vi.mock` this module rather than import it.
+ * ⚠ BUNDLE. G6 is about 410 KB gzipped: this module is reached only through
+ * the dynamic `import()` in `canvasLoaders.ts`, so `graph/headless` and
+ * `graph/ui` load without it (`@antv/g6` is an optional peer).
+ *
+ * ⚠ REACT 19 STRICT MODE mounts, unmounts and mounts again: the G6 instance is
+ * created in a microtask and skipped when the cleanup already ran; the cleanup
+ * disconnects the `ResizeObserver` and destroys the instance.
+ *
+ * jsdom has no canvas: the tests replace `@antv/g6` with a fake `Graph`.
  *
  * THE TOUCH MODEL (GIC-08, #669; the pure parts are `shell/canvasGestures.ts`):
- *   - `touch-action: none` on THIS element only, so pinch and pan belong to the
- *     canvas while the rest of the page still scrolls;
- *   - the first tap on a node previews it (`previewId`: its neighbours light up),
- *     the second tap on the same node activates it. `onNodeClick` fires on every
- *     tap or click and the PAGE decides which it is, from `inputModality`;
- *   - a 500ms long-press on a node opens the context menu
- *     (`onNodeContextMenu`, with a haptic tick) and arms dragging, so a node can
- *     only be pinned by long-press then drag, never by accident while panning;
- *   - on a coarse pointer a tap within `budgets.hitTargetPx / 2` of a node hits it
- *     (an enlarged pick radius, 44px target);
- *   - `budgets` also set the `devicePixelRatio` cap, label density,
- *     `hideEdgesOnMove` and the layout time box, without rebuilding sigma, so a
- *     rotation keeps the camera;
+ *   - `touch-action: none` on THIS element only;
+ *   - the first tap on a node previews it (`previewId`), the second activates
+ *     it; `onNodeClick` fires on every tap and the PAGE decides which it is;
+ *   - a 500ms long-press on a node opens the context menu and arms dragging, so
+ *     a node is only pinned by long-press then drag, never while panning;
+ *   - on a coarse pointer a tap within `budgets.hitTargetPx / 2` of a node hits it;
  *   - `revealInsets` is the part of the canvas the inspector covers: selecting a
  *     node pans it into the rest.
  */
 
-import '@react-sigma/core/lib/style.css';
-
-import {
-  SigmaContainer,
-  useCamera,
-  useRegisterEvents,
-  useSetSettings,
-  useSigma,
-} from '@react-sigma/core';
-import { createDrawCurvedEdgeLabel, createEdgeCurveProgram } from '@sigma/edge-curve';
-import { createNodeBorderProgram } from '@sigma/node-border';
-import { createNodeImageProgram } from '@sigma/node-image';
+import { Graph } from '@antv/g6';
 import Box from '@mui/material/Box';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { alpha, useTheme } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import type { MultiDirectedGraph, UndirectedGraph } from 'graphology';
-import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
-import { createNodeCompoundProgram } from 'sigma/rendering';
-import type { Settings } from 'sigma/settings';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 
-import { LassoBehaviour } from './connect/LassoBehaviour.js';
-import { DEFAULT_LAYOUT_TIME_BOX_MS, LABEL_DENSITY, type ExplorerBudgets } from './shell/explorerBudgets.js';
-import { useCanvasLayout, type CanvasLayout } from './layout/useCanvasLayout.js';
+import { LassoBehaviour, type LassoTarget } from './connect/LassoBehaviour.js';
+import { LABEL_LOD_MIN_NODES, LABEL_LOD_ZOOM, LABEL_LOD_ZOOM_REDUCED } from './explorerEncoding.js';
+import { humanizeKey } from '../../../headless/utils/graphDisplay.js';
 import {
-  capPixelRatio,
+  buildCanvasData,
+  clusterSize,
+  computeElementStates,
+  diameterOf,
+  edgeStateStyles,
+  labelScale,
+  nodeStateStyles,
+  type CanvasTheme,
+} from './g6/canvasData.js';
+import {
+  CAMERA_ANIMATION_MS,
+  ZOOM_RANGE,
+  ZOOM_STEP,
+  cappedPixelRatio,
+  createCameraTracker,
+  fitTransform,
+  unionBounds,
+  zoomBucket,
+  type Bounds,
+} from './g6/viewport.js';
+import {
+  forceLayoutOptions,
+  movableNodes,
+  movesEverything,
+  radialLayoutOptions,
+  shouldRunLayout,
+  type CanvasLayout,
+} from './layout/canvasLayouts.js';
+import { usePins } from './layout/usePins.js';
+import { isLive, markDrawn, syncSize, zoomOf } from './g6/lifecycle.js';
+import { DEFAULT_LAYOUT_TIME_BOX_MS, type ExplorerBudgets } from './shell/explorerBudgets.js';
+import {
   createLongPress,
   pickNearestNode,
   revealDelta,
@@ -80,12 +97,8 @@ import {
   type LongPress,
 } from './shell/canvasGestures.js';
 import { useReducedMotion } from './shell/useReducedMotion.js';
-import {
-  CURVED_ARROW_PROGRAM,
-  PICTOGRAM_PROGRAM,
-  buildEdgeReducer,
-  buildNodeReducer,
-} from './explorerReducers.js';
+import { MINIMAP_HEIGHT, MINIMAP_WIDTH } from './ExplorerMinimap.js';
+import { ZoomControls } from './ZoomControls.js';
 
 /**
  * Any graph the canvas can draw (the explorer's directed multigraph, the overview's undirected one).
@@ -94,40 +107,7 @@ import {
  */
 export type GraphCanvasGraph = MultiDirectedGraph | UndirectedGraph;
 
-export { FA2_SETTLE_ITERATIONS } from './layout/layoutBudgets.js';
-
-/**
- * Sigma's default hover/selection label is a WHITE box with the label colour
- * on top — unreadable in dark mode, where the label colour is near-white. This
- * draws the same box in the theme's own paper and text colours.
- */
-function themedHover(background: string, text: string, border: string): Settings['defaultDrawNodeHover'] {
-  return (context, data, settings) => {
-    const size = settings.labelSize;
-    context.font = `${settings.labelWeight} ${size}px ${settings.labelFont}`;
-    const label = typeof data.label === 'string' ? data.label : '';
-    const pad = 4;
-    const textWidth = label ? context.measureText(label).width : 0;
-    const height = Math.max(size + pad * 2, data.size * 2 + pad);
-    const left = data.x - data.size - pad;
-    const width = data.size * 2 + pad * 2 + (label ? textWidth + pad + 2 : 0);
-    context.beginPath();
-    context.fillStyle = background;
-    context.strokeStyle = border;
-    context.lineWidth = 1;
-    context.roundRect(left, data.y - height / 2, width, height, 4);
-    context.fill();
-    context.stroke();
-    context.beginPath();
-    context.fillStyle = data.color;
-    context.arc(data.x, data.y, data.size, 0, Math.PI * 2);
-    context.fill();
-    if (label) {
-      context.fillStyle = text;
-      context.fillText(label, data.x + data.size + pad, data.y + size / 3);
-    }
-  };
-}
+export { FORCE_SETTLE_ITERATIONS } from './layout/canvasLayouts.js';
 
 /**
  * Imperative controls the canvas hands to its toolbar and keyboard handler.
@@ -139,7 +119,7 @@ export interface GraphCanvasControls {
   zoomIn: () => void;
   /** Zoom the camera out one step. */
   zoomOut: () => void;
-  /** Animated camera reset — "Fit". */
+  /** Animated fit of every visible node — "Fit" (and the `0` key). */
   fit: () => void;
   /** Moves every unpinned node again ("Re-layout all"). */
   relayoutAll: () => void;
@@ -149,7 +129,7 @@ export interface GraphCanvasControls {
   unpinAll: () => void;
   /** Whether a node is pinned. */
   isPinned: (id: string) => boolean;
-  /** The camera as sigma holds it (framed-graph coordinates and zoom ratio). */
+  /** The camera: the graph point at the centre of the canvas and the zoom ratio (`1 / zoom`). */
   getCamera?: () => CameraSnapshot;
   /** Puts the camera back exactly, without animation. */
   setCamera?: (camera: CameraSnapshot) => void;
@@ -157,11 +137,11 @@ export interface GraphCanvasControls {
   fitTo?: (ids: readonly string[]) => void;
   /** Flies the camera to a node and zooms in to it (the palette's "On canvas" result); a no-op for a node that is not drawn. */
   focusNode?: (id: string) => void;
-  /** The rectangle the canvas shows, in graph coordinates (the minimap's viewport), or `null` before the first frame. */
+  /** The rectangle the canvas shows, in graph coordinates, or `null` before the first frame. */
   getViewport?: () => CanvasViewport | null;
-  /** Centres the camera on a point in graph coordinates, without changing the zoom (dragging the minimap). */
+  /** Centres the camera on a point in graph coordinates, without changing the zoom. */
   panToGraph?: (x: number, y: number) => void;
-  /** Calls `listener` after every frame the canvas draws (camera moves and layout steps); returns the unsubscribe function. */
+  /** Calls `listener` after every frame the canvas draws (camera moves and layouts); returns the unsubscribe function. */
   onFrame?: (listener: () => void) => () => void;
 }
 
@@ -190,16 +170,16 @@ export interface CanvasViewport {
 }
 
 /**
- * The camera's state: the centre in framed-graph coordinates and the zoom ratio.
+ * The camera's state: the centre in graph coordinates and the zoom ratio.
  *
  * @stability experimental
  */
 export interface CameraSnapshot {
-  /** The camera centre's x, in framed-graph coordinates. */
+  /** The graph x under the centre of the canvas. */
   x: number;
-  /** The camera centre's y, in framed-graph coordinates. */
+  /** The graph y under the centre of the canvas. */
   y: number;
-  /** The zoom ratio: 1 frames the whole graph, smaller zooms in. */
+  /** The zoom ratio, `1 / zoom`: smaller is closer. */
   ratio: number;
 }
 
@@ -220,7 +200,7 @@ export interface NodeContextMenuEvent {
 }
 
 /**
- * Props of `GraphCanvas`, the sigma drawing surface for an explorer or overview graph.
+ * Props of `GraphCanvas`, the G6 drawing surface for an explorer or overview graph.
  *
  * @stability experimental
  */
@@ -233,7 +213,7 @@ export interface GraphCanvasProps {
   visibleIds: ReadonlySet<string>;
   /** Id of the selected node, which is highlighted, or `null` for none. */
   selectedId: string | null;
-  /** `forceatlas` lays out only the new nodes with ForceAtlas2; `concentric` rings by hop from `seedIds`; `static` draws the stored `x`/`y` as they are (visual baselines). */
+  /** `forceatlas` lays out only the new nodes with a force layout; `concentric` rings by hop from `seedIds`; `static` draws the stored `x`/`y` as they are. */
   layout: CanvasLayout;
   /** The seeds, the centre of the concentric layout. */
   seedIds?: readonly string[];
@@ -261,7 +241,7 @@ export interface GraphCanvasProps {
   previewId?: string | null;
   /** Nodes marked in "Select" mode; drawn highlighted whatever else is dimmed. */
   markedIds?: ReadonlySet<string>;
-  /** Nodes the TimeBar dims (no evidence in the brushed window, or not active in the bar under the pointer). A selected, focused or marked node is never dimmed. */
+  /** Nodes the TimeBar dims. A selected, focused or marked node is never dimmed. */
   dimmedIds?: ReadonlySet<string> | null;
   /** Path mode (GIC-13): the nodes of the shown path. Non-empty: they are lit and every other node is dimmed. */
   pathNodeIds?: ReadonlySet<string>;
@@ -269,7 +249,7 @@ export interface GraphCanvasProps {
   pathEdgeIds?: ReadonlySet<string>;
   /** `touch` enables long-press and the enlarged pick radius and disables hover and double-click expand. Default `pointer`. */
   inputModality?: 'touch' | 'pointer';
-  /** The performance budgets of the window (GIC-08). Omitted: sigma's defaults, as the overview uses it. */
+  /** The performance budgets of the window (GIC-08). Omitted: the roomy defaults, as the overview uses it. */
   budgets?: ExplorerBudgets;
   /** The part of the canvas the inspector covers, in px; a selection is panned out from under it. */
   revealInsets?: Insets;
@@ -279,118 +259,772 @@ export interface GraphCanvasProps {
   selectTool?: boolean;
   /** A lasso was drawn (GIC-14): the ids of the visible nodes inside it. Absent: no lasso. */
   onLasso?: (ids: string[]) => void;
+  /** The element G6's minimap draws into (`ExplorerMinimap`); absent or on a compact window: no minimap. */
+  minimapContainer?: HTMLElement | null;
+  /** `false` hides the on-screen zoom cluster. Default: shown when `interactive`. */
+  showZoomControls?: boolean;
 }
 
-/** The curved-edge shape: a bend of 0.25 by default, an arrow head at the target. */
-const CURVE_OPTIONS = {
-  curvatureAttribute: 'curvature',
-  defaultCurvature: 0.25,
-  arrowHead: {
-    extremity: 'target' as const,
-    lengthToThicknessRatio: 2.5,
-    widenessToThicknessRatio: 2,
-  },
-};
+/** A G6 pointer event, as far as this file reads it. */
+interface CanvasPointerEvent {
+  target?: { id?: string } | null;
+  targetType?: string;
+  shiftKey?: boolean;
+  clientX?: number;
+  clientY?: number;
+  client?: { x: number; y: number };
+  nativeEvent?: { shiftKey?: boolean; clientX?: number; clientY?: number; preventDefault?: () => void };
+  preventDefault?: () => void;
+}
 
-/**
- * The node and edge programs, built ONCE PER SIGMA INSTANCE (`@sigma/node-image`
- * shares one texture atlas between its programs, so it must not be reused
- * across instances).
- *
- * A `pictogram` node is two programs drawn together: a ringed disc
- * (`@sigma/node-border`: an optional ring, an optional transparent gap, then the
- * fill) and the type's glyph in pictogram mode, a mask tinted by `iconColor`.
- * The ring and its gap are sized as a fraction of the node's radius.
- */
-function buildPrograms(accent: string) {
-  const disc = createNodeBorderProgram({
-    borders: [
-      { size: { attribute: 'ringSize', defaultValue: 0 }, color: { attribute: 'ringColor', defaultValue: accent } },
-      { size: { attribute: 'gapSize', defaultValue: 0 }, color: { transparent: true } },
-      { size: { fill: true }, color: { attribute: 'color' } },
-    ],
-  });
-  const glyph = createNodeImageProgram({
-    drawingMode: 'color',
-    colorAttribute: 'iconColor',
-    imageAttribute: 'image',
-    keepWithinCircle: true,
-    padding: 0.2,
-    size: { mode: 'force', value: 64 },
-    objectFit: 'contain',
-    correctCentering: true,
-  });
-  return {
-    nodeProgramClasses: { [PICTOGRAM_PROGRAM]: createNodeCompoundProgram([disc, glyph]) },
-    edgeProgramClasses: {
-      [CURVED_ARROW_PROGRAM]: createEdgeCurveProgram({
-        ...CURVE_OPTIONS,
-        drawLabel: createDrawCurvedEdgeLabel({ ...CURVE_OPTIONS, arrowHead: null }),
-      }),
-    },
-  };
+const clientOf = (event: CanvasPointerEvent): { x: number; y: number } => ({
+  x: event.client?.x ?? event.clientX ?? event.nativeEvent?.clientX ?? 0,
+  y: event.client?.y ?? event.clientY ?? event.nativeEvent?.clientY ?? 0,
+});
+
+/** Escapes text for the tooltip, which G6 sets as HTML. Labels are user data. */
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
 export function GraphCanvas(props: GraphCanvasProps) {
   const { graph, height, interactive = true, ariaLabel } = props;
   const theme = useTheme();
-  // The explorer's own window class (the `sm` boundary), read here, never the shell's gates.
-  // Without budgets (the overview) the window class thins the labels; WITH budgets they decide, through
-  // `setSettings` below, so a rotation across `sm` never rebuilds sigma and loses the camera.
   const windowCompact = useMediaQuery(theme.breakpoints.down('sm'));
-  const compact = props.budgets ? false : windowCompact;
-  const accent = theme.palette.primary.main;
+  const finePointer = useMediaQuery('(pointer: fine)');
+  const coarsePointer = useMediaQuery('(pointer: coarse)');
+  const reducedMotion = useReducedMotion();
+  const touch = (props.inputModality ?? 'pointer') === 'touch';
 
-  // STABLE settings: `SigmaContainer` rebuilds sigma whenever these change, so
-  // everything that varies per render (reducers, selection) goes through
-  // `useSetSettings` inside the container instead.
-  const settings = useMemo(
+  const canvasTheme = useMemo<CanvasTheme>(
     () => ({
-      ...buildPrograms(accent),
-      // Compact: fewer labels (the focus and the seeds are forced back on).
-      labelRenderedSizeThreshold: compact ? 12 : 8,
-      labelDensity: compact ? 0.6 : 1,
-      labelColor: { color: theme.palette.text.primary },
-      labelFont: theme.typography.fontFamily as string,
-      labelSize: 12,
-      stagePadding: 40,
-      defaultDrawNodeHover: themedHover(
-        theme.palette.background.paper,
-        theme.palette.text.primary,
-        theme.palette.divider,
-      ),
-      defaultEdgeType: 'arrow',
-      // Edge labels are drawn only for the hovered edge and the focus's own edges
-      // (the reducer blanks every other label).
-      renderEdgeLabels: true,
-      edgeLabelColor: { color: theme.palette.text.secondary },
-      edgeLabelSize: 11,
-      enableEdgeEvents: interactive,
-      enableCameraZooming: interactive,
-      enableCameraPanning: interactive,
-      zIndex: true,
-      allowInvalidContainer: true,
+      mode: theme.palette.mode === 'dark' ? 'dark' : 'light',
+      paper: theme.palette.background.paper,
+      text: theme.palette.text.primary,
+      textSecondary: theme.palette.text.secondary,
+      accent: theme.palette.primary.main,
+      self: theme.palette.secondary.main,
+      marked: theme.palette.warning.main,
+      fontFamily: String(theme.typography.fontFamily ?? 'sans-serif'),
     }),
-    [
-      accent,
-      compact,
-      theme.palette.text.primary,
-      theme.palette.text.secondary,
-      theme.palette.background.paper,
-      theme.palette.divider,
-      theme.typography.fontFamily,
-      interactive,
-    ],
+    [theme],
   );
 
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  hostRef.current = host;
+  const graphRef = useRef<Graph | null>(null);
+  const [ready, setReady] = useState(0);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+  const [zoomKey, setZoomKey] = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [relayoutToken, setRelayoutToken] = useState(0);
+
+  const pinControls = usePins(graph, props.pinsKey);
+  const tracker = useRef(createCameraTracker()).current;
+  const frameListeners = useRef(new Set<() => void>());
+  const longPressRef = useRef<LongPress | null>(null);
+
+  // Everything the G6 event handlers read, kept current without re-registering them.
+  const latest = useRef({ props, touch, reducedMotion, canvasTheme, pinControls, hoverId, hoveredEdgeId, relayoutToken });
+  latest.current = { props, touch, reducedMotion, canvasTheme, pinControls, hoverId, hoveredEdgeId, relayoutToken };
+
+  const { onPinnedCountChange } = props;
+  useEffect(() => {
+    onPinnedCountChange?.(pinControls.pinnedCount);
+  }, [pinControls.pinnedCount, onPinnedCountChange]);
+
+  const animation = useCallback(
+    () => (latest.current.reducedMotion ? false : { duration: CAMERA_ANIMATION_MS, easing: 'ease-in-out' }),
+    [],
+  );
+
+  // --- Where nodes are drawn, in viewport px ----------------------------------
+  const drawnNodes = useCallback((): LassoTarget[] => {
+    const g6 = graphRef.current;
+    if (!isLive(g6)) return [];
+    const { graph: model, visibleIds } = latest.current.props;
+    const zoom = zoomOf(g6);
+    const out: LassoTarget[] = [];
+    for (const id of visibleIds) {
+      if (!model.hasNode(id) || !g6.hasNode(id)) continue;
+      const attrs = model.getNodeAttributes(id) as Record<string, unknown>;
+      if (attrs.isStub === true) continue;
+      try {
+        const [x, y] = g6.getViewportByCanvas(g6.getElementPosition(id));
+        out.push({ id, x: x!, y: y!, radius: (diameterOf(attrs) / 2) * zoom });
+      } catch {
+        // Not drawn yet.
+      }
+    }
+    return out;
+  }, []);
+
+  // --- Framing ----------------------------------------------------------------
+  const fitIds = useCallback(
+    async (ids: readonly string[], animate: boolean) => {
+      const g6 = graphRef.current;
+      if (!isLive(g6)) return;
+      const drawn = ids.filter((id) => g6.hasNode(id));
+      const bounds = unionBounds(
+        drawn.map((id): Bounds | null => {
+          try {
+            return g6.getElementRenderBounds(id) as unknown as Bounds;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (!bounds) return;
+      const [width, height] = g6.getSize();
+      if (!width || !height) return;
+      const { zoom } = fitTransform(bounds, [width, height]);
+      const effect = animate ? animation() : false;
+      await tracker.programmatic(async () => {
+        await g6.focusElement(drawn, effect);
+        if (!isLive(g6)) return;
+        await g6.zoomTo(zoom, effect);
+      });
+    },
+    [animation, tracker],
+  );
+
+  const fitVisible = useCallback(
+    (animate: boolean) => {
+      const g6 = graphRef.current;
+      if (!isLive(g6)) return Promise.resolve();
+      return fitIds(
+        g6.getNodeData().map((node) => String(node.id)),
+        animate,
+      );
+    },
+    [fitIds],
+  );
+
+  // --- Element states ---------------------------------------------------------
+  const syncing = useRef(false);
+  const applyStates = useCallback(() => {
+    const g6 = graphRef.current;
+    if (!isLive(g6) || syncing.current) return;
+    const { props: p, touch: isTouch, hoverId: hover, hoveredEdgeId: hoverEdge } = latest.current;
+    const focusId = (isTouch ? null : hover) ?? p.previewId ?? null;
+    const constrained = p.budgets?.constrained ?? windowCompactRef.current;
+    const reduced = p.budgets ? p.budgets.labelDensity === 'reduced' : constrained;
+    const states = computeElementStates({
+      graph: p.graph,
+      visibleIds: p.visibleIds,
+      selectedId: p.selectedId,
+      focusId,
+      hoveredEdgeId: hoverEdge,
+      markedIds: p.markedIds,
+      dimmedIds: p.dimmedIds,
+      pathNodeIds: p.pathNodeIds,
+      pathEdgeIds: p.pathEdgeIds,
+      compact: constrained,
+      zoom: zoomOf(g6),
+      lodZoom: reduced ? LABEL_LOD_ZOOM_REDUCED : LABEL_LOD_ZOOM,
+      lodMinNodes: LABEL_LOD_MIN_NODES,
+    });
+    const merged: Record<string, string[]> = {};
+    for (const [id, list] of Object.entries(states.nodes)) if (g6.hasNode(id)) merged[id] = list;
+    for (const [id, list] of Object.entries(states.edges)) if (g6.hasEdge(id)) merged[id] = list;
+    void g6.setElementState(merged, false);
+  }, []);
+  const windowCompactRef = useRef(windowCompact);
+  windowCompactRef.current = windowCompact;
+
+  // --- Data and layout --------------------------------------------------------
+  const laidOut = useRef<{ graph: GraphCanvasGraph; ids: Set<string> } | null>(null);
+  const lastLayout = useRef<CanvasLayout | null>(null);
+  const lastToken = useRef(0);
+  const dirty = useRef(false);
+  const running = useRef(false);
+  /** The label scale the drawn data carries, so a zoom step restyles only when it changes. */
+  const appliedScale = useRef('');
+
+  const runSync = useCallback(async () => {
+    const g6 = graphRef.current;
+    if (!g6 || g6.destroyed) return;
+    const { props: p, canvasTheme: tokens, pinControls: pins, relayoutToken: token } = latest.current;
+    const model = p.graph;
+    if (!laidOut.current || laidOut.current.graph !== model) {
+      laidOut.current = { graph: model, ids: new Set() };
+      lastLayout.current = null;
+    }
+    const known = laidOut.current.ids;
+    pins.applyPins();
+
+    const relayout = lastToken.current !== token;
+    lastToken.current = token;
+    const previous = lastLayout.current;
+    lastLayout.current = p.layout;
+    const all = movesEverything({ layout: p.layout, previous, relayout });
+    const movable = p.layout === 'static' ? new Set<string>() : movableNodes(model, known, { all });
+    model.forEachNode((id) => known.add(id));
+
+    const scale = labelScale(zoomOf(g6));
+    appliedScale.current = JSON.stringify(scale);
+    const data = buildCanvasData(model, p.visibleIds, tokens, scale);
+    const nodes = data.nodes ?? [];
+    const visibleMovable = nodes.filter((node) => movable.has(String(node.id))).length;
+    const run =
+      shouldRunLayout({ layout: p.layout, previous, relayout, movable: visibleMovable }) && nodes.length >= 2;
+    if (run && p.layout === 'forceatlas') {
+      for (const node of nodes) {
+        if (movable.has(String(node.id))) continue;
+        const style = node.style as { x: number; y: number };
+        Object.assign(node, { fx: style.x, fy: style.y });
+      }
+    }
+
+    syncing.current = true;
+    try {
+      g6.setData(data);
+      if (run) {
+        const budget = p.budgets?.layoutTimeBoxMs ?? DEFAULT_LAYOUT_TIME_BOX_MS;
+        g6.setLayout(
+          (p.layout === 'forceatlas'
+            ? forceLayoutOptions(budget)
+            : radialLayoutOptions(model, p.seedIds, budget)) as Parameters<Graph['setLayout']>[0],
+        );
+        await g6.render();
+        if (g6.destroyed) return;
+        // The layout's positions become the model's, so pins, the lasso and the next merge read them.
+        const pinned = pins.pins.current;
+        const restore: Array<{ id: string; style: { x: number; y: number } }> = [];
+        for (const node of nodes) {
+          const id = String(node.id);
+          const pin = pinned.get(id);
+          if (pin) {
+            restore.push({ id, style: { x: pin.x, y: pin.y } });
+            continue;
+          }
+          if (!movable.has(id) || !model.hasNode(id)) continue;
+          const [x, y] = g6.getElementPosition(id);
+          model.mergeNodeAttributes(id, { x, y });
+        }
+        if (restore.length > 0 && p.layout !== 'forceatlas') {
+          g6.updateNodeData(restore);
+          await g6.draw();
+        }
+      } else {
+        await g6.draw();
+      }
+    } finally {
+      syncing.current = false;
+    }
+    if (g6.destroyed) return;
+    markDrawn(g6);
+    // The pane may have been laid out (or resized) between creating the instance and its first draw.
+    const pane = hostRef.current;
+    if (pane) syncSize(g6, pane.clientWidth, pane.clientHeight);
+    applyStates();
+    if (!tracker.moved()) await fitVisible(true);
+  }, [applyStates, fitVisible, tracker]);
+
+  /** Restyles the drawn labels for the current zoom when it crossed a step (screen-constant text). */
+  const applyLabelScale = useCallback(() => {
+    const g6 = graphRef.current;
+    if (!isLive(g6) || syncing.current || running.current) return;
+    const scale = labelScale(zoomOf(g6));
+    const key = JSON.stringify(scale);
+    if (key === appliedScale.current) return;
+    appliedScale.current = key;
+    const nodes = g6.getNodeData().map((node) => {
+      const members = (node.data as { memberCount?: unknown } | undefined)?.memberCount;
+      // An overview cluster keeps its on-screen size too.
+      const style = typeof members === 'number' ? { ...scale.node, size: clusterSize(members, scale) } : scale.node;
+      return { id: node.id, style };
+    });
+    const edges = g6.getEdgeData().map((edge) => ({ id: String(edge.id), style: scale.edge }));
+    if (nodes.length > 0) g6.updateNodeData(nodes);
+    if (edges.length > 0) g6.updateEdgeData(edges);
+    void g6.draw();
+  }, []);
+
+  const requestSync = useCallback(() => {
+    if (running.current) {
+      dirty.current = true;
+      return;
+    }
+    running.current = true;
+    void (async () => {
+      try {
+        do {
+          dirty.current = false;
+          await runSync();
+        } while (dirty.current && graphRef.current && !graphRef.current.destroyed);
+      } catch {
+        // A run interrupted by an unmount; the next mount starts over.
+      } finally {
+        running.current = false;
+      }
+      // The run's own fit moved the camera while it held the canvas: catch the labels up.
+      applyLabelScale();
+    })();
+  }, [runSync, applyLabelScale]);
+
+  // --- Create and destroy the instance ----------------------------------------
+  const pixelRatio = cappedPixelRatio(props.budgets?.pixelRatioCap ?? null);
+  useEffect(() => {
+    if (!host) return undefined;
+    let disposed = false;
+    let instance: Graph | null = null;
+    let observer: ResizeObserver | undefined;
+    queueMicrotask(() => {
+      if (disposed) return;
+      const tokens = latest.current.canvasTheme;
+      const behaviors = interactive
+        ? [
+            { type: 'zoom-canvas', key: 'zoom-canvas', sensitivity: 1 },
+            {
+              type: 'drag-canvas',
+              key: 'drag-canvas',
+              enable: (event: CanvasPointerEvent) => {
+                if (event.targetType === 'canvas') return true;
+                // On touch a plain drag that starts on a node pans; only a long-press arms the node.
+                return latest.current.touch && event.targetType === 'node' && !longPressRef.current?.fired();
+              },
+            },
+            {
+              type: 'drag-element',
+              key: 'drag-element',
+              // A state no element ever has: only the node under the pointer moves, never "the selection".
+              state: 'drag-group',
+              animation: false,
+              enable: (event: CanvasPointerEvent) =>
+                event.targetType === 'node' && (!latest.current.touch || longPressRef.current?.fired() === true),
+              onFinish: (ids: Array<string | number>) => {
+                const g6 = graphRef.current;
+                const { props: p, pinControls: pins } = latest.current;
+                if (!isLive(g6)) return;
+                for (const raw of ids) {
+                  const id = String(raw);
+                  if (!p.graph.hasNode(id)) continue;
+                  const [x, y] = g6.getElementPosition(id);
+                  pins.pin(id, { x: x!, y: y! });
+                }
+              },
+            },
+            {
+              type: 'optimize-viewport-transform',
+              key: 'optimize-viewport-transform',
+              enable: () => {
+                const limit = latest.current.props.budgets?.hideEdgesOnMoveAbove;
+                return typeof limit === 'number' && latest.current.props.graph.size > limit;
+              },
+            },
+          ]
+        : [];
+      instance = new Graph({
+        container: host,
+        width: host.clientWidth || 300,
+        height: host.clientHeight || 300,
+        autoResize: false,
+        zoomRange: [ZOOM_RANGE[0], ZOOM_RANGE[1]],
+        animation: latest.current.reducedMotion ? false : { duration: CAMERA_ANIMATION_MS },
+        ...(pixelRatio ? { devicePixelRatio: pixelRatio } : {}),
+        node: { state: nodeStateStyles(tokens) },
+        edge: { state: edgeStateStyles(tokens) },
+        behaviors: behaviors as never,
+        plugins: [],
+      });
+      const g6 = instance;
+      const frame = () => {
+        for (const listener of frameListeners.current) listener();
+      };
+      g6.on('aftertransform', () => {
+        // An animated transform can finish after the instance was destroyed (an unmount, StrictMode).
+        if (!isLive(g6)) return;
+        tracker.onTransform();
+        setZoomKey(zoomBucket(zoomOf(g6)));
+        frame();
+      });
+      const liveFrame = () => {
+        if (isLive(g6)) frame();
+      };
+      g6.on('afterdraw', liveFrame);
+      g6.on('afterlayout', liveFrame);
+      g6.on('afteranimate', liveFrame);
+
+      if (interactive) {
+        const on = (name: string, listener: (event: CanvasPointerEvent) => void) => g6.on(name, listener as never);
+        const handlers = () => latest.current.props;
+        const isStub = (id: string) => handlers().graph.hasNode(id) && handlers().graph.getNodeAttribute(id, 'isStub') === true;
+        on('node:click', (event: CanvasPointerEvent) => {
+          const id = event.target?.id;
+          if (!id || longPressRef.current?.fired()) return;
+          // A "+N more" stub is activated, not selected: activating it expands its type.
+          if (isStub(id)) {
+            handlers().onNodeDoubleClick(id);
+            return;
+          }
+          handlers().onNodeClick(id, { shiftKey: Boolean(event.shiftKey ?? event.nativeEvent?.shiftKey) });
+        });
+        on('node:dblclick', (event: CanvasPointerEvent) => {
+          const id = event.target?.id;
+          if (!id || isStub(id)) return;
+          // On touch a quick second tap is the "second tap" that opens the inspector, never an expand.
+          if (latest.current.touch) return;
+          handlers().onNodeDoubleClick(id);
+        });
+        on('node:pointerenter', (event: CanvasPointerEvent) => {
+          if (!latest.current.touch && event.target?.id) setHoverId(event.target.id);
+        });
+        on('node:pointerleave', () => setHoverId(null));
+        on('edge:pointerenter', (event: CanvasPointerEvent) => {
+          if (!latest.current.touch && event.target?.id) setHoveredEdgeId(event.target.id);
+        });
+        on('edge:pointerleave', () => setHoveredEdgeId(null));
+        on('edge:click', (event: CanvasPointerEvent) => {
+          if (event.target?.id) handlers().onEdgeClick?.(event.target.id);
+        });
+        on('canvas:click', (event: CanvasPointerEvent) => {
+          if (longPressRef.current?.fired()) return;
+          if (latest.current.touch) {
+            const rect = host.getBoundingClientRect();
+            const point = clientOf(event);
+            const radius = (handlers().budgets?.hitTargetPx || 44) / 2;
+            const drawn = new Map(drawnNodes().map((node) => [node.id, node]));
+            const hit = pickNearestNode(
+              drawn.keys(),
+              (id) => {
+                const node = drawn.get(id);
+                return node ? { x: node.x, y: node.y, size: node.radius } : null;
+              },
+              { x: point.x - rect.left, y: point.y - rect.top },
+              radius,
+            );
+            if (hit && isStub(hit)) handlers().onNodeDoubleClick(hit);
+            else if (hit) handlers().onNodeClick(hit);
+            else handlers().onStageClick();
+            return;
+          }
+          handlers().onStageClick();
+        });
+        on('node:contextmenu', (event: CanvasPointerEvent) => {
+          const id = event.target?.id;
+          if (!id) return;
+          event.preventDefault?.();
+          event.nativeEvent?.preventDefault?.();
+          const point = clientOf(event);
+          handlers().onNodeContextMenu?.({ id, clientX: point.x, clientY: point.y, source: 'right-click' });
+        });
+      }
+
+      observer = new ResizeObserver(() => {
+        // Before the first draw there is no canvas to resize: `runSync` syncs the size after it.
+        if (!syncSize(instance, host.clientWidth, host.clientHeight)) return;
+        if (!tracker.moved()) void fitVisible(false);
+      });
+      observer.observe(host);
+      graphRef.current = g6;
+      laidOut.current = null;
+      setReady((n) => n + 1);
+    });
+    return () => {
+      disposed = true;
+      observer?.disconnect();
+      if (instance) {
+        if (graphRef.current === instance) graphRef.current = null;
+        instance.destroy();
+      }
+      laidOut.current = null;
+    };
+    // The instance is rebuilt only for a new host, a change of interactivity or of the pixel-ratio budget.
+  }, [host, interactive, pixelRatio, tracker, drawnNodes, fitVisible]);
+
+  // The theme's state styles (light/dark) and the motion preference.
+  useEffect(() => {
+    const g6 = graphRef.current;
+    if (!g6 || g6.destroyed) return;
+    g6.setNode({ state: nodeStateStyles(canvasTheme) } as Parameters<Graph['setNode']>[0]);
+    g6.setEdge({ state: edgeStateStyles(canvasTheme) } as Parameters<Graph['setEdge']>[0]);
+    g6.setOptions({ animation: reducedMotion ? false : { duration: CAMERA_ANIMATION_MS } });
+  }, [ready, canvasTheme, reducedMotion]);
+
+  // --- Re-sync on every change of the data, the visibility or the layout -------
+  const visibleKey = useMemo(() => [...props.visibleIds].sort().join(','), [props.visibleIds]);
+  useEffect(() => {
+    if (ready > 0) requestSync();
+  }, [ready, graph, props.version, visibleKey, props.layout, relayoutToken, canvasTheme, requestSync]);
+
+  // --- Screen-constant labels: restyle when the zoom crosses a step ------------
+  useEffect(() => {
+    applyLabelScale();
+  }, [ready, zoomKey, applyLabelScale]);
+
+  // --- Interaction states -----------------------------------------------------
+  const markedKey = props.markedIds ? [...props.markedIds].sort().join(',') : '';
+  const dimmedKey = props.dimmedIds ? [...props.dimmedIds].sort().join(',') : '';
+  const pathNodeKey = props.pathNodeIds ? [...props.pathNodeIds].sort().join(',') : '';
+  const pathEdgeKey = props.pathEdgeIds ? [...props.pathEdgeIds].sort().join(',') : '';
+  useEffect(() => {
+    if (ready > 0) applyStates();
+  }, [
+    ready,
+    applyStates,
+    props.selectedId,
+    props.previewId,
+    hoverId,
+    hoveredEdgeId,
+    markedKey,
+    dimmedKey,
+    pathNodeKey,
+    pathEdgeKey,
+    zoomKey,
+    touch,
+    windowCompact,
+  ]);
+
+  // --- Plugins: minimap (not on a compact window) and tooltip (fine pointers) ---
+  const minimapContainer = props.minimapContainer ?? null;
+  const tooltips = interactive && finePointer && !touch;
+  useEffect(() => {
+    const g6 = graphRef.current;
+    if (!g6 || g6.destroyed) return;
+    const plugins: Array<Record<string, unknown>> = [];
+    if (minimapContainer && !windowCompact) {
+      plugins.push({
+        type: 'minimap',
+        key: 'minimap',
+        container: minimapContainer,
+        size: [MINIMAP_WIDTH, MINIMAP_HEIGHT],
+        padding: 8,
+        delay: 128,
+        containerStyle: { border: 'none', background: 'transparent' },
+        maskStyle: {
+          border: `2px solid ${canvasTheme.accent}`,
+          background: 'rgba(127, 127, 127, 0.12)',
+          borderRadius: '2px',
+        },
+      });
+    }
+    if (tooltips) {
+      plugins.push({
+        type: 'tooltip',
+        key: 'tooltip',
+        trigger: 'hover',
+        enable: (event: CanvasPointerEvent) => event.targetType === 'node',
+        getContent: (_event: unknown, items: Array<{ id?: string | number; data?: Record<string, unknown> }>) => {
+          const item = items[0];
+          const label = String(item?.data?.label ?? item?.id ?? '');
+          const type = typeof item?.data?.entityType === 'string' ? humanizeKey(item.data.entityType as string) : '';
+          return Promise.resolve(
+            `<div style="font:12px ${escapeHtml(canvasTheme.fontFamily)};color:${canvasTheme.text}">` +
+              `<strong>${escapeHtml(label)}</strong>${type ? `<br/><span>${escapeHtml(type)}</span>` : ''}</div>`,
+          );
+        },
+        style: {
+          '.tooltip': {
+            background: canvasTheme.paper,
+            color: canvasTheme.text,
+            'border-radius': '6px',
+            padding: '6px 8px',
+          },
+        },
+      });
+    }
+    g6.setPlugins(plugins as Parameters<Graph['setPlugins']>[0]);
+  }, [ready, minimapContainer, windowCompact, tooltips, canvasTheme]);
+
+  // --- Keep the selection out from under the inspector --------------------------
+  const revealInsets = props.revealInsets;
+  const insetsKey = revealInsets
+    ? `${revealInsets.top},${revealInsets.right},${revealInsets.bottom},${revealInsets.left}`
+    : '';
+  const selectedId = props.selectedId;
+  useEffect(() => {
+    if (!revealInsets || !selectedId || ready === 0) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const g6 = graphRef.current;
+      if (!isLive(g6) || !g6.hasNode(selectedId)) return;
+      const [width, height] = g6.getSize();
+      if (!width || !height) return;
+      const [x, y] = g6.getViewportByCanvas(g6.getElementPosition(selectedId));
+      const delta = revealDelta({ x: x!, y: y! }, { width, height }, revealInsets);
+      if (!delta) return;
+      void tracker.programmatic(() => g6.translateBy([delta.x, delta.y], animation()));
+    });
+    return () => cancelAnimationFrame(frame);
+    // The insets are compared by value (`insetsKey`), not identity.
+  }, [selectedId, insetsKey, ready, tracker, animation]);
+
+  // --- Touch: long-press for the context menu (and to arm dragging) -------------
+  useEffect(() => {
+    if (!host || !interactive || !touch) return undefined;
+    let pressed: string | null = null;
+    const longPress = createLongPress({
+      onLongPress: (point) => {
+        if (!pressed) return;
+        const rect = host.getBoundingClientRect();
+        latest.current.props.onNodeContextMenu?.({
+          id: pressed,
+          clientX: rect.left + point.x,
+          clientY: rect.top + point.y,
+          source: 'long-press',
+        });
+      },
+    });
+    longPressRef.current = longPress;
+    const local = (event: PointerEvent) => {
+      const rect = host.getBoundingClientRect();
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    };
+    const pointers = new Set<number>();
+    const onDown = (event: PointerEvent) => {
+      pointers.add(event.pointerId);
+      if (event.pointerType !== 'touch' || pointers.size !== 1) {
+        longPress.cancel();
+        return;
+      }
+      const point = local(event);
+      const radius = (latest.current.props.budgets?.hitTargetPx || 44) / 2;
+      const drawn = new Map(drawnNodes().map((node) => [node.id, node]));
+      pressed = pickNearestNode(
+        drawn.keys(),
+        (id) => {
+          const node = drawn.get(id);
+          return node ? { x: node.x, y: node.y, size: node.radius } : null;
+        },
+        point,
+        radius,
+      );
+      if (pressed) longPress.start(point);
+    };
+    const onMove = (event: PointerEvent) => {
+      if (pointers.size !== 1) longPress.cancel();
+      else longPress.move(local(event));
+    };
+    const onUp = (event: PointerEvent) => {
+      pointers.delete(event.pointerId);
+      longPress.cancel();
+    };
+    host.addEventListener('pointerdown', onDown, true);
+    host.addEventListener('pointermove', onMove, true);
+    host.addEventListener('pointerup', onUp, true);
+    host.addEventListener('pointercancel', onUp, true);
+    return () => {
+      longPress.cancel();
+      longPressRef.current = null;
+      host.removeEventListener('pointerdown', onDown, true);
+      host.removeEventListener('pointermove', onMove, true);
+      host.removeEventListener('pointerup', onUp, true);
+      host.removeEventListener('pointercancel', onUp, true);
+    };
+  }, [host, interactive, touch, drawnNodes]);
+
+  // --- Fullscreen ------------------------------------------------------------
+  const fullscreenSupported =
+    typeof document !== 'undefined' &&
+    document.fullscreenEnabled === true &&
+    typeof HTMLElement !== 'undefined' &&
+    typeof HTMLElement.prototype.requestFullscreen === 'function';
+  useEffect(() => {
+    if (!fullscreenSupported) return undefined;
+    const onChange = () => setFullscreen(document.fullscreenElement === paneRef.current && paneRef.current !== null);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, [fullscreenSupported]);
+  const toggleFullscreen = useCallback(() => {
+    const pane = paneRef.current;
+    if (!pane) return;
+    if (document.fullscreenElement === pane) void document.exitFullscreen?.();
+    else void pane.requestFullscreen?.().catch(() => undefined);
+  }, []);
+
+  // --- Controls ----------------------------------------------------------------
+  const zoomBy = useCallback(
+    (ratio: number) => {
+      const g6 = graphRef.current;
+      if (!isLive(g6)) return;
+      void g6.zoomBy(ratio, animation());
+    },
+    [animation],
+  );
+  const fit = useCallback(() => {
+    tracker.reset();
+    void fitVisible(true);
+  }, [tracker, fitVisible]);
+
+  useImperativeHandle(
+    props.controlsRef,
+    () => ({
+      zoomIn: () => zoomBy(ZOOM_STEP),
+      zoomOut: () => zoomBy(1 / ZOOM_STEP),
+      fit,
+      relayoutAll: () => setRelayoutToken((n) => n + 1),
+      togglePin: (id) => latest.current.pinControls.togglePin(id),
+      unpinAll: () => latest.current.pinControls.unpinAll(),
+      isPinned: (id) => latest.current.pinControls.isPinned(id),
+      getCamera: () => {
+        const g6 = graphRef.current;
+        if (!isLive(g6)) return { x: 0, y: 0, ratio: 1 };
+        const [x, y] = g6.getCanvasByViewport(g6.getViewportCenter());
+        return { x: x!, y: y!, ratio: 1 / zoomOf(g6) };
+      },
+      setCamera: (camera) => {
+        const g6 = graphRef.current;
+        if (!isLive(g6)) return;
+        void (async () => {
+          await g6.zoomTo(1 / camera.ratio, false);
+          const [vx, vy] = g6.getViewportByCanvas([camera.x, camera.y]);
+          const [cx, cy] = g6.getViewportCenter();
+          await g6.translateBy([cx! - vx!, cy! - vy!], false);
+        })();
+      },
+      fitTo: (ids) => {
+        void fitIds(ids, true).then(() => tracker.onTransform());
+      },
+      focusNode: (id) => {
+        const g6 = graphRef.current;
+        if (!isLive(g6) || !g6.hasNode(id)) return;
+        void (async () => {
+          await tracker.programmatic(async () => {
+            await g6.focusElement(id, animation());
+            if (isLive(g6) && zoomOf(g6) < 1.5) await g6.zoomTo(1.5, animation());
+          });
+          tracker.onTransform();
+        })();
+      },
+      getViewport: () => {
+        const g6 = graphRef.current;
+        if (!isLive(g6)) return null;
+        const [width, height] = g6.getSize();
+        if (!width || !height) return null;
+        const [x0, y0] = g6.getCanvasByViewport([0, 0]);
+        const [x1, y1] = g6.getCanvasByViewport([width, height]);
+        return { topLeft: { x: x0!, y: y0! }, bottomRight: { x: x1!, y: y1! } };
+      },
+      panToGraph: (x, y) => {
+        const g6 = graphRef.current;
+        if (!isLive(g6)) return;
+        const [vx, vy] = g6.getViewportByCanvas([x, y]);
+        const [cx, cy] = g6.getViewportCenter();
+        void g6.translateBy([cx! - vx!, cy! - vy!], false);
+      },
+      onFrame: (listener) => {
+        frameListeners.current.add(listener);
+        return () => {
+          frameListeners.current.delete(listener);
+        };
+      },
+    }),
+    [zoomBy, fit, fitIds, tracker, animation],
+  );
+
+  const showZoom = interactive && props.showZoomControls !== false;
+  const coarse = coarsePointer || touch;
   return (
     <Box
+      ref={paneRef}
       sx={{
         position: 'relative',
         height,
         width: '100%',
-        // `@react-sigma/core`'s stylesheet paints white; the theme's ground instead.
-        '& .react-sigma': { background: 'transparent' },
+        bgcolor: fullscreen ? 'background.default' : undefined,
         pointerEvents: interactive ? undefined : 'none',
         // The canvas owns pinch and pan; nothing else on the page is affected.
         touchAction: interactive ? 'none' : undefined,
@@ -400,437 +1034,33 @@ export function GraphCanvas(props: GraphCanvasProps) {
         WebkitTapHighlightColor: 'transparent',
       }}
       onContextMenu={props.onNodeContextMenu && interactive ? (event) => event.preventDefault() : undefined}
-      aria-label={ariaLabel}
-      role={ariaLabel ? 'img' : undefined}
     >
-      <SigmaContainer graph={graph} settings={settings} style={{ height: '100%', width: '100%' }}>
-        <CanvasBehaviour {...props} />
-        {props.onLasso && interactive && (
-          <LassoBehaviour
-            graph={graph}
-            visibleIds={props.visibleIds}
-            selectTool={props.selectTool === true}
-            onLasso={props.onLasso}
-          />
-        )}
-      </SigmaContainer>
+      <Box
+        ref={setHost}
+        data-testid="graph-canvas"
+        aria-label={ariaLabel}
+        role={ariaLabel ? 'img' : undefined}
+        sx={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
+      />
+      {props.onLasso && interactive && (
+        <LassoBehaviour
+          container={host}
+          positions={drawnNodes}
+          selectTool={props.selectTool === true}
+          onLasso={props.onLasso}
+        />
+      )}
+      {showZoom && (
+        <ZoomControls
+          onZoomIn={() => zoomBy(ZOOM_STEP)}
+          onZoomOut={() => zoomBy(1 / ZOOM_STEP)}
+          onFit={fit}
+          onToggleFullscreen={fullscreenSupported ? toggleFullscreen : undefined}
+          fullscreen={fullscreen}
+          coarse={coarse}
+          insets={{ bottom: props.revealInsets?.bottom ?? 0, right: props.revealInsets?.right ?? 0 }}
+        />
+      )}
     </Box>
   );
-}
-
-function CanvasBehaviour({
-  graph,
-  version,
-  visibleIds,
-  selectedId,
-  previewId = null,
-  markedIds,
-  dimmedIds,
-  pathNodeIds,
-  pathEdgeIds,
-  layout,
-  seedIds,
-  pinsKey,
-  onPinnedCountChange,
-  inputModality = 'pointer',
-  budgets,
-  revealInsets,
-  onNodeClick,
-  onNodeDoubleClick,
-  onStageClick,
-  onEdgeClick,
-  onNodeContextMenu,
-  interactive = true,
-  controlsRef,
-}: GraphCanvasProps) {
-  const sigma = useSigma();
-  const setSettings = useSetSettings();
-  const registerEvents = useRegisterEvents();
-  const camera = useCamera({ duration: 300, factor: 1.5 });
-  const theme = useTheme();
-  const dimColor = alpha(theme.palette.text.disabled, theme.palette.mode === 'dark' ? 0.4 : 0.6);
-  const compact = useMediaQuery(theme.breakpoints.down('sm'));
-  // ONE input-modality source: the shell's `useInputModality` decides, through `inputModality`
-  // (a touch screen has no hover; the first tap previews through `previewId`, the second selects).
-  const touch = inputModality === 'touch';
-  const [hoverId, setHoverId] = useState<string | null>(null);
-  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
-
-  const reducedMotion = useReducedMotion();
-  const reducedMotionRef = useRef(reducedMotion);
-  reducedMotionRef.current = reducedMotion;
-  const layoutControls = useCanvasLayout({
-    graph,
-    version,
-    layout,
-    seedIds,
-    pinsKey,
-    reducedMotion,
-    // ONE time box: the shell's budgets (GIC-08); the overview passes none and gets the roomy default.
-    budgetMs: budgets?.layoutTimeBoxMs ?? DEFAULT_LAYOUT_TIME_BOX_MS,
-  });
-  const layoutRef = useRef(layoutControls);
-  layoutRef.current = layoutControls;
-
-  useEffect(() => {
-    onPinnedCountChange?.(layoutControls.pinnedCount);
-  }, [layoutControls.pinnedCount, onPinnedCountChange]);
-
-  useImperativeHandle(
-    controlsRef,
-    () => ({
-      zoomIn: () => camera.zoomIn(),
-      zoomOut: () => camera.zoomOut(),
-      fit: () => camera.reset({ duration: 300 }),
-      relayoutAll: () => layoutRef.current.relayoutAll(),
-      togglePin: (id) => layoutRef.current.togglePin(id),
-      unpinAll: () => layoutRef.current.unpinAll(),
-      isPinned: (id) => layoutRef.current.isPinned(id),
-      getCamera: () => {
-        const { x, y, ratio } = sigma.getCamera().getState();
-        return { x, y, ratio };
-      },
-      setCamera: (state) => sigma.getCamera().setState(state),
-      fitTo: (ids) => {
-        const points = ids
-          .filter((id) => graph.hasNode(id))
-          .map((id) => sigma.getNodeDisplayData(id))
-          .filter((point): point is NonNullable<typeof point> => Boolean(point));
-        if (points.length === 0) return;
-        const xs = points.map((point) => point.x);
-        const ys = points.map((point) => point.y);
-        const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-        const target = {
-          x: (Math.min(...xs) + Math.max(...xs)) / 2,
-          y: (Math.min(...ys) + Math.max(...ys)) / 2,
-          ratio: Math.min(1, Math.max(0.05, span * 1.6 + 0.05)),
-        };
-        if (reducedMotion) sigma.getCamera().setState(target);
-        else void sigma.getCamera().animate(target, { duration: 300 });
-      },
-      focusNode: (id) => {
-        const display = sigma.getNodeDisplayData(id);
-        if (!display) return;
-        const target = { x: display.x, y: display.y, ratio: Math.min(sigma.getCamera().getState().ratio, 0.5) };
-        if (reducedMotionRef.current) sigma.getCamera().setState(target);
-        else void sigma.getCamera().animate(target, { duration: 300 });
-      },
-      getViewport: () => {
-        const { width, height } = sigma.getDimensions();
-        if (width === 0 || height === 0) return null;
-        return {
-          topLeft: sigma.viewportToGraph({ x: 0, y: 0 }),
-          bottomRight: sigma.viewportToGraph({ x: width, y: height }),
-        };
-      },
-      panToGraph: (x, y) => {
-        const framed = sigma.viewportToFramedGraph(sigma.graphToViewport({ x, y }));
-        sigma.getCamera().setState({ x: framed.x, y: framed.y });
-      },
-      onFrame: (listener) => {
-        sigma.on('afterRender', listener);
-        return () => {
-          sigma.removeListener('afterRender', listener);
-        };
-      },
-    }),
-    [camera, sigma, graph, reducedMotion],
-  );
-
-  // Labels are drawn onto a 2D canvas once; if the webfont lands after the
-  // first frame they would stay in the fallback face until the next redraw.
-  useEffect(() => {
-    let cancelled = false;
-    void document.fonts?.ready.then(() => {
-      if (!cancelled) sigma.refresh();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [sigma]);
-
-  // --- Budgets: none of these rebuild sigma, so a rotation keeps the camera -----
-  const pixelRatioCap = budgets?.pixelRatioCap ?? null;
-  useEffect(() => {
-    if (pixelRatioCap === null) return undefined;
-    return capPixelRatio(sigma, pixelRatioCap);
-  }, [sigma, pixelRatioCap]);
-
-  const labelDensity = budgets ? LABEL_DENSITY[budgets.labelDensity] : null;
-  const labelThreshold = budgets ? (budgets.labelSizeThreshold ?? (budgets.constrained ? 12 : 8)) : null;
-  useEffect(() => {
-    if (labelDensity !== null && labelThreshold !== null) {
-      setSettings({ labelDensity, labelRenderedSizeThreshold: labelThreshold });
-    }
-  }, [labelDensity, labelThreshold, setSettings]);
-
-  const hideEdgesAbove = budgets?.hideEdgesOnMoveAbove ?? null;
-  useEffect(() => {
-    if (hideEdgesAbove === null) return;
-    setSettings({ hideEdgesOnMove: graph.size > hideEdgesAbove });
-  }, [graph, version, hideEdgesAbove, setSettings]);
-
-  // The camera, readable from the DOM: the rotation test and any tool that needs to know where we are looking.
-  useEffect(() => {
-    const container = sigma.getContainer();
-    const write = () => {
-      const { x, y, ratio } = sigma.getCamera().getState();
-      container.dataset.cameraX = x.toFixed(4);
-      container.dataset.cameraY = y.toFixed(4);
-      container.dataset.cameraRatio = ratio.toFixed(4);
-    };
-    write();
-    sigma.getCamera().on('updated', write);
-    return () => {
-      sigma.getCamera().removeListener('updated', write);
-    };
-  }, [sigma]);
-
-  // Read by `tests/visual` (touch emulation drives a canvas it cannot see into): where a node is drawn,
-  // in px from the canvas's top-left. A read-only probe on the container; nothing in the app calls it.
-  useEffect(() => {
-    const container = sigma.getContainer() as HTMLElement & { kvoxProbe?: unknown };
-    container.kvoxProbe = {
-      nodeViewport: (id: string) => {
-        if (!graph.hasNode(id)) return null;
-        const attributes = graph.getNodeAttributes(id) as { x: number; y: number; size: number };
-        const at = sigma.graphToViewport({ x: attributes.x, y: attributes.y });
-        return { x: at.x, y: at.y, size: sigma.scaleSize(attributes.size) };
-      },
-    };
-    return () => {
-      delete container.kvoxProbe;
-    };
-  }, [sigma, graph]);
-
-  // --- Reducers: visibility, highlight, rings, labels ---------------------------
-  // View state goes through the reducers, never into the graph's attributes.
-  const markedKey = markedIds ? [...markedIds].sort().join(',') : '';
-  const dimmedKey = dimmedIds ? [...dimmedIds].sort().join(',') : '';
-  const pathNodeKey = pathNodeIds ? [...pathNodeIds].sort().join(',') : '';
-  const pathEdgeKey = pathEdgeIds ? [...pathEdgeIds].sort().join(',') : '';
-  // Hover is for a pointer; a touch preview takes its place on a phone.
-  const focusId = (touch ? null : hoverId) ?? previewId;
-  const constrained = budgets?.constrained ?? compact;
-  useEffect(() => {
-    const context = {
-      graph,
-      visibleIds,
-      selectedId,
-      focusId,
-      hoveredEdgeId,
-      markedIds: new Set(markedKey ? markedKey.split(',') : []),
-      dimmedIds: dimmedKey ? new Set(dimmedKey.split(',')) : null,
-      pathNodeIds: new Set(pathNodeKey ? pathNodeKey.split(',') : []),
-      pathEdgeIds: new Set(pathEdgeKey ? pathEdgeKey.split(',') : []),
-      accent: theme.palette.primary.main,
-      dimColor,
-      compact: constrained,
-    };
-    setSettings({
-      nodeReducer: buildNodeReducer(context) as Settings['nodeReducer'],
-      edgeReducer: buildEdgeReducer(context) as Settings['edgeReducer'],
-    });
-    // `version` is a dependency on purpose: a merge changes neighbourhoods.
-  }, [
-    graph,
-    version,
-    visibleIds,
-    selectedId,
-    focusId,
-    hoveredEdgeId,
-    markedKey,
-    dimmedKey,
-    pathNodeKey,
-    pathEdgeKey,
-    dimColor,
-    constrained,
-    theme.palette.primary.main,
-    setSettings,
-  ]);
-
-  // --- Keep the selection out from under the inspector --------------------------
-  const insetsKey = revealInsets
-    ? `${revealInsets.top},${revealInsets.right},${revealInsets.bottom},${revealInsets.left}`
-    : '';
-  useEffect(() => {
-    if (!revealInsets || !selectedId || !graph.hasNode(selectedId)) return undefined;
-    const frame = requestAnimationFrame(() => {
-      if (!graph.hasNode(selectedId)) return;
-      const { width, height } = sigma.getDimensions();
-      if (width === 0 || height === 0) return;
-      const attributes = graph.getNodeAttributes(selectedId) as { x: number; y: number };
-      const at = sigma.graphToViewport({ x: attributes.x, y: attributes.y });
-      const delta = revealDelta(at, { width, height }, revealInsets);
-      if (!delta) return;
-      const centre = sigma.viewportToFramedGraph({ x: width / 2 - delta.x, y: height / 2 - delta.y });
-      const target = { x: centre.x, y: centre.y };
-      if (reducedMotion) sigma.getCamera().setState(target);
-      else void sigma.getCamera().animate(target, { duration: 250 });
-    });
-    return () => cancelAnimationFrame(frame);
-    // The insets are compared by value (`insetsKey`), not identity.
-  }, [sigma, graph, selectedId, insetsKey, reducedMotion]);
-
-  // --- Events, including drag and the touch model -----------------------------
-  const handlers = useRef({ onNodeClick, onNodeDoubleClick, onStageClick, onEdgeClick, onNodeContextMenu });
-  handlers.current = { onNodeClick, onNodeDoubleClick, onStageClick, onEdgeClick, onNodeContextMenu };
-  const hitRadius = touch ? (budgets?.hitTargetPx || 44) / 2 : 0;
-  const visibleRef = useRef(visibleIds);
-  visibleRef.current = visibleIds;
-  const longPressRef = useRef<LongPress | null>(null);
-
-  useEffect(() => {
-    if (!interactive) return;
-    let dragged: string | null = null;
-    let moved = false;
-
-    const nearest = (point: { x: number; y: number }): string | null => {
-      if (hitRadius <= 0) return null;
-      return pickNearestNode(
-        visibleRef.current,
-        (id) => {
-          if (!graph.hasNode(id)) return null;
-          const attributes = graph.getNodeAttributes(id) as { x: number; y: number; size: number };
-          const at = sigma.graphToViewport({ x: attributes.x, y: attributes.y });
-          return { x: at.x, y: at.y, size: sigma.scaleSize(attributes.size) };
-        },
-        point,
-        hitRadius,
-      );
-    };
-
-    registerEvents({
-      clickNode: ({ node, event }) => {
-        if (moved || longPressRef.current?.fired()) return;
-        // A "+N more" stub is activated, not selected: activating it expands its type.
-        if (graph.getNodeAttribute(node, 'isStub') === true) {
-          handlers.current.onNodeDoubleClick(node);
-          return;
-        }
-        handlers.current.onNodeClick(node, { shiftKey: Boolean((event?.original as MouseEvent | undefined)?.shiftKey) });
-      },
-      enterNode: ({ node }) => {
-        if (!touch) setHoverId(node);
-      },
-      leaveNode: () => setHoverId(null),
-      enterEdge: ({ edge }) => {
-        if (!touch) setHoveredEdgeId(edge);
-      },
-      leaveEdge: () => setHoveredEdgeId(null),
-      doubleClickNode: (event) => {
-        // Sigma's default for a double-click is to zoom; here it expands.
-        event.preventSigmaDefault();
-        if (graph.getNodeAttribute(event.node, 'isStub') === true) {
-          handlers.current.onNodeDoubleClick(event.node);
-          return;
-        }
-        if (touch) {
-          // Sigma reports a quick second tap as a double-tap INSTEAD of a tap. On touch that is the
-          // "second tap" that opens the inspector, and it must not also expand.
-          handlers.current.onNodeClick(event.node);
-          return;
-        }
-        handlers.current.onNodeDoubleClick(event.node);
-      },
-      clickStage: (event) => {
-        if (longPressRef.current?.fired()) return;
-        const hit = touch ? nearest({ x: event.event.x, y: event.event.y }) : null;
-        if (hit && graph.getNodeAttribute(hit, 'isStub') === true) handlers.current.onNodeDoubleClick(hit);
-        else if (hit) handlers.current.onNodeClick(hit);
-        else handlers.current.onStageClick();
-      },
-      clickEdge: ({ edge }) => handlers.current.onEdgeClick?.(edge),
-      rightClickNode: ({ node, event }) => {
-        event.original.preventDefault();
-        const rect = sigma.getContainer().getBoundingClientRect();
-        handlers.current.onNodeContextMenu?.({
-          id: node,
-          clientX: rect.left + event.x,
-          clientY: rect.top + event.y,
-          source: 'right-click',
-        });
-      },
-      downNode: ({ node }) => {
-        dragged = node;
-        moved = false;
-      },
-      mousemovebody: (event) => {
-        if (!dragged) return;
-        // On touch a node moves only after a long-press: a plain drag pans the camera.
-        if (touch && !longPressRef.current?.fired()) return;
-        moved = true;
-        const position = sigma.viewportToGraph(event);
-        graph.mergeNodeAttributes(dragged, { x: position.x, y: position.y, fixed: true });
-        event.preventSigmaDefault();
-        event.original.preventDefault();
-        event.original.stopPropagation();
-      },
-      mouseup: () => {
-        if (dragged && moved && graph.hasNode(dragged)) {
-          const { x, y } = graph.getNodeAttributes(dragged);
-          layoutRef.current.pin(dragged, { x: x as number, y: y as number });
-        }
-        dragged = null;
-      },
-      mousedown: () => {
-        // Keep the camera still while a node is held.
-        if (!sigma.getCustomBBox()) sigma.setCustomBBox(sigma.getBBox());
-      },
-    });
-
-    if (!touch) return undefined;
-
-    // Touch: long-press (context menu + arms dragging), cancelled by a second finger or a wander.
-    let pressed: string | null = null;
-    const longPress = createLongPress({
-      onLongPress: (point) => {
-        if (!pressed) return;
-        const rect = sigma.getContainer().getBoundingClientRect();
-        handlers.current.onNodeContextMenu?.({
-          id: pressed,
-          clientX: rect.left + point.x,
-          clientY: rect.top + point.y,
-          source: 'long-press',
-        });
-      },
-    });
-    longPressRef.current = longPress;
-    const touchCaptor = sigma.getTouchCaptor();
-    const onTouchDown = (event: { touches: Array<{ x: number; y: number }> }) => {
-      if (event.touches.length !== 1) {
-        longPress.cancel();
-        return;
-      }
-      const point = event.touches[0]!;
-      pressed = nearest(point);
-      moved = false;
-      if (pressed) {
-        // Keep the camera still while a node is held, so it does not slide under the finger.
-        if (!sigma.getCustomBBox()) sigma.setCustomBBox(sigma.getBBox());
-        dragged = pressed;
-        longPress.start(point);
-      }
-    };
-    const onTouchMove = (event: { touches: Array<{ x: number; y: number }> }) => {
-      if (event.touches.length !== 1) longPress.cancel();
-      else longPress.move(event.touches[0]!);
-    };
-    const onTouchUp = () => {
-      longPress.cancel();
-      dragged = null;
-    };
-    touchCaptor.on('touchdown', onTouchDown);
-    touchCaptor.on('touchmove', onTouchMove);
-    touchCaptor.on('touchup', onTouchUp);
-    return () => {
-      longPress.cancel();
-      longPressRef.current = null;
-      touchCaptor.removeListener('touchdown', onTouchDown);
-      touchCaptor.removeListener('touchmove', onTouchMove);
-      touchCaptor.removeListener('touchup', onTouchUp);
-    };
-  }, [graph, interactive, registerEvents, sigma, touch, hitRadius]);
-
-  return null;
 }

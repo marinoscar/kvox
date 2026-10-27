@@ -15,7 +15,7 @@ import { GRAPH_PERMS, JOE_ID, installGraphApi } from '../support/graphApi';
  *
  * The entity page carries #374's Neighbourhood widget, so its routes add
  * `?layout=static`: the widget's canvas then shows the model's deterministic
- * placement and never runs a layout (see `graph-explorer.spec.ts`).
+ * placement and never runs a layout.
  *
  * ⚠ These baselines are valid only when generated inside the pinned Playwright
  * image (`.github/workflows/visual-baselines.yml`).

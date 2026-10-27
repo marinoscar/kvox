@@ -1,7 +1,7 @@
 /**
  * The explorer's visual language (#667, epic #661): which colour, pictogram,
- * size, ring and edge style says what. PURE: no React, no sigma, no graphology
- * instance, so every rule is a plain unit test (jsdom has no WebGL).
+ * size, ring and edge style says what. PURE: no React, no G6, no graphology
+ * instance, so every rule is a plain unit test (jsdom has no canvas).
  *
  * THREE CHANNELS FOR TYPE, never one. Colour alone fails colour-blind users, so
  * a node's type is also its pictogram (`icons/pictograms.ts`) and, in the
@@ -182,7 +182,7 @@ export function ontologyNodeTypes(ontology: GraphOntology): string[] {
   return keys;
 }
 
-/** The `data:` URL of a type's pictogram, for `@sigma/node-image`. */
+/** The `data:` URL of a type's pictogram, drawn centred in the node by the G6 canvas. */
 export function iconUrlFor(type: string, mode: ExplorerMode = 'light'): string {
   return pictogramDataUri(encodingFor(type, mode).icon);
 }
@@ -232,7 +232,7 @@ export interface RingState {
   selected?: boolean;
 }
 
-/** `@sigma/node-border` sizes, as a fraction of the node's radius. */
+/** Ring sizes, as a fraction of the node's radius (the model's record of which ring a node wears). */
 export interface RingAttributes {
   /** Width of the ring. */
   ringSize: number;
@@ -241,8 +241,8 @@ export interface RingAttributes {
 }
 
 /**
- * Seed: a thick ring. Pinned: a thin ring set off by a gap, the stand-in for the
- * issue's dashed ring (a WebGL node program cannot dash). Selected: a thin ring.
+ * Seed: a thick ring. Pinned: a thin ring set off by a gap (the canvas draws it
+ * dashed, `pinned` state). Selected: a thin ring.
  * Precedence when several apply: selected over seed over pinned, because the
  * selection is the one the user is looking at.
  */
@@ -342,10 +342,10 @@ export function edgeLabel(relationType: string, props: Record<string, unknown> |
 }
 
 /**
- * Colour, width, stance, dash and label of an edge. The base colour is the
- * theme's own `baseColor` (muted); an `INVOLVED_IN` edge with a known stance
- * takes the stance accent; a derived edge is drawn at 60% opacity (the dash
- * the issue asks for needs a custom WebGL program, tracked as a follow-up).
+ * Colour, width, stance, dash and label of an edge. The base colour is
+ * `baseColor` (the relation family's colour, {@link relationFamilyColor}); an
+ * `INVOLVED_IN` edge with a known stance takes the stance accent; a derived
+ * edge is drawn at 60% opacity and, like a `resistant` stance, dashed.
  */
 export function edgeAppearance(
   edge: EdgeAppearanceInput,
@@ -368,9 +368,10 @@ export const CURVATURE_STEP = 0.3;
 
 /**
  * Curvatures for the `count` edges between one pair of nodes, centred on zero:
- * 1 edge is straight, 2 are `±0.15`, 3 are `-0.3, 0, 0.3`. `@sigma/edge-curve`
- * bends an edge to its own left, so an edge stored in the opposite direction
- * negates its value, and the whole bundle fans out on the same side.
+ * 1 edge is straight, 2 are `±0.15`, 3 are `-0.3, 0, 0.3`. The canvas bends an
+ * edge to its own side ({@link edgeCurveOffset}), so an edge stored in the
+ * opposite direction negates its value, and the whole bundle fans out on the
+ * same side.
  */
 export function parallelCurvatures(count: number): number[] {
   if (count <= 1) return [0];
@@ -378,3 +379,147 @@ export function parallelCurvatures(count: number): number[] {
     Math.round((i - (count - 1) / 2) * CURVATURE_STEP * 1000) / 1000,
   );
 }
+
+// -----------------------------------------------------------------------------
+// Relation families (edge colour)
+// -----------------------------------------------------------------------------
+
+/**
+ * The family a relation type belongs to; an edge is coloured by its family, so
+ * the eye groups "who works where" apart from "what was discussed".
+ *
+ * @stability experimental
+ */
+export type RelationFamily = 'organisation' | 'personal' | 'activity' | 'reference' | 'other';
+
+const RELATION_FAMILIES: Readonly<Record<string, RelationFamily>> = {
+  WORKS_FOR: 'organisation',
+  REPORTS_TO: 'organisation',
+  HAS_ROLE: 'organisation',
+  PART_OF: 'organisation',
+  CUSTOMER_OF: 'organisation',
+  COMPETITOR_OF: 'organisation',
+  PARTNER_OF: 'organisation',
+  OFFERED_BY: 'organisation',
+  USES: 'organisation',
+  FRIEND_OF: 'personal',
+  SPOUSE_OF: 'personal',
+  PARENT_OF: 'personal',
+  INTERESTED_IN: 'personal',
+  KNOWS_ABOUT: 'personal',
+  TRAVELED_ON: 'personal',
+  ATTENDED: 'activity',
+  DISCUSSED: 'activity',
+  DECIDED_IN: 'activity',
+  CREATED_IN: 'activity',
+  ASSIGNED_TO: 'activity',
+  OWED_TO: 'activity',
+  INVOLVED_IN: 'activity',
+  HAS_MILESTONE: 'activity',
+  CONCERNS: 'activity',
+  SUPPORTED_BY: 'activity',
+  ABOUT: 'reference',
+  MENTIONS: 'reference',
+  BROADER: 'reference',
+  SUPERSEDES: 'reference',
+  IDENTIFIED_AS: 'reference',
+};
+
+/**
+ * Mid-contrast family colours, one set per theme variant: each clears
+ * {@link MIN_GRAPHICAL_CONTRAST} against every {@link VALIDATION_BACKGROUNDS}
+ * entry (`explorerEncoding.test.ts`), so an edge reads on the canvas without
+ * shouting over the nodes.
+ */
+export const RELATION_FAMILY_COLORS: Readonly<Record<ExplorerMode, Readonly<Record<RelationFamily, string>>>> = {
+  light: {
+    organisation: '#4a5aa8',
+    personal: '#9c4a7a',
+    activity: '#2b7a80',
+    reference: '#6e6250',
+    other: '#646b78',
+  },
+  dark: {
+    organisation: '#8f9be0',
+    personal: '#d48fb5',
+    activity: '#5fb7bd',
+    reference: '#b5a98f',
+    other: '#9ca3af',
+  },
+};
+
+/** The family of a relation type; an unknown or user-defined type is `other`. */
+export function relationFamily(relationType: string): RelationFamily {
+  return RELATION_FAMILIES[relationType.toUpperCase()] ?? 'other';
+}
+
+/** The colour of a relation type's family in a theme variant. */
+export function relationFamilyColor(relationType: string, mode: ExplorerMode = 'light'): string {
+  return RELATION_FAMILY_COLORS[mode][relationFamily(relationType)];
+}
+
+// -----------------------------------------------------------------------------
+// Canvas sizes (the G6 canvas draws in px)
+// -----------------------------------------------------------------------------
+
+/** Smallest and largest drawn node DIAMETER on the canvas, in px. */
+export const NODE_DIAMETER_MIN = 18;
+export const NODE_DIAMETER_MAX = 56;
+
+/** How much bigger a seed is drawn than its importance alone says, in px. */
+export const SEED_DIAMETER_BONUS = 8;
+
+/**
+ * The canvas diameter of a node from the model's radius (`nodeSize`, itself
+ * from `mentionCount`, else degree): the radius range maps linearly onto
+ * `[NODE_DIAMETER_MIN, NODE_DIAMETER_MAX]`; a seed gets {@link SEED_DIAMETER_BONUS}.
+ */
+export function nodeDiameter(size: number | undefined, isSeed = false): number {
+  const radius = typeof size === 'number' && Number.isFinite(size) ? size : NODE_SIZE_MIN;
+  const low = NODE_SIZE_MIN * 0.8;
+  const t = Math.min(1, Math.max(0, (radius - low) / (NODE_SIZE_MAX - low)));
+  const diameter = NODE_DIAMETER_MIN + t * (NODE_DIAMETER_MAX - NODE_DIAMETER_MIN) + (isSeed ? SEED_DIAMETER_BONUS : 0);
+  return Math.round(Math.min(NODE_DIAMETER_MAX, diameter) * 100) / 100;
+}
+
+/**
+ * The diameter of an overview cluster from how many entities it holds:
+ * `18 + 8·√n`, clamped to `[NODE_DIAMETER_MIN, NODE_DIAMETER_MAX]`, so a
+ * cluster reads as bigger than a single entity.
+ */
+export function clusterDiameter(memberCount: number): number {
+  const n = Math.max(0, Number.isFinite(memberCount) ? memberCount : 0);
+  return Math.round(Math.min(NODE_DIAMETER_MAX, NODE_DIAMETER_MIN + 8 * Math.sqrt(n)) * 100) / 100;
+}
+
+/** Thinnest and thickest drawn edge on the canvas, in px. */
+export const EDGE_LINE_MIN = 1.25;
+export const EDGE_LINE_MAX = 5;
+
+/** The canvas line width from the model's edge width ({@link edgeWidth}, 1 to 6). */
+export function edgeLineWidth(size: number | undefined): number {
+  const width = typeof size === 'number' && Number.isFinite(size) ? size : 1.5;
+  const t = Math.min(1, Math.max(0, (width - 1) / 5));
+  return Math.round((EDGE_LINE_MIN + t * (EDGE_LINE_MAX - EDGE_LINE_MIN)) * 100) / 100;
+}
+
+/** Px of bend per unit of model curvature. */
+export const CURVE_OFFSET_PER_UNIT = 80;
+/** The slight bend every edge has, so a lone edge still reads as a curve, in px. */
+export const CURVE_OFFSET_BASE = 8;
+
+/** The quadratic edge's control-point offset (px) for a model curvature ({@link parallelCurvatures}). */
+export function edgeCurveOffset(curvature: number | undefined): number {
+  const c = typeof curvature === 'number' && Number.isFinite(curvature) ? curvature : 0;
+  return Math.round((CURVE_OFFSET_BASE + c * CURVE_OFFSET_PER_UNIT) * 100) / 100;
+}
+
+/**
+ * Level of detail: below this zoom only the labels that matter (seed,
+ * selection, path, the user's own node, a lit neighbourhood) are drawn.
+ */
+export const LABEL_LOD_ZOOM = 0.6;
+/** The same threshold for a constrained window (a phone's reduced label density). */
+export const LABEL_LOD_ZOOM_REDUCED = 0.8;
+/** A canvas with at most this many visible nodes keeps every label at any zoom: it cannot clutter. */
+export const LABEL_LOD_MIN_NODES = 25;

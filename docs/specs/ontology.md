@@ -219,7 +219,7 @@ prompt (§14).
 
 **Deferred to v2, not rejected — listed in full in §5.7:** corpus-wide
 sensemaking summaries. The `Concept`/topic layer shipped as `Topic` in ontology
-1.3.0 (§5.1) and the rendering library is sigma.js + graphology (§22.1).
+1.3.0 (§5.1) and the rendering library is AntV G6 + graphology (§22.1; sigma.js until #775).
 
 ## 2. Standards profile
 
@@ -838,7 +838,7 @@ uncertain resolution (§7).
   deferred.** An earlier draft of this document left this open for the P5
   issue that builds the neighbourhood view; §22 (added once the explorer and
   whole-graph overview were specified) makes the choice for both surfaces at
-  once — sigma.js + graphology — because a library chosen twice, once per
+  once — sigma.js + graphology, since #775 AntV G6 + graphology — because a library chosen twice, once per
   view, would risk two different in-memory graph representations for what is
   conceptually one graph.
 
@@ -2103,7 +2103,7 @@ interactive — a pannable canvas inside a scrolling column would trap the
 page's scroll under a thumb — so a tap opens the explorer instead. The
 rendering library named as a
 deferred decision here in an earlier draft of this document is deferred no
-longer — §22 chooses sigma.js + graphology and records `react-force-graph`
+longer — §22 chooses sigma.js + graphology (AntV G6 since #775) and records `react-force-graph`
 and `cytoscape` as rejected, once this document actually had to build the
 whole-graph overview (§22) and could no longer leave the neighbourhood
 widget's own library unstated without also leaving the overview's unstated.
@@ -3926,7 +3926,17 @@ that neighbourhood interactively across more than one entity, and a
 nor the explorer answers — "what does my *whole* graph look like." Both
 resolve the rendering-library decision §5.7 and §13 previously left open.
 
-### 22.1 Library: sigma.js + graphology, chosen here
+### 22.1 Library: AntV G6 + graphology (was sigma.js), chosen here
+
+> **Update (#775).** The explorer, the overview and the neighbourhood widget
+> now draw with **AntV G6 5** (`@antv/g6` `^5.1.1`, its Canvas renderer)
+> instead of sigma.js; graphology stays the data structure the models build.
+> G6 brings what sigma needed hand-written programs for (dashed rings and
+> edges, curved and labelled edges, badges, halos, a minimap, tooltips, d3-force
+> and radial layouts) and needs no WebGL. It runs under the production and
+> Desktop CSPs (`script-src 'self'`, no `eval`, no `blob:`) as long as no
+> layout sets `enableWorker`. It is about 410 KB gzipped, so it stays in the
+> canvas's own lazy chunk. The original reasoning below is kept for the record.
 
 **sigma.js** (WebGL rendering) **+ graphology** (the graph data structure
 and algorithm library both the client and, via
@@ -3944,31 +3954,26 @@ below, rather than left open any further.
 
 ### 22.2 Explorer (`/graph/explore`)
 
-**Built** (issue #374). The exact versions: `sigma` `^3.0.3`, `graphology`
-`^0.26.0`, `@react-sigma/core` `^5.0.6`, `graphology-layout` `^0.6.1`,
-`graphology-layout-forceatlas2` `^0.10.1`, `graphology-types` `^0.24.8`.
+**Built** (issue #374; G6 since #775). The exact versions: `@antv/g6` `^5.1.1`,
+`graphology` `^0.26.0`, `graphology-types` `^0.24.8`.
 `packages/kvox-web/src/graph/ui/components/explorer/GraphCanvas.tsx` is the **one** file
-in the codebase that imports `sigma`, generic enough that the entity page's
+in the codebase that imports `@antv/g6`, generic enough that the entity page's
 `NeighborhoodWidget` (§13) and the whole-graph overview (§22.3) both
 draw through it rather than each carrying its own renderer.
 
-**Layout runs in a same-origin module worker.** `layout/layout.worker.ts` runs
-ForceAtlas2 for a fixed 180 iterations (2 per chunk), then
-`graphology-layout-noverlap`, and posts transferable `Float32Array` frames; it
-is started with `new Worker(new URL('./layout.worker.js', import.meta.url), {
-type: 'module' })`, so the bundler emits it as its own file and production's
-`worker-src 'self'` (`infra/nginx/csp.conf`) allows it with **no CSP change**.
-`graphology-layout-forceatlas2/worker` is never used: its supervisor builds a
-`blob:` worker the CSP would refuse. Without `Worker`, or if the worker
-errors, the same algorithm runs on the main thread in 8 ms slices per frame.
-Bounding the settle by iteration count (and a time box, below) rather than the
-clock keeps it **deterministic**, which is also what `?layout=static` (never
-moves a node; applied automatically under `prefers-reduced-motion: reduce`)
-depends on. After an expand only nodes never laid out move; the rest are fixed,
-and a dragged or `P`-pinned node stays where it is. Other layouts: `concentric`
-(rings by hop from the seeds, the default for an ego view under 40 nodes).
-Positions tween over 300 ms, or jump once under reduced motion. Detail:
-[the graph README](../../packages/kvox-web/src/graph/README.md#explorer-layout-668).
+**Layout runs on the main thread, with G6's own layouts.** `forceatlas` (the
+`?layout=force` mode) is G6's `d3-force` with `collide` (half the node's
+diameter plus room for its label); `concentric` is G6's `radial` around the
+first seed (the default for an ego view under 40 nodes); `static` (never moves
+a node) runs none. **No layout ever sets `enableWorker`**: G6 would start a
+`blob:` worker, which production's `worker-src 'self'` (`infra/nginx/csp.conf`)
+and the Desktop CSP refuse. A run is bounded by its iteration count (scaled by
+the time box, below), not the clock. After an expand only nodes never laid out
+move: every other node is fixed with `fx`/`fy`, and a dragged or `P`-pinned
+node stays where it is. The camera fits the visible nodes after the first draw
+and after each layout until the user moves it; moves animate over 300 ms, or
+jump under reduced motion. Detail:
+[the graph README](../../packages/kvox-web/src/graph/README.md#explorer-canvas-and-layout-g6-775-incremental-since-668).
 
 Seeded from an entity page, a search result, or a bare visit to
 `/graph/explore` itself (in which case it seeds from the caller's
@@ -3985,15 +3990,15 @@ runs) — narrow what expansion is allowed to add, not merely what is
 displayed, so a filtered-out type is never fetched at all. **A hard
 node cap** (300, or 120 on a constrained window, see the budgets below) — past it, expansion is refused with a message naming the cap
 rather than silently degrading into an unreadable hairball or a frozen tab;
-300 is chosen against sigma.js's own practical WebGL ceiling for a
-force-directed layout that still redraws smoothly on an ordinary laptop, not
+300 was chosen against sigma.js's practical WebGL ceiling (and holds for G6's
+Canvas renderer) for a force-directed layout that still redraws smoothly on an ordinary laptop, not
 against any property of this design's own graph size, which §3.5's "shallow
 by construction" scope means rarely approaches it during ordinary use.
 
-A browser with no WebGL (`webgl.ts`'s `isWebGLAvailable()`), or `?view=list`,
-renders an **accessible list view** (`ExplorerListView.tsx`) carrying the
-identical nodes and edges rather than an apology — sigma and graphology
-never enter that code path, because `GraphCanvas` is lazy-loaded a *second*
+A browser with no 2D canvas (`webgl.ts`'s `isWebGLAvailable()`, kept under its
+old name), or `?view=list`, renders an **accessible list view**
+(`ExplorerListView.tsx`) carrying the identical nodes and edges rather than an
+apology — G6 never enters that code path, because `GraphCanvas` is lazy-loaded a *second*
 time inside the already-lazy `/graph/explore` page. The canvas itself is
 fully keyboard-operable: arrow keys step between nodes, Enter expands the
 selected one, `+`/`-`/`0` zoom/fit, `L` toggles the list view, `O` opens the

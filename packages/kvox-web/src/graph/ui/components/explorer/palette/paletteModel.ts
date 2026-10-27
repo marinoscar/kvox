@@ -1,7 +1,7 @@
 /**
  * The command palette's rules, as pure functions (GIC-09, #670; epic #661).
  *
- * NO REACT, NO SIGMA. A test drives them with a plain graphology graph; the
+ * NO REACT, NO G6. A test drives them with a plain graphology graph; the
  * palette component only renders what they return.
  *
  *   - {@link parsePaletteQuery} splits `type:Person joe` into the free text and

@@ -152,7 +152,7 @@ apps/web/src/pages: every file plus the `Admin` folder, grouped by owner below.
 | `components/common` | 11 | 66.7% / +52/-22 | noise | `shell` | issue 4.6 | Layout (+52/-22), error boundary, spinner, route guards, maintenance gate/banner. Two files already identical. |
 | `components/datatable` | 44 | n/a / +0/-0 | noise | `datatable` | issue 4.6 | 44 files with no same-path counterpart (EAB holds them in `platform-web/datatable`). Provisional: re-diff against the package before deleting. |
 | `components/device-activation` | 5 | n/a / +0/-0 | noise | `identity` | issue 1.3 | Device authorization UI. |
-| `components/graph` | 65 | n/a / +0/-0 | domain | `@marinoscar/kvox-web/graph` | Epic 7 | sigma.js explorer, entity page, proposals review. |
+| `components/graph` | 65 | n/a / +0/-0 | domain | `@marinoscar/kvox-web/graph` | Epic 7 | Graph explorer (sigma.js, AntV G6 since #775), entity page, proposals review. |
 | `components/home` | 15 | 0% / +0/-0 | domain | `@marinoscar/kvox-web/home` | Epic 7 | Home page sections; `QuickActions.tsx` exists only in EAB. |
 | `components/library` | 7 | n/a / +0/-0 | domain | `@marinoscar/kvox-web/library` | Epic 7 | Transcripts and notes library views. |
 | `components/navigation` | 5 | 0% / +697/-31 | kvox-divergence | `shell` | issue 4.6 | Rail, bottom bar, app bar, user menu (+697/-31) built on `destinations.ts`; keep the destinations registry. Four-tab ceiling and pinned destinations are KVox UX decisions. |

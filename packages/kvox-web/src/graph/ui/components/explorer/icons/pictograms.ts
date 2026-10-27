@@ -3,16 +3,14 @@
  * node type, as SVG path data, NO remote assets.
  *
  * WHY TS AND NOT `.svg` FILES. This package is compiled by `tsc`, which does
- * not copy or import `.svg` files, and sigma needs the image as a URL anyway.
+ * not copy or import `.svg` files, and the canvas needs the image as a URL anyway.
  * The glyphs are therefore path strings here, and `pictogramDataUri` turns one
- * into a `data:image/svg+xml;base64,…` URL that `@sigma/node-image` draws in
- * pictogram mode (a mask tinted by the node's `iconColor`).
+ * into a `data:image/svg+xml;base64,…` URL that the G6 canvas draws centred in
+ * the node, in the node's `iconColor`.
  *
- * WHY BASE64. `@sigma/node-image` treats a source whose path ends in `.svg` as
- * a file and `fetch()`es it, which production's `connect-src 'self' https:`
- * refuses for a `data:` or `blob:` URL. A base64 body has no `.`, so the
- * library takes its plain-`Image` path, which only needs `img-src data:` (the
- * policy already allows it).
+ * WHY A DATA URL. The canvas loads an icon with a plain `Image`, which only needs
+ * `img-src data:` (the policy already allows it); nothing is fetched from a
+ * remote host, and G6's own icon font is never used.
  *
  * The glyph geometry is from Material Icons (Apache License 2.0), the same set
  * `@mui/icons-material` ships, so a pictogram matches the rest of the UI.
@@ -49,7 +47,7 @@ export const PICTOGRAMS = {
 /** A key of {@link PICTOGRAMS}. */
 export type PictogramName = keyof typeof PICTOGRAMS;
 
-/** The size the glyph is rasterised at for the WebGL texture. */
+/** The size the glyph is rasterised at for the canvas image. */
 export const PICTOGRAM_PX = 64;
 
 /** The complete SVG document for one pictogram, filled with `fill`. */
@@ -63,14 +61,15 @@ export function pictogramSvg(name: PictogramName, fill = '#ffffff'): string {
 const cache = new Map<string, string>();
 
 /**
- * The pictogram as a `data:image/svg+xml;base64,…` URL for `@sigma/node-image`
- * (see the file comment for why base64). Memoised: every node of a type shares
- * one URL, so sigma uploads one texture per type.
+ * The pictogram as a `data:image/svg+xml;base64,…` URL, filled with `fill`
+ * (white by default). Memoised: every node of a type shares one URL, so the
+ * canvas decodes one image per type and colour.
  */
-export function pictogramDataUri(name: PictogramName): string {
-  const hit = cache.get(name);
+export function pictogramDataUri(name: PictogramName, fill = '#ffffff'): string {
+  const key = `${name}|${fill}`;
+  const hit = cache.get(key);
   if (hit) return hit;
-  const uri = `data:image/svg+xml;base64,${btoa(pictogramSvg(name))}`;
-  cache.set(name, uri);
+  const uri = `data:image/svg+xml;base64,${btoa(pictogramSvg(name, fill))}`;
+  cache.set(key, uri);
   return uri;
 }

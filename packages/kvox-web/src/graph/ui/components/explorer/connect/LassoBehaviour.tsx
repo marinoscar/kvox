@@ -1,15 +1,15 @@
 /**
  * The explorer's lasso (GIC-14, #675): hold Shift and drag on the stage, or drag with the Select tool on,
- * to draw a freehand loop; the nodes inside it are marked. A press that lands on a node is left to sigma
- * (shift-click toggles that node, a plain press drags it), so the two gestures never fight.
+ * to draw a freehand loop; the nodes inside it are marked. A press that lands on a node is left to the
+ * canvas (shift-click toggles that node, a plain press drags it), so the two gestures never fight.
  *
- * Rendered INSIDE `SigmaContainer` by `GraphCanvas`, which keeps it in the lazily loaded canvas chunk like
- * the rest of sigma. The listeners sit on the canvas's wrapper in the CAPTURE phase and stop the press from
- * reaching sigma, so the camera does not pan under the loop. The geometry is `lassoGeometry.ts`, unit-tested
- * without a canvas; a keyboard has its own way to mark nodes (Select mode, then Space on the focused node).
+ * RENDERER-AGNOSTIC (#775). It listens on `container` (the canvas's element) in the CAPTURE phase and stops
+ * the press from reaching the G6 canvas underneath, so the camera does not pan under the loop. Where each
+ * node is drawn comes from `positions`, which the canvas computes in viewport px. The geometry is
+ * `lassoGeometry.ts`, unit-tested without a canvas; a keyboard has its own way to mark nodes (Select mode,
+ * then Space on the focused node).
  */
 
-import { useSigma } from '@react-sigma/core';
 import { useTheme } from '@mui/material/styles';
 import { useEffect, useRef, useState } from 'react';
 
@@ -22,11 +22,12 @@ import {
   type LassoPoint,
 } from './lassoGeometry.js';
 
-/** The part of the canvas's graph the lasso reads. */
-interface LassoGraph {
-  hasNode(id: string): boolean;
-  getNodeAttributes(id: string): Record<string, unknown>;
-}
+/**
+ * A node as the lasso sees it: its id, where it is drawn in viewport px, and its drawn radius.
+ *
+ * @stability experimental
+ */
+export type LassoTarget = LassoNode & { radius: number };
 
 /**
  * Props of {@link LassoBehaviour}.
@@ -34,10 +35,10 @@ interface LassoGraph {
  * @stability experimental
  */
 export interface LassoBehaviourProps {
-  /** The canvas's graph; node `x`, `y` and `size` are read. */
-  graph: LassoGraph;
-  /** The nodes that are drawn; a hidden node is never selected. */
-  visibleIds: ReadonlySet<string>;
+  /** The element the canvas draws into; the lasso listens on it and draws over it. `null` until mounted. */
+  container: HTMLElement | null;
+  /** The visible, selectable nodes and where they are drawn, read when a press starts and when the loop closes. */
+  positions: () => LassoTarget[];
   /** The Select tool (a pointer): a plain drag draws the loop. Shift always does. */
   selectTool: boolean;
   /** The loop was closed: the ids of the visible nodes inside it. */
@@ -49,81 +50,74 @@ export interface LassoBehaviourProps {
  *
  * @stability experimental
  */
-export function LassoBehaviour({ graph, visibleIds, selectTool, onLasso }: LassoBehaviourProps) {
-  const sigma = useSigma();
+export function LassoBehaviour({ container, positions, selectTool, onLasso }: LassoBehaviourProps) {
   const theme = useTheme();
   const [points, setPoints] = useState<readonly LassoPoint[]>([]);
-  const latest = useRef({ graph, visibleIds, selectTool, onLasso });
-  latest.current = { graph, visibleIds, selectTool, onLasso };
+  const latest = useRef({ positions, selectTool, onLasso });
+  latest.current = { positions, selectTool, onLasso };
 
   useEffect(() => {
-    const container = sigma.getContainer();
-    const host = container.parentElement ?? container;
+    if (!container) return undefined;
+    const host = container;
     let drawing: readonly LassoPoint[] | null = null;
 
-    const local = (event: MouseEvent): LassoPoint => {
-      const rect = container.getBoundingClientRect();
+    const local = (event: { clientX: number; clientY: number }): LassoPoint => {
+      const rect = host.getBoundingClientRect();
       return { x: event.clientX - rect.left, y: event.clientY - rect.top };
-    };
-    const positions = (): Array<LassoNode & { radius: number }> => {
-      const { graph: g, visibleIds: visible } = latest.current;
-      const out: Array<LassoNode & { radius: number }> = [];
-      for (const id of visible) {
-        if (!g.hasNode(id)) continue;
-        const attributes = g.getNodeAttributes(id) as { x?: number; y?: number; size?: number; isStub?: boolean };
-        if (typeof attributes.x !== 'number' || typeof attributes.y !== 'number' || attributes.isStub) continue;
-        const at = sigma.graphToViewport({ x: attributes.x, y: attributes.y });
-        out.push({ id, x: at.x, y: at.y, radius: sigma.scaleSize(attributes.size ?? 5) });
-      }
-      return out;
     };
 
     const stop = () => {
-      window.removeEventListener('mousemove', onMove, true);
-      window.removeEventListener('mouseup', onUp, true);
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onCancel, true);
       window.removeEventListener('keydown', onKey, true);
       drawing = null;
       setPoints((current) => (current.length === 0 ? current : []));
     };
-    const onMove = (event: MouseEvent) => {
+    const onMove = (event: PointerEvent) => {
       if (!drawing) return;
+      event.stopPropagation();
       drawing = appendLassoPoint(drawing, local(event));
       setPoints(drawing);
     };
-    const onUp = () => {
+    const onUp = (event: PointerEvent) => {
       const finished = drawing;
+      event.stopPropagation();
       stop();
-      // The click the browser sends after this press must not reach sigma, or it would clear the selection.
-      const swallow = (event: Event) => event.stopPropagation();
+      // The click the browser sends after this press must not reach the canvas, or it would clear the selection.
+      const swallow = (click: Event) => click.stopPropagation();
       host.addEventListener('click', swallow, { capture: true, once: true });
       window.setTimeout(() => host.removeEventListener('click', swallow, true), 0);
       if (!finished || !isLassoSelection(finished)) return;
-      const ids = nodesInPolygon(positions(), finished);
+      const ids = nodesInPolygon(latest.current.positions(), finished);
       if (ids.length > 0) latest.current.onLasso(ids);
     };
+    const onCancel = () => stop();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') stop();
     };
-    const onDown = (event: MouseEvent) => {
+    const onDown = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') return;
       if (event.button !== 0 || !(event.shiftKey || latest.current.selectTool)) return;
       const start = local(event);
-      // On a node: sigma handles it (shift-click toggles, a plain press drags).
-      if (nodeAtPoint(positions(), start)) return;
+      // On a node: the canvas handles it (shift-click toggles, a plain press drags).
+      if (nodeAtPoint(latest.current.positions(), start)) return;
       event.stopPropagation();
       event.preventDefault();
       drawing = [start];
       setPoints(drawing);
-      window.addEventListener('mousemove', onMove, true);
-      window.addEventListener('mouseup', onUp, true);
+      window.addEventListener('pointermove', onMove, true);
+      window.addEventListener('pointerup', onUp, true);
+      window.addEventListener('pointercancel', onCancel, true);
       window.addEventListener('keydown', onKey, true);
     };
 
-    host.addEventListener('mousedown', onDown, true);
+    host.addEventListener('pointerdown', onDown, true);
     return () => {
-      host.removeEventListener('mousedown', onDown, true);
+      host.removeEventListener('pointerdown', onDown, true);
       stop();
     };
-  }, [sigma]);
+  }, [container]);
 
   if (points.length < 2) return null;
   const colour = theme.palette.primary.main;

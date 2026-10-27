@@ -5,7 +5,7 @@ Shared rules for AI assistants working on this codebase (loaded by OpenCode, and
 ## Project overview
 
 Web application foundation (KVox): React UI + Node API + PostgreSQL, with OAuth authentication, RBAC, a settings framework, a background job queue with worker nodes, transcription, AI notes and a connected-knowledge graph.
-Stack: Node.js + TypeScript; NestJS on Fastify + Prisma (API); React + MUI, sigma.js + graphology (web); Commander + ink (`kvox` CLI); PostgreSQL; Passport (Google OAuth); Jest + Supertest (API), Vitest + React Testing Library (web, CLI); OpenTelemetry + GreptimeDB + Pino; Docker Compose; Nginx same-origin.
+Stack: Node.js + TypeScript; NestJS on Fastify + Prisma (API); React + MUI, AntV G6 + graphology (web); Commander + ink (`kvox` CLI); PostgreSQL; Passport (Google OAuth); Jest + Supertest (API), Vitest + React Testing Library (web, CLI); OpenTelemetry + GreptimeDB + Pino; Docker Compose; Nginx same-origin.
 Start at [README.md](README.md) and [docs/README.md](docs/README.md) (index with a "Doc map by task").
 
 ## Repository structure

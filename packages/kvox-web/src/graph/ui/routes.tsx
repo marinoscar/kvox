@@ -35,7 +35,7 @@ import type { KvoxRouteDef } from '../../core/ui/index.js';
  *   is sent to `/settings`.
  *
  * The pages are lazy; the explorer and the overview load their canvas
- * (`sigma`, `graphology` layout) a second time, so the list view never
+ * (`@antv/g6`) a second time, so the list view never
  * downloads it. The entity page takes the Ask slots, so an app that offers Ask
  * replaces its `Component` (the web edition does, in
  * `apps/web/src/kvox/graphRoutes.ts`).

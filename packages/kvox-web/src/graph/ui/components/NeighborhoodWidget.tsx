@@ -4,9 +4,9 @@
  * text form of the same one-hop slice.
  *
  * `getEntityNeighborhood(id, { hops: 1, limit: 60 })`, drawn by the explorer's
- * own `GraphCanvas` (lazy — sigma and graphology never enter the entity page's
+ * own `GraphCanvas` (lazy — G6 and graphology never enter the entity page's
  * chunk): the model's deterministic ring placement first, then a short
- * ForceAtlas2 settle (none under `prefers-reduced-motion` or `?layout=static`).
+ * force-layout settle (none under `prefers-reduced-motion` or `?layout=static`).
  * Clicking a node selects it and shows a small card with "Open page".
  *
  * ON A PHONE THE CANVAS IS NOT INTERACTIVE: a pannable canvas in a scrolling
@@ -66,7 +66,7 @@ export function explorerPathFor(entityId: string): string {
 }
 
 /**
- * The entity page's interactive one-hop neighbourhood. Renders nothing without WebGL or when the neighbourhood cannot be read; on a phone the canvas is not interactive and a tap opens the explorer.
+ * The entity page's interactive one-hop neighbourhood. Renders nothing without a drawing canvas or when the neighbourhood cannot be read; on a phone the canvas is not interactive and a tap opens the explorer.
  *
  * @stability experimental
  */

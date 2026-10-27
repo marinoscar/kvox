@@ -1,34 +1,35 @@
 /**
- * WebGL detection for the explorer and the entity-page neighbourhood widget
- * (#374). Sigma draws with WebGL only; without it the explorer forces its list
- * view and the widget hides itself (the Connections list below it already
+ * Drawing-surface detection for the explorer, the overview and the entity-page
+ * neighbourhood widget (#374; G6, #775). The G6 canvas draws with the 2D
+ * Canvas API (it needs no WebGL); without a 2D context the explorer forces its
+ * list view and the widget hides itself (the Connections list below it already
  * carries the same content).
  *
- * Probed once per page load and cached: creating a context is not free, and
- * the answer cannot change without a reload. jsdom has no WebGL, so tests mock
- * this module rather than the canvas element.
+ * The exported names keep "WebGL" for compatibility with hosts and their tests
+ * (`mockGraphCanvas({ webgl })`); what they report is "the canvas can draw".
+ *
+ * Probed once per page load and cached. jsdom has no 2D canvas, so tests force
+ * the answer rather than mock the canvas element.
  */
 
 let cached: boolean | null = null;
 
+/** Whether the browser can draw the graph canvas (a 2D canvas context exists). */
 export function isWebGLAvailable(): boolean {
   if (cached !== null) return cached;
   try {
-    // No WebGL constructor at all (jsdom, very old browsers): don't even ask a
+    // No 2D context constructor at all (jsdom, very old browsers): don't even ask a
     // canvas, whose unimplemented `getContext` would only log noise.
     if (
       typeof window === 'undefined' ||
       typeof document === 'undefined' ||
-      typeof window.WebGLRenderingContext === 'undefined'
+      typeof window.CanvasRenderingContext2D === 'undefined'
     ) {
       cached = false;
       return cached;
     }
     const canvas = document.createElement('canvas');
-    const context =
-      (canvas.getContext('webgl2') as WebGL2RenderingContext | null) ??
-      (canvas.getContext('webgl') as WebGLRenderingContext | null);
-    cached = Boolean(context);
+    cached = Boolean(canvas.getContext('2d'));
   } catch {
     cached = false;
   }

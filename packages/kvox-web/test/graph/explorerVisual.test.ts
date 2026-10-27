@@ -23,9 +23,7 @@ import {
   type ExplorerState,
 } from '../../src/graph/ui/components/explorer/explorerModel.js';
 import {
-  CURVED_ARROW_PROGRAM,
   MAX_FOCUS_EDGE_LABELS,
-  PICTOGRAM_PROGRAM,
   buildEdgeReducer,
   buildNodeReducer,
   type ReducerContext,
@@ -37,7 +35,7 @@ import { ACME_ID, ANA_ID, JOE_ID, Q3_MEETING_ID, expandFixture, gid, hubFixture 
 /**
  * The explorer's visual language, model half (#667): degree of interest, the
  * "+N more" stubs, parallel-edge curvature, the highlight reducers and the legend
- * model. No sigma and no WebGL anywhere: the reducers are pure.
+ * model. No G6 and no canvas anywhere: the reducers are pure.
  */
 
 const NOW = Date.parse('2026-09-26T00:00:00.000Z');
@@ -410,14 +408,13 @@ describe('reducers', () => {
     expect(plain(marked, nodeData(state, marked)).label).toBe('');
   });
 
-  it('with no focus: draws every node as a pictogram, hides nothing, dims nothing, labels no edge', () => {
+  it('with no focus: hides nothing, dims nothing, labels no edge', () => {
     const state = loaded();
     const node = buildNodeReducer(context(state));
     const edge = buildEdgeReducer(context(state));
     for (const id of state.graph.nodes()) {
       const out = node(id, nodeData(state, id));
       expect(out.hidden).toBeUndefined();
-      expect(out.type).toBe(PICTOGRAM_PROGRAM);
       expect(out.color).toBe(state.graph.getNodeAttribute(id, 'color'));
       expect(out.label).toBe(state.graph.getNodeAttribute(id, 'label'));
     }
@@ -554,14 +551,6 @@ describe('reducers', () => {
     const wall = buildEdgeReducer(context(hub, { focusId: JOE_ID }));
     expect(MAX_FOCUS_EDGE_LABELS).toBeLessThan(hub.graph.degree(JOE_ID));
     for (const id of hub.graph.edges()) expect(wall(id, edgeData(hub, id)).label).toBe('');
-  });
-
-  it('switches a parallel edge to the curved program and leaves a straight one alone', () => {
-    const state = loaded();
-    const edge = buildEdgeReducer(context(state));
-    const id = state.graph.edges()[0];
-    expect(edge(id, { ...edgeData(state, id), curvature: 0 }).type).toBe('arrow');
-    expect(edge(id, { ...edgeData(state, id), curvature: 0.3 }).type).toBe(CURVED_ARROW_PROGRAM);
   });
 
   it('rings: a seed, a pinned and the selected node each get theirs; a plain node none', () => {

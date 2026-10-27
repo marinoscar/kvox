@@ -1,11 +1,10 @@
 // The MUI half of the graph slice: the pages, the pieces other screens embed,
 // the slot components for the transcript and note pages and the libraries, and
 // the data the app spreads into its registries (the destination, the routes and
-// the Knowledge graph card). The drawing libraries (sigma and its React
-// bindings, `graphology` and its ForceAtlas2 layout) are optional peers of this
-// entry only, and they load lazily: `GraphCanvas.tsx` is the one file that
-// imports sigma, reached only through the explorer, the overview and the
-// neighbourhood widget.
+// the Knowledge graph card). The drawing libraries (`@antv/g6` and
+// `graphology`) are optional peers of this entry only, and G6 loads lazily:
+// `GraphCanvas.tsx` is the one file that imports it, reached only through the
+// explorer, the overview and the neighbourhood widget.
 
 export { GraphIndexPage } from './pages/GraphIndexPage.js';
 export type { GraphIndexLocationState } from './pages/GraphIndexPage.js';
@@ -125,7 +124,7 @@ export type {
   CanvasViewport,
   NodeContextMenuEvent,
 } from './components/explorer/GraphCanvas.js';
-export type { CanvasLayout } from './components/explorer/layout/useCanvasLayout.js';
+export type { CanvasLayout } from './components/explorer/layout/canvasLayouts.js';
 export type { ExplorerBudgets } from './components/explorer/shell/explorerBudgets.js';
 export type { Insets } from './components/explorer/shell/canvasGestures.js';
 export type { NeighborhoodCanvasProps } from './components/explorer/NeighborhoodCanvas.js';

@@ -2,16 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 
 /**
  * The drawing libraries are optional peers of the `graph/ui` entry ONLY, and
- * sigma is reached only through the lazy canvas.
+ * G6 is reached only through the lazy canvas.
  *
- * `sigma`, `@react-sigma/core`, `graphology-layout-forceatlas2`, `graphology-layout-noverlap`
- * (the layout worker's overlap pass) and the three `@sigma/*` programs (`node-image`,
- * `node-border`, `edge-curve`, #667) are not
- * installed by a host that uses just `graph/headless` (KVox Desktop's main
- * process, a CLI), and `graphology` is not either, so that entry has to load
- * with every one of them missing. The `ui` entry needs `graphology` (the
- * explorer and overview models) but not sigma, nor its programs, until a screen
- * draws a canvas: only the lazy `GraphCanvas` chunk imports them.
+ * `@antv/g6` (about 410 KB gzipped) is not installed by a host that uses just
+ * `graph/headless` (KVox Desktop's main process, a CLI), and `graphology` is
+ * not either, so that entry has to load with both missing. The `ui` entry needs
+ * `graphology` (the explorer and overview models) but not G6 until a screen
+ * draws a canvas: only the lazy `GraphCanvas` chunk imports it.
  *
  * "Not installed" is simulated by making each module throw the error a missing
  * package throws when it is imported.
@@ -21,16 +18,7 @@ function missing(name: string): never {
   throw new Error(`Cannot find package '${name}'`);
 }
 
-vi.mock('sigma', () => missing('sigma'));
-vi.mock('sigma/settings', () => missing('sigma/settings'));
-vi.mock('@react-sigma/core', () => missing('@react-sigma/core'));
-vi.mock('@react-sigma/core/lib/style.css', () => missing('@react-sigma/core/lib/style.css'));
-vi.mock('graphology-layout-forceatlas2', () => missing('graphology-layout-forceatlas2'));
-vi.mock('sigma/rendering', () => missing('sigma/rendering'));
-vi.mock('@sigma/node-image', () => missing('@sigma/node-image'));
-vi.mock('@sigma/node-border', () => missing('@sigma/node-border'));
-vi.mock('@sigma/edge-curve', () => missing('@sigma/edge-curve'));
-vi.mock('graphology-layout-noverlap', () => missing('graphology-layout-noverlap'));
+vi.mock('@antv/g6', () => missing('@antv/g6'));
 
 describe('graph/headless without the drawing libraries', () => {
   it('loads and exports its client and hooks', async () => {
@@ -56,7 +44,7 @@ describe('graph/headless without the drawing libraries', () => {
   });
 });
 
-describe('graph/ui without sigma', () => {
+describe('graph/ui without G6', () => {
   it('loads: the canvas is a lazy chunk that only a screen drawing a graph pulls in', async () => {
     const ui = await import('../../src/graph/ui/index.js');
 
