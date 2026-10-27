@@ -4,9 +4,11 @@
  * step is "now" (no `as_of` at all). A change is debounced 300 ms so dragging
  * across two years is one request, not twenty-four.
  *
- * A step maps to the FIRST DAY of its month, UTC (`2024-03-01`) — the API
- * reads a bare date as 00:00:00Z that day, so the value is stable wherever
- * the viewer is.
+ * A step maps to the FIRST DAY of its month (`2024-03-01`), a calendar date:
+ * the API reads a bare `as_of` as that date's UTC midnight against calendar
+ * ranges, so the value is stable wherever the viewer is. Which month is the
+ * CURRENT one is the user's local calendar (the display zone): on 31 March at
+ * 22:00 in Los Angeles it is still March, already April in UTC.
  */
 
 import Box from '@mui/material/Box';
@@ -15,7 +17,10 @@ import Slider from '@mui/material/Slider';
 import Typography from '@mui/material/Typography';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
+
 import { monthLabel } from '../../../headless/utils/explorerFilters.js';
+import { dayKeyOf, todayKey } from './timebar/timeAxis.js';
 
 export const AS_OF_DEBOUNCE_MS = 300;
 
@@ -34,13 +39,18 @@ function monthStart(year: number, month: number): string {
   return `${String(year).padStart(4, '0')}-${String(month + 1).padStart(2, '0')}-01`;
 }
 
-/** Every month start from `min`'s month up to and including `now`'s month. */
-export function monthSteps(min: string, now: Date): string[] {
-  const start = new Date(min);
-  let year = Number.isNaN(start.getTime()) ? now.getUTCFullYear() - 5 : start.getUTCFullYear();
-  let month = Number.isNaN(start.getTime()) ? now.getUTCMonth() : start.getUTCMonth();
-  const endYear = now.getUTCFullYear();
-  const endMonth = now.getUTCMonth();
+/**
+ * Every month start from `min`'s month up to and including the current month,
+ * both read on the local calendar of `timeZone` (default the display zone): a
+ * bare `YYYY-MM-DD` `min` is its own month, an instant the month it falls in there.
+ */
+export function monthSteps(min: string, now: Date, timeZone?: string): string[] {
+  const today = todayKey(now, timeZone);
+  const endYear = Number(today.slice(0, 4));
+  const endMonth = Number(today.slice(5, 7)) - 1;
+  const minKey = dayKeyOf(min, timeZone);
+  let year = minKey ? Number(minKey.slice(0, 4)) : endYear - 5;
+  let month = minKey ? Number(minKey.slice(5, 7)) - 1 : endMonth;
   const steps: string[] = [];
   while (year < endYear || (year === endYear && month <= endMonth)) {
     steps.push(monthStart(year, month));
@@ -49,7 +59,6 @@ export function monthSteps(min: string, now: Date): string[] {
       month = 0;
       year += 1;
     }
-    if (steps.length > 1200) break;
   }
   if (steps.length === 0) steps.push(monthStart(endYear, endMonth));
   return steps;
@@ -57,7 +66,8 @@ export function monthSteps(min: string, now: Date): string[] {
 
 export function AsOfSlider({ minDate, value, onChange, now, disabled }: AsOfSliderProps) {
   const clock = useMemo(() => now ?? new Date(), [now]);
-  const steps = useMemo(() => monthSteps(minDate, clock), [minDate, clock]);
+  const timeZone = useDisplayTimeZone();
+  const steps = useMemo(() => monthSteps(minDate, clock, timeZone), [minDate, clock, timeZone]);
   const last = steps.length - 1;
 
   const indexOf = (v: string | null) => {

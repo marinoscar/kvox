@@ -1,13 +1,25 @@
 /**
- * The TimeBar's calendar arithmetic (GIC-15, #676). Pure, UTC only, no clock:
- * the API buckets in UTC (weeks start Monday, months on the 1st), so the axis
- * does too, and a range written to the URL means the same thing for every
- * viewer wherever they are.
+ * The TimeBar's calendar arithmetic (GIC-15, #676). Pure, no clock.
+ *
+ * The axis runs in CALENDAR DAYS of the user's display time zone, because the
+ * API cuts its activity buckets in the requester's zone (weeks start Monday
+ * there, months on the 1st; the response echoes the zone as `timeZone`). A day
+ * is written as a date key `YYYY-MM-DD`, and handled in arithmetic as a "day
+ * number": the UTC midnight of that calendar date in ms. A day number is a
+ * floating calendar date, never an instant, so adding `n * DAY_MS` is plain
+ * calendar arithmetic and is DST-safe (UTC has no DST; a 23- or 25-hour local
+ * day is still one day). Only two functions meet real instants: {@link todayDay}
+ * (the clock) and {@link dayKeyOf} (an ISO instant), and both read them in a
+ * zone.
  *
  * A brush is a half-open range `[from, to)` of whole buckets, both ends
  * `YYYY-MM-DD`. `to` is the START of the bucket after the last one selected,
- * which is also the instant the explorer evaluates the graph at (`as_of`).
+ * which is also the calendar date the explorer evaluates the graph at (`as_of`).
+ * A bare day sent as `from`/`to`/`since` is read by the API as that day's local
+ * midnight, so the URL holds the user's calendar days.
  */
+
+import { getDisplayTimeZone, zonedDateKey } from '@marinoscar/platform-web/timezone/headless';
 
 import type { GraphActivityBucket } from '../../../../headless/clients/graph.js';
 
@@ -25,13 +37,13 @@ export const MIN_SPAN_DAYS = 28;
  * @stability experimental
  */
 export interface TimeRange {
-  /** First day of the first selected bucket, `YYYY-MM-DD` (UTC). */
+  /** First day of the first selected bucket, `YYYY-MM-DD` (a calendar day of the display zone). */
   from: string;
-  /** First day of the bucket after the last selected one, `YYYY-MM-DD` (UTC). Exclusive. */
+  /** First day of the bucket after the last selected one, `YYYY-MM-DD` (a calendar day of the display zone). Exclusive. */
   to: string;
 }
 
-/** `YYYY-MM-DD` to UTC midnight in ms; `null` when it is not a real calendar date. */
+/** A date key `YYYY-MM-DD` to its day number (UTC midnight of the calendar date, in ms); `null` when it is not a real calendar date. */
 export function parseDay(value: string | null | undefined): number | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const ms = Date.parse(`${value}T00:00:00Z`);
@@ -39,12 +51,48 @@ export function parseDay(value: string | null | undefined): number | null {
   return formatDay(ms) === value ? ms : null;
 }
 
-/** UTC ms to `YYYY-MM-DD`. */
+/** A day number to its date key `YYYY-MM-DD`. */
 export function formatDay(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-/** The start (UTC midnight) of the bucket holding `ms`: the Monday of its week, or the 1st of its month. */
+/**
+ * The calendar day a value falls on in `timeZone`, as `YYYY-MM-DD`: a bare
+ * `YYYY-MM-DD` is already a calendar day and is returned as is; an ISO instant
+ * (or a `Date`, or epoch ms) is read in the zone. `null` for a value that is no date.
+ *
+ * @param value - A date key, an ISO instant, a `Date` or epoch ms.
+ * @param timeZone - An IANA zone; default the display zone.
+ */
+export function dayKeyOf(value: string | number | Date, timeZone?: string): string | null {
+  if (typeof value === 'string' && value.length === 10) return parseDay(value) === null ? null : value;
+  return zonedDateKey(value, timeZone ?? getDisplayTimeZone());
+}
+
+/**
+ * Today in `timeZone`, as a day number: the clock read as the user's calendar day.
+ *
+ * @param now - The clock; default now.
+ * @param timeZone - An IANA zone; default the display zone.
+ */
+export function todayDay(now: number | Date = Date.now(), timeZone?: string): number {
+  const ms = typeof now === 'number' ? now : now.getTime();
+  // An unreadable clock (NaN) falls back to the UTC day rather than throwing.
+  return parseDay(dayKeyOf(ms, timeZone)) ?? ms - (ms % DAY_MS);
+}
+
+/** Today in `timeZone` as a date key (`YYYY-MM-DD`); see {@link todayDay}. */
+export function todayKey(now: number | Date = Date.now(), timeZone?: string): string {
+  return formatDay(todayDay(now, timeZone));
+}
+
+/** The date key `n` calendar days after (negative: before) `key`; `null` for a key that is no date. */
+export function addDaysToKey(key: string, n: number): string | null {
+  const day = parseDay(key);
+  return day === null ? null : formatDay(day + n * DAY_MS);
+}
+
+/** The start of the bucket holding the day number `ms`: the Monday of its week, or the 1st of its month. */
 export function bucketStart(ms: number, bucket: GraphActivityBucket): number {
   const date = new Date(ms);
   if (bucket === 'month') return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
@@ -101,20 +149,33 @@ export function snapRange(fromMs: number, toMs: number, bucket: GraphActivityBuc
   return { from: formatDay(a), to: formatDay(b) };
 }
 
-/** The one-bucket range holding a date or instant (`Show in TimeBar`). `null` for a value that is no date. */
-export function rangeForInstant(value: string, bucket: GraphActivityBucket = 'month'): TimeRange | null {
-  const ms = Date.parse(value.length === 10 ? `${value}T00:00:00Z` : value);
-  if (Number.isNaN(ms)) return null;
+/**
+ * The one-bucket range holding a date or instant (`Show in TimeBar`). A bare
+ * `YYYY-MM-DD` is a calendar day; an instant is read as the calendar day it
+ * falls on in `timeZone` (default the display zone), so it lands in the bucket
+ * the API counted it in. `null` for a value that is no date.
+ */
+export function rangeForInstant(
+  value: string,
+  bucket: GraphActivityBucket = 'month',
+  timeZone?: string,
+): TimeRange | null {
+  const ms = parseDay(dayKeyOf(value, timeZone));
+  if (ms === null) return null;
   const start = bucketStart(ms, bucket);
   return { from: formatDay(start), to: formatDay(addBuckets(start, bucket, 1)) };
 }
 
-/** `[start, end)` overlap test, in ms. */
+/** `[start, end)` overlap test, in day numbers (or any ms). */
 export function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
   return aStart < bEnd && bStart < aEnd;
 }
 
-/** "Mar 2026" for a month bucket, "9 Mar 2026" for a week one. */
+/**
+ * "Mar 2026" for a month bucket, "9 Mar 2026" for a week one. `start` is a day
+ * number, so its UTC fields ARE the calendar date (of whatever zone cut it):
+ * reading it in another zone would shift the label a day.
+ */
 export function bucketLabel(start: number, bucket: GraphActivityBucket): string {
   const date = new Date(start);
   const month = MONTHS[date.getUTCMonth()];

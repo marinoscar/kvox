@@ -1,14 +1,16 @@
 /**
  * The explorer's ONE time control (#768): presets over the URL's `from`/`to`
- * range. Pure, UTC, the clock a parameter.
+ * range. Pure, the clock and the zone parameters.
  *
- * A preset is a half-open `[from, to)` range of whole days ending TOMORROW
- * (UTC), so today is inside it and the range end is never in the past: in the
- * focused view the graph is then evaluated "now" (no `as_of`), exactly like All
- * time. "All time" is no range at all (`from`/`to` absent from the URL).
+ * A preset is a half-open `[from, to)` range of whole CALENDAR days of the
+ * display time zone ending TOMORROW there (the user's local tomorrow), so their
+ * today is inside it and the range end is never in the past: in the focused
+ * view the graph is then evaluated "now" (no `as_of`), exactly like All time.
+ * The API reads each bare day as that day's local midnight. "All time" is no
+ * range at all (`from`/`to` absent from the URL).
  */
 
-import { DAY_MS, formatDay, parseDay, type TimeRange } from './timeAxis.js';
+import { DAY_MS, formatDay, parseDay, todayDay, type TimeRange } from './timeAxis.js';
 
 /**
  * The time control's choices.
@@ -33,25 +35,30 @@ export const TIME_PRESET_LABELS: Readonly<Record<TimePresetKey, string>> = {
   custom: 'Custom range',
 };
 
-/** UTC midnight of the day after `now`. */
-function tomorrow(now: number): number {
-  const date = new Date(now);
-  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) + DAY_MS;
+/** The day number of the user's local tomorrow at `now` in `timeZone` (default the display zone). */
+function tomorrow(now: number, timeZone?: string): number {
+  return todayDay(now, timeZone) + DAY_MS;
 }
 
-/** The range a preset stands for at `now`; `null` for All time (and for Custom, which has no range of its own). */
-export function presetRange(key: TimePresetKey, now: number = Date.now()): TimeRange | null {
+/**
+ * The range a preset stands for at `now`; `null` for All time (and for Custom, which has no range of its own).
+ *
+ * @param key - The preset.
+ * @param now - The clock (epoch ms); default now.
+ * @param timeZone - The zone whose calendar the range is cut in; default the display zone.
+ */
+export function presetRange(key: TimePresetKey, now: number = Date.now(), timeZone?: string): TimeRange | null {
   const preset = TIME_PRESETS.find((p) => p.key === key);
   if (!preset) return null;
-  const end = tomorrow(now);
+  const end = tomorrow(now, timeZone);
   return { from: formatDay(end - preset.days * DAY_MS), to: formatDay(end) };
 }
 
-/** Which choice a range reads as: `all` without one, a preset when it matches exactly at `now`, else `custom`. */
-export function presetOf(range: TimeRange | null, now: number = Date.now()): TimePresetKey {
+/** Which choice a range reads as: `all` without one, a preset when it matches exactly at `now` (in `timeZone`), else `custom`. */
+export function presetOf(range: TimeRange | null, now: number = Date.now(), timeZone?: string): TimePresetKey {
   if (!range) return 'all';
   for (const preset of TIME_PRESETS) {
-    const r = presetRange(preset.key, now);
+    const r = presetRange(preset.key, now, timeZone);
     if (r && r.from === range.from && r.to === range.to) return preset.key;
   }
   return 'custom';
@@ -59,6 +66,7 @@ export function presetOf(range: TimeRange | null, now: number = Date.now()): Tim
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/** "9 Mar 2026" for a day number: its UTC fields are the calendar date. */
 function dayLabel(ms: number): string {
   const date = new Date(ms);
   return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
@@ -73,8 +81,8 @@ export function customRangeLabel(range: TimeRange): string {
 }
 
 /** What the control's button says for a range. */
-export function timeControlLabel(range: TimeRange | null, now: number = Date.now()): string {
-  const key = presetOf(range, now);
+export function timeControlLabel(range: TimeRange | null, now: number = Date.now(), timeZone?: string): string {
+  const key = presetOf(range, now, timeZone);
   return key === 'custom' && range ? customRangeLabel(range) : TIME_PRESET_LABELS[key];
 }
 

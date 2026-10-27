@@ -832,6 +832,7 @@ describe('GraphExplorerPage — filters and time', () => {
         HttpResponse.json({
           data: {
             bucket: 'month',
+            timeZone: 'UTC',
             series: [
               { start: '2026-01-01', total: 2, byType: { Person: 2 } },
               { start: '2026-03-01', total: 3, byType: { Person: 1, Organization: 2 } },

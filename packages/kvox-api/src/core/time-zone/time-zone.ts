@@ -17,10 +17,18 @@ import { DEFAULT_SERVER_TIME_ZONE, TIME_ZONE_HEADER, zonedDateKey, zonedDayStart
 // platform import a kvox-api file may make.
 // =============================================================================
 
-/** The fallback zone when nothing is stored and no usable header arrived. */
+/**
+ * The fallback zone when nothing is stored and no usable header arrived.
+ *
+ * @stability experimental
+ */
 export const KVOX_DEFAULT_TIME_ZONE: string = DEFAULT_SERVER_TIME_ZONE;
 
-/** The request header a client sends with the device zone (`x-time-zone`). */
+/**
+ * The request header a client sends with the device zone (`x-time-zone`).
+ *
+ * @stability experimental
+ */
 export const KVOX_TIME_ZONE_HEADER: string = TIME_ZONE_HEADER;
 
 const validCache = new Map<string, boolean>();
