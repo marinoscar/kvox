@@ -21,7 +21,10 @@ import {
   GraphOverviewPage,
   BUILDING_TEXT,
   EMPTY_TITLE,
+  FILLS_IN_TEXT,
   OVERVIEW_NO_WEBGL_TEXT,
+  SPARSE_ENTITY_COUNT,
+  SPARSE_TITLE,
   overviewCaption,
 } from '../../src/graph/ui/pages/GraphOverviewPage.js';
 import type { GraphOverview } from '../../src/graph/headless/clients/graph.js';
@@ -33,7 +36,8 @@ import type { MockUser } from './helpers.js';
 import { render } from './helpers.js';
 
 /**
- * `/graph/overview` (#375). jsdom has no WebGL, so the canvas is a FAKE that
+ * `/graph`, the knowledge landing (#375, #782; `/graph/overview` redirects
+ * here, see `GraphRoutes.test.tsx`). jsdom has no WebGL, so the canvas is a FAKE that
  * renders one button per node, named by the node's UNDIMMED label and marked
  * with its current colour — every rule is tested outside the canvas, which is
  * the point of keeping them in `overviewModel`.
@@ -122,14 +126,14 @@ function currentUrl(): URL {
   return new URL(screen.getByTestId('location').textContent ?? '/', 'http://x');
 }
 
-function renderOverview(route = '/graph/overview', user: MockUser = graphWriter) {
+function renderOverview(route = '/graph', user: MockUser = graphWriter) {
   return render(
     <>
       <Routes>
-        <Route path="/graph/overview" element={<GraphOverviewPage />} />
+        <Route path="/graph" element={<GraphOverviewPage />} />
         <Route path="/graph/explore" element={<h1>Explorer</h1>} />
         <Route path="/graph/entities/:id" element={<h1>Entity page</h1>} />
-        <Route path="/graph" element={<h1>Knowledge index</h1>} />
+        <Route path="/graph/entities" element={<h1>Entity index</h1>} />
       </Routes>
       <LocationProbe />
     </>,
@@ -144,9 +148,9 @@ async function canvasReady() {
 }
 
 describe('overviewCaption', () => {
-  it('says when it was built and how big the graph is', () => {
+  it('says when it was updated and how big the graph is', () => {
     const caption = overviewCaption(overviewFixture(), new Date('2026-09-23T15:00:00.000Z'));
-    expect(caption).toBe('Built 3 days ago · 13 entities · 16 connections');
+    expect(caption).toBe('Updated 3 days ago · 13 entities · 16 connections');
     expect(overviewCaption(overviewFixture({ computedAt: null, nodeCount: 1, edgeCount: 1 }))).toBe(
       '1 entity · 1 connection',
     );
@@ -157,7 +161,8 @@ describe('GraphOverviewPage — layers', () => {
   it('draws the clusters layer by default, statically, with the header caption', async () => {
     renderOverview();
     const canvas = await canvasReady();
-    expect(screen.getByRole('heading', { level: 1, name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Knowledge' })).toBeInTheDocument();
+    expect(screen.getByText(/^Updated .* · 13 entities · 16 connections$/)).toBeInTheDocument();
     expect(screen.getByText(/13 entities · 16 connections/)).toBeInTheDocument();
     expect(canvas).toHaveAttribute('data-layout', 'static');
     expect(within(canvas).getAllByRole('button', { name: /\(\d+\)$/ }).map((b) => b.textContent)).toEqual([
@@ -187,7 +192,7 @@ describe('GraphOverviewPage — layers', () => {
 
   it('selecting a node in the everything layer selects its cluster and dims the rest', async () => {
     const user = userEvent.setup();
-    renderOverview('/graph/overview?layer=nodes');
+    renderOverview('/graph?layer=nodes');
     const canvas = await screen.findByTestId('fake-canvas');
     await user.click(await within(canvas).findByRole('button', { name: 'Ana Diaz' }));
     await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBe('1'));
@@ -221,7 +226,7 @@ describe('GraphOverviewPage — cluster selection and drill-down', () => {
 
   it('a cluster with no label entity offers no "Open" link; the stage click deselects', async () => {
     const user = userEvent.setup();
-    renderOverview('/graph/overview?cluster=2');
+    renderOverview('/graph?cluster=2');
     const panel = await screen.findByRole('complementary', { name: 'Cluster 3' });
     expect(within(panel).queryByRole('link', { name: /^Open/ })).not.toBeInTheDocument();
     await user.click(within(screen.getByTestId('fake-canvas')).getByRole('button', { name: 'stage' }));
@@ -229,14 +234,14 @@ describe('GraphOverviewPage — cluster selection and drill-down', () => {
   });
 
   it('ignores a ?cluster= this snapshot does not have', async () => {
-    renderOverview('/graph/overview?cluster=77');
+    renderOverview('/graph?cluster=77');
     await canvasReady();
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
   });
 
   it('"Explore this cluster" hands the members over and opens the explorer', async () => {
     const user = userEvent.setup();
-    renderOverview('/graph/overview?cluster=1');
+    renderOverview('/graph?cluster=1');
     const panel = await screen.findByRole('complementary', { name: 'Org Sigma' });
     await user.click(within(panel).getByRole('button', { name: 'Explore this cluster' }));
 
@@ -262,7 +267,7 @@ describe('GraphOverviewPage — cluster selection and drill-down', () => {
 
   it('renders the panel as a bottom sheet on a phone', async () => {
     act(() => setViewportWidth(390));
-    renderOverview('/graph/overview?cluster=0');
+    renderOverview('/graph?cluster=0');
     const sheet = await screen.findByRole('presentation');
     expect(within(sheet).getByRole('heading', { name: 'Org Kappa' })).toBeInTheDocument();
     expect(within(sheet).getByRole('button', { name: 'Explore this cluster' })).toBeInTheDocument();
@@ -319,7 +324,7 @@ describe('GraphOverviewPage — keyboard', () => {
 describe('GraphOverviewPage — list view', () => {
   it('lists clusters largest first, is keyboard operable and axe-clean', async () => {
     const user = userEvent.setup();
-    const { container } = renderOverview('/graph/overview?view=list');
+    const { container } = renderOverview('/graph?view=list');
     const list = await screen.findByRole('region', { name: CLUSTER_LIST_LABEL });
     expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();
     const rows = within(list).getAllByRole('button', { expanded: false });
@@ -344,7 +349,7 @@ describe('GraphOverviewPage — list view', () => {
 
   it('collapsing the open row deselects; the toggle returns to the canvas', async () => {
     const user = userEvent.setup();
-    renderOverview('/graph/overview?view=list&cluster=0');
+    renderOverview('/graph?view=list&cluster=0');
     const list = await screen.findByRole('region', { name: CLUSTER_LIST_LABEL });
     await user.click(within(list).getByRole('button', { expanded: true }));
     await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBeNull());
@@ -382,7 +387,7 @@ describe('GraphOverviewPage — snapshot states', () => {
 
   it('stale: a reader sees the sentence and no Refresh anywhere', async () => {
     serveOverview(overviewStates.stale());
-    renderOverview('/graph/overview', graphReader);
+    renderOverview('/graph', graphReader);
     await canvasReady();
     expect(screen.getByText(STALE_TEXT)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
@@ -433,11 +438,15 @@ describe('GraphOverviewPage — snapshot states', () => {
     expect(calls).toBe(2);
   });
 
-  it('none + empty graph: "Nothing to show yet" linking the index, no canvas', async () => {
+  it('none + empty graph: the map fills in, with Browse entities and Explore, no canvas', async () => {
     serveOverview(overviewStates.empty());
     const { container } = renderOverview();
     expect(await screen.findByRole('heading', { name: EMPTY_TITLE })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to Knowledge' })).toHaveAttribute('href', '/graph');
+    expect(screen.getByText(FILLS_IN_TEXT)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Browse entities' })).toHaveAttribute('href', '/graph/entities');
+    const main = screen.getByRole('heading', { name: EMPTY_TITLE }).closest('div') as HTMLElement;
+    expect(within(main).getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/graph/explore');
+    expect(screen.queryByText(/^Updated /)).not.toBeInTheDocument();
     expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
@@ -477,5 +486,102 @@ describe('GraphOverviewPage — snapshot states', () => {
     fail = false;
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     await canvasReady();
+  });
+});
+
+describe('GraphOverviewPage — the knowledge header (#782)', () => {
+  it('links to Entities, Explore, Review and Possible duplicates on a desktop', async () => {
+    renderOverview('/graph', graphReader);
+    await canvasReady();
+    expect(screen.getByRole('link', { name: 'Entities' })).toHaveAttribute('href', '/graph/entities');
+    expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/graph/explore');
+    expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute('href', '/graph/review');
+    expect(await screen.findByRole('link', { name: /^Possible duplicates/ })).toHaveAttribute(
+      'href',
+      '/graph/duplicates',
+    );
+    // The overview does not link to itself.
+    expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument();
+  });
+
+  it('carries Synonyms, Export and Import in the overflow menu for graph:write', async () => {
+    const user = userEvent.setup();
+    server.use(http.get('*/api/graph/exports', () => HttpResponse.json({ data: { exports: [] } })));
+    renderOverview('/graph', graphWriter);
+    await canvasReady();
+    await user.click(screen.getByRole('button', { name: 'More knowledge actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Synonyms' })).toHaveAttribute('href', '/graph/synonyms');
+    expect(screen.getByRole('menuitem', { name: 'Import graph…' })).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'Export graph…' }));
+    expect(await screen.findByRole('dialog', { name: 'Export graph' })).toBeInTheDocument();
+  });
+
+  it('offers no "Import graph…" to a reader', async () => {
+    const user = userEvent.setup();
+    renderOverview('/graph', graphReader);
+    await canvasReady();
+    await user.click(screen.getByRole('button', { name: 'More knowledge actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Export graph…' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Import graph…' })).not.toBeInTheDocument();
+  });
+
+  it('opens Import graph… for a writer', async () => {
+    const user = userEvent.setup();
+    renderOverview('/graph', graphWriter);
+    await canvasReady();
+    await user.click(screen.getByRole('button', { name: 'More knowledge actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Import graph…' }));
+    expect(await screen.findByRole('dialog', { name: 'Import graph' })).toBeInTheDocument();
+  });
+
+  it('folds every link into one menu on a phone', async () => {
+    const user = userEvent.setup();
+    setViewportWidth(390);
+    renderOverview('/graph', graphReader);
+    await canvasReady();
+    expect(screen.queryByRole('link', { name: 'Entities' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'More knowledge views' }));
+    expect(await screen.findByRole('menuitem', { name: 'Entities' })).toHaveAttribute('href', '/graph/entities');
+    expect(screen.getByRole('menuitem', { name: 'Explore' })).toHaveAttribute('href', '/graph/explore');
+    expect(screen.getByRole('menuitem', { name: 'Review' })).toHaveAttribute('href', '/graph/review');
+    expect(screen.getByRole('menuitem', { name: /^Possible duplicates/ })).toHaveAttribute('href', '/graph/duplicates');
+    expect(screen.getByRole('menuitem', { name: 'Synonyms' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Export graph…' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Import graph…' })).not.toBeInTheDocument();
+  });
+});
+
+describe('GraphOverviewPage — empty and sparse (#782)', () => {
+  it('a sparse map is still drawn, under a "fills in" message with Browse entities and Explore', async () => {
+    const base = overviewFixture();
+    serveOverview(
+      overviewFixture({
+        nodeCount: SPARSE_ENTITY_COUNT - 1,
+        edgeCount: 2,
+        clusters: base.clusters.slice(0, 1),
+      }),
+    );
+    const { container } = renderOverview();
+    await canvasReady();
+    const sparse = screen.getByRole('region', { name: SPARSE_TITLE });
+    expect(within(sparse).getByText(FILLS_IN_TEXT)).toBeInTheDocument();
+    expect(within(sparse).getByRole('link', { name: 'Browse entities' })).toHaveAttribute('href', '/graph/entities');
+    expect(within(sparse).getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/graph/explore');
+    expect(screen.getByText(/^Updated .* · 4 entities · 2 connections$/)).toBeInTheDocument();
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+
+  it('says nothing about sparseness once the map has enough entities', async () => {
+    renderOverview();
+    await canvasReady();
+    expect(screen.queryByRole('region', { name: SPARSE_TITLE })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Browse entities' })).not.toBeInTheDocument();
+  });
+
+  it('while the first snapshot builds, offers Browse entities and Explore', async () => {
+    serveOverview(overviewStates.building());
+    renderOverview();
+    expect(await screen.findByRole('heading', { name: BUILDING_TEXT })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Browse entities' })).toHaveAttribute('href', '/graph/entities');
   });
 });
