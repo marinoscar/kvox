@@ -375,16 +375,16 @@ real-world thing because nothing told them which label to reach for.
 
 **Person** — a human being. Never a role ("the CIO"), never a team, never an
 organization acting collectively. *Positive:* "Sarah Chen," "the Acme CIO
-whose name was given as Marcus Webb." *Negative:* "the data team at EY" (an
+whose name was given as Marcus Webb." *Negative:* "the data team at OAC" (an
 `Organization`, or a `Person` if and only if one specific human is meant);
 "whoever's on call" (no specific human named — nothing to create). *Domain:*
 `core` (§17.2).
 
 **Organization** — a company, client, vendor, institution, or an internal
 team specifically when that team acts as a party to a commitment or decision
-rather than merely being mentioned. *Positive:* "EY" (a company); "the data
-team at EY," when a commitment is owed *to* that team specifically rather
-than to an individual within it. *Negative:* "the data team at EY," mentioned
+rather than merely being mentioned. *Positive:* "OAC" (a company); "the data
+team at OAC," when a commitment is owed *to* that team specifically rather
+than to an individual within it. *Negative:* "the data team at OAC," mentioned
 only in passing with no commitment or decision naming it as a party — that
 mention lives as evidence on whatever it actually relates to, not as a new
 `Organization` row created speculatively. *Domain:* `core` (§17.2).
@@ -438,9 +438,9 @@ notes, never extracted). Aligned to `skos:Concept`; `BROADER` (§5.2) rolls
 topics up into themes. *Domain:* `core` (§17.2). Added in ontology 1.3.0.
 
 **Product** — a named product, service, tool, platform or technology that
-organizations offer, adopt or evaluate: "Microsoft Copilot," "Salesforce,"
-"SAP S/4HANA." *Negative:* the rollout or adoption effort is a `Project`
-("Copilot rollout"); the vendor company is an `Organization`, never folded
+organizations offer, adopt or evaluate: "Product X," "Product Y,"
+"Product Z." *Negative:* the rollout or adoption effort is a `Project`
+("Product X rollout"); the vendor company is an `Organization`, never folded
 into the product label. Attributes: `category` (software, platform, AI
 model, hardware, service, other), `vendorName` (a resolution hint only).
 Aligned to `schema:Product`. *Domain:* `work` (§17.2), so it disappears with
@@ -830,7 +830,7 @@ uncertain resolution (§7).
   this document has no evidence kvox's users need yet. See "Rejected
   alternatives."
 - **Corpus-wide sensemaking** ("what are the recurring themes across all my
-  meetings this quarter") — the specific question Microsoft GraphRAG's
+  meetings this quarter") — the specific question Org Beta GraphRAG's
   community-summary architecture answers and this design deliberately does
   not attempt; §9's per-entity digest is the narrow, cheap answer to "what's
   new about *this one thing*," not to "summarize everything."
@@ -882,18 +882,18 @@ about that specific pattern does not apply to this job type at all).
 - **Two rules derived from the offered schema** (#665, ontology 1.3.0).
   A *boundary rule* tells the model that a Project is an effort with an
   owner and an expected end, a Topic a recurring subject with neither and a
-  Product a named thing an organization buys, uses or offers ("Copilot
-  rollout", "licensing cost", "Microsoft Copilot"), and never to fold two
+  Product a named thing an organization buys, uses or offers ("Product X
+  rollout", "licensing cost", "Product X"), and never to fold two
   of them into one row; it names only the offered types among the three and
   is absent when fewer than two are offered. A *worked example* shows the
   reference scenario (*"Joe from Company A said he's skeptical about the
-  Copilot rollout; Company A is piloting Microsoft Copilot; the licence
+  Product X rollout; Company A is piloting Product X; the licence
   budget isn't approved"* → Person Joe, Organization Company A and
-  Microsoft, Product Microsoft Copilot, Project Copilot rollout; Joe
-  `WORKS_FOR` Company A; Joe `INVOLVED_IN` Copilot rollout `{role:
-  stakeholder, stance: skeptical}`; Company A `USES` Microsoft Copilot
-  `{stage: piloting}`; Microsoft Copilot `OFFERED_BY` Microsoft; Copilot
-  rollout `CONCERNS` Microsoft Copilot; a `risk` fact `{riskKind:
+  Org Beta, Product Product X, Project Product X rollout; Joe
+  `WORKS_FOR` Company A; Joe `INVOLVED_IN` Product X rollout `{role:
+  stakeholder, stance: skeptical}`; Company A `USES` Product X
+  `{stage: piloting}`; Product X `OFFERED_BY` Org Beta; Product X
+  rollout `CONCERNS` Product X; a `risk` fact `{riskKind:
   blocker}` about the rollout) and ends with "propose a stance only when the
   source states one". Every entity, relation, fact kind and property value
   in it is printed only when the offered schema carries it (a missing
@@ -1142,9 +1142,9 @@ attendee/speaker match** (strong — the two "Sarah"s were in the same room),
 **organization co-mention** (strong — both "Sarah"s work at Acme; for a
 `Product` the organization is its vendor, so `OFFERED_BY` counts like
 `WORKS_FOR` and `HAS_ROLE`, and a mention's stated `vendorName` counts as
-the vendor named in the proposal even with no Organization row — "Copilot",
-"M365 Copilot" and "Microsoft 365 Copilot" resolve to one Product when the
-vendor Microsoft is co-mentioned, #665),
+the vendor named in the proposal even with no Organization row — "PX",
+"PX Suite" and "Product X" resolve to one Product when the
+vendor Org Beta is co-mentioned, #665),
 **shared-neighbour overlap** (medium — both connect to the same `Project`),
 **recency** (weak — a tie-breaker only, never a deciding signal on its own).
 
@@ -1205,7 +1205,7 @@ only when they are the **same fact**: same type, same endpoints, same
 `valid`, **and** the same identity props under the one rule the temporal
 planner and dedup use (`sameIdentityProps`, `graph/temporal/identity.ts`) —
 required props equal after trimming and case-folding, an `identity: true`
-prop equal or null/absent on either side. `Joe HAS_ROLE Microsoft {VP}` and
+prop equal or null/absent on either side. `Joe HAS_ROLE Org Beta {VP}` and
 `{SVP}` over the same period are two roles and both stay, simply re-pointed;
 `{VP}` and `{VP, businessUnit: "Consulting"}` are one role. On a fold, every
 declared, non-deprecated prop the kept row lacks and the folded row states is
@@ -3877,11 +3877,11 @@ groups rather than an LLM judge, deliberately: crude, but deterministic and
 reviewable without a second model's variance. `citeFrom` reuses the
 fixtures' own segment ids (`"m01-s009"`) or `"mNN#note"` verbatim; with
 `citeFromMin: N` (default 1) valid citations must reach at least N
-distinct listed sources. q43 (#665), *"How is Joe connected to the Copilot
-rollout?"*, is grounded in the Joe / Company A / Copilot rollout notes
+distinct listed sources. q43 (#665), *"How is Joe connected to the Product X
+rollout?"*, is grounded in the Joe / Company A / Product X rollout notes
 (m56, m57; the extraction golden set holds their labels: Joe `WORKS_FOR`
 Company A and `INVOLVED_IN` the rollout `{stakeholder, skeptical}`, Company A
-`USES` Microsoft Copilot `{piloting}` `OFFERED_BY` Microsoft, the rollout
+`USES` Product X `{piloting}` `OFFERED_BY` Org Beta, the rollout
 `CONCERNS` the product and *licensing cost*, a blocker Risk) and passes only
 with citations from **both** notes (`citeFromMin: 2`); the graph is never the
 sole source, because a citation must resolve to a note's evidence.
@@ -4291,7 +4291,7 @@ printed in a brief).
   all — every question re-derives "is this the same Sarah" from scratch,
   which is strictly worse than doing it once at review time (§7) and
   reusing the answer.
-- **Microsoft GraphRAG's community-summary architecture.** Rejected because
+- **Org Beta GraphRAG's community-summary architecture.** Rejected because
   its target question — corpus-wide sensemaking, "what are the themes
   across everything" — is not the question this product's users are asking
   (§5.7); it is also the more expensive of the two designs to run

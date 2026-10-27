@@ -41,7 +41,7 @@ import { EMAIL_MODULE_OPTIONS } from '../platform/email/email.options';
 
 const data: AllowlistInvitationEmailData = {
   recipientEmail: 'sam@example.test',
-  invitedBy: 'Oscar Marin',
+  invitedBy: 'Avery Example',
   signInUrl: 'https://app.example.test/login',
 };
 
@@ -129,11 +129,11 @@ describe('allowlistInvitationEmail — hierarchy and the single call to action',
   it('gives the inviting administrator their own block, in both parts', () => {
     const rendered = allowlistInvitationEmail(data);
 
-    expect(rendered.html).toContain('Added by <strong>Oscar Marin</strong>');
+    expect(rendered.html).toContain('Added by <strong>Avery Example</strong>');
     expect(rendered.html).toContain(
       'They are the person to ask if you were not expecting this.',
     );
-    expect(rendered.text).toContain('Added by Oscar Marin.');
+    expect(rendered.text).toContain('Added by Avery Example.');
   });
 
   it('omits the attribution entirely when the administrator is unknown', () => {

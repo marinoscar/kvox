@@ -9,8 +9,8 @@
 //   A  alias/label exact — `kg_entity_aliases.normalized = ANY($names)`, the
 //      mention's label and aliases normalized with #355's `normalizeAlias` in
 //      TypeScript, widened (#767) by every term of the owner's synonym groups
-//      (entity type null or the mention's) that contain one of them: "EY"
-//      finds "Ernst & Young". Arms B and C still use the mention's own name. Relies on #355's contract that every entity's own label is
+//      (entity type null or the mention's) that contain one of them: "OAC"
+//      finds "Org Alpha Consulting". Arms B and C still use the mention's own name. Relies on #355's contract that every entity's own label is
 //      also an alias row, so SQL never normalizes a label a second way.
 //   B  trigram ≥ 0.4 — `pg_trgm` over the entity label and the aliases'
 //      NORMALIZED form (the column `kg_entity_aliases_normalized_trgm_idx`

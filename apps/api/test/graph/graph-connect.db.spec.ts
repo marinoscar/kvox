@@ -6,9 +6,9 @@
 //
 // Three meeting notes share entities (the people and products they mention):
 //
-//   note 1: Joe x3, Copilot x2, Company A, Risk-ish Topic
-//   note 2: Joe x1, Copilot x1, Microsoft
-//   note 3: Joe x2, Microsoft, Steering
+//   note 1: Joe x3, Product X x2, Company A, Risk-ish Topic
+//   note 2: Joe x1, Product X x1, Org Beta
+//   note 3: Joe x2, Org Beta, Steering
 //
 // What it proves: shared entities and their input coverage / mention counts
 // (an `ignored` mention does not count), ranking, an unreadable input (another
@@ -81,25 +81,25 @@ describeWithDb('GraphConnectService (real Postgres)', () => {
   async function scenario() {
     const { user, g } = await owner();
     const joe = await g.entity('Person', 'Joe');
-    const copilot = await g.entity('Product', 'Copilot');
+    const productx = await g.entity('Product', 'Product X');
     const companyA = await g.entity('Organization', 'Company A');
-    const microsoft = await g.entity('Organization', 'Microsoft');
+    const orgbeta = await g.entity('Organization', 'Org Beta');
     const steering = await g.entity('Meeting', 'Steering');
     const n1 = await g.note({ title: 'Company A call' });
-    const n2 = await g.note({ title: 'Microsoft call' });
+    const n2 = await g.note({ title: 'Org Beta call' });
     const n3 = await g.note({ title: 'Steering' });
     await mention(user.id, joe, { noteId: n1.id }, 3);
-    await mention(user.id, copilot, { noteId: n1.id }, 2);
+    await mention(user.id, productx, { noteId: n1.id }, 2);
     await mention(user.id, companyA, { noteId: n1.id });
     await mention(user.id, joe, { noteId: n2.id });
-    await mention(user.id, copilot, { noteId: n2.id });
-    await mention(user.id, microsoft, { noteId: n2.id });
+    await mention(user.id, productx, { noteId: n2.id });
+    await mention(user.id, orgbeta, { noteId: n2.id });
     await mention(user.id, joe, { noteId: n3.id }, 2);
-    await mention(user.id, microsoft, { noteId: n3.id });
+    await mention(user.id, orgbeta, { noteId: n3.id });
     await mention(user.id, steering, { noteId: n3.id });
     // An ignored mention is not a mention.
     await mention(user.id, steering, { noteId: n1.id }, 1, 'ignored');
-    return { user, g, joe, copilot, companyA, microsoft, steering, n1, n2, n3 };
+    return { user, g, joe, productx, companyA, orgbeta, steering, n1, n2, n3 };
   }
 
   it('returns the shared entities of three notes, widest coverage first, then mention count', async () => {
@@ -112,7 +112,7 @@ describeWithDb('GraphConnectService (real Postgres)', () => {
     expect(res.inputs.map((i) => i.id).sort()).toEqual([s.n1.id, s.n2.id, s.n3.id].sort());
     expect(res.inputs.find((i) => i.id === s.n1.id)).toMatchObject({ kind: 'note', title: 'Company A call' });
 
-    expect(res.shared.map((x) => x.entityId)).toEqual([s.joe, s.copilot, s.microsoft]);
+    expect(res.shared.map((x) => x.entityId)).toEqual([s.joe, s.productx, s.orgbeta]);
     expect(res.shared[0]).toMatchObject({ mentionCount: 6 });
     expect(res.shared[0].inputIds.sort()).toEqual([s.n1.id, s.n2.id, s.n3.id].sort());
     expect(res.shared[1]).toMatchObject({ mentionCount: 3 });
@@ -122,7 +122,7 @@ describeWithDb('GraphConnectService (real Postgres)', () => {
     expect(res.shared.map((x) => x.entityId)).not.toContain(s.steering);
     // The slice carries the shared entities.
     const sliceIds = res.slice.nodes.map((n) => n.id);
-    expect(sliceIds).toEqual(expect.arrayContaining([s.joe, s.copilot, s.microsoft]));
+    expect(sliceIds).toEqual(expect.arrayContaining([s.joe, s.productx, s.orgbeta]));
   });
 
   it('answers a 404 naming nothing when an input is unreadable (another owner, deleted, missing)', async () => {
@@ -182,8 +182,8 @@ describeWithDb('GraphConnectService (real Postgres)', () => {
     const res = await svc.connect(s.user, parse({ noteIds: [s.n1.id] }));
     expect(res.shared).toEqual([]);
     expect(res.paths).toEqual([]);
-    expect(res.inputs[0].entityIds).toEqual([s.joe, s.copilot, s.companyA]);
-    expect(res.slice.nodes.map((n) => n.id)).toEqual(expect.arrayContaining([s.joe, s.copilot, s.companyA]));
+    expect(res.inputs[0].entityIds).toEqual([s.joe, s.productx, s.companyA]);
+    expect(res.slice.nodes.map((n) => n.id)).toEqual(expect.arrayContaining([s.joe, s.productx, s.companyA]));
   });
 
   it('never includes a sensitive person fact', async () => {
@@ -215,7 +215,7 @@ describeWithDb('GraphConnectService (real Postgres)', () => {
   it('connects entities: the neighbours two entities share, and a foreign entity is a 404', async () => {
     const { user, g } = await owner();
     const joe = await g.entity('Person', 'Joe');
-    const rollout = await g.entity('Project', 'Copilot rollout');
+    const rollout = await g.entity('Project', 'Product X rollout');
     const companyA = await g.entity('Organization', 'Company A');
     await g.relation('WORKS_FOR', joe, companyA);
     await g.relation('PART_OF', rollout, companyA);

@@ -38,7 +38,7 @@ describe('buildPathViews', () => {
 
   it('reads each path in walking order with role, stage and stance chips', () => {
     expect(views).toHaveLength(2);
-    expect(views[0].nodes.map((n) => n.label)).toEqual(['Joe Rivera', 'Copilot rollout']);
+    expect(views[0].nodes.map((n) => n.label)).toEqual(['Joe Rivera', 'Product X rollout']);
     expect(views[0].strength).toBe('strong');
     expect(views[0].hops[0]).toMatchObject({ edgeId: EDGE_INVOLVED, chips: ['Stakeholder', 'skeptical'], evidenceCount: 5, reversed: false });
     expect(views[1].strength).toBe('moderate');
@@ -67,9 +67,9 @@ describe('buildPathViews', () => {
   });
 
   it('reads the path as a sentence for a screen reader', () => {
-    expect(hopSentence(views[0], 0)).toBe('Joe Rivera, involved in as stakeholder, skeptical, Copilot rollout');
+    expect(hopSentence(views[0], 0)).toBe('Joe Rivera, involved in as stakeholder, skeptical, Product X rollout');
     expect(describePath(views[1])).toBe(
-      'Path 2, moderate evidence, 2 hops: Joe Rivera, works for, Acme Corp, uses, pilot, Copilot rollout',
+      'Path 2, moderate evidence, 2 hops: Joe Rivera, works for, Acme Corp, uses, pilot, Product X rollout',
     );
   });
 

@@ -163,10 +163,10 @@ const ctrlZ = (shift = false) => fireEvent.keyDown(document.body, { key: shift ?
 
 /** A slice with a stance edge and a plain one, honouring `relationTypes` the way the API does. */
 function stanceSlice(body: ExpandFixtureRequest): GraphSlice {
-  const copilot = gid(700);
+  const productx = gid(700);
   const nodes = [
     { id: JOE_ID, nodeKind: 'entity' as const, type: 'Person', label: 'Joe Rivera', status: null, occurredAt: null, depth: 0, degree: 2 },
-    { id: copilot, nodeKind: 'entity' as const, type: 'Project', label: 'Copilot rollout', status: null, occurredAt: null, depth: 1, degree: 1 },
+    { id: productx, nodeKind: 'entity' as const, type: 'Project', label: 'Product X rollout', status: null, occurredAt: null, depth: 1, degree: 1 },
     { id: ACME_ID, nodeKind: 'entity' as const, type: 'Organization', label: 'Acme Corp', status: null, occurredAt: null, depth: 1, degree: 1 },
   ];
   const edges = [
@@ -174,7 +174,7 @@ function stanceSlice(body: ExpandFixtureRequest): GraphSlice {
       id: gid(710),
       type: 'INVOLVED_IN',
       source: JOE_ID,
-      target: copilot,
+      target: productx,
       valid: null,
       confidence: 0.9,
       virtual: false,

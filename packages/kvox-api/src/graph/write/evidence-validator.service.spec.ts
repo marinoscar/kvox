@@ -105,7 +105,7 @@ describe('EvidenceValidator', () => {
   });
 
   it("accepts a note Context citation (#440): both offsets null on a readable note version", async () => {
-    const ctxEv = { noteId: NOTE, noteVersion: 1, charStart: null, charEnd: null, quote: 'EY, Consulting' } as EvidenceInput;
+    const ctxEv = { noteId: NOTE, noteVersion: 1, charStart: null, charEnd: null, quote: 'OAC, Consulting' } as EvidenceInput;
     await expect(invalidIndexes([ctxEv])).resolves.toBeNull();
   });
 

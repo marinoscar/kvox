@@ -299,7 +299,7 @@ describe('edge appearance in the graph', () => {
       asOf: '2026-09-26T00:00:00.000Z',
       nodes: [
         { id: JOE_ID, nodeKind: 'entity', type: 'Person', label: 'Joe', depth: 0, degree: 2, status: null, occurredAt: null },
-        { id: project, nodeKind: 'entity', type: 'Project', label: 'Copilot rollout', depth: 1, degree: 2, status: null, occurredAt: null },
+        { id: project, nodeKind: 'entity', type: 'Project', label: 'Product X rollout', depth: 1, degree: 2, status: null, occurredAt: null },
       ],
       edges: [
         // Two parallel relations in the same direction, and one back the other way.

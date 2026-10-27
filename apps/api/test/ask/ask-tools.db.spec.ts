@@ -199,9 +199,9 @@ describeWithDb('Ask toolset (real Postgres)', () => {
   it('list_risks lists open risks by severity then recency, filters by subject, status and severity, and is owner-scoped', async () => {
     const a = await owner('a');
     const b = await owner('b');
-    const rollout = await a.g.entity('Project', 'Copilot rollout');
+    const rollout = await a.g.entity('Project', 'Product X rollout');
     const other = await a.g.entity('Project', 'Other project');
-    const bRollout = await b.g.entity('Project', 'Copilot rollout');
+    const bRollout = await b.g.entity('Project', 'Product X rollout');
     const mk = (statement: string, subjectId: string, opts: Record<string, unknown> = {}) =>
       a.g.item('risk', { statement, subjectId, ...opts });
     const day = (d: string) => new Date(`${d}T00:00:00Z`);
@@ -215,7 +215,7 @@ describeWithDb('Ask toolset (real Postgres)', () => {
     await mk('elsewhere', other, { props: { severity: 'high' } });
     await b.g.item('risk', { statement: 'B private risk', subjectId: bRollout, props: { severity: 'high' } });
 
-    const h = a.ctx.handles.register({ kind: 'ent', id: rollout, label: 'Copilot rollout' });
+    const h = a.ctx.handles.register({ kind: 'ent', id: rollout, label: 'Product X rollout' });
     const statements = async (args: Record<string, unknown>) => {
       const out = await call(a.ctx, 'list_risks', args);
       expect(out.ok).toBe(true);
@@ -233,7 +233,7 @@ describeWithDb('Ask toolset (real Postgres)', () => {
     const detail = JSON.parse((await call(a.ctx, 'list_risks', { subject: h, severity: 'high' })).json) as {
       items: { severity: string; kind: string | null; mitigation?: string; subject: { label: string } }[];
     };
-    expect(detail.items[0]).toMatchObject({ severity: 'high', kind: 'blocker', mitigation: 'Escalate to the CFO', subject: { label: 'Copilot rollout' } });
+    expect(detail.items[0]).toMatchObject({ severity: 'high', kind: 'blocker', mitigation: 'Escalate to the CFO', subject: { label: 'Product X rollout' } });
 
     // A forged handle to B's project returns nothing of B's.
     const forged = a.ctx.handles.register({ kind: 'ent', id: bRollout, label: 'forged' });

@@ -27,7 +27,7 @@ import { GraphIndexPage } from '../../src/graph/ui/pages/GraphIndexPage.js';
 
 const EY_GROUP: SynonymGroup = {
   id: gid(701),
-  terms: ['EY', 'Ernst & Young'],
+  terms: ['OAC', 'Org Alpha Consulting'],
   entityType: 'Organization',
   createdAt: '2026-10-26T10:00:00.000Z',
   updatedAt: '2026-10-26T10:00:00.000Z',
@@ -94,7 +94,7 @@ function renderPage(user: MockUser = graphWriter) {
 }
 
 const row = (name: string) => screen.findByRole('listitem', { name });
-const EY_ROW = 'EY = Ernst & Young';
+const OAC_ROW = 'OAC = Org Alpha Consulting';
 const BOB_ROW = 'Bob = Robert = Rob';
 
 async function openAdd(user: ReturnType<typeof userEvent.setup>) {
@@ -116,12 +116,12 @@ describe('GraphSynonymsPage — list', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Synonyms' })).toBeInTheDocument();
     expect(screen.getByText(SYNONYMS_SUBTITLE)).toBeInTheDocument();
 
-    const ey = await row(EY_ROW);
-    const names = within(ey).getByRole('list', { name: 'Names' });
-    expect(within(names).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['EY', '=Ernst & Young']);
-    expect(within(ey).getByText('Organizations')).toBeInTheDocument();
-    expect(within(ey).getByRole('button', { name: `Edit ${EY_ROW}` })).toBeInTheDocument();
-    expect(within(ey).getByRole('button', { name: `Delete ${EY_ROW}` })).toBeInTheDocument();
+    const oac = await row(OAC_ROW);
+    const names = within(oac).getByRole('list', { name: 'Names' });
+    expect(within(names).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['OAC', '=Org Alpha Consulting']);
+    expect(within(oac).getByText('Organizations')).toBeInTheDocument();
+    expect(within(oac).getByRole('button', { name: `Edit ${OAC_ROW}` })).toBeInTheDocument();
+    expect(within(oac).getByRole('button', { name: `Delete ${OAC_ROW}` })).toBeInTheDocument();
 
     const bob = await row(BOB_ROW);
     expect(within(bob).getByText('Any type')).toBeInTheDocument();
@@ -131,7 +131,7 @@ describe('GraphSynonymsPage — list', () => {
     groups = [];
     renderPage();
     expect(await screen.findByText('No synonyms yet')).toBeInTheDocument();
-    expect(within(screen.getByTestId('synonyms-example')).getByText('Ernst & Young')).toBeInTheDocument();
+    expect(within(screen.getByTestId('synonyms-example')).getByText('Org Alpha Consulting')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add synonyms' })).toBeInTheDocument();
   });
 
@@ -147,8 +147,8 @@ describe('GraphSynonymsPage — list', () => {
 
   it('a read-only viewer sees the list without add, edit or delete', async () => {
     renderPage(graphReader);
-    const ey = await row(EY_ROW);
-    expect(within(ey).queryByRole('button')).not.toBeInTheDocument();
+    const oac = await row(OAC_ROW);
+    expect(within(oac).queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add synonyms' })).not.toBeInTheDocument();
   });
 
@@ -160,7 +160,7 @@ describe('GraphSynonymsPage — list', () => {
   });
 
   it('synonymGroupText and synonymTypeLabel', () => {
-    expect(synonymGroupText(['EY', 'Ernst & Young'])).toBe('EY = Ernst & Young');
+    expect(synonymGroupText(['OAC', 'Org Alpha Consulting'])).toBe('OAC = Org Alpha Consulting');
     expect(synonymTypeLabel(null, null)).toBe('Any type');
     expect(synonymTypeLabel('Organization', null)).toBe('Organization');
   });
@@ -170,14 +170,14 @@ describe('GraphSynonymsPage — add', () => {
   it('collects names as chips on Enter and comma, with an optional type, and adds the group', async () => {
     const user = userEvent.setup();
     renderPage();
-    await row(EY_ROW);
+    await row(OAC_ROW);
     const dialog = await openAdd(user);
     const input = within(dialog).getByRole('textbox', { name: 'Add a name' });
-    await user.type(input, 'KPMG{Enter}Klynveld Peat,');
-    await user.type(input, 'kpmg,');
+    await user.type(input, 'OGX{Enter}Gamma Xi,');
+    await user.type(input, 'ogx,');
     const chips = within(dialog).getByRole('list', { name: 'Names to save' });
     // A repeat (case ignored) is not added twice.
-    expect(within(chips).getAllByRole('listitem').map((chip) => chip.textContent)).toEqual(['KPMG', 'Klynveld Peat']);
+    expect(within(chips).getAllByRole('listitem').map((chip) => chip.textContent)).toEqual(['OGX', 'Gamma Xi']);
 
     await user.click(within(dialog).getByRole('combobox', { name: 'Type' }));
     await user.click(await screen.findByRole('option', { name: 'Organizations' }));
@@ -185,9 +185,9 @@ describe('GraphSynonymsPage — add', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(writes).toEqual([
-      { method: 'POST', path: '/graph/synonyms', body: { terms: ['KPMG', 'Klynveld Peat'], entityType: 'Organization' } },
+      { method: 'POST', path: '/graph/synonyms', body: { terms: ['OGX', 'Gamma Xi'], entityType: 'Organization' } },
     ]);
-    expect(await row('KPMG = Klynveld Peat')).toBeInTheDocument();
+    expect(await row('OGX = Gamma Xi')).toBeInTheDocument();
     expect(await screen.findByText('Synonyms added')).toBeInTheDocument();
   });
 
@@ -232,7 +232,7 @@ describe('GraphSynonymsPage — add', () => {
     const user = userEvent.setup();
     renderPage();
     const dialog = await openAdd(user);
-    await user.type(within(dialog).getByRole('textbox', { name: 'Add a name' }), 'EY,Ernst & Young,');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Add a name' }), 'OAC,Org Alpha Consulting,');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await within(dialog).findByText(SYNONYM_ERROR_COPY[reason]!)).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Add synonyms' })).toBeInTheDocument();
@@ -243,14 +243,14 @@ describe('GraphSynonymsPage — edit and delete', () => {
   it('edits a group: names and type prefilled, the change saved in place', async () => {
     const user = userEvent.setup();
     renderPage();
-    const ey = await row(EY_ROW);
-    await user.click(within(ey).getByRole('button', { name: `Edit ${EY_ROW}` }));
+    const oac = await row(OAC_ROW);
+    await user.click(within(oac).getByRole('button', { name: `Edit ${OAC_ROW}` }));
     const dialog = await screen.findByRole('dialog', { name: 'Edit synonyms' });
     const chips = within(dialog).getByRole('list', { name: 'Names to save' });
-    expect(within(chips).getAllByRole('listitem').map((chip) => chip.textContent)).toEqual(['EY', 'Ernst & Young']);
+    expect(within(chips).getAllByRole('listitem').map((chip) => chip.textContent)).toEqual(['OAC', 'Org Alpha Consulting']);
     expect(within(dialog).getByRole('combobox', { name: 'Type' })).toHaveTextContent('Organizations');
 
-    await user.type(within(dialog).getByRole('textbox', { name: 'Add a name' }), 'E&Y{Enter}');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Add a name' }), 'O&C{Enter}');
     await user.click(within(dialog).getByRole('combobox', { name: 'Type' }));
     await user.click(await screen.findByRole('option', { name: 'Any type' }));
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
@@ -260,10 +260,10 @@ describe('GraphSynonymsPage — edit and delete', () => {
       {
         method: 'PATCH',
         path: `/graph/synonyms/${EY_GROUP.id}`,
-        body: { terms: ['EY', 'Ernst & Young', 'E&Y'], entityType: null },
+        body: { terms: ['OAC', 'Org Alpha Consulting', 'O&C'], entityType: null },
       },
     ]);
-    const edited = await row('EY = Ernst & Young = E&Y');
+    const edited = await row('OAC = Org Alpha Consulting = O&C');
     expect(within(edited).getByText('Any type')).toBeInTheDocument();
     expect(await screen.findByText('Synonyms saved')).toBeInTheDocument();
   });
@@ -280,7 +280,7 @@ describe('GraphSynonymsPage — edit and delete', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.queryByRole('listitem', { name: BOB_ROW })).not.toBeInTheDocument();
     expect(writes).toEqual([{ method: 'DELETE', path: `/graph/synonyms/${BOB_GROUP.id}`, body: null }]);
-    expect(screen.getByRole('listitem', { name: EY_ROW })).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: OAC_ROW })).toBeInTheDocument();
     expect(await screen.findByText('Synonyms deleted')).toBeInTheDocument();
   });
 

@@ -32,7 +32,7 @@ function response(over: Partial<GraphConnectResponse> = {}): GraphConnectRespons
   return {
     inputs: [
       { kind: 'note', id: N1, title: 'Company A call', entityIds: [P1, PROD, ORG] },
-      { kind: 'note', id: N2, title: 'Microsoft call', entityIds: [P1, P2, PROD, RISK] },
+      { kind: 'note', id: N2, title: 'Org Beta call', entityIds: [P1, P2, PROD, RISK] },
     ],
     shared: [
       { entityId: P1, inputIds: [N1, N2], mentionCount: 6 },
@@ -47,7 +47,7 @@ function response(over: Partial<GraphConnectResponse> = {}): GraphConnectRespons
       nodes: [
         node(P1, 'Joe', 'Person'),
         node(P2, 'Ana', 'Person'),
-        node(PROD, 'Copilot', 'Product'),
+        node(PROD, 'Product X', 'Product'),
         node(RISK, 'Vendor lock-in', 'Risk'),
         node(ORG, 'Company A', 'Organization'),
       ],
@@ -95,9 +95,9 @@ describe('summarySentence', () => {
 describe('sharedRows, bridgeRows and sharedIdSet', () => {
   it('turns the shared entities into rows with the input titles, in the API order', () => {
     const rows = sharedRows(response());
-    expect(rows.map((r) => r.label)).toEqual(['Joe', 'Ana', 'Copilot', 'Vendor lock-in']);
+    expect(rows.map((r) => r.label)).toEqual(['Joe', 'Ana', 'Product X', 'Vendor lock-in']);
     expect(rows[0]).toMatchObject({ coverage: 2, mentionCount: 6, type: 'Person' });
-    expect(rows[0].inputTitles).toEqual(['Company A call', 'Microsoft call']);
+    expect(rows[0].inputTitles).toEqual(['Company A call', 'Org Beta call']);
   });
 
   it('falls back to the id for an entity the slice does not carry', () => {
@@ -109,7 +109,7 @@ describe('sharedRows, bridgeRows and sharedIdSet', () => {
     const [bridge] = bridgeRows(response());
     expect(bridge.labels).toEqual(['Company A', 'Joe']);
     expect(bridge.fromTitle).toBe('Company A call');
-    expect(bridge.toTitle).toBe('Microsoft call');
+    expect(bridge.toTitle).toBe('Org Beta call');
   });
 
   it('rings the shared entities only', () => {

@@ -32,7 +32,7 @@ const ACTIVITY: GraphActivityResponse = {
       { start: '2025-06-01', count: 1 },
       { start: '2026-02-01', count: 2 },
     ],
-    copilot: [{ start: '2026-02-01', count: 3 }],
+    productx: [{ start: '2026-02-01', count: 3 }],
   },
 };
 

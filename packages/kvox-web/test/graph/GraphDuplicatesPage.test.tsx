@@ -20,15 +20,15 @@ import { duplicatesBadgeText } from '../../src/graph/ui/components/DuplicatesLin
  * type filter, and the entry-point badge on the Knowledge index.
  */
 
-const EY = { id: gid(601), type: 'Organization', label: 'EY', aliases: [], mentionCount: 2 };
-const ERNST = { id: gid(602), type: 'Organization', label: 'Ernst & Young', aliases: ['E&Y'], mentionCount: 9 };
+const OAC = { id: gid(601), type: 'Organization', label: 'OAC', aliases: [], mentionCount: 2 };
+const ORG_ALPHA = { id: gid(602), type: 'Organization', label: 'Org Alpha Consulting', aliases: ['O&C'], mentionCount: 9 };
 const JON = { id: gid(603), type: 'Person', label: 'Jon Smith', aliases: [], mentionCount: 4 };
 const JOHN = { id: gid(604), type: 'Person', label: 'John Smith', aliases: ['Johnny'], mentionCount: 1 };
 const MERGE_ID = gid(690);
 
 const ORG_PAIR: DuplicatePair = {
-  a: EY,
-  b: ERNST,
+  a: OAC,
+  b: ORG_ALPHA,
   score: 0.9,
   reasons: ['initials', 'resolution_proposal'],
   source: 'resolution_proposal',
@@ -62,7 +62,7 @@ beforeEach(() => {
       return HttpResponse.json({
         data: {
           merge: { id: MERGE_ID, survivorId: body.intoId, mergedId: params.id, createdAt: '2026-10-26T10:00:00.000Z' },
-          survivor: { id: body.intoId, type: 'Organization', label: 'Ernst & Young', aliasCount: 2 },
+          survivor: { id: body.intoId, type: 'Organization', label: 'Org Alpha Consulting', aliasCount: 2 },
         },
       });
     }),
@@ -70,8 +70,8 @@ beforeEach(() => {
       posts.push({ path: `/graph/merges/${params.id}/reverse`, body: await request.json() });
       return HttpResponse.json({
         data: {
-          merge: { id: params.id, survivorId: ERNST.id, mergedId: EY.id, reversedAt: '2026-10-26T10:05:00.000Z' },
-          restored: { id: EY.id, type: 'Organization', label: 'EY' },
+          merge: { id: params.id, survivorId: ORG_ALPHA.id, mergedId: OAC.id, reversedAt: '2026-10-26T10:05:00.000Z' },
+          restored: { id: OAC.id, type: 'Organization', label: 'OAC' },
           skipped: [],
         },
       });
@@ -94,7 +94,7 @@ function renderPage(user: MockUser = graphWriter) {
 }
 
 const card = (name: string) => screen.findByRole('article', { name });
-const ORG_CARD = 'EY and Ernst & Young';
+const ORG_CARD = 'OAC and Org Alpha Consulting';
 const PERSON_CARD = 'Jon Smith and John Smith';
 
 describe('GraphDuplicatesPage — list', () => {
@@ -102,10 +102,10 @@ describe('GraphDuplicatesPage — list', () => {
     renderPage();
     expect(await screen.findByRole('heading', { level: 1, name: 'Possible duplicates' })).toBeInTheDocument();
     const org = await card(ORG_CARD);
-    expect(within(org).getByRole('link', { name: 'EY' })).toHaveAttribute('href', `/graph/entities/${EY.id}`);
-    expect(within(org).getByRole('link', { name: 'Ernst & Young' })).toHaveAttribute('href', `/graph/entities/${ERNST.id}`);
+    expect(within(org).getByRole('link', { name: 'OAC' })).toHaveAttribute('href', `/graph/entities/${OAC.id}`);
+    expect(within(org).getByRole('link', { name: 'Org Alpha Consulting' })).toHaveAttribute('href', `/graph/entities/${ORG_ALPHA.id}`);
     expect(within(org).getByText('Organization · 9 mentions')).toBeInTheDocument();
-    expect(within(org).getByRole('list', { name: 'Other names of Ernst & Young' })).toHaveTextContent('E&Y');
+    expect(within(org).getByRole('list', { name: 'Other names of Org Alpha Consulting' })).toHaveTextContent('O&C');
     const reasons = within(org).getByRole('list', { name: 'Why these may be the same' });
     expect(within(reasons).getByText('Initials match')).toBeInTheDocument();
     expect(within(reasons).getByText('Suggested by KVox')).toBeInTheDocument();
@@ -150,20 +150,20 @@ describe('GraphDuplicatesPage — actions', () => {
     await user.click(within(org).getByRole('button', { name: 'Merge' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Merge these entities?' });
-    // Default: the side with more mentions (Ernst & Young, 9) is kept.
-    expect(within(dialog).getByRole('radio', { name: /Ernst & Young/ })).toBeChecked();
-    expect(within(dialog).getByText('“EY” will become an alias of “Ernst & Young”.')).toBeInTheDocument();
+    // Default: the side with more mentions (Org Alpha Consulting, 9) is kept.
+    expect(within(dialog).getByRole('radio', { name: /Org Alpha Consulting/ })).toBeChecked();
+    expect(within(dialog).getByText('“OAC” will become an alias of “Org Alpha Consulting”.')).toBeInTheDocument();
 
-    // Choose to keep EY instead.
-    await user.click(within(dialog).getByRole('radio', { name: /^EY/ }));
-    expect(within(dialog).getByText('“Ernst & Young” will become an alias of “EY”.')).toBeInTheDocument();
+    // Choose to keep OAC instead.
+    await user.click(within(dialog).getByRole('radio', { name: /^OAC/ }));
+    expect(within(dialog).getByText('“Org Alpha Consulting” will become an alias of “OAC”.')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Merge' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.queryByRole('article', { name: ORG_CARD })).not.toBeInTheDocument();
-    expect(posts).toEqual([{ path: `/graph/entities/${ERNST.id}/merge`, body: { intoId: EY.id } }]);
+    expect(posts).toEqual([{ path: `/graph/entities/${ORG_ALPHA.id}/merge`, body: { intoId: OAC.id } }]);
     expect(screen.getByRole('article', { name: PERSON_CARD })).toBeInTheDocument();
-    expect(await screen.findByText('Merged “Ernst & Young” into “EY”')).toBeInTheDocument();
+    expect(await screen.findByText('Merged “Org Alpha Consulting” into “OAC”')).toBeInTheDocument();
 
     const before = listUrls.length;
     await user.click(screen.getByRole('button', { name: 'Undo' }));
@@ -242,13 +242,13 @@ describe('GraphDuplicatesPage — actions', () => {
 
 describe('duplicates helpers', () => {
   it('keeps the side with more mentions; a tie keeps a', () => {
-    expect(defaultDuplicateSurvivor(ORG_PAIR).id).toBe(ERNST.id);
+    expect(defaultDuplicateSurvivor(ORG_PAIR).id).toBe(ORG_ALPHA.id);
     expect(defaultDuplicateSurvivor(PERSON_PAIR).id).toBe(JON.id);
-    expect(defaultDuplicateSurvivor({ a: EY, b: { ...ERNST, mentionCount: 2 } }).id).toBe(EY.id);
+    expect(defaultDuplicateSurvivor({ a: OAC, b: { ...ORG_ALPHA, mentionCount: 2 } }).id).toBe(OAC.id);
   });
 
   it('keys a pair the same whichever side is a', () => {
-    expect(duplicatePairKey({ a: EY, b: ERNST })).toBe(duplicatePairKey({ a: ERNST, b: EY }));
+    expect(duplicatePairKey({ a: OAC, b: ORG_ALPHA })).toBe(duplicatePairKey({ a: ORG_ALPHA, b: OAC }));
   });
 
   it('reads the badge as a count, nothing for none, and "50+" at the limit', () => {

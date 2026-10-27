@@ -51,7 +51,7 @@ const squish = (value: string): string => value.replace(/\s+/g, ' ');
 const data: AllowlistInvitationReminderEmailData = {
   recipientEmail: 'sam@example.test',
   invitedAt: new Date('2026-01-15T10:00:00.000Z'),
-  invitedBy: 'Oscar Marin',
+  invitedBy: 'Avery Example',
   signInUrl: 'https://app.example.test/login',
 };
 
@@ -224,11 +224,11 @@ describe('allowlistInvitationReminderEmail — hierarchy and the single call to 
   it('gives the inviting administrator their own block, in both parts', () => {
     const rendered = allowlistInvitationReminderEmail(data);
 
-    expect(rendered.html).toContain('Added by <strong>Oscar Marin</strong>');
+    expect(rendered.html).toContain('Added by <strong>Avery Example</strong>');
     expect(rendered.html).toContain(
       'They are the person to ask if you were not expecting this.',
     );
-    expect(rendered.text).toContain('Added by Oscar Marin.');
+    expect(rendered.text).toContain('Added by Avery Example.');
   });
 
   it('omits the attribution entirely when the administrator is unknown', () => {

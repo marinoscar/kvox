@@ -71,9 +71,9 @@ export const Product = defineEntityType({
   label: 'Product',
   pluralLabel: 'Products',
   description:
-    'A named product, service, tool, platform or technology that organizations offer, adopt or evaluate, e.g. "Microsoft Copilot", "Salesforce", "SAP S/4HANA".',
+    'A named product, service, tool, platform or technology that organizations offer, adopt or evaluate, e.g. "Product X", "Product Y", "Product Z".',
   disambiguation: [
-    'The rollout or adoption effort is a Project ("Copilot rollout"); the thing being rolled out is the Product ("Microsoft Copilot").',
+    'The rollout or adoption effort is a Project ("Product X rollout"); the thing being rolled out is the Product ("Product X").',
     'The vendor company is an Organization linked by OFFERED_BY, never folded into the product label.',
   ],
   attributes: {
@@ -236,7 +236,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Works for',
       description:
-        'A person is employed by, or works on behalf of, an organization — the one way a person\'s employer is recorded: "Joe works for Microsoft" is Joe WORKS_FOR Microsoft (an Organization); his role and business unit there are a HAS_ROLE to the same Organization.',
+        'A person is employed by, or works on behalf of, an organization — the one way a person\'s employer is recorded: "Joe works for Org Beta" is Joe WORKS_FOR Org Beta (an Organization); his role and business unit there are a HAS_ROLE to the same Organization.',
       from: ['Person'],
       to: ['Organization'],
       temporal: true,
@@ -252,7 +252,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Has role',
       description:
-        'A person holds a titled role, optionally within a business unit, at an organization for a period of time: "Joe, VP of Supply Chain at Microsoft" is Joe HAS_ROLE Microsoft {title: "VP", businessUnit: "Supply Chain"}.',
+        'A person holds a titled role, optionally within a business unit, at an organization for a period of time: "Joe, VP of Supply Chain at Org Beta" is Joe HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.',
       from: ['Person'],
       to: ['Organization'],
       temporal: true,
@@ -346,7 +346,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Involved in',
       description:
-        'A person has a stated role in a project, and optionally a stance toward it: "Joe is the budget approver for the Copilot rollout and is skeptical of it" is Joe INVOLVED_IN Copilot rollout {role: approver, stance: skeptical}.' +
+        'A person has a stated role in a project, and optionally a stance toward it: "Joe is the budget approver for the Product X rollout and is skeptical of it" is Joe INVOLVED_IN Product X rollout {role: approver, stance: skeptical}.' +
         ' Assigned tasks are Commitments with ASSIGNED_TO; attending one meeting about a project is ATTENDED + DISCUSSED, not INVOLVED_IN unless the source states a role. Set role only to the role the source states or clearly implies; if no role is stated, do not create INVOLVED_IN. Set stance only when the source states it or the person\'s position is unmistakably implied (an explicit objection, endorsement or refusal). Never infer stance from tone, a single question, or silence; when in doubt, omit it.',
       from: ['Person'],
       to: ['Project'],
@@ -397,7 +397,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Uses',
       description:
-        'An organization or a project adopts, evaluates or runs a product, at a stage: "Company A is piloting Copilot" is Company A USES Copilot {stage: piloting}.' +
+        'An organization or a project adopts, evaluates or runs a product, at a stage: "Company A is piloting Product X" is Company A USES Product X {stage: piloting}.' +
         ' A move to a later stage (piloting to adopted) is a new USES with the new stage, which closes the earlier one; never edit the old stage. The vendor of the product is OFFERED_BY, not USES; a project about a product without adopting it is CONCERNS. Set stage only when the source states it; "evaluating" is for a stated assessment, not for a passing mention.',
       from: ['Organization', 'Project'],
       to: ['Product'],
@@ -430,7 +430,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Offered by',
       description:
-        'The vendor of a product: "Copilot is Microsoft\'s" is Microsoft Copilot OFFERED_BY Microsoft.' +
+        'The vendor of a product: "Product X is Org Beta\'s" is Product X OFFERED_BY Org Beta.' +
         ' A product has one current vendor; a change of vendor (an acquisition) is a new OFFERED_BY that closes the old one. A customer that merely uses the product is USES or CUSTOMER_OF, never OFFERED_BY.',
       from: ['Product'],
       to: ['Organization'],
@@ -447,7 +447,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Customer of',
       description:
-        'An organization buys from another organization: "Company A is a Microsoft customer" is Company A CUSTOMER_OF Microsoft. Direction matters: customer first, supplier second.' +
+        'An organization buys from another organization: "Company A is an Org Beta customer" is Company A CUSTOMER_OF Org Beta. Direction matters: customer first, supplier second.' +
         ' Using a specific product is USES; CUSTOMER_OF is the commercial relationship between the two organizations. A partner, reseller or integrator is PARTNER_OF, not CUSTOMER_OF.',
       from: ['Organization'],
       to: ['Organization'],
@@ -462,7 +462,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Partner of',
       description:
-        'Two organizations are business partners (alliance, reseller, integrator): "Accenture is Company A\'s partner". Direction does not matter: record it once.' +
+        'Two organizations are business partners (alliance, reseller, integrator): "Org Delta is Company A\'s partner". Direction does not matter: record it once.' +
         ' A buyer and supplier is CUSTOMER_OF; organizations that compete are COMPETITOR_OF.',
       from: ['Organization'],
       to: ['Organization'],
@@ -478,7 +478,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Competitor of',
       description:
-        'Two organizations compete in the same market: "Google and Microsoft compete on productivity suites". Direction does not matter: record it once.' +
+        'Two organizations compete in the same market: "Org Gamma and Org Beta compete on productivity suites". Direction does not matter: record it once.' +
         ' Only when the source says or clearly implies the organizations compete; two organizations merely mentioned together are not competitors.',
       from: ['Organization'],
       to: ['Organization'],
@@ -494,7 +494,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Concerns',
       description:
-        'What a project is about: "The Copilot rollout concerns Microsoft Copilot and licensing cost" gives the project CONCERNS the product and CONCERNS the topic.' +
+        'What a project is about: "The Product X rollout concerns Product X and licensing cost" gives the project CONCERNS the product and CONCERNS the topic.' +
         ' A meeting covering a subject is DISCUSSED; CONCERNS ties a project to its own subject matter. A project that adopts or runs a product is USES; use CONCERNS for the product the effort is about.',
       from: ['Project'],
       to: ['Product', 'Topic'],

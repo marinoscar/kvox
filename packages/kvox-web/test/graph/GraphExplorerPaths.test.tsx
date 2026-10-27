@@ -109,7 +109,7 @@ beforeEach(() => {
     }),
     http.get('*/api/graph/entities/:id', ({ params }) =>
       params.id === COPILOT_ID
-        ? HttpResponse.json({ data: { ...entityDetail(ACME_ID), id: COPILOT_ID, label: 'Copilot rollout', type: 'Project' } })
+        ? HttpResponse.json({ data: { ...entityDetail(ACME_ID), id: COPILOT_ID, label: 'Product X rollout', type: 'Project' } })
         : HttpResponse.json({ data: entityDetail(String(params.id)) }),
     ),
     http.get('*/api/graph/entities', ({ request }) => {
@@ -141,19 +141,19 @@ async function pathReady() {
 }
 
 describe('path mode — results', () => {
-  it('Joe to the Copilot rollout: two ranked paths, each hop with a quote and a working deep link', async () => {
+  it('Joe to the Product X rollout: two ranked paths, each hop with a quote and a working deep link', async () => {
     renderExplorer(`/graph/explore?${PAIR}`);
     const list = await pathReady();
 
     expect(list).toHaveAccessibleName(
-      'Path 1, strong evidence, 1 hop: Joe Rivera, involved in as stakeholder, skeptical, Copilot rollout',
+      'Path 1, strong evidence, 1 hop: Joe Rivera, involved in as stakeholder, skeptical, Product X rollout',
     );
     expect(screen.getByRole('button', { name: /^Path 1, strong evidence$/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /^Path 2, moderate evidence$/ })).toBeInTheDocument();
 
-    const quote = await within(list).findByText(/Joe is a stakeholder on the Copilot rollout/);
+    const quote = await within(list).findByText(/Joe is a stakeholder on the Product X rollout/);
     expect(quote).toBeInTheDocument();
-    const link = within(list).getByRole('link', { name: /Open at source: Copilot sync/ });
+    const link = within(list).getByRole('link', { name: /Open at source: Product X sync/ });
     expect(link).toHaveAttribute('href', expect.stringContaining('/notes/'));
     // 5 sources, one shown: "4 more".
     expect(within(list).getByRole('button', { name: '4 more sources for this connection' })).toBeInTheDocument();
@@ -166,7 +166,7 @@ describe('path mode — results', () => {
 
     await userEvent.setup().click(screen.getByRole('button', { name: /^Path 2, moderate evidence$/ }));
     const second = await screen.findByRole('list', { name: /^Path 2, moderate evidence, 2 hops/ });
-    expect(await within(second).findByText(/Acme is piloting Copilot/)).toBeInTheDocument();
+    expect(await within(second).findByText(/Acme is piloting Product X/)).toBeInTheDocument();
     expect(within(second).getByText('Pilot')).toBeInTheDocument();
   });
 
@@ -198,12 +198,12 @@ describe('path mode — on the canvas', () => {
     await pathReady();
     const canvas = await screen.findByTestId('fake-canvas');
     await within(canvas).findByRole('button', { name: 'Acme Corp' });
-    expect(within(canvas).queryByRole('button', { name: 'Copilot rollout' })).not.toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'Product X rollout' })).not.toBeInTheDocument();
     expect(canvas).toHaveAttribute('data-path-nodes', '');
 
     await user.click(screen.getByRole('button', { name: 'Show on canvas' }));
 
-    await within(canvas).findByRole('button', { name: 'Copilot rollout' });
+    await within(canvas).findByRole('button', { name: 'Product X rollout' });
     // Merge, not replace: Acme was already there.
     expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toBeInTheDocument();
     await waitFor(() => expect(canvas).toHaveAttribute('data-path-nodes', [JOE_ID, COPILOT_ID].sort().join(',')));
@@ -228,7 +228,7 @@ describe('path mode — on the canvas', () => {
     renderExplorer(`/graph/explore?${PAIR}`);
     const list = await pathReady();
     const hop = within(list).getByRole('button', {
-      name: 'Joe Rivera, involved in as stakeholder, skeptical, Copilot rollout. Open this connection in the inspector.',
+      name: 'Joe Rivera, involved in as stakeholder, skeptical, Product X rollout. Open this connection in the inspector.',
     });
     hop.focus();
     await user.keyboard('{Enter}');
@@ -248,8 +248,8 @@ describe('path mode — URL and entry points', () => {
     const find = screen.getByRole('button', { name: 'Find paths' });
     expect(find).toBeDisabled();
 
-    await user.type(screen.getByRole('combobox', { name: 'To (B)' }), 'Copilot');
-    await user.click(await screen.findByRole('option', { name: /Copilot rollout/ }));
+    await user.type(screen.getByRole('combobox', { name: 'To (B)' }), 'Product X');
+    await user.click(await screen.findByRole('option', { name: /Product X rollout/ }));
     await user.click(screen.getByRole('button', { name: /^2 hops$/ }));
     expect(find).toBeEnabled();
     await user.click(find);
@@ -285,9 +285,9 @@ describe('path mode — URL and entry points', () => {
     await user.click(await screen.findByRole('button', { name: 'Change the connection' }));
     const a = await screen.findByRole('combobox', { name: 'From (A)' });
     await waitFor(() => expect(a).toHaveValue('Joe Rivera'));
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'To (B)' })).toHaveValue('Copilot rollout'));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'To (B)' })).toHaveValue('Product X rollout'));
     await user.click(screen.getByRole('button', { name: 'Swap A and B' }));
-    expect(screen.getByRole('combobox', { name: 'From (A)' })).toHaveValue('Copilot rollout');
+    expect(screen.getByRole('combobox', { name: 'From (A)' })).toHaveValue('Product X rollout');
     expect(screen.getByRole('combobox', { name: 'To (B)' })).toHaveValue('Joe Rivera');
   });
 

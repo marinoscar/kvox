@@ -34,7 +34,7 @@ describe('the graph schemas are strict-mode valid', () => {
 
   it('an extraction answer for a note with and without a Context (#440)', () => {
     const withContext = makeInput();
-    withContext.note.contextText = 'EY, Consulting';
+    withContext.note.contextText = 'OAC, Consulting';
     const withoutContext = makeInput();
     withoutContext.note.contextText = '   ';
 

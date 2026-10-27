@@ -303,13 +303,13 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     const user = await createUser();
     const note = await createNote(user.id);
     const joe = await entity(user.id, 'Person', 'Joe');
-    const microsoft = await entity(user.id, 'Organization', 'Microsoft');
-    const supplyChain = await relation(user.id, 'HAS_ROLE', joe, microsoft, '[2019-01-01,)', 'year', { title: 'VP', businessUnit: 'Supply Chain' });
+    const orgbeta = await entity(user.id, 'Organization', 'Org Beta');
+    const supplyChain = await relation(user.id, 'HAS_ROLE', joe, orgbeta, '[2019-01-01,)', 'year', { title: 'VP', businessUnit: 'Supply Chain' });
 
     // A move to Finance, same title: a new fact that closes the Supply Chain role.
     const move = await proposal(user.id, note.id);
     await row(move.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
-    await row(move.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Microsoft'), { resolution: linked(microsoft) });
+    await row(move.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Org Beta'), { resolution: linked(orgbeta) });
     await row(move.id, user.id, 'relation', relPayload({ type: 'HAS_ROLE', props: { title: 'VP', businessUnit: 'Finance' }, validFrom: '2026-03-01', precision: 'month' }));
     await runAll(ctx(move.id, user.id, note.id));
     const moved = await rows(move.id);
@@ -320,11 +320,11 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
 
     // A title-only role, restated with a unit: the same fact — known, evidence attaches, nothing closes.
     const annie = await entity(user.id, 'Person', 'Annie');
-    const vp = await relation(user.id, 'HAS_ROLE', annie, microsoft, '[2019-01-01,)', 'year', { title: 'VP' });
+    const vp = await relation(user.id, 'HAS_ROLE', annie, orgbeta, '[2019-01-01,)', 'year', { title: 'VP' });
     const note2 = await createNote(user.id);
     const restate = await proposal(user.id, note2.id);
     await row(restate.id, user.id, 'entity', entityPayload('e1', 'Person', 'Annie'), { resolution: linked(annie) });
-    await row(restate.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Microsoft'), { resolution: linked(microsoft) });
+    await row(restate.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Org Beta'), { resolution: linked(orgbeta) });
     await row(restate.id, user.id, 'relation', relPayload({ type: 'HAS_ROLE', props: { title: 'VP', businessUnit: 'Supply Chain' } }));
     await runAll(ctx(restate.id, user.id, note2.id));
     const restated = await rows(restate.id);

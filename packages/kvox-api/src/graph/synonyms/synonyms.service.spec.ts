@@ -7,7 +7,7 @@ const OTHER = '0a000000-0000-4000-8000-000000000002';
 const ID = '11111111-1111-4111-8111-111111111111';
 const user = { id: OWNER, permissions: ['graph:read', 'graph:write'] } as never;
 const row = (over: Record<string, unknown> = {}) => ({
-  id: ID, ownerId: OWNER, terms: ['EY', 'Ernst & Young'], normalized: ['ey', 'ernst & young'], entityType: null,
+  id: ID, ownerId: OWNER, terms: ['OAC', 'Org Alpha Consulting'], normalized: ['oac', 'org alpha consulting'], entityType: null,
   createdAt: new Date('2026-01-01T00:00:00Z'), updatedAt: new Date('2026-01-02T00:00:00Z'), ...over,
 });
 
@@ -30,23 +30,23 @@ function harness(o: { count?: number; found?: ReturnType<typeof row> | null; typ
 describe('SynonymsService', () => {
   it('creates a group with normalized terms, owner-scoped', async () => {
     const { service, prisma } = harness();
-    const out = await service.create({ terms: ['EY', 'Ernst & Young', 'ey'], entityType: 'Organization' }, user);
+    const out = await service.create({ terms: ['OAC', 'Org Alpha Consulting', 'oac'], entityType: 'Organization' }, user);
     expect(prisma.kgSynonym.create).toHaveBeenCalledWith({
-      data: { ownerId: OWNER, terms: ['EY', 'Ernst & Young'], normalized: ['ey', 'ernst & young'], entityType: 'Organization' },
+      data: { ownerId: OWNER, terms: ['OAC', 'Org Alpha Consulting'], normalized: ['oac', 'org alpha consulting'], entityType: 'Organization' },
     });
     expect(out.createdAt).toBe('2026-01-01T00:00:00.000Z');
   });
 
   it('400 synonyms_too_few when the terms collapse to one', async () => {
     const { service, prisma } = harness();
-    await expect(service.create({ terms: ['EY', 'ey'] }, user)).rejects.toMatchObject({ response: { details: { reason: 'synonyms_too_few' } } });
+    await expect(service.create({ terms: ['OAC', 'oac'] }, user)).rejects.toMatchObject({ response: { details: { reason: 'synonyms_too_few' } } });
     expect(prisma.kgSynonym.create).not.toHaveBeenCalled();
   });
 
   it('400 for a term without letters and for an unknown entity type', async () => {
     const { service } = harness();
-    await expect(service.create({ terms: ['EY', '--'] }, user)).rejects.toBeInstanceOf(BadRequestException);
-    await expect(service.create({ terms: ['EY', 'Ernst'], entityType: 'Nope' }, user)).rejects.toMatchObject({
+    await expect(service.create({ terms: ['OAC', '--'] }, user)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ terms: ['OAC', 'Org Alpha'], entityType: 'Nope' }, user)).rejects.toMatchObject({
       response: { details: { reason: 'unknown_entity_type' } },
     });
   });
@@ -66,10 +66,10 @@ describe('SynonymsService', () => {
 
   it('updates and deletes the owner\'s group', async () => {
     const { service, prisma } = harness();
-    await service.update(ID, { terms: ['IBM', 'International Business Machines'], entityType: null }, user);
+    await service.update(ID, { terms: ['OZM', 'Org Zeta Metrics'], entityType: null }, user);
     expect(prisma.kgSynonym.update).toHaveBeenCalledWith({
       where: { id: ID },
-      data: { terms: ['IBM', 'International Business Machines'], normalized: ['ibm', 'international business machines'], entityType: null },
+      data: { terms: ['OZM', 'Org Zeta Metrics'], normalized: ['ozm', 'org zeta metrics'], entityType: null },
     });
     await service.remove(ID, user);
     expect(prisma.kgSynonym.delete).toHaveBeenCalledWith({ where: { id: ID } });
@@ -79,6 +79,6 @@ describe('SynonymsService', () => {
     const { service, prisma } = harness();
     const out = await service.list(user);
     expect(prisma.kgSynonym.findMany.mock.calls[0][0].where).toEqual({ ownerId: OWNER });
-    expect(out.groups[0].terms).toEqual(['EY', 'Ernst & Young']);
+    expect(out.groups[0].terms).toEqual(['OAC', 'Org Alpha Consulting']);
   });
 });

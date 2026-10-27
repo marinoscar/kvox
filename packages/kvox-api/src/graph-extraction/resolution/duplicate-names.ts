@@ -7,15 +7,15 @@
 // (`normalizeAlias`), so the comparisons here never case-fold on their own.
 //
 //   name_contained  one name is a whole-word run inside the other
-//                   ("oscar" in "oscar marin"; "al" is NOT in "alan")
+//                   ("avery" in "avery example"; "al" is NOT in "alan")
 //   initials        a short all-letter name is the initials of the other's words
-//                   ("ey" / "ernst & young", "ibm" / "international business machines")
+//                   ("oac" / "org alpha consulting", "ozm" / "org zeta metrics")
 //   alias_match     two entities share one normalized name
 //   similar_name    trigram similarity at or above `SIMILAR_NAME_THRESHOLD` (SQL)
 //
 // Design decisions, each pinned in `duplicate-names.spec.ts`:
 //   - containment needs the shorter name to be at least `MIN_CONTAINED_CHARS`
-//     long: "al" inside "al pacino" is noise, "oscar" inside "oscar marin" is not;
+//     long: "al" inside "al pacino" is noise, "avery" inside "avery example" is not;
 //   - a name made only of stopwords never matches;
 //   - initials may drop the stopwords ("and", "&", "of", "the") or keep them
 //     ("boa" / "bank of america").
@@ -74,7 +74,7 @@ function isStopOnly(tokens: string[]): boolean {
 
 /**
  * Whether the shorter name is a whole-word run of the longer one.
- * Returns `'prefix'` ("oscar" / "oscar marin"), `'inner'` ("marin" / "oscar marin"), or null.
+ * Returns `'prefix'` ("avery" / "avery example"), `'inner'` ("example" / "avery example"), or null.
  * Equal names are not containment (that is `alias_match`).
  */
 export function containment(a: string, b: string): 'prefix' | 'inner' | null {

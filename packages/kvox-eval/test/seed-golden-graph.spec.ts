@@ -1,7 +1,7 @@
 /**
  * The golden-graph seeder on the PGlite host (#608): nothing refused, nothing
  * warned, every evidence row mapped, no orphan, the sensitive facts present,
- * and the pinned row counts (m37-m39 added the Topic, Product and BROADER gold; m40-m44 the stakeholder and market relations; m50-m55 the Risk gold; m56-m57 the Joe / Company A / Copilot rollout scenario). One host for the file.
+ * and the pinned row counts (m37-m39 added the Topic, Product and BROADER gold; m40-m44 the stakeholder and market relations; m50-m55 the Risk gold; m56-m57 the Joe / Company A / Product X rollout scenario). One host for the file.
  */
 
 import { createKvoxAi } from '@marinoscar/kvox-ai';

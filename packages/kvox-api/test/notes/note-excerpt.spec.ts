@@ -9,7 +9,7 @@ import { noteExcerpt } from '../../src/notes/note-excerpt.js';
 describe('noteExcerpt', () => {
   it('starts a real meeting note at the summary prose, with no markdown syntax', () => {
     const body =
-      '# EY Internal — Confidential\n\n## 0. Header\n\n| Field | Details |\n|---|---|\n| Meeting name | Dell-2 |\n\n## 1. Summary\n\nThe team agreed to ship the pilot in March.';
+      '# OAC Internal — Confidential\n\n## 0. Header\n\n| Field | Details |\n|---|---|\n| Meeting name | Alpha-2 |\n\n## 1. Summary\n\nThe team agreed to ship the pilot in March.';
     const excerpt = noteExcerpt(body);
 
     expect(excerpt.startsWith('The team agreed to')).toBe(true);
@@ -39,8 +39,8 @@ describe('noteExcerpt', () => {
   });
 
   it('falls back to table rows for a table-only note, skipping the header row', () => {
-    expect(noteExcerpt('| Field | Details |\n|---|---|\n| Meeting name | Dell-2 |')).toBe(
-      'Meeting name: Dell-2',
+    expect(noteExcerpt('| Field | Details |\n|---|---|\n| Meeting name | Alpha-2 |')).toBe(
+      'Meeting name: Alpha-2',
     );
   });
 

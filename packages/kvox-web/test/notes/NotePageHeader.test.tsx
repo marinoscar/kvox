@@ -29,7 +29,7 @@ vi.mock('../../src/notes/headless/clients/noteGenerationStream.js', async (impor
 
 const API_BASE = 'http://localhost:3000/api';
 
-const LONG_TITLE = 'Chevron Enterprise AI — Account Intelligence & Pursuit Notes';
+const LONG_TITLE = 'Org Alpha quarterly planning — consolidated notes from six working sessions';
 
 function note(overrides: Partial<Note> = {}): Note {
   return {

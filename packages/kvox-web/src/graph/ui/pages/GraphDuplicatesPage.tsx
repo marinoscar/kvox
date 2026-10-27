@@ -2,7 +2,7 @@
  * `/graph/duplicates` — Possible duplicates (#766; API `GET /api/graph/duplicates`).
  *
  * WHY IT EXISTS. Notes name the same person or organization in several ways
- * ("EY", "Ernst & Young"), and the graph ends up with two entities for one
+ * ("OAC", "Org Alpha Consulting"), and the graph ends up with two entities for one
  * thing. The API lists the pairs that probably are one entity (a fast name
  * pass plus the open resolution proposals); this page lets a person settle
  * each pair: Merge, Not the same, or Skip.

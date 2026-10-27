@@ -30,8 +30,8 @@ describe('graph insights contract (GIC-16)', () => {
     const entity = { id: A, label: 'Joe', type: 'Person' };
     const full = {
       ...base,
-      themes: [{ clusterId: 0, label: 'Copilot', labelEntityId: A, size: 9, typeCounts: { Person: 9 }, memberSample: [{ ...entity, degree: 3 }] }],
-      connectors: [{ entity, score: 0.4, clusters: [{ id: 0, label: 'Copilot' }], reason: 'Joe connects the Copilot group.' }],
+      themes: [{ clusterId: 0, label: 'Product X', labelEntityId: A, size: 9, typeCounts: { Person: 9 }, memberSample: [{ ...entity, degree: 3 }] }],
+      connectors: [{ entity, score: 0.4, clusters: [{ id: 0, label: 'Product X' }], reason: 'Joe connects the Product X group.' }],
       rising: [{ entity, count: 5, previous: 1, reason: 'x' }],
       fadingTies: [{ from: entity, to: entity, relationTypes: ['KNOWS'], lastEvidenceAt: '2026-01-01T00:00:00.000Z', evidenceBefore: 4, reason: 'x' }],
       openRisks: [{ id: A, title: null, statement: 's', severity: 'high', subject: entity, occurredAt: null }],

@@ -155,9 +155,9 @@ describe('temporalRuleFor', () => {
 
 describe('planTemporalInsert — HAS_ROLE business unit identity (#440)', () => {
   const role = (id: string, props: Record<string, unknown>, from = '2019-01-01') =>
-    edge({ id, type: 'HAS_ROLE', toId: 'microsoft', props, valid: r(from, null) });
+    edge({ id, type: 'HAS_ROLE', toId: 'org-beta', props, valid: r(from, null) });
   const next = (props: Record<string, unknown>, from = '2026-03-01') =>
-    cand({ type: 'HAS_ROLE', toId: 'microsoft', props, valid: r(from, null) });
+    cand({ type: 'HAS_ROLE', toId: 'org-beta', props, valid: r(from, null) });
 
   it('{VP, Supply Chain} then {VP, Finance} is a new role: closes and supersedes the old one', () => {
     expect(
@@ -185,7 +185,7 @@ describe('planTemporalInsert — HAS_ROLE business unit identity (#440)', () => 
   it('an undated {VP} statement never closes the {VP, Supply Chain} role', () => {
     const existing = [role('sc', { title: 'VP', businessUnit: 'Supply Chain' })];
     expect(
-      planTemporalInsert(existing, cand({ type: 'HAS_ROLE', toId: 'microsoft', props: { title: 'VP' }, valid: null }), HAS_ROLE)
+      planTemporalInsert(existing, cand({ type: 'HAS_ROLE', toId: 'org-beta', props: { title: 'VP' }, valid: null }), HAS_ROLE)
     ).toEqual({ action: 'attach_evidence', edgeId: 'sc', reason: 'restated' });
   });
 

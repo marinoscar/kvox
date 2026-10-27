@@ -5,7 +5,7 @@ import { z } from 'zod';
 // =============================================================================
 //
 // `/api/graph/synonyms`: the caller's own groups of names that mean the same
-// thing ("EY" = "Ernst & Young"). The contract validates SHAPE only; the server
+// thing ("OAC" = "Org Alpha Consulting"). The contract validates SHAPE only; the server
 // normalizes (`normalizeAlias`), de-duplicates and checks the entity type
 // against the caller's effective ontology.
 // =============================================================================

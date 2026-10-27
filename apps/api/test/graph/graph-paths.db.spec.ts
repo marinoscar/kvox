@@ -7,11 +7,11 @@
 // `npm test`; run by `npm run test:db`.
 //
 // The reference scenario (the epic's question, "how is Joe connected to the
-// Copilot rollout?"), with the relation types that exist in the ontology:
+// Product X rollout?"), with the relation types that exist in the ontology:
 //
-//   Joe -ATTENDED-> Copilot rollout                                     1 hop
-//   Joe -WORKS_FOR-> Company A <-PART_OF- Copilot program <-PART_OF- Copilot rollout   3 hops
-//   Joe -ATTENDED-> Kickoff -PART_OF-> Copilot program <-PART_OF- Copilot rollout      3 hops
+//   Joe -ATTENDED-> Product X rollout                                     1 hop
+//   Joe -WORKS_FOR-> Company A <-PART_OF- Product X program <-PART_OF- Product X rollout   3 hops
+//   Joe -ATTENDED-> Kickoff -PART_OF-> Product X program <-PART_OF- Product X rollout      3 hops
 //
 // What it proves: the shortest path is found, ranking follows evidence, at
 // most k DISTINCT paths come back, "no connection" is an empty list and not an
@@ -99,9 +99,9 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
   /** The reference scenario; every relation carries one evidence row (the fixture's). */
   async function scenario(g: GraphFixture, worksForValid = '[2020-01-01,)') {
     const joe = await g.entity('Person', 'Joe');
-    const rollout = await g.entity('Meeting', 'Copilot rollout');
+    const rollout = await g.entity('Meeting', 'Product X rollout');
     const kickoff = await g.entity('Meeting', 'Kickoff');
-    const program = await g.entity('Project', 'Copilot program');
+    const program = await g.entity('Project', 'Product X program');
     const companyA = await g.entity('Organization', 'Company A');
     const direct = await g.relation('ATTENDED', joe, rollout);
     const worksFor = await g.relation('WORKS_FOR', joe, companyA, { valid: worksForValid, precision: 'year' });

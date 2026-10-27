@@ -2,8 +2,8 @@
  * `/graph/synonyms` — the caller's personal synonyms (#767; API
  * `GET/POST /api/graph/synonyms`, `PATCH/DELETE /api/graph/synonyms/:id`).
  *
- * WHY IT EXISTS. People and companies go by several names ("EY", "Ernst &
- * Young"). A synonym group tells KVox those names mean the same thing; the
+ * WHY IT EXISTS. People and companies go by several names ("OAC", "Org Alpha
+ * Consulting"). A synonym group tells KVox those names mean the same thing; the
  * server uses the groups to match mentions to entities, to propose possible
  * duplicates and in graph search.
  *
@@ -59,7 +59,7 @@ const MAX_TERM_LENGTH = 120;
  * @stability experimental
  */
 export const SYNONYMS_SUBTITLE =
-  'Names that mean the same thing, like EY = Ernst & Young. KVox uses them to match people, companies and topics, to find duplicates, and in graph search.';
+  'Names that mean the same thing, like OAC = Org Alpha Consulting. KVox uses them to match people, companies and topics, to find duplicates, and in graph search.';
 
 /**
  * The words a group reads as: its names joined by " = ".
@@ -419,7 +419,7 @@ export function GraphSynonymsPage() {
           Tell KVox which names mean the same thing. For example:
         </Typography>
         <Box sx={{ display: 'flex', justifyContent: 'center', mb: canWrite ? 2 : 0 }} data-testid="synonyms-example">
-          <SynonymTerms terms={['EY', 'Ernst & Young']} />
+          <SynonymTerms terms={['OAC', 'Org Alpha Consulting']} />
         </Box>
         {addButton('contained')}
       </Paper>

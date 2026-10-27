@@ -24,7 +24,7 @@
       "disambiguation": [
         "Never a role (\"the CIO\"), never a team, never an organization acting collectively.",
         "Positive: \"Sarah Chen\"; \"the Acme CIO whose name was given as Marcus Webb.\"",
-        "Negative: \"the data team at EY\" is an Organization, or a Person if and only if one specific human is meant.",
+        "Negative: \"the data team at OAC\" is an Organization, or a Person if and only if one specific human is meant.",
         "Negative: \"whoever's on call\" names no specific human, so there is nothing to create."
       ],
       "storage": "entity",
@@ -62,7 +62,7 @@
       "pluralLabel": "Organizations",
       "description": "A company, client, vendor or institution, or an internal team specifically when that team acts as a party to a commitment or decision.",
       "disambiguation": [
-        "Positive: \"EY\" (a company); \"the data team at EY\" when a commitment is owed to that team specifically rather than to an individual within it.",
+        "Positive: \"OAC\" (a company); \"the data team at OAC\" when a commitment is owed to that team specifically rather than to an individual within it.",
         "Negative: a team mentioned only in passing, with no commitment or decision naming it as a party, is not an Organization; do not create one speculatively.",
         "Never a single human being acting for the organization: that is a Person."
       ],

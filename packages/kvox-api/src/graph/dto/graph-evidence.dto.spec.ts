@@ -15,10 +15,10 @@ describe('evidenceInputSchema', () => {
 
   it('accepts a note Context citation: both offsets null (#440)', () => {
     expect(
-      ok({ noteId: NOTE, noteVersion: 2, charStart: null, charEnd: null, quote: 'EY, Consulting' })
+      ok({ noteId: NOTE, noteVersion: 2, charStart: null, charEnd: null, quote: 'OAC, Consulting' })
     ).toBe(true);
     // Omitted offsets default to null — the same Context citation.
-    expect(ok({ noteId: NOTE, noteVersion: 2, quote: 'EY, Consulting' })).toBe(true);
+    expect(ok({ noteId: NOTE, noteVersion: 2, quote: 'OAC, Consulting' })).toBe(true);
   });
 
   it('refuses a note citation with exactly one offset set', () => {

@@ -8,7 +8,7 @@
 //   - create / list / update / delete on `kg_synonyms`, owner-scoped (404 for
 //     another user's group), `normalized` stored through `normalizeAlias`;
 //   - the 2..20 cardinality CHECK holds at the table;
-//   - candidate generation finds "Ernst & Young" for the mention "EY" through
+//   - candidate generation finds "Org Alpha Consulting" for the mention "OAC" through
 //     a synonym group (and does not without one, nor for another owner's group);
 //   - the possible-duplicates pass lists the pair with reason `synonym`;
 // =============================================================================
@@ -60,10 +60,10 @@ describeWithDb('Personal synonym dictionary (real Postgres)', () => {
   it('creates, lists, updates and deletes a group, owner-scoped', async () => {
     const a = await owner('crud-a');
     const b = await owner('crud-b');
-    const created = await service.create({ terms: ['EY', 'Ernst & Young', 'ey'], entityType: 'Organization' }, a.actor);
-    expect(created.terms).toEqual(['EY', 'Ernst & Young']);
+    const created = await service.create({ terms: ['OAC', 'Org Alpha Consulting', 'oac'], entityType: 'Organization' }, a.actor);
+    expect(created.terms).toEqual(['OAC', 'Org Alpha Consulting']);
     const row = await prisma.kgSynonym.findUniqueOrThrow({ where: { id: created.id } });
-    expect(row.normalized).toEqual(['ey', 'ernst & young']);
+    expect(row.normalized).toEqual(['oac', 'org alpha consulting']);
 
     expect((await service.list(a.actor)).groups.map((g) => g.id)).toEqual([created.id]);
     expect((await service.list(b.actor)).groups).toEqual([]);
@@ -83,23 +83,23 @@ describeWithDb('Personal synonym dictionary (real Postgres)', () => {
     await expect(prisma.kgSynonym.create({ data: { ownerId: user.id, terms: ['solo'], normalized: ['solo'] } })).rejects.toBeDefined();
   });
 
-  it('candidate generation matches EY to Ernst & Young through a group, for the owner and type only', async () => {
+  it('candidate generation matches OAC to Org Alpha Consulting through a group, for the owner and type only', async () => {
     const a = await owner('cand-a');
     const b = await owner('cand-b');
-    const ey = await a.g.entity('Organization', 'Ernst & Young');
-    const mention = { type: 'Organization', label: 'EY', aliases: [] as string[] };
+    const oac = await a.g.entity('Organization', 'Org Alpha Consulting');
+    const mention = { type: 'Organization', label: 'OAC', aliases: [] as string[] };
 
-    expect((await candidates.forMention(a.user.id, mention)).map((c) => c.entityId)).not.toContain(ey);
+    expect((await candidates.forMention(a.user.id, mention)).map((c) => c.entityId)).not.toContain(oac);
 
-    await service.create({ terms: ['EY', 'Ernst & Young'] }, b.actor);
-    expect((await candidates.forMention(a.user.id, mention)).map((c) => c.entityId)).not.toContain(ey);
+    await service.create({ terms: ['OAC', 'Org Alpha Consulting'] }, b.actor);
+    expect((await candidates.forMention(a.user.id, mention)).map((c) => c.entityId)).not.toContain(oac);
 
-    await service.create({ terms: ['EY', 'Ernst & Young'], entityType: 'Person' }, a.actor);
+    await service.create({ terms: ['OAC', 'Org Alpha Consulting'], entityType: 'Person' }, a.actor);
     expect((await candidates.forMention(a.user.id, mention)).filter((c) => c.aliasExact)).toEqual([]);
 
-    await service.create({ terms: ['EY', 'Ernst & Young'], entityType: 'Organization' }, a.actor);
-    const found = (await candidates.forMention(a.user.id, mention)).find((c) => c.entityId === ey);
-    expect(found).toMatchObject({ aliasExact: true, label: 'Ernst & Young' });
+    await service.create({ terms: ['OAC', 'Org Alpha Consulting'], entityType: 'Organization' }, a.actor);
+    const found = (await candidates.forMention(a.user.id, mention)).find((c) => c.entityId === oac);
+    expect(found).toMatchObject({ aliasExact: true, label: 'Org Alpha Consulting' });
   });
 
   it('the duplicates pass lists two entities sharing a group as `synonym` (0.9)', async () => {

@@ -31,7 +31,7 @@ function graphOf(nodes: { id: string; label: string; type: string; stub?: boolea
 describe('parsePaletteQuery', () => {
   it('splits type tokens from the free text, by key or label, ignoring case', () => {
     expect(parsePaletteQuery('type:Person joe', TYPES)).toEqual({ text: 'joe', types: ['Person'], unknownTypes: [] });
-    expect(parsePaletteQuery('copilot TYPE:products', TYPES)).toEqual({ text: 'copilot', types: ['Product'], unknownTypes: [] });
+    expect(parsePaletteQuery('productx TYPE:products', TYPES)).toEqual({ text: 'productx', types: ['Product'], unknownTypes: [] });
     expect(parsePaletteQuery('type:People type:Person joe rivera', TYPES).types).toEqual(['Person']);
     expect(parsePaletteQuery('type:commitment', TYPES).types).toEqual(['commitment']);
   });
@@ -60,8 +60,8 @@ describe('fuzzyScore', () => {
 describe('canvasMatches', () => {
   const { graph, ids } = graphOf([
     { id: 'a', label: 'Joe Rivera', type: 'Person' },
-    { id: 'b', label: 'Copilot rollout', type: 'Project' },
-    { id: 'c', label: 'Microsoft Copilot', type: 'Product' },
+    { id: 'b', label: 'Product X rollout', type: 'Project' },
+    { id: 'c', label: 'Product X', type: 'Product' },
     { id: 'd', label: '+3 more', type: 'Person', stub: true },
     { id: 'e', label: 'Joel Park', type: 'Person' },
   ]);
@@ -74,7 +74,7 @@ describe('canvasMatches', () => {
   });
 
   it('narrows by type tokens, with or without text', () => {
-    expect(canvasMatches(graph, ids, parsePaletteQuery('type:Product copilot', TYPES)).map((m) => m.id)).toEqual(['c']);
+    expect(canvasMatches(graph, ids, parsePaletteQuery('type:Product productx', TYPES)).map((m) => m.id)).toEqual(['c']);
     expect(canvasMatches(graph, ids, parsePaletteQuery('type:Person', TYPES)).map((m) => m.id).sort()).toEqual(['a', 'e']);
   });
 
