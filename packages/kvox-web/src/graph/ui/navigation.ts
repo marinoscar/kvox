@@ -42,8 +42,9 @@ export const kvoxGraphDestinations: readonly KvoxDestination<'knowledge', 'graph
  * The route prefixes the knowledge destination owns, keyed by destination key.
  *
  * @remarks
- * `/graph` covers the index, `/graph/entities/:id`, `/graph/explore`,
- * `/graph/overview`, `/graph/imports/:id`, `/graph/review`,
+ * `/graph` covers the overview (the landing since #782), the entity index
+ * `/graph/entities`, `/graph/entities/:id`, `/graph/explore`, the
+ * `/graph/overview` redirect, `/graph/imports/:id`, `/graph/review`,
  * `/graph/review-queue`, `/graph/duplicates` and `/graph/synonyms` (#373 to #375, #387, #721, #766,
  * #767); `/ask`
  * covers `/ask` and `/ask/:conversationId` (#380). Owned whether or not the tab

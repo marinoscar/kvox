@@ -17,7 +17,8 @@ import { useHasPermission } from '../../src/core/headless/index.js';
 import type { MockUser } from './helpers.js';
 
 /**
- * `/graph` — the knowledge graph's index (#373). MSW answers from
+ * `/graph/entities` — the knowledge graph's entity index (#373; moved from
+ * `/graph` by #782). MSW answers from
  * `mocks/graphData.ts`, the #370 contract's fixtures.
  */
 
@@ -46,12 +47,12 @@ function LocationProbe() {
   );
 }
 
-function renderIndex(route = '/graph', user: MockUser = graphReader) {
+function renderIndex(route = '/graph/entities', user: MockUser = graphReader) {
   return render(
     <>
       <Routes>
         <Route
-          path="/graph"
+          path="/graph/entities"
           element={
             <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
               <GraphIndexPage />
@@ -90,7 +91,7 @@ describe('GraphIndexPage', () => {
   it('lists people and organizations by default, each linking to its page', async () => {
     const { container } = renderIndex();
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Knowledge' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Entities' })).toBeInTheDocument();
     const joe = await screen.findByRole('link', { name: /Joe Rivera/ });
     expect(joe).toHaveAttribute('href', `/graph/entities/${graphEntitySummaries[0].id}`);
     expect(screen.getByRole('link', { name: /Acme Corp/ })).toBeInTheDocument();
@@ -98,9 +99,11 @@ describe('GraphIndexPage', () => {
     expect(screen.queryByRole('link', { name: /Project Atlas/ })).not.toBeInTheDocument();
     expect(listRequests[0].searchParams.get('type')).toBe('Person,Organization');
 
-    // Explore / Overview render as links (the routes arrive in #374/#375).
+    // The header links back to the overview (the landing, #782), Explore and Review.
+    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '/graph');
     expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/graph/explore');
-    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '/graph/overview');
+    expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute('href', '/graph/review');
+    expect(screen.queryByRole('link', { name: 'Entities' })).not.toBeInTheDocument();
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
@@ -122,7 +125,7 @@ describe('GraphIndexPage', () => {
   });
 
   it('reads the selection from the URL', async () => {
-    renderIndex('/graph?type=Project');
+    renderIndex('/graph/entities?type=Project');
     expect(await screen.findByRole('link', { name: /Project Atlas/ })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Joe Rivera/ })).not.toBeInTheDocument();
   });
@@ -143,7 +146,7 @@ describe('GraphIndexPage', () => {
   });
 
   it('says so when a search matches nothing', async () => {
-    renderIndex('/graph?q=zzz');
+    renderIndex('/graph/entities?q=zzz');
     expect(await screen.findByText('No matches for “zzz”')).toBeInTheDocument();
   });
 
@@ -201,7 +204,7 @@ describe('GraphIndexPage', () => {
   });
 
   it('redirects home without graph:read', async () => {
-    renderIndex('/graph', noGraphUser);
+    renderIndex('/graph/entities', noGraphUser);
     expect(await screen.findByText('Home page')).toBeInTheDocument();
     expect(listRequests).toHaveLength(0);
   });
@@ -215,7 +218,7 @@ describe('GraphIndexPage', () => {
     expect(screen.queryByRole('link', { name: 'Explore' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'More knowledge views' }));
     expect(await screen.findByRole('menuitem', { name: 'Explore' })).toHaveAttribute('href', '/graph/explore');
-    expect(screen.getByRole('menuitem', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Overview' })).toHaveAttribute('href', '/graph');
   });
 
   it('opens "Export graph…" from the header overflow menu (#386)', async () => {
@@ -244,7 +247,7 @@ describe('GraphIndexPage', () => {
         return HttpResponse.json({ data: { items: status === 'draft' ? [imported] : [], nextCursor: null } });
       }),
     );
-    renderIndex('/graph', graphWriter);
+    renderIndex('/graph/entities', graphWriter);
     await screen.findByRole('link', { name: /Joe Rivera/ });
 
     const imports = await screen.findByRole('list', { name: 'Recent imports' });
@@ -259,10 +262,10 @@ describe('GraphIndexPage', () => {
 
   it('shows no imports section when there are none, or the answer is unreadable', async () => {
     server.use(http.get('*/api/graph/proposals', () => HttpResponse.json({ data: {} })));
-    renderIndex('/graph', graphWriter);
+    renderIndex('/graph/entities', graphWriter);
     await screen.findByRole('link', { name: /Joe Rivera/ });
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Recent imports' })).not.toBeInTheDocument());
-    expect(screen.getByRole('heading', { level: 1, name: 'Knowledge' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Entities' })).toBeInTheDocument();
   });
 
   it('has no "Import graph…" and no imports section for a reader', async () => {
