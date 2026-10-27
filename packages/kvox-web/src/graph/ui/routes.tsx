@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 
 import type { KvoxRouteDef } from '../../core/ui/index.js';
+import { GraphOverviewRedirect } from './pages/GraphOverviewRedirect.js';
 
 /**
  * The routes of the graph slice, as data: the app renders each one inside its
@@ -12,9 +13,15 @@ import type { KvoxRouteDef } from '../../core/ui/index.js';
  * the exact string `graph-read.controller.ts` (#370) enforces; seeded to all
  * three roles, so the gate is here for the deployment that revokes it.
  *
+ * - `/graph` (#375, the landing since #782): the whole-graph overview;
+ *   `GET /api/graph/overview` is `graph:read`; its Refresh (`graph:write`) is
+ *   gated inside the page. URL state `layer`, `cluster`, `view=list`.
+ * - `/graph/entities` (#373, moved from `/graph` by #782): the entity index;
+ *   `GET /api/graph/entities` is `graph:read`. URL state `q`, `type`. A
+ *   static segment, so it never clashes with `/graph/entities/:id`.
  * - `/graph/explore` (#374): `POST /api/graph/explore/expand` is `graph:read`.
- * - `/graph/overview` (#375): `GET /api/graph/overview` is `graph:read`; its
- *   Refresh (`graph:write`) is gated inside the page.
+ * - `/graph/overview` (#782): the overview's old address, a redirect to
+ *   `/graph` that keeps the query string (`GraphOverviewRedirect`).
  * - `/graph/review`: the draft proposals waiting for review
  *   (`GET /api/graph/proposals?status=draft` is `graph:read`), each linking
  *   to the note page's review sheet (`?review=1`) or the import page.
@@ -29,7 +36,8 @@ import type { KvoxRouteDef } from '../../core/ui/index.js';
  *   `graph:write`, gated inside the page.
  * - `/graph/imports/:proposalId` (#387): `graph:write`, the exact string
  *   `POST /api/graph/imports` and the review writes enforce, because importing
- *   is curating the graph. A viewer without it is sent to `/graph`.
+ *   is curating the graph. A viewer without it is sent to `/graph`, the
+ *   overview.
  * - `/settings/knowledge-graph` (#369): the one gated `/settings/*` route,
  *   `graph:write` on the attribute-definition write routes. A viewer without it
  *   is sent to `/settings`.
@@ -46,6 +54,15 @@ import type { KvoxRouteDef } from '../../core/ui/index.js';
 export const kvoxGraphRoutes: readonly KvoxRouteDef[] = [
   {
     path: '/graph',
+    permission: 'graph:read',
+    Component: lazy(() =>
+      import('./pages/GraphOverviewPage.js').then((module) => ({
+        default: module.GraphOverviewPage,
+      })),
+    ),
+  },
+  {
+    path: '/graph/entities',
     permission: 'graph:read',
     Component: lazy(() =>
       import('./pages/GraphIndexPage.js').then((module) => ({ default: module.GraphIndexPage })),
@@ -70,11 +87,7 @@ export const kvoxGraphRoutes: readonly KvoxRouteDef[] = [
   {
     path: '/graph/overview',
     permission: 'graph:read',
-    Component: lazy(() =>
-      import('./pages/GraphOverviewPage.js').then((module) => ({
-        default: module.GraphOverviewPage,
-      })),
-    ),
+    Component: GraphOverviewRedirect,
   },
   {
     path: '/graph/review',

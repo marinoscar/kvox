@@ -1,7 +1,20 @@
 /**
- * `/graph/overview` — the shape of the caller's whole graph (#375, epic #347;
- * spec §5.7, §22.3). Owned by `knowledge` (#438) through the `/graph` prefix
+ * `/graph` — the shape of the caller's whole graph (#375, epic #347; spec
+ * §5.7, §22.3), and since #782 the knowledge LANDING: opening Knowledge shows
+ * this map first. Its old address, `/graph/overview`, redirects here with the
+ * query string kept. Owned by `knowledge` (#438) through the `/graph` prefix
  * (`config/destinations.ts`), gated on `graph:read`, lazy.
+ *
+ * THE HEADER IS THE SHARED `KnowledgeHeader` (#782): links to Entities
+ * (`/graph/entities`, the index that used to live at `/graph`), Explore,
+ * Review and Possible duplicates, and the overflow menu with Synonyms,
+ * "Export graph…" and (with `graph:write`) "Import graph…".
+ *
+ * EMPTY AND SPARSE (#782): with no snapshot yet, or no clusters, or fewer
+ * than {@link SPARSE_ENTITY_COUNT} entities, the page says the map fills in
+ * as notes are processed and offers Browse entities and Explore. A sparse map
+ * is still drawn under the message. The caption reads "Updated" and the
+ * relative time, from the snapshot's `computedAt`.
  *
  * DRAWN FROM A STORED SNAPSHOT, NEVER LAID OUT HERE. `GET /api/graph/overview`
  * returns the latest `kg.graph_layout` snapshot (#371) — clusters and 2-D
@@ -33,6 +46,7 @@ import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
+import Stack from '@mui/material/Stack';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
@@ -55,6 +69,8 @@ import { setExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
 import { nodeTypeLabel } from '../../headless/utils/explorerFilters.js';
 import { canvasLoaders } from '../components/explorer/canvasLoaders.js';
 import { isWebGLAvailable } from '../components/explorer/webgl.js';
+import { KnowledgeHeader } from '../components/KnowledgeHeader.js';
+import { GRAPH_ENTITIES_PATH } from '../paths.js';
 import { ClusterListView } from '../components/overview/ClusterListView.js';
 import { ClusterSidePanel } from '../components/overview/ClusterSidePanel.js';
 import { OverviewBanners } from '../components/overview/OverviewBanners.js';
@@ -77,9 +93,16 @@ import { formatRelativeTime, useHasPermission } from '../../../core/headless/ind
 
 const GraphCanvas = lazy(() => canvasLoaders.graphCanvas());
 
-export const OVERVIEW_TITLE = 'Overview';
+export const OVERVIEW_TITLE = 'Knowledge';
 export const BUILDING_TEXT = 'Building your overview…';
-export const EMPTY_TITLE = 'Nothing to show yet';
+export const EMPTY_TITLE = 'Your map is on its way';
+/** What the empty and sparse states say (#782). */
+export const FILLS_IN_TEXT =
+  'The map fills in as your notes are processed and their proposals reviewed. Until then, browse your entities or explore from one.';
+/** The sparse state's title: a map is drawn, but there is little on it. */
+export const SPARSE_TITLE = 'Your map is just getting started';
+/** Below this many entities the map is "sparse" and the page says so (#782). */
+export const SPARSE_ENTITY_COUNT = 5;
 export const OVERVIEW_NO_WEBGL_TEXT =
   "Your browser can't draw the graph (canvas drawing is unavailable), so it is shown as a list.";
 
@@ -89,12 +112,12 @@ function plural(n: number, one: string, many: string): string {
   return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 }
 
-/** "Built 3 days ago · 120 entities · 340 connections". */
+/** "Updated 3 days ago · 120 entities · 340 connections". */
 export function overviewCaption(overview: GraphOverview, now: Date = new Date()): string {
   const parts: string[] = [];
   if (overview.computedAt) {
     const relative = formatRelativeTime(overview.computedAt, now);
-    parts.push(`Built ${relative.charAt(0).toLowerCase()}${relative.slice(1)}`);
+    parts.push(`Updated ${relative.charAt(0).toLowerCase()}${relative.slice(1)}`);
   }
   parts.push(plural(overview.nodeCount, 'entity', 'entities'));
   parts.push(plural(overview.edgeCount, 'connection', 'connections'));
@@ -102,7 +125,7 @@ export function overviewCaption(overview: GraphOverview, now: Date = new Date())
 }
 
 /**
- * The `/graph/overview` page: the shape of the caller's whole graph, drawn from a stored layout snapshot as clusters or as individual nodes, with a hand-off to the explorer.
+ * The `/graph` page (the knowledge landing): the shape of the caller's whole graph, drawn from a stored layout snapshot as clusters or as individual nodes, with a hand-off to the explorer.
  *
  * @stability experimental
  */
@@ -278,18 +301,20 @@ export function GraphOverviewPage() {
 
   // --- Render -----------------------------------------------------------------------
   const header = (
-    <Box sx={{ mb: 1.5 }}>
-      <Typography variant="h5" component="h1">
-        {OVERVIEW_TITLE}
-      </Typography>
-      {overview && overview.status === 'ready' ? (
-        <Typography variant="body2" color="text.secondary">
-          {overviewCaption(overview)}
-        </Typography>
-      ) : isLoading ? (
-        <Skeleton width={260} aria-hidden />
-      ) : null}
-    </Box>
+    <KnowledgeHeader
+      current="overview"
+      title={OVERVIEW_TITLE}
+      subtitle={
+        overview && overview.status === 'ready' ? (
+          overviewCaption(overview)
+        ) : isLoading ? (
+          <Skeleton width={260} aria-hidden />
+        ) : undefined
+      }
+    />
+  );
+  const sparse = Boolean(
+    overview && overview.status === 'ready' && !overview.tooLarge && overview.nodeCount < SPARSE_ENTITY_COUNT,
   );
 
   let body;
@@ -315,9 +340,10 @@ export function GraphOverviewPage() {
         <Typography variant="h6" component="h2">
           {BUILDING_TEXT}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           This page updates by itself when it is ready.
         </Typography>
+        <OverviewStartActions />
       </Paper>
     );
   } else if (!overview.tooLarge && (overview.status === 'none' || overview.clusters.length === 0)) {
@@ -327,12 +353,9 @@ export function GraphOverviewPage() {
           {EMPTY_TITLE}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          The overview appears once your reviewed notes have added people, organizations or projects
-          to your graph.
+          {FILLS_IN_TEXT}
         </Typography>
-        <Button component={RouterLink} to="/graph" variant="contained">
-          Back to Knowledge
-        </Button>
+        <OverviewStartActions />
       </Paper>
     );
   } else {
@@ -382,6 +405,22 @@ export function GraphOverviewPage() {
               </Button>
             )}
           </Box>
+        )}
+        {sparse && (
+          <Paper
+            variant="outlined"
+            component="section"
+            aria-labelledby="overview-sparse-heading"
+            sx={{ p: { xs: 2, sm: 2.5 }, mb: 1.5 }}
+          >
+            <Typography id="overview-sparse-heading" variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
+              {SPARSE_TITLE}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              {FILLS_IN_TEXT}
+            </Typography>
+            <OverviewStartActions align="start" />
+          </Paper>
         )}
         <OverviewBanners
           overview={overview}
@@ -462,6 +501,25 @@ export function GraphOverviewPage() {
         {announcement}
       </Box>
     </Box>
+  );
+}
+
+/** "Browse entities" and "Explore": where to go while the map is empty or sparse (#782). */
+function OverviewStartActions({ align = 'center' }: { align?: 'center' | 'start' }) {
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      useFlexGap
+      sx={{ flexWrap: 'wrap', justifyContent: align === 'center' ? 'center' : 'flex-start' }}
+    >
+      <Button component={RouterLink} to={GRAPH_ENTITIES_PATH} variant="contained">
+        Browse entities
+      </Button>
+      <Button component={RouterLink} to="/graph/explore" variant="outlined">
+        Explore
+      </Button>
+    </Stack>
   );
 }
 

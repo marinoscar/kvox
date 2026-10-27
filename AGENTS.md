@@ -30,9 +30,7 @@ Full index: [docs/README.md](docs/README.md). The most used:
 - Endpoint reference (one `###` per group; read by heading, never whole): [docs/API.md](docs/API.md)
 - Security design, allowlist, sessions: [docs/SECURITY-ARCHITECTURE.md](docs/SECURITY-ARCHITECTURE.md)
 - Dev loop, environment variables: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md); testing: [docs/TESTING.md](docs/TESTING.md)
-- Specs: [settings-ui](docs/specs/settings-ui.md), [job-queue](docs/specs/job-queue.md), [worker-nodes](docs/specs/worker-nodes.md), [transcription](docs/specs/transcription.md), [notes](docs/specs/notes.md), [ontology](docs/specs/ontology.md)
-- Recipes: [job type](.claude/skills/add-job-type/SKILL.md), [notification](.claude/skills/add-notification/SKILL.md), [CLI and deploy](apps/cli/README.md)
-- Runbooks: [docs/README.md#runbooks](docs/README.md#runbooks)
+- Specs and runbooks: [docs/README.md](docs/README.md#runbooks)
 
 ## Working with a small context window
 
@@ -40,6 +38,12 @@ Full index: [docs/README.md](docs/README.md). The most used:
 - Never read `docs/API.md` (340 KB), `docs/ARCHITECTURE.md` or a spec whole.
 - Use one subagent at a time; hand it the doc section to read, not the whole doc.
 - Area rules are in the nested `AGENTS.md` of the folder you work in.
+
+## MANDATORY: No real people, companies or user material
+
+- **Never reuse material a user shares** (documents, notes, transcripts, screenshots) anywhere in the repo, issues, PRs or commits.
+- **No real people, companies, organizations or products as examples.** Use invented placeholders (`Person A`, `Org Alpha`, `Product X`, `@example.test`). Exempt only: named vendor integrations and legal/authorship metadata.
+- Detail and the full placeholder list: [docs/AI-ASSISTANTS.md](docs/AI-ASSISTANTS.md#no-real-people-companies-or-user-material).
 
 ## MANDATORY: Issue-Driven Development (Traceability)
 
@@ -185,4 +189,4 @@ Service URLs (dev): app http://localhost:3535 (Nginx); API reference http://loca
 
 ## Subagents
 
-Delegate development work to the matching agent in the tool's agents folder: `.opencode/agents/` for OpenCode, `.claude/agents/` for Claude Code. Agents: `backend-dev` (API), `frontend-dev` (React, MUI), `database-dev` (schema, migrations), `testing-dev` (tests), `docs-dev` (docs), `ops-dev` (container rebuilds, migrations, typecheck). Multi-domain work runs them in sequence (database, backend, frontend, testing, docs). Do not write controllers, services, components, Prisma schema, migrations, tests or docs directly; reading, planning and simple commands are fine. `ops-dev` never performs state-changing git operations (pull, merge, push, commit, worktree or branch management); the main agent does those.
+Delegate development work to the matching agent in `.opencode/agents/` (OpenCode) or `.claude/agents/` (Claude Code): `backend-dev`, `frontend-dev`, `database-dev`, `testing-dev`, `docs-dev`, `ops-dev` (container rebuilds, migrations, typecheck). Multi-domain work runs them in sequence (database, backend, frontend, testing, docs). Do not write controllers, services, components, Prisma schema, migrations, tests or docs directly; reading, planning and simple commands are fine. `ops-dev` never performs state-changing git operations; the main agent does those.

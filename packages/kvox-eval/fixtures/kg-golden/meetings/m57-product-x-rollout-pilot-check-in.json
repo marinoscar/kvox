@@ -49,7 +49,7 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-org-orgbeta",
+      "id": "g-org-org-beta",
       "type": "Organization",
       "label": "Org Beta",
       "aliases": [],
@@ -60,9 +60,7 @@
       "id": "g-product-product-x",
       "type": "Product",
       "label": "Product X",
-      "aliases": [
-        "Product X"
-      ],
+      "aliases": [],
       "props": {},
       "attendedFixtureIds": []
     },
@@ -163,7 +161,7 @@
         "type": "Organization",
         "label": "Org Beta",
         "aliases": [],
-        "existingId": "g-org-orgbeta",
+        "existingId": "g-org-org-beta",
         "props": {},
         "evidence": [
           {
@@ -176,9 +174,7 @@
         "key": "productx",
         "type": "Product",
         "label": "Product X",
-        "aliases": [
-          "Product X"
-        ],
+        "aliases": [],
         "existingId": "g-product-product-x",
         "props": {
           "category": "ai_model"

@@ -112,21 +112,21 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
 
   it("carries a relation's declared props on its edge, and {} on one without (#440)", async () => {
     const { user, g } = await owner();
-    const oscar = await g.entity('Person', 'Oscar');
+    const avery = await g.entity('Person', 'Avery');
     const oac = await g.entity('Organization', 'OAC');
-    const role = await g.relation('HAS_ROLE', oscar, oac, {
+    const role = await g.relation('HAS_ROLE', avery, oac, {
       valid: '[2020-01-01,)',
       precision: 'year',
       // An undeclared key is never passed through, even if a row carries one.
       props: { title: 'Managing Director', businessUnit: 'Consulting', stray: 'x' },
     });
-    const works = await g.relation('WORKS_FOR', oscar, oac, { valid: '[2020-01-01,)', precision: 'year' });
+    const works = await g.relation('WORKS_FOR', avery, oac, { valid: '[2020-01-01,)', precision: 'year' });
 
-    const slice = await nbhd(user.id, oscar);
+    const slice = await nbhd(user.id, avery);
     expect(slice.edges.find((e) => e.id === role)?.props).toEqual({ title: 'Managing Director', businessUnit: 'Consulting' });
     expect(slice.edges.find((e) => e.id === works)?.props).toEqual({});
 
-    const expanded = await svc.expand({ id: user.id }, { nodeIds: [oscar], cap: 100 } as never);
+    const expanded = await svc.expand({ id: user.id }, { nodeIds: [avery], cap: 100 } as never);
     expect(expanded.edges.find((e) => e.id === role)?.props).toEqual({ title: 'Managing Director', businessUnit: 'Consulting' });
   });
 

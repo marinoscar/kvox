@@ -19,8 +19,8 @@ describe('nameTokens', () => {
 
 describe('containment', () => {
   it('finds a whole-word prefix', () => {
-    expect(containment('oscar', 'avery example')).toBe('prefix');
-    expect(containment('avery example', 'oscar')).toBe('prefix');
+    expect(containment('avery', 'avery example')).toBe('prefix');
+    expect(containment('avery example', 'avery')).toBe('prefix');
   });
   it('finds a whole-word run that is not the prefix', () => {
     expect(containment('example', 'avery example')).toBe('inner');
@@ -29,7 +29,7 @@ describe('containment', () => {
   it('never matches inside a word: Al / Alan', () => {
     expect(containment('al', 'alan')).toBeNull();
     expect(containment('al', 'alan smith')).toBeNull();
-    expect(containment('osc', 'avery example')).toBeNull();
+    expect(containment('ave', 'avery example')).toBeNull();
   });
   it('needs at least 3 letters in the shorter name: Al / Al Pacino is noise', () => {
     expect(containment('al', 'al pacino')).toBeNull();
@@ -53,7 +53,7 @@ describe('acronyms and initials', () => {
   it('builds initials with and without stopwords', () => {
     expect(initialsOf('org alpha consulting')).toEqual(['oac']);
     expect(initialsOf('bureau of alpha')).toEqual(['ba', 'boa']);
-    expect(initialsOf('oscar')).toEqual([]);
+    expect(initialsOf('avery')).toEqual([]);
     expect(initialsOf('the office')).toEqual([]);
   });
   it('matches OAC, OZM and KG', () => {
@@ -67,13 +67,13 @@ describe('acronyms and initials', () => {
   it('does not match a wrong acronym or a one-word name', () => {
     expect(initialsMatch('oac', 'org alpha consulting group')).toBe(false);
     expect(initialsMatch('ab', 'alan')).toBe(false);
-    expect(initialsMatch('oscar', 'avery example')).toBe(false);
+    expect(initialsMatch('avery', 'avery example')).toBe(false);
   });
 });
 
 describe('nameReasons', () => {
-  it('Oscar / Avery Example', () => {
-    expect(nameReasons(['oscar'], ['avery example'])).toEqual(['name_contained']);
+  it('Avery / Avery Example', () => {
+    expect(nameReasons(['avery'], ['avery example'])).toEqual(['name_contained']);
   });
   it('OAC / Org Alpha Consulting', () => {
     expect(nameReasons(['oac'], ['org alpha consulting'])).toEqual(['initials']);
@@ -86,11 +86,11 @@ describe('nameReasons', () => {
     expect(nameReasons(['al'], ['alan'])).toEqual([]);
   });
   it('a shared alias is alias_match, and every name pairing is tried', () => {
-    expect(nameReasons(['avery example', 'zed'], ['oscar m', 'zed'])).toEqual(['alias_match']);
+    expect(nameReasons(['avery example', 'zed'], ['avery m', 'zed'])).toEqual(['alias_match']);
     expect(nameReasons(['oac consulting', 'oac'], ['org alpha consulting'])).toEqual(['initials']);
   });
   it('reports several signals in a stable order', () => {
-    expect(nameReasons(['oscar', 'zed'], ['avery example', 'zed'])).toEqual(['alias_match', 'name_contained']);
+    expect(nameReasons(['avery', 'zed'], ['avery example', 'zed'])).toEqual(['alias_match', 'name_contained']);
   });
 });
 
@@ -125,7 +125,7 @@ describe('findNamePairs', () => {
 
   it('finds containment, initials and shared aliases in one type, once per pair', () => {
     const pairs = findNamePairs([
-      e('1', 'Person', 'oscar'),
+      e('1', 'Person', 'avery'),
       e('2', 'Person', 'avery example'),
       e('3', 'Organization', 'oac'),
       e('4', 'Organization', 'org alpha consulting'),
@@ -140,7 +140,7 @@ describe('findNamePairs', () => {
   });
 
   it('never pairs across types', () => {
-    expect(findNamePairs([e('1', 'Person', 'oscar'), e('2', 'Organization', 'avery example')])).toEqual([]);
+    expect(findNamePairs([e('1', 'Person', 'avery'), e('2', 'Organization', 'avery example')])).toEqual([]);
   });
 
   it('skips a word shared by too many entities', () => {

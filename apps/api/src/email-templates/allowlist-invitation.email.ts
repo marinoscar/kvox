@@ -105,7 +105,7 @@ export interface AllowlistInvitationEmailData {
    *
    * DISCLOSED ON PURPOSE, and it is a deliberate trade rather than an
    * oversight. It reveals one internal address to somebody outside the system;
-   * in exchange the message is credible ("Oscar added you") instead of
+   * in exchange the message is credible ("Avery added you") instead of
    * anonymous, and the recipient has somebody to ask if they were not
    * expecting it. An unattributed invitation to an unfamiliar application is
    * indistinguishable from a phishing attempt, and the whole point of sending

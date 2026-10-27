@@ -19,6 +19,7 @@ export type {
 export { GraphExplorerPage } from './pages/GraphExplorerPage.js';
 export type { GraphExplorerNodeActionsProps, GraphExplorerPageProps, GraphExplorerPageSlots } from './pages/GraphExplorerPage.js';
 export { GraphOverviewPage } from './pages/GraphOverviewPage.js';
+export { GraphOverviewRedirect } from './pages/GraphOverviewRedirect.js';
 export { GraphImportPage } from './pages/GraphImportPage.js';
 export { GraphReviewPage, reviewTarget } from './pages/GraphReviewPage.js';
 export type { ReviewTarget } from './pages/GraphReviewPage.js';
@@ -39,6 +40,9 @@ export {
 export { SynonymsLink } from './components/SynonymsLink.js';
 export type { SynonymsLinkProps } from './components/SynonymsLink.js';
 export { DUPLICATES_BADGE_LIMIT, DuplicatesLink, duplicatesBadgeText } from './components/DuplicatesLink.js';
+export { KnowledgeHeader } from './components/KnowledgeHeader.js';
+export { GRAPH_ENTITIES_PATH, GRAPH_OVERVIEW_PATH } from './paths.js';
+export type { KnowledgeHeaderProps, KnowledgeView } from './components/KnowledgeHeader.js';
 export type { DuplicatesLinkProps } from './components/DuplicatesLink.js';
 export { ReviewQueueGroupCard, reviewGroupTarget } from './components/review/ReviewQueueGroupCard.js';
 export type { ReviewQueueGroupCardProps } from './components/review/ReviewQueueGroupCard.js';
