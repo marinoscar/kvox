@@ -23,6 +23,7 @@ export {
   GRAPH_CHANGED_EVENT,
   GRAPH_PROPOSAL_DRAFTED_EVENT,
   type GraphChangedEvent,
+  type GraphChangedCounts,
   type GraphChangedReason,
   type GraphProposalDraftedEvent,
 } from './graph-events.js';

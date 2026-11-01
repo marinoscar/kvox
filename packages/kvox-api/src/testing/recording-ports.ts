@@ -9,6 +9,8 @@ import type {
   KvoxSecretsPort,
   KvoxSettingsNamespaceDef,
   KvoxSettingsPort,
+  KvoxWebhookContext,
+  KvoxWebhooksPort,
 } from '../ports/index.js';
 
 /**
@@ -83,6 +85,39 @@ export function createRecordingKvoxAudit(): RecordingKvoxAudit {
     recorded,
     async record(e) {
       recorded.push(e);
+    },
+  };
+}
+
+/**
+ * A {@link KvoxWebhooksPort} that records.
+ *
+ * @stability experimental
+ */
+export interface RecordingKvoxWebhooks extends KvoxWebhooksPort {
+  /** Every emit, in order. */
+  readonly emitted: Array<{
+    /** The event key emitted. */
+    eventKey: string;
+    /** The payload passed to the port. */
+    data: unknown;
+    /** The context (user and organization) passed to the port. */
+    ctx: KvoxWebhookContext;
+  }>;
+}
+
+/**
+ * Builds a webhook port that keeps what it is given.
+ *
+ * @returns the recording port.
+ * @stability experimental
+ */
+export function createRecordingKvoxWebhooks(): RecordingKvoxWebhooks {
+  const emitted: RecordingKvoxWebhooks['emitted'] = [];
+  return {
+    emitted,
+    async emit(eventKey, data, ctx) {
+      emitted.push({ eventKey, data, ctx });
     },
   };
 }
