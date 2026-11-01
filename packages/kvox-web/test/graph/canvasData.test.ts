@@ -255,6 +255,24 @@ describe('computeElementStates', () => {
     expect(computeElementStates(ctx({ graph })).nodes[PERSON_B]).toContain('pinned');
   });
 
+  it('draws the owner\'s own node as "You · label" with the self ring, and leaves every other label alone (#778)', () => {
+    const graph = canvasGraph();
+    graph.setNodeAttribute(PERSON_B, 'isSelf', true);
+    const own = toNodeDatum(PERSON_B, graph.getNodeAttributes(PERSON_B), THEME);
+    expect((own.style as Record<string, unknown>).labelText).toBe(`You · ${graph.getNodeAttribute(PERSON_B, 'label')}`);
+    expect((own.data as Record<string, unknown>).label).toBe(`You · ${graph.getNodeAttribute(PERSON_B, 'label')}`);
+    const other = toNodeDatum(PERSON_A, graph.getNodeAttributes(PERSON_A), THEME);
+    expect((other.style as Record<string, unknown>).labelText).toBe(graph.getNodeAttribute(PERSON_A, 'label'));
+    // A ring of its own, and labelled at every level of detail.
+    const ring = nodeStateStyles(THEME).self!;
+    expect(ring.stroke).toBe(THEME.self);
+    expect(ring.label).toBe(true);
+    expect(THEME.self).not.toBe(THEME.accent);
+    const states = computeElementStates(ctx({ graph, zoom: 0.05, selectedId: null, pathNodeIds: new Set() }));
+    expect(states.nodes[PERSON_B]).toEqual(expect.arrayContaining(['self', 'labelled']));
+    expect(states.nodes[PERSON_B]).not.toContain('nolabel');
+  });
+
   it('below the LOD zoom only the seed, the selection, the path and the own node keep labels', () => {
     const graph = canvasGraph();
     graph.setNodeAttribute(PRODUCT_X, 'isSelf', true);

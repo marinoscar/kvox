@@ -41,6 +41,7 @@ const SUB_DEFAULTS: Record<string, Record<string, unknown>> = {
   resolution: RESOLUTION_DEFAULTS,
   domains: { work: true, personal: false },
   review: { minConfidence: 0.7, autoCommitSafeRows: true },
+  self: { entityId: null },
 };
 
 /** The API's `mergeGraph`, in miniature. */
@@ -65,6 +66,8 @@ function mergeGraph(current: Graph | undefined, patch: Graph | null | undefined)
 let stored: { graph?: Graph; version: number };
 let patches: Array<Record<string, unknown>>;
 let aiConfig: Record<string, unknown>;
+let selfAnswer: { self: unknown; suggestions: unknown[]; displayName: string | null };
+let createdPeople: string[];
 
 function settingsBody() {
   return {
@@ -89,6 +92,15 @@ function useHandlers(initialGraph?: GraphPreferencesSettings) {
       return HttpResponse.json({ data: settingsBody() });
     }),
     http.get(`${API_BASE}/ai-tasks/config`, () => HttpResponse.json({ data: aiConfig })),
+    http.get(`${API_BASE}/graph/self`, () => HttpResponse.json({ data: selfAnswer })),
+    http.get(`${API_BASE}/graph/entities`, () =>
+      HttpResponse.json({ data: { items: [{ id: PERSON_ID, type: 'Person', label: 'Avery Example', aliases: [] }], nextCursor: null } }),
+    ),
+    http.post(`${API_BASE}/graph/self/person`, async ({ request }) => {
+      const body = (await request.json()) as { label: string };
+      createdPeople.push(body.label);
+      return HttpResponse.json({ data: { id: PERSON_ID, label: body.label, aliases: [] } }, { status: 201 });
+    }),
   );
 }
 
@@ -99,7 +111,11 @@ async function renderPage(initialGraph?: GraphPreferencesSettings) {
   return result;
 }
 
+const PERSON_ID = '0b1f1d1e-4f3a-4c52-9a77-3f4f6a2b9c10';
+
 beforeEach(() => {
+  selfAnswer = { self: null, suggestions: [], displayName: null };
+  createdPeople = [];
   aiConfig = {
     available: true,
     provider: 'openai',
@@ -114,6 +130,62 @@ beforeEach(() => {
 });
 
 describe('UserKnowledgeGraphPage', () => {
+  describe('You in the graph (#778)', () => {
+    it('chooses nothing by itself: no PATCH leaves the page, even with a suggestion', async () => {
+      selfAnswer = {
+        self: null,
+        suggestions: [{ id: PERSON_ID, label: 'Avery Example', aliases: ['Avery'] }],
+        displayName: 'Avery Example',
+      };
+      await renderPage();
+      expect(await screen.findByText('Is this you?')).toBeInTheDocument();
+      expect(patches).toEqual([]);
+    });
+
+    it('"That\'s me" PATCHes graph.self.entityId and then shows the chosen Person', async () => {
+      selfAnswer = {
+        self: null,
+        suggestions: [{ id: PERSON_ID, label: 'Avery Example', aliases: [] }],
+        displayName: 'Avery Example',
+      };
+      const user = userEvent.setup();
+      await renderPage();
+      await user.click(await screen.findByRole('button', { name: "That's me" }));
+      await waitFor(() => expect(patches).toEqual([{ graph: { self: { entityId: PERSON_ID } } }]));
+    });
+
+    it('picks an existing Person from the search field', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await user.type(await screen.findByLabelText('Find yourself in your graph'), 'Ave');
+      await user.click(await screen.findByRole('option', { name: /Avery Example/ }));
+      await waitFor(() => expect(patches).toEqual([{ graph: { self: { entityId: PERSON_ID } } }]));
+    });
+
+    it('adds a Person by hand, then chooses it', async () => {
+      selfAnswer = { self: null, suggestions: [], displayName: 'Avery Example' };
+      const user = userEvent.setup();
+      await renderPage();
+      await user.click(await screen.findByRole('button', { name: 'Add me to the graph' }));
+      await waitFor(() => expect(patches).toEqual([{ graph: { self: { entityId: PERSON_ID } } }]));
+      expect(createdPeople).toEqual(['Avery Example']);
+    });
+
+    it('shows the chosen Person and clears the choice with null', async () => {
+      selfAnswer = { self: { id: PERSON_ID, label: 'Avery Example', aliases: ['Avery'] }, suggestions: [], displayName: null };
+      const user = userEvent.setup();
+      await renderPage({ self: { entityId: PERSON_ID } });
+      expect(await screen.findByText('Avery Example')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Clear' }));
+      await waitFor(() => expect(patches).toEqual([{ graph: { self: { entityId: null } } }]));
+    });
+
+    it('says so when the stored Person is no longer in the graph', async () => {
+      await renderPage({ self: { entityId: PERSON_ID } });
+      expect(await screen.findByText(/no longer in your graph/)).toBeInTheDocument();
+    });
+  });
+
   it('renders every section with the defaults when the namespace is absent', async () => {
     await renderPage();
 

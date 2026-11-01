@@ -53,6 +53,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useHasPermission, useKvoxHost } from '../../../core/headless/index.js';
 import { KvoxLoadingSpinner } from '../../../core/ui/index.js';
 import { AttributeDefsBrowser } from '../components/settings/AttributeDefsBrowser.js';
+import { SelfIdentitySection } from '../components/settings/SelfIdentitySection.js';
 import { TopicsPromoteSection } from '../components/settings/TopicsPromoteSection.js';
 import { useGraphAiConfig } from '../../headless/hooks/useGraphAiConfig.js';
 import { useGraphEffectiveOntology } from '../../headless/hooks/useGraphAttributeDefs.js';
@@ -244,6 +245,14 @@ export function UserKnowledgeGraphPage() {
         <FormHelperText sx={{ mt: 0 }}>
           Runs on your AI key. You can always extract a note by hand.
         </FormHelperText>
+      </Section>
+
+      {/* 2a. You in the graph (#778): nothing is chosen for the user; a suggestion is a button. */}
+      <Section title="You in the graph" id="kg-self-heading">
+        <SelfIdentitySection
+          storedEntityId={preferences.self.entityId}
+          onChoose={(entityId) => update({ self: { entityId } })}
+        />
       </Section>
 
       {/* 2b. Past meetings (#666): renders nothing without graph:write or while connected knowledge is off. */}

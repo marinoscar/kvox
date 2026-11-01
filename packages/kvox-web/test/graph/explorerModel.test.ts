@@ -65,6 +65,21 @@ describe('mergeSlice', () => {
     expect(edge).toMatchObject({ type: 'arrow', relationType: 'WORKS_FOR' });
   });
 
+  it('carries the owner\'s isSelf mark from the slice onto the node, on add and on refresh (#778)', () => {
+    const slice = joeSlice();
+    slice.nodes[0] = { ...slice.nodes[0], isSelf: true };
+    const state = createExplorerState();
+    mergeSlice(state, slice);
+    state.seedIds = [...slice.seedIds];
+    const marked = slice.nodes[0].id;
+    expect(state.graph.getNodeAttribute(marked, 'isSelf')).toBe(true);
+    expect(state.graph.nodes().filter((id) => state.graph.getNodeAttribute(id, 'isSelf') === true)).toEqual([marked]);
+    // The user clears the choice: the next read has no mark and the node stops being "You".
+    const cleared = joeSlice();
+    mergeSlice(state, cleared);
+    expect(state.graph.getNodeAttribute(marked, 'isSelf')).toBe(false);
+  });
+
   it('is idempotent: merging the same slice twice adds nothing and keeps positions', () => {
     const state = loaded();
     const before = positionsOf(state);
