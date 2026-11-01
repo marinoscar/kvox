@@ -81,10 +81,10 @@ export const graphOverviewQuerySchema = z.object({
     .describe('Comma-separated entity types or item kinds to keep. Absent or blank = all. Unknown key = 400.'),
   from: overviewDateSchema
     .optional()
-    .describe('Keep entities with evidence dated at or after this instant (`YYYY-MM-DD` is 00:00:00Z that day).'),
+    .describe('Keep entities with evidence dated at or after this instant (`YYYY-MM-DD` is local midnight that day in the requester time zone).'),
   to: overviewDateSchema
     .optional()
-    .describe('Keep entities with evidence dated before this instant (`YYYY-MM-DD` is 00:00:00Z that day).'),
+    .describe('Keep entities with evidence dated before this instant (`YYYY-MM-DD` is local midnight that day in the requester time zone).'),
   edges: z
     .enum(['true', 'false'])
     .transform((v) => v === 'true')

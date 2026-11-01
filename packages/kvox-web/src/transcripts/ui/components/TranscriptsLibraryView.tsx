@@ -61,6 +61,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { visuallyHidden } from '../visuallyHidden.js';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import {
@@ -489,6 +490,10 @@ export function TranscriptsLibraryView({ slots, sharing }: TranscriptsLibraryVie
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
+  // Grouped by the reader's calendar days, in their display zone; a saved
+  // profile re-groups the feed.
+  const zone = useDisplayTimeZone();
+
   /**
    * The feed cut into date groups — issue #190.
    *
@@ -498,7 +503,7 @@ export function TranscriptsLibraryView({ slots, sharing }: TranscriptsLibraryVie
    * two rows a microsecond apart in different groups across a midnight, which
    * is a heading that appears for one row and a bug nobody would reproduce.
    */
-  const dateGroups = useMemo(() => groupFeedByDate(transcripts, new Date()), [transcripts]);
+  const dateGroups = useMemo(() => groupFeedByDate(transcripts, new Date(), zone), [transcripts, zone]);
 
   return (
     <Box>

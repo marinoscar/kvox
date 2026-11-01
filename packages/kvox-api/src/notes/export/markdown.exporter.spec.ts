@@ -45,7 +45,7 @@ describe('MarkdownNoteExporter', () => {
     expect(text).toContain('> **Source:** Weekly Sync — Sep 12, 2026 (transcript)');
     expect(text).toContain('> **Template:** Concise Meeting Notes');
     expect(text).toContain('> **Note version:** Version 3 · saved Sep 12, 2026');
-    expect(text).toContain('> **Exported:** 2026-09-14T04:37:11.000Z');
+    expect(text).toContain('> **Exported:** Sep 14, 2026, 04:37 UTC');
   });
 
   it('emits front matter by default and omits it on request', async () => {

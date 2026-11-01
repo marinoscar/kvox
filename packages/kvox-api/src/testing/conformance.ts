@@ -961,6 +961,15 @@ export function describeKvoxPortsConformance(
       for (const [key, value] of Object.entries(patch)) expect(read[key]).toEqual(value);
     });
 
+    rule('readUserTimeZone answers null or a valid IANA zone id, and never throws', async (settings) => {
+      const userId = settings.user?.userId ?? settings.noDefaults?.userId;
+      if (!userId) return;
+      const zone = await settings.port.readUserTimeZone(userId);
+      if (zone === null) return;
+      expect(typeof zone).toBe('string');
+      expect(() => new Intl.DateTimeFormat('en-US', { timeZone: zone })).not.toThrow();
+    });
+
     rule('a user namespace with undefined defaults reads undefined until written, then the parsed value', async (settings) => {
       declare(settings);
       if (!settings.noDefaults) return;

@@ -75,7 +75,12 @@ export class AskMessagesService {
     @Inject(KVOX_JOBS) private readonly jobs: KvoxJobsPort,
   ) {}
 
-  async post(userId: string, conversationId: string, dto: PostAskMessage): Promise<PostAskMessageResponse> {
+  async post(
+    userId: string,
+    conversationId: string,
+    dto: PostAskMessage,
+    timeZone?: string,
+  ): Promise<PostAskMessageResponse> {
     const conversation = await this.access.requireConversation(userId, conversationId);
 
     // Every 409 here is the product's own refusal for the Ask task (`graph_disabled`,
@@ -129,6 +134,7 @@ export class AskMessagesService {
         model: resolution.model,
         providerId: resolution.providerId,
         reasoningEffort: resolution.reasoningEffort,
+        ...(timeZone ? { timeZone } : {}),
         ...(scope ? { scope } : {}),
       };
       // An AI job on the asker's own key; it touches no stored object, so the host files it under

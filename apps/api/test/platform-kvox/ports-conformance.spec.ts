@@ -432,7 +432,7 @@ function settingsUnderTest(): KvoxPortsUnderTest['settings'] {
   };
 
   return {
-    port: new PlatformKvoxSettingsAdapter(store as never, users as never, { systemSettings: { findUnique: async () => null } } as never),
+    port: new PlatformKvoxSettingsAdapter(store as never, users as never, { resolveUserTimeZone: async () => 'America/Costa_Rica' } as never, { systemSettings: { findUnique: async () => null } } as never),
     namespaces: [
       { scope: 'system', name: 'transcription', schema: z.object({}), defaults: {} },
       { scope: 'user', name: 'graph', schema: z.object({}), defaults: {} },

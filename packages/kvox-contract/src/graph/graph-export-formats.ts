@@ -36,12 +36,29 @@ export const GRAPH_EXPORT_FORMAT_INFO: Readonly<Record<GraphExportFormat, { exte
 };
 
 /**
+ * The `YYYY-MM-DD` day an instant falls on in an IANA time zone; UTC when the zone is absent or
+ * unknown. Pure `Intl`, so this package needs no time zone dependency.
+ */
+function dayKeyIn(instant: Date, timeZone: string | undefined): string {
+  if (timeZone) {
+    try {
+      // `en-CA` formats a date as `YYYY-MM-DD`.
+      return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant);
+    } catch {
+      // An unknown zone id: fall through to UTC.
+    }
+  }
+  return instant.toISOString().slice(0, 10);
+}
+
+/**
  * `<app-slug>-graph-<YYYY-MM-DD>.<ext>` — the download's filename, dated by
- * when the export was requested (UTC). Signed into the download URL's
+ * the day the export was requested in the owner's time zone (`timeZone`, an IANA
+ * id; UTC when absent). Signed into the download URL's
  * `Content-Disposition`, never added by a client.
  *
  * @stability experimental
  */
-export function graphExportFilename(appSlug: string, createdAt: Date, format: GraphExportFormat): string {
-  return `${appSlug}-graph-${createdAt.toISOString().slice(0, 10)}.${GRAPH_EXPORT_FORMAT_INFO[format].extension}`;
+export function graphExportFilename(appSlug: string, createdAt: Date, format: GraphExportFormat, timeZone?: string): string {
+  return `${appSlug}-graph-${dayKeyIn(createdAt, timeZone)}.${GRAPH_EXPORT_FORMAT_INFO[format].extension}`;
 }

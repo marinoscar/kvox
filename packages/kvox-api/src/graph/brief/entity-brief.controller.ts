@@ -9,7 +9,7 @@ import {
   type EntityBriefResponse,
 } from './dto/entity-brief.dto.js';
 import { EntityBriefService } from './entity-brief.service.js';
-import { KvoxAuth } from '../../core/index.js';
+import { KvoxAuth, KvoxTimeZoneService, TimeZoneHeader } from '../../core/index.js';
 import { GRAPH_READ_PERMISSION } from '../graph.permissions.js';
 import { CurrentGraphActor } from '../graph-actor.js';
 import type { GraphActor } from '../graph-actor.js';
@@ -30,7 +30,10 @@ import { ApiDataResponse } from '../api-data-response.js';
 @ApiTags('Graph')
 @Controller('graph')
 export class EntityBriefController {
-  constructor(private readonly briefs: EntityBriefService) {}
+  constructor(
+    private readonly briefs: EntityBriefService,
+    private readonly zones: KvoxTimeZoneService,
+  ) {}
 
   @Get('entities/:id/brief')
   @KvoxAuth(GRAPH_READ_PERMISSION)
@@ -61,9 +64,13 @@ export class EntityBriefController {
     @Param('id', ParseUUIDPipe) id: string,
     @Query(new ZodValidationPipe(entityBriefQuerySchema)) query: EntityBriefQuery,
     @CurrentGraphActor() user: GraphActor,
+    @TimeZoneHeader() timeZoneHeader?: string,
   ): Promise<EntityBriefResponse> {
+    // `since` bounds instants: a bare day is local midnight in the requester's zone.
+    const timeZone = query.since ? await this.zones.forRequest(user.id, timeZoneHeader) : undefined;
     return this.briefs.getBrief(user, id, {
       since: query.since,
+      ...(timeZone ? { timeZone } : {}),
       asOf: query.as_of,
       markViewed: query.markViewed,
       enqueueStaleDigest: true,

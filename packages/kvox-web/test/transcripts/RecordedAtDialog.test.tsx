@@ -29,9 +29,11 @@ import { render } from './helpers.js';
 import { fakeApiError } from '../../src/core/testing/index.js';
 import { updateTranscript } from '../../src/transcripts/headless/clients/transcripts.js';
 import type { TranscriptDetail } from '../../src/transcripts/headless/clients/transcripts.js';
+import { setPreferredTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import {
   RECORDED_AT_HELPER_TEXT,
   RecordedAtDialog,
+  fromLocalInputValue,
   recordedAtError,
   toLocalInputValue,
 } from '../../src/transcripts/ui/components/RecordedAtDialog.js';
@@ -125,6 +127,47 @@ describe('RecordedAtDialog — local zone', () => {
   it('shows the helper text explaining why the date matters', () => {
     renderDialog();
     expect(screen.getByText(RECORDED_AT_HELPER_TEXT)).toBeInTheDocument();
+  });
+});
+
+describe('RecordedAtDialog — the display time zone', () => {
+  it('shows and saves the wall clock of the zone the user chose, not the device’s', async () => {
+    // RECORDED_AT is 20:00 UTC: 05:00 the next day in Tokyo (UTC+9, no DST).
+    setPreferredTimeZone('Asia/Tokyo');
+    const user = userEvent.setup();
+    renderDialog();
+    expect(field().value).toBe('2026-03-03T05:00');
+
+    fireEvent.change(field(), { target: { value: '2025-11-05T14:30' } });
+    await user.click(saveButton());
+    expect(mockUpdate).toHaveBeenCalledWith(expect.anything(), 't1', {
+      recordedAt: '2025-11-05T05:30:00.000Z',
+    });
+  });
+
+  it('round-trips an instant through a zone, on either side of a DST change', () => {
+    for (const iso of ['2026-01-15T17:45:00.000Z', '2026-07-15T17:45:00.000Z']) {
+      for (const zone of ['America/New_York', 'Asia/Kolkata', 'Pacific/Auckland', 'UTC']) {
+        const local = toLocalInputValue(iso, zone);
+        expect(new Date(fromLocalInputValue(local, zone)!).toISOString()).toBe(iso);
+      }
+    }
+    // Winter (EST, UTC−5) and summer (EDT, UTC−4) read the same wall clock differently.
+    expect(toLocalInputValue('2026-01-15T17:45:00.000Z', 'America/New_York')).toBe('2026-01-15T12:45');
+    expect(toLocalInputValue('2026-07-15T17:45:00.000Z', 'America/New_York')).toBe('2026-07-15T13:45');
+  });
+
+  it('reads the hour a DST change repeats as its first occurrence', () => {
+    // New York falls back at 06:00 UTC on 1 Nov 2026: 01:30 happens twice.
+    expect(new Date(fromLocalInputValue('2026-11-01T01:30', 'America/New_York')!).toISOString()).toBe(
+      '2026-11-01T05:30:00.000Z',
+    );
+  });
+
+  it('refuses a value that is not a date and time', () => {
+    expect(fromLocalInputValue('2026-02-31T10:00', 'UTC')).toBeNull();
+    expect(fromLocalInputValue('not a date', 'UTC')).toBeNull();
+    expect(recordedAtError('2026-02-31T10:00', Date.now(), 'UTC')).toBe('Enter a valid date and time.');
   });
 });
 

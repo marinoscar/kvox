@@ -183,7 +183,7 @@ describe('visibleSettingsSections — works identically against USER_SETTINGS_SE
   });
 
   it('still matches by title only for the user registry', () => {
-    // Profile's description reads "Your display name and profile image..." —
+    // Profile's description reads "Your display name, profile image and time zone..." —
     // "display" is in no user-settings card title.
     const byDescriptionOnly = visibleSettingsSections(USER_SETTINGS_SECTIONS, () => false, 'display');
     expect(titlesOf(byDescriptionOnly)).toHaveLength(0);

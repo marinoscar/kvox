@@ -50,6 +50,7 @@ import type { GraphOntology } from '../../headless/clients/graph.js';
 import { SearchSnippet } from '../../../search/ui/index.js';
 import { EvidenceChips } from './EvidenceChip.js';
 import { entityPath } from './EntityListRow.js';
+import { formatDate, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 export interface EntityBriefCardProps {
   brief: EntityBrief;
@@ -76,11 +77,24 @@ export const BRIEF_SECTION_TITLES = [
 /** The optional sixth section (#664): shown between "Risks / claims" and "People changes" only when the brief carries open risks. */
 export const BRIEF_OPEN_RISKS_TITLE = 'Open risks';
 
-function formatDay(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+/** A calendar value on the wire: a bare date (`2026-03-01`) or that date at UTC midnight. */
+const UTC_MIDNIGHT = /^\d{4}-\d{2}-\d{2}(T00:00(:00(\.0+)?)?(Z|\+00:00))?$/;
+
+/**
+ * An INSTANT (`digest.generatedAt`, a last-viewed `since`) as a day in the
+ * reader's display zone, or `iso` itself when it does not parse.
+ */
+function formatInstantDay(iso: string, timeZone: string): string {
+  return formatDate(iso, { dateStyle: 'medium', timeZone, fallback: iso });
+}
+
+/**
+ * A CALENDAR value (a due date: the API sends `Date.toISOString()` of a
+ * `date` column, so UTC midnight) as the day it names. Read in UTC, so no
+ * display zone moves it a day either way.
+ */
+function formatCalendarDay(iso: string): string {
+  return formatDate(iso, { dateStyle: 'medium', timeZone: 'UTC', fallback: iso });
 }
 
 function EntryRow({ entry }: { entry: BriefEntry }) {
@@ -109,7 +123,7 @@ function EntryRow({ entry }: { entry: BriefEntry }) {
           {formatPrecisionDate(entry.occurredAt, entry.precision)}
         </Typography>
         {entry.superseded && <Chip size="small" label="Superseded" />}
-        {entry.dueAt && <Chip size="small" variant="outlined" label={`Due ${formatDay(entry.dueAt)}`} />}
+        {entry.dueAt && <Chip size="small" variant="outlined" label={`Due ${formatCalendarDay(entry.dueAt)}`} />}
         {entry.ownerPerson && (
           <Link component={RouterLink} to={entityPath(entry.ownerPerson.id)} variant="caption">
             {entry.ownerPerson.label}
@@ -204,6 +218,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
 }
 
 function DigestSummary({ brief, onRefresh }: { brief: EntityBrief; onRefresh: () => void }) {
+  const zone = useDisplayTimeZone();
   const { digest, digestPending, digestStale, digestUnavailable } = brief;
 
   let status: ReactNode = null;
@@ -258,7 +273,7 @@ function DigestSummary({ brief, onRefresh }: { brief: EntityBrief; onRefresh: ()
             ))}
           </Box>
           <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
-            Summary as of {formatDay(digest.generatedAt)}
+            Summary as of {formatInstantDay(digest.generatedAt, zone)}
           </Typography>
         </>
       )}
@@ -268,8 +283,15 @@ function DigestSummary({ brief, onRefresh }: { brief: EntityBrief; onRefresh: ()
 }
 
 export function EntityBriefCard({ brief, ontology, onRefresh }: EntityBriefCardProps) {
+  const zone = useDisplayTimeZone();
   const { sections, window } = brief;
-  const since = window.since ? formatDay(window.since) : null;
+  // `since` is an instant (last viewed, digest coverage, default window), except
+  // a `?since=` the reader typed as a bare date, which the API echoes at UTC midnight.
+  const since = window.since
+    ? window.sinceSource === 'query' && UTC_MIDNIGHT.test(window.since)
+      ? formatCalendarDay(window.since)
+      : formatInstantDay(window.since, zone)
+    : null;
   const sinceLine = since
     ? `Since ${since}${window.sinceSource === 'last_viewed' ? ' — since you last looked' : ''}`
     : 'Everything so far';

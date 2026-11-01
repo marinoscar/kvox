@@ -44,6 +44,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import type { GraphOntology } from '../../../../headless/clients/graph.js';
 import { useGraphEntity } from '../../../../headless/hooks/useGraphEntity.js';
 import { formatPrecisionDate } from '../../../../headless/utils/graphDisplay.js';
+import { formatDate, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import type { ExpandOnly } from '../../../hooks/useGraphExplorer.js';
 import type { GraphEntityAskPanelProps } from '../../../pages/GraphEntityPage.js';
 import { entityPath } from '../../EntityListRow.js';
@@ -374,10 +375,14 @@ function NodeHeader(props: {
 }) {
   const { node, title, aliases, firstSeenAt, lastSeenAt, mentions, onClose, touch } = props;
   const mode = useTheme().palette.mode;
+  const zone = useDisplayTimeZone();
   const shownAliases = aliases.slice(0, 3);
   const facts: string[] = [];
-  if (firstSeenAt) facts.push(`First seen ${formatPrecisionDate(firstSeenAt, 'day')}`);
-  if (lastSeenAt) facts.push(`Last seen ${formatPrecisionDate(lastSeenAt, 'day')}`);
+  // First/last seen are instants: the reader's display zone, as EntityHeader shows them.
+  // An item's occurredAt below is a calendar value and stays UTC.
+  const seenDay = (iso: string) => formatDate(iso, { dateStyle: 'medium', timeZone: zone, fallback: 'Date unknown' });
+  if (firstSeenAt) facts.push(`First seen ${seenDay(firstSeenAt)}`);
+  if (lastSeenAt) facts.push(`Last seen ${seenDay(lastSeenAt)}`);
   if (mentions !== null) facts.push(mentions === 1 ? '1 mention' : `${mentions} mentions`);
   if (facts.length === 0 && node.nodeKind === 'item' && node.occurredAt) {
     facts.push(formatPrecisionDate(node.occurredAt, 'day'));

@@ -31,6 +31,7 @@ const askRespondPayloadSchema = z.object({
   model: z.string().min(1),
   providerId: z.string().min(1),
   reasoningEffort: z.string().nullable().optional(),
+  timeZone: z.string().min(1).max(64).optional(),
   scope: z
     .object({ entityIds: z.array(z.guid()).optional(), evidenceIds: z.array(z.guid()).optional() })
     .optional(),
@@ -66,6 +67,12 @@ export interface AskRespondPayload {
   providerId: string;
   /** The reasoning effort chosen at request time, when any. */
   reasoningEffort?: string | null;
+  /**
+   * The asker's IANA time zone at request time (stored profile zone, else the `X-Time-Zone`
+   * header, else UTC): the turn's "today" and the dates its tools show are cut in it. A job
+   * queued before this field existed has none; the handler then reads the user's zone when it runs.
+   */
+  timeZone?: string;
   /** The graph selection the question starts from (GIC-17): ids only, re-checked when the job runs. */
   scope?: AskRespondScope;
 }

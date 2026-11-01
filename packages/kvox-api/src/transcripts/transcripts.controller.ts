@@ -98,7 +98,7 @@ import {
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ZodValidationPipe } from 'nestjs-zod';
 
-import { KvoxAuth, matchesETag, versionETag } from '../core/index.js';
+import { KvoxAuth, TimeZoneHeader, matchesETag, versionETag } from '../core/index.js';
 import { ApiDataResponse } from './api-data-response.js';
 import { CurrentActor, type TranscriptsActor } from './transcripts-actor.js';
 import { TRANSCRIPTS_READ_PERMISSION, TRANSCRIPTS_WRITE_PERMISSION } from './transcripts.permissions.js';
@@ -884,8 +884,9 @@ export class TranscriptsController {
     @Body(new ZodValidationPipe(createTranscriptExportSchema)) dto: CreateTranscriptExportDto,
     @CurrentActor() user: TranscriptsActor,
     @Res({ passthrough: true }) reply: FastifyReply,
+    @TimeZoneHeader() timeZoneHeader?: string,
   ) {
-    const result = await this.exports.requestExport(id, dto, user);
+    const result = await this.exports.requestExport(id, dto, user, timeZoneHeader);
 
     reply.status(result.created ? HttpStatus.ACCEPTED : HttpStatus.OK);
 

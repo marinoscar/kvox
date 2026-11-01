@@ -5,8 +5,10 @@
  * Organization, with a title and an optional business unit).
  *
  * The target is picked from the caller's own graph (`EntitySearchField`,
- * filtered to the type the relation allows). "Since" is optional — the API
- * defaults it to today — and a still-open edge of the same type is closed at
+ * filtered to the type the relation allows). "Since" is optional: left
+ * empty, the request carries NO `validFrom` and the API stores the requester's
+ * today in their time zone (profile, else the `X-Time-Zone` header the client
+ * sends), so the browser never derives a day from UTC. A still-open edge of the same type is closed at
  * that date by the server, exactly as committing a proposal closes it. The
  * relation is cited "Set by hand".
  *
@@ -111,6 +113,7 @@ export function EntityRelationDialog({ open, entityId, type, onClose, onSaved }:
       ...(isRole
         ? { props: { title: title.trim(), ...(businessUnit.trim() ? { businessUnit: businessUnit.trim() } : {}) } }
         : {}),
+      // Empty: send nothing; the server's default is the requester's local today.
       ...(since ? { validFrom: since } : {}),
     });
     if (result) onSaved(result);

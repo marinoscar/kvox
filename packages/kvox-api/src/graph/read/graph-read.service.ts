@@ -36,7 +36,7 @@ import type {
 import { withGraphStatementTimeout } from './graph-query-timeout.js';
 import { edgeValid } from './graph-neighborhood.service.js';
 import { decodeGraphCursor, encodeGraphCursor, GraphCursorError, type GraphCursorRoute } from './graph-cursor.js';
-import { asOfOr400, resolveEntityTypes, resolveTimelineKinds } from './read-params.js';
+import { asOfOr400, instantBoundOr400, resolveEntityTypes, resolveTimelineKinds } from './read-params.js';
 import {
   asOfRelationSql,
   isoMicrosSql,
@@ -109,7 +109,7 @@ export class GraphReadService {
   /**
    * List entities.
    */
-  async listEntities(user: GraphReader, query: ListEntitiesQuery): Promise<ListEntitiesResponse> {
+  async listEntities(user: GraphReader, query: ListEntitiesQuery, timeZone = 'UTC'): Promise<ListEntitiesResponse> {
     const ownerId = user.id;
     const schema = await this.ontology.effectiveSchemaFor(ownerId);
     const types = resolveEntityTypes(schema, query.type, 'type');
@@ -136,7 +136,8 @@ export class GraphReadService {
       rows = await this.searchEntityRows(ownerId, query.q, filters, query.limit);
     } else if (query.sort === 'mentions') {
       // The most-mentioned entities, optionally within a window (GIC-09): the top `limit`, no cursor.
-      const since = query.since ? asOfOr400(query.since) : null;
+      // `since` filters mention INSTANTS (`created_at`): a bare day is local midnight in the requester's zone.
+      const since = query.since ? instantBoundOr400(query.since, timeZone) : null;
       rows = await this.mostMentionedRows(ownerId, filters, since, query.limit);
     } else {
       const route: GraphCursorRoute = query.sort === 'viewed' ? 'entities:viewed' : 'entities:updated';

@@ -54,7 +54,7 @@ function exportRow(overrides: Partial<TranscriptExportRow> = {}): TranscriptExpo
   } as TranscriptExportRow;
 }
 
-function build() {
+function build(options: { withPdf?: boolean } = {}) {
   const prisma = {
     transcriptExport: {
       findFirst: jest.fn().mockResolvedValue(null),
@@ -78,6 +78,17 @@ function build() {
 
   new JsonTranscriptExporter(registry).onModuleInit();
   new MarkdownTranscriptExporter(registry).onModuleInit();
+  // A format that prints zone-dependent dates (the PDF cover): its content address includes the zone.
+  if (options.withPdf) registry.register({
+    ...(registry.get('markdown') as object),
+    format: 'pdf',
+    localizesDates: true,
+    extension: 'pdf',
+    mimeType: 'application/pdf',
+    render: async () => undefined,
+  } as never);
+  // The profile zone, else the header, else UTC: the "profile" here is empty, so the header decides.
+  const zones = { forRequest: jest.fn(async (_userId: string, header?: string) => header ?? 'UTC') };
 
   const service = new TranscriptExportService(
     prisma as unknown as KvoxTranscriptsDb,
@@ -87,9 +98,10 @@ function build() {
     registry,
     jobs as unknown as KvoxJobsPort,
     audit as unknown as KvoxAuditPort,
+    zones as never,
   );
 
-  return { service, prisma, access, objects, jobs, registry, audit };
+  return { service, prisma, access, objects, jobs, registry, audit, zones };
 }
 
 /** A queued export whose row and job link both resolve. */
@@ -190,6 +202,29 @@ describe('requestExport', () => {
         options: { includeTimestamps: true, mergeConsecutive: false },
       }),
     );
+  });
+
+  it('puts the requester zone in the content address of a format that prints zone-dependent dates only', async () => {
+    const { service, prisma, jobs } = build({ withPdf: true });
+
+    primeCreate(prisma);
+
+    // A PDF (the cover date) requested from two zones is two files; Markdown is one file whatever the zone.
+    await service.requestExport('tr-1', { format: 'pdf', options: {} }, USER, 'America/Chicago');
+    await service.requestExport('tr-1', { format: 'pdf', options: {} }, USER, 'Asia/Tokyo');
+    await service.requestExport('tr-1', { format: 'markdown', options: {} }, USER, 'America/Chicago');
+    await service.requestExport('tr-1', { format: 'markdown', options: {} }, USER, 'Asia/Tokyo');
+
+    const hashes = prisma.transcriptExport.create.mock.calls.map((call) => (call[0].data as { optionsHash: string }).optionsHash);
+
+    expect(hashes[0]).not.toBe(hashes[1]);
+    expect(hashes[2]).toBe(hashes[3]);
+    expect(jobs.enqueue.mock.calls.map((call) => (call[0].payload as { timeZone?: string }).timeZone)).toEqual([
+      'America/Chicago',
+      'Asia/Tokyo',
+      undefined,
+      undefined,
+    ]);
   });
 
   it('expires the row seven days out', async () => {

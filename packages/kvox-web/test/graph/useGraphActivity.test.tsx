@@ -25,7 +25,7 @@ describe('useGraphActivity', () => {
     server.use(
       http.get('*/api/graph/activity', () =>
         HttpResponse.json({
-          data: { bucket: 'month', series: [{ start: '2026-01-01', total: 1, byType: { Person: 1 } }], byEntity: {} },
+          data: { bucket: 'month', timeZone: 'UTC', series: [{ start: '2026-01-01', total: 1, byType: { Person: 1 } }], byEntity: {} },
         }),
       ),
     );
@@ -51,7 +51,7 @@ describe('useGraphActivity', () => {
       http.get('*/api/graph/activity', ({ request }) => {
         const bucket = new URL(request.url).searchParams.get('bucket');
         return HttpResponse.json({
-          data: { bucket, series: [{ start: '2026-01-01', total: bucket === 'week' ? 5 : 1, byType: {} }], byEntity: {} },
+          data: { bucket, timeZone: 'UTC', series: [{ start: '2026-01-01', total: bucket === 'week' ? 5 : 1, byType: {} }], byEntity: {} },
         });
       }),
     );
