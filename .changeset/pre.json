@@ -20,6 +20,7 @@
     "embedding-catalog-choice",
     "fix-neighbors-relation-example",
     "fix-speaker-link-one-connection",
+    "g6-graph-canvas",
     "gic-04-extraction-resolution-eval",
     "gic-05-topics-promote",
     "gic-07-worker-layout",
@@ -34,8 +35,12 @@
     "gic-16-insights",
     "gic-17-lenses-history-ask-selection",
     "gic-18-docs-final",
+    "graph-autocommit-default-on",
     "graph-overview-landing",
+    "graph-self-identity",
     "graph-tx-reads-one-connection",
+    "kg-extract-chunking",
+    "kg-multi-meeting-documents",
     "kg-synonyms-table",
     "kvox-ai-copilot-ask",
     "kvox-ai-copilot-signin-runtime-routing",
@@ -122,6 +127,7 @@
     "ontology-1-3-0-risk-item",
     "ontology-1-3-0-stakeholder-relations",
     "ontology-1-3-0-topic-product",
+    "ontology-1-4-0-opportunity-document",
     "placeholder-examples",
     "platform-next-10-pin",
     "platform-next-11-pin",
@@ -133,6 +139,7 @@
     "platform-next-19-pin",
     "platform-next-20-pin",
     "remove-epic-visual-specs",
+    "replace-borrowed-brands",
     "search-model-filter"
   ]
 }
