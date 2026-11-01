@@ -166,7 +166,7 @@ describe('visibleSettingsSections — works identically against USER_SETTINGS_SE
 
     expect(titlesOf(result).sort()).toEqual(
       titlesOf(USER_SETTINGS_SECTIONS)
-        .filter((title) => title !== 'Knowledge graph' && title !== 'AI Provider')
+        .filter((title) => title !== 'Knowledge graph' && title !== 'AI Provider' && title !== 'Webhooks')
         .sort(),
     );
     // Its one-card `Knowledge` group collapses with it.
@@ -174,7 +174,8 @@ describe('visibleSettingsSections — works identically against USER_SETTINGS_SE
 
     const withGates = visibleSettingsSections(
       USER_SETTINGS_SECTIONS,
-      (permission) => permission === 'graph:write' || permission === 'ai:use',
+      (permission) =>
+        permission === 'graph:write' || permission === 'ai:use' || permission === 'webhooks:read',
       '',
       { ai: true },
     );
@@ -501,6 +502,8 @@ describe('the Operations group (#266)', () => {
       // #464, epic #462 — the platform's Doctor, APPENDED for the same reason
       // Broadcasts was: an insertion would move five cards a reader has learnt.
       'Doctor',
+      // #795 — the webhooks slice's system card, APPENDED for the same reason.
+      'Webhooks',
     ]);
   });
 
@@ -1289,8 +1292,9 @@ describe('the Doctor card (#464)', () => {
     'utf8',
   );
 
-  it('is the last Operations card, routed to /admin/settings/doctor and not inert', () => {
-    expect(operations?.cards.at(-1)?.title).toBe('Doctor');
+  it('is routed to /admin/settings/doctor and not inert, and only the appended Webhooks card (#795) follows it', () => {
+    expect(operations?.cards.at(-1)?.title).toBe('Webhooks');
+    expect(operations?.cards.at(-2)?.title).toBe('Doctor');
     expect(doctor?.path).toBe('/admin/settings/doctor');
     expect(doctor?.disabled).toBeUndefined();
     expect(doctor?.Icon).toBeDefined();
@@ -1424,11 +1428,12 @@ describe('the Observability cards (#471)', () => {
     expect(ADMIN_SECTIONS.at(-1)?.label).toBe('Danger Zone');
   });
 
-  it('declares the three cards in the package’s order, none inserted into an existing group', () => {
+  it('declares the three telemetry cards in the package’s order, then Alerts (#795), none inserted into an existing group', () => {
     expect(observability?.cards.map((card) => card.title)).toEqual([
       'Telemetry',
       'Telemetry Explorer',
       'Telemetry Dashboard',
+      'Alerts',
     ]);
     for (const section of ADMIN_SECTIONS) {
       if (section.label === 'Observability') continue;

@@ -44,6 +44,9 @@ import { kvoxTranscriptionAdminSections } from '@marinoscar/kvox-web/transcripti
 // Doctor (#464, epic #462) — the platform's health-check page, declared by the
 // package (title, description, path, `system_settings:read`) and appended below.
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
+// Webhooks and Alerts (#795): cards from the slices as data.
+import { webhooksAdminSections } from '@marinoscar/platform-web/webhooks/ui';
+import { alertsAdminCards } from '@marinoscar/platform-web/alerts/ui';
 import { setupGuideSettingsPage } from '@marinoscar/platform-web/onboarding/ui';
 // Factory reset (#562; a packaged page: card and icon from its descriptor) and
 // the label of the `Danger Zone` group both registries pin last.
@@ -546,6 +549,12 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
       // the string the platform's doctor controller enforces on its GET), plus
       // its icon, which the package keeps beside the card.
       { ...doctorSettingsPage.card, Icon: doctorSettingsPage.Icon },
+      // #795. `Webhooks`, APPENDED: the deployment's outbound webhook endpoints and
+      // their deliveries. `system_webhooks:read` is the SYSTEM permission the packaged
+      // `/api/admin/webhooks` controller enforces; writes (`system_webhooks:write`) are gated inside
+      // the page. OPERATIONS: deliveries are work dispatched and watched. The slice's
+      // `organizations` card is NOT spread (`feature: 'orgs'`; this deployment runs single-org).
+      ...webhooksAdminSections.operations,
     ],
   },
   {
@@ -560,7 +569,11 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
     // resolver names them correctly. A viewer without `telemetry:read` or
     // `telemetry:query` sees no section at all.
     label: 'Observability',
-    cards: [...telemetryAdminCards],
+    // #795. `Alerts`, APPENDED after the telemetry cards: alert rules and their
+    // incidents. `alerts:read` is the SYSTEM permission every read route of the packaged
+    // `/api/admin/alerts` controller enforces; writes (`alerts:write`) are gated inside the page.
+    // NO `feature`: node rules work while telemetry is off.
+    cards: [...telemetryAdminCards, ...alertsAdminCards],
   },
   // Issue #562. `Danger Zone`, PINNED LAST: the one documented exception to
   // append-only (docs/specs/settings-ui.md). A group added later is inserted
