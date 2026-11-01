@@ -203,6 +203,10 @@ export const graphNodeSchema = z.object({
     .describe(
       'ISO instant of the latest readable mention (entity) or latest evidence (item); null when there is none. Absent from an older API.',
     ),
+  isSelf: z
+    .boolean()
+    .optional()
+    .describe('True on the one Person you chose as yourself (`preferences.self.entityId`, #778). Absent otherwise.'),
 });
 /**
  * The parsed shape of {@link graphNodeSchema}.

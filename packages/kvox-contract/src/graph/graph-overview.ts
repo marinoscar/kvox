@@ -62,6 +62,7 @@ const overviewNodeSchema = z.object({
   y: z.number(),
   clusterId: z.number().int(),
   degree: z.number().int(),
+  isSelf: z.boolean().optional().describe('True on the Person you chose as yourself (#778). Absent otherwise.'),
 });
 
 const overviewDateSchema = z.union([z.iso.date(), z.iso.datetime({ offset: true })]);

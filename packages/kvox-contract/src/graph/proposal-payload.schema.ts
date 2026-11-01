@@ -273,6 +273,7 @@ export const RESOLUTION_SOURCES = [
   'vector',
   'adjudication',
   'user',
+  'self',
 ] as const;
 
 /**

@@ -149,6 +149,8 @@ export type { GraphPreferences } from './preferences/graph-preferences.defaults.
 export { GRAPH_PREFERENCES_CHANGED_EVENT } from './preferences/graph-preferences.events.js';
 export type { GraphPreferencesChangedEvent } from './preferences/graph-preferences.events.js';
 export { GraphPreferencesService } from './preferences/graph-preferences.service.js';
+export { GraphSelfService } from './self/graph-self.service.js';
+export { mentionsSelf, selfNames, type ResolvedSelf } from './self/graph-self.js';
 export { TemporalInputError, commitmentsToReview, fromPgRange, identityKey, isExclusiveTemporal, planTemporalInsert, rangeFromPrecision, ruleForEffectiveRelation, sameIdentityProps, stableStringify, temporalRuleFor, toPgRange } from './temporal/index.js';
 export type { CandidateEdge, TemporalEdge, TemporalPlan, TemporalReviewStatus, TemporalRule, ValidPrecision, ValidRange } from './temporal/index.js';
 export { GraphDuplicateError, GraphInvariantError, GraphValidationError, toGraphHttpException } from './write/graph-write.errors.js';
