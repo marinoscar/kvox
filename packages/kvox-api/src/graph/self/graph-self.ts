@@ -7,9 +7,14 @@
 
 import { normalizeAlias } from '../write/normalize.js';
 
-/** The Person the owner chose as themselves, resolved and ready to use. */
+/** The Person the owner chose as themselves, resolved and ready to use.
+ *
+ * @stability experimental
+ */
 export interface ResolvedSelf {
+  /** The live Person entity id (after following any merge). */
   readonly entityId: string;
+  /** The Person's label. */
   readonly label: string;
   /** The alias strings other than the label. */
   readonly aliases: readonly string[];
@@ -24,7 +29,10 @@ export function selfName(name: string): string | null {
   }
 }
 
-/** The set of normalized names that mean the owner: the label and every alias. */
+/** The set of normalized names that mean the owner: the label and every alias.
+ *
+ * @stability experimental
+ */
 export function selfNames(self: Pick<ResolvedSelf, 'label' | 'aliases'>): Set<string> {
   const out = new Set<string>();
   for (const name of [self.label, ...self.aliases]) {
@@ -34,7 +42,10 @@ export function selfNames(self: Pick<ResolvedSelf, 'label' | 'aliases'>): Set<st
   return out;
 }
 
-/** Whether a mention (its label or any alias) names the owner. */
+/** Whether a mention (its label or any alias) names the owner.
+ *
+ * @stability experimental
+ */
 export function mentionsSelf(
   self: Pick<ResolvedSelf, 'label' | 'aliases'>,
   mention: { label: string; aliases: readonly string[] },

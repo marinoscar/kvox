@@ -117,6 +117,7 @@ export interface GraphPreferencesPatch {
   } | null;
   /** Who you are in the graph (#778); `entityId: null` (or `self: null`) clears it. */
   self?: {
+    /** The Person entity id to set, or null to clear it. */
     entityId?: string | null;
   } | null;
 }
@@ -161,6 +162,7 @@ export interface ResolvedGraphPreferences {
   };
   /** Who you are in the graph (#778): the stored Person id (it may be merged away; the API resolves it), or null. */
   self: {
+    /** The chosen Person entity id, or null when none is chosen. */
     entityId: string | null;
   };
 }
