@@ -68,6 +68,8 @@ export interface GraphPreferencesSettings {
   review?: {
     /** Rows the AI is less sure of than this (0 to 1) wait for a person. */
     minConfidence: number;
+    /** Commit the confident rows of every note's draft automatically (#779). Absent means on. */
+    autoCommitSafeRows?: boolean;
   };
 }
 
@@ -105,6 +107,8 @@ export interface GraphPreferencesPatch {
   review?: {
     /** The safe policy's confidence floor (0 to 1); `null` resets it. */
     minConfidence?: number | null;
+    /** Commit confident rows automatically; `null` resets it (on). */
+    autoCommitSafeRows?: boolean | null;
   } | null;
 }
 
@@ -143,6 +147,8 @@ export interface ResolvedGraphPreferences {
   review: {
     /** Rows the AI is less sure of than this (0 to 1) wait for a person. */
     minConfidence: number;
+    /** Whether the confident rows of every note's draft are committed automatically (#779). */
+    autoCommitSafeRows: boolean;
   };
 }
 
@@ -160,7 +166,7 @@ export const GRAPH_PREFERENCE_DEFAULTS: ResolvedGraphPreferences = {
     adjudication: 'llm',
   },
   domains: { core: true, work: true, personal: false },
-  review: { minConfidence: 0.7 },
+  review: { minConfidence: 0.7, autoCommitSafeRows: true },
 };
 
 /**
@@ -244,7 +250,10 @@ export function resolveGraphPreferences(
       work: value?.domains?.work ?? d.domains.work,
       personal: value?.domains?.personal ?? d.domains.personal,
     },
-    review: { minConfidence: value?.review?.minConfidence ?? d.review.minConfidence },
+    review: {
+      minConfidence: value?.review?.minConfidence ?? d.review.minConfidence,
+      autoCommitSafeRows: value?.review?.autoCommitSafeRows ?? d.review.autoCommitSafeRows,
+    },
   };
 }
 

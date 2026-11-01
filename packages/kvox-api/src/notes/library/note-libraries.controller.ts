@@ -108,7 +108,8 @@ export class NoteLibrariesController {
   @KvoxAuth(NOTES_WRITE_PERMISSION)
   @ApiOperation({
     summary: 'Rename a library or change its policy',
-    description: 'Any of `name`, `autoExtract`, `autoCommit`. Requires `notes:write`.',
+    description:
+      'Any of `name`, `autoExtract`, `autoCommit`. `autoCommit: null` follows the owner\'s graph preference. Requires `notes:write`.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiBody({ type: UpdateNoteLibraryBodyDto })

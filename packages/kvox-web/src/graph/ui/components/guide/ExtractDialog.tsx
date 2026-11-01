@@ -286,7 +286,7 @@ export function ExtractDialog({
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography variant="body2" color="text.secondary">
             The AI reads this note and its transcript and proposes people, organizations, decisions and
-            commitments. Nothing reaches your graph until you review it.
+            commitments. Confident rows are added to your graph automatically unless you turned that off in Settings; anything uncertain, and every sensitive personal fact, waits for your review.
           </Typography>
 
           {mode === 're-extract' && pendingDecisions > 0 && (

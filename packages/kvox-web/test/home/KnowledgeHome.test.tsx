@@ -32,7 +32,7 @@ function library(overrides: Partial<NoteLibrary> = {}): NoteLibrary {
     id: 'lib-1',
     name: 'Work notes',
     autoExtract: true,
-    autoCommit: false,
+    autoCommit: null,
     createdAt: '2026-10-01T09:00:00.000Z',
     updatedAt: '2026-10-01T09:00:00.000Z',
     lastScanAt: '2026-10-22T09:00:00.000Z',

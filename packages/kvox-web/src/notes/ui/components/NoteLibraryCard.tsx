@@ -125,7 +125,8 @@ export function NoteLibraryCard({
             {library.lastScanAt ? `Last scanned ${formatRelativeTime(library.lastScanAt)}` : 'Never scanned'}
           </Typography>
           {library.autoExtract && <Chip size="small" color="primary" variant="outlined" label="Auto-extract" />}
-          {library.autoCommit && <Chip size="small" color="secondary" variant="outlined" label="Auto-commit" />}
+          {library.autoCommit === true && <Chip size="small" color="secondary" variant="outlined" label="Auto-commit" />}
+          {library.autoCommit === false && <Chip size="small" variant="outlined" label="Review each" />}
         </Box>
         {progress && (
           <Box sx={{ mt: 1.5 }} role="status" aria-live="polite">

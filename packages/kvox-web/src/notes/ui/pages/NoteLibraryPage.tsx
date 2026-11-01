@@ -23,6 +23,7 @@ import Link from '@mui/material/Link';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
+import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Snackbar from '@mui/material/Snackbar';
 import Switch from '@mui/material/Switch';
@@ -65,7 +66,7 @@ export interface NoteLibraryPageProps {
  * @stability experimental
  */
 export const AUTO_COMMIT_SAFE_POLICY_TEXT =
-  'Rows about sensitive personal facts, closings, ambiguous matches and low-confidence rows always wait for you in the Review Queue.';
+  'Rows about sensitive personal facts, closings, ambiguous or possible-duplicate matches and low-confidence rows always wait for you in the Review Queue.';
 
 const BATCH_STATUS_LABEL: Readonly<Record<string, string>> = {
   scanning: 'Scanning',
@@ -342,23 +343,37 @@ export function NoteLibraryPage({ libraryId: libraryIdProp, sequential }: NoteLi
             <FormHelperText sx={{ mt: -0.5, mb: 1.5, ml: 0 }}>
               Read every imported note for people, projects and facts, using your AI key. Proposals wait for your review.
             </FormHelperText>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={library.autoCommit}
-                  disabled={!canWrite || saving !== null || (!library.autoExtract && !library.autoCommit)}
-                  onChange={(_, checked) => {
-                    if (checked) setConfirmAutoCommit(true);
-                    else void save('autoCommit', { autoCommit: false }, 'Auto-commit is off: every proposal waits for review.');
-                  }}
-                />
-              }
+            <TextField
+              select
+              size="small"
               label="Auto-commit"
-            />
-            <FormHelperText sx={{ mt: -0.5, mb: 2, ml: 0 }}>
-              {library.autoExtract
-                ? `Add safe proposals to the graph without review. ${AUTO_COMMIT_SAFE_POLICY_TEXT}`
-                : 'Turn on Auto-extract first.'}
+              value={library.autoCommit === null ? 'inherit' : library.autoCommit ? 'on' : 'off'}
+              disabled={!canWrite || saving !== null || (!library.autoExtract && library.autoCommit !== true)}
+              onChange={(event) => {
+                const choice = event.target.value;
+                if (choice === 'on') setConfirmAutoCommit(true);
+                else if (choice === 'off') void save('autoCommit', { autoCommit: false }, 'Auto-commit is off for this library: every proposal waits for review.');
+                else void save('autoCommit', { autoCommit: null }, 'This library now follows your Knowledge graph setting.');
+              }}
+              sx={{ minWidth: 280, mb: 0.5 }}
+            >
+              <MenuItem value="inherit">Follow my Knowledge graph setting</MenuItem>
+              <MenuItem value="on">On for this library</MenuItem>
+              <MenuItem value="off">Off for this library</MenuItem>
+            </TextField>
+            <FormHelperText sx={{ mb: 2, ml: 0 }}>
+              {library.autoExtract ? (
+                <>
+                  Add safe proposals to the graph without review. {AUTO_COMMIT_SAFE_POLICY_TEXT} Your default is
+                  &quot;Commit confident rows automatically&quot; in{' '}
+                  <Link component={RouterLink} to="/settings/knowledge-graph">
+                    Settings, Knowledge graph
+                  </Link>
+                  ; On or Off here overrides it for this library.
+                </>
+              ) : (
+                'Turn on Auto-extract first.'
+              )}
             </FormHelperText>
             {canWrite && (
               <Button color="error" variant="outlined" startIcon={<DeleteIcon />} onClick={() => setConfirmRemove(true)}>

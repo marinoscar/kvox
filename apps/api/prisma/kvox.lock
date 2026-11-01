@@ -1,5 +1,5 @@
 {
-  "kvoxDbVersion": "0.1.0-next.19",
+  "kvoxDbVersion": "0.1.0-next.20",
   "lockVersion": 1,
   "migrations": [
     {
@@ -111,6 +111,11 @@
       "installedDir": "20261026184116_add_kg_synonyms",
       "originId": "kvox:20261026184116_add_kg_synonyms",
       "sha256": "3b9b856f63829f550296021adcf8052888992d46f9bdfc4c468f3f2862dd9a8d"
+    },
+    {
+      "installedDir": "20261027120000_note_library_auto_commit_inherit",
+      "originId": "kvox:20261027120000_note_library_auto_commit_inherit",
+      "sha256": "db3cce90ebe04c6b60b3f71c54089d2d0f4d7abc3622ad9c8f97f3d8803f3499"
     }
   ]
 }

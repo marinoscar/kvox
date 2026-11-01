@@ -115,9 +115,16 @@ export function mergeGraphPreferences(
   if (patch.review === null) {
     delete merged.review;
   } else if (patch.review !== undefined) {
-    const base = merged.review ?? { ...defaults.review };
+    const base: NonNullable<GraphPreferencesValue['review']> = merged.review ?? { minConfidence: defaults.review.minConfidence };
+    // `autoCommitSafeRows` is stored only once a person has set it, so a default that changes
+    // later still reaches everyone who never chose (#779).
+    const autoCommit =
+      patch.review.autoCommitSafeRows === null
+        ? undefined
+        : (patch.review.autoCommitSafeRows ?? base.autoCommitSafeRows);
     merged.review = {
       minConfidence: pick(patch.review.minConfidence, base.minConfidence, defaults.review.minConfidence),
+      ...(autoCommit === undefined ? {} : { autoCommitSafeRows: autoCommit }),
     };
   }
 

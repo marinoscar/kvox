@@ -40,6 +40,7 @@ const SUB_DEFAULTS: Record<string, Record<string, unknown>> = {
   extraction: { autoExtract: true },
   resolution: RESOLUTION_DEFAULTS,
   domains: { work: true, personal: false },
+  review: { minConfidence: 0.7, autoCommitSafeRows: true },
 };
 
 /** The API's `mergeGraph`, in miniature. */
@@ -142,6 +143,33 @@ describe('UserKnowledgeGraphPage', () => {
       expect(screen.getByRole('switch', { name: /extract a graph proposal/i })).not.toBeChecked(),
     );
     expect(await screen.findByText('All changes saved')).toBeInTheDocument();
+  });
+
+  it('"Commit confident rows automatically" is on by default and PATCHes review.autoCommitSafeRows (#779)', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    const toggle = screen.getByRole('switch', { name: /commit confident rows automatically/i });
+    expect(toggle).toBeChecked();
+    expect(screen.getByText(/always wait for you in the Review Queue/i)).toBeInTheDocument();
+    expect(screen.getByText(/overrides this for that library/i)).toBeInTheDocument();
+
+    await user.click(toggle);
+
+    await waitFor(() => expect(patches).toEqual([{ graph: { review: { autoCommitSafeRows: false } } }]));
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: /commit confident rows automatically/i })).not.toBeChecked(),
+    );
+  });
+
+  it('shows the switch off when the stored preference is off', async () => {
+    await renderPage({ review: { minConfidence: 0.7, autoCommitSafeRows: false } });
+    expect(screen.getByRole('switch', { name: /commit confident rows automatically/i })).not.toBeChecked();
+  });
+
+  it('a row stored before the preference existed reads as on', async () => {
+    await renderPage({ review: { minConfidence: 0.8 } });
+    expect(screen.getByRole('switch', { name: /commit confident rows automatically/i })).toBeChecked();
   });
 
   it('the mode radio and the adjudication switch PATCH resolution fields', async () => {

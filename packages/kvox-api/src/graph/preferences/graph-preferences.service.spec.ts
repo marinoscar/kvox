@@ -1,5 +1,7 @@
 import { GraphPreferencesService } from './graph-preferences.service.js';
-import { GRAPH_PREFERENCE_DEFAULTS } from './graph-preferences.defaults.js';
+import { GRAPH_PREFERENCE_DEFAULTS, effectiveAutoCommit, resolveGraphPreferences } from './graph-preferences.defaults.js';
+import { mergeGraphPreferences } from './graph-preferences.merge.js';
+import { graphPreferencesPatchSchema, graphPreferencesSchema } from './graph-preferences.schema.js';
 
 // =============================================================================
 // GraphPreferencesService (#369, epic #346; over the settings port by #496)
@@ -32,5 +34,40 @@ describe('GraphPreferencesService', () => {
     const resolved = await service.get(USER);
     expect(resolved.resolution.autoLinkThreshold).toBe(0.93);
     expect(resolved.domains.work).toBe(true);
+  });
+});
+
+describe('auto-commit of safe rows (#779, ADR-0007)', () => {
+  it('is on by default, and a row stored before it existed reads as on', () => {
+    expect(GRAPH_PREFERENCE_DEFAULTS.review.autoCommitSafeRows).toBe(true);
+    expect(resolveGraphPreferences(undefined).review.autoCommitSafeRows).toBe(true);
+    const legacy = graphPreferencesSchema.parse({ review: { minConfidence: 0.8 } });
+    expect(resolveGraphPreferences(legacy).review).toEqual({ minConfidence: 0.8, autoCommitSafeRows: true });
+  });
+
+  it('stores the choice only once a person made it, and null restores the default', () => {
+    const patch = (value: unknown) => graphPreferencesPatchSchema.parse({ review: value });
+    expect(mergeGraphPreferences(undefined, patch({ minConfidence: 0.8 }))?.review).toEqual({ minConfidence: 0.8 });
+    const off = mergeGraphPreferences(undefined, patch({ autoCommitSafeRows: false }));
+    expect(off?.review).toEqual({ minConfidence: 0.7, autoCommitSafeRows: false });
+    expect(resolveGraphPreferences(off).review.autoCommitSafeRows).toBe(false);
+    // a later minConfidence change keeps the choice
+    expect(mergeGraphPreferences(off, patch({ minConfidence: 0.9 }))?.review).toEqual({ minConfidence: 0.9, autoCommitSafeRows: false });
+    expect(mergeGraphPreferences(off, patch({ autoCommitSafeRows: null }))?.review).toEqual({ minConfidence: 0.7 });
+  });
+
+  describe('effectiveAutoCommit: the library setting, when it has one, beats the preference', () => {
+    const on = { review: { minConfidence: 0.7, autoCommitSafeRows: true } };
+    const off = { review: { minConfidence: 0.7, autoCommitSafeRows: false } };
+    it.each([
+      ['no library, preference on (default)', undefined, on, true],
+      ['no library, preference off', undefined, off, false],
+      ['library follows (null), preference on', null, on, true],
+      ['library follows (null), preference off', null, off, false],
+      ['library explicitly on, preference off', true, off, true],
+      ['library explicitly off, preference on', false, on, false],
+    ] as const)('%s', (_label, library, preferences, expected) => {
+      expect(effectiveAutoCommit(library, preferences)).toBe(expected);
+    });
   });
 });
