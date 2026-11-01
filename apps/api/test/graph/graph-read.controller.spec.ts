@@ -318,7 +318,7 @@ describe('Graph read routes (integration)', () => {
       .get(`/api/graph/activity?ids=${max.join(',')}&bucket=week`)
       .set(authHeader(user.accessToken));
     expect(ok.status).toBe(200);
-    expect(ok.body.data).toEqual({ bucket: 'week', series: [], byEntity: {} });
+    expect(ok.body.data).toEqual({ bucket: 'week', series: [], byEntity: {}, timeZone: 'UTC' });
   });
 
   it('answers evidence batch with only the caller’s rows', async () => {
