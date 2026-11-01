@@ -28,6 +28,7 @@ Status: ports, core and testing are in place (issue 5.4); `transcription` (issue
 - `@marinoscar/kvox-api/graph-rdf/shacl-runner`: `runShaclValidation`, the import's SHACL validation step with Node built-ins only (no Nest, no Prisma), for the isolated process a host passes as `GraphRdfModule.forRoot({ shacl: { run } })`. [README](src/graph-rdf/README.md#configuration).
 - `@marinoscar/kvox-api/graph-rdf/testing`: `describeGraphRdfConformance` and the `internals` namespace. [README](src/graph-rdf/README.md#conformance-suite).
 - `@marinoscar/kvox-api/ask`: `AskModule.forRoot` (saved conversations, the `ask.respond` job on `KVOX_AI.chat` with the seven read-only graph tools, the SSE view over the durable answer) on the graph, notes and search slices. [README](src/ask/README.md#purpose-and-scope).
+- `@marinoscar/kvox-api/webhooks`: `KVOX_WEBHOOK_EVENTS` (four content-free event definitions with strict zod payloads), `KvoxWebhooksModule.forRoot` (listeners that enqueue `kvox.webhook_emit`, and its handler that publishes through the optional `KVOX_WEBHOOKS` port). [README](src/webhooks/README.md).
 - `@marinoscar/kvox-api/ask/testing`: `describeAskConformance`, `createScriptedChat`, the in-memory Ask tables, the tool fakes and the `internals` namespace. [README](src/ask/README.md#conformance-suite).
 
 The web edition binds every port to a platform slice in `apps/api/src/platform-kvox/`; the contract in prose, with the Desktop mapping notes, is [docs/specs/kvox-ports.md](../../docs/specs/kvox-ports.md).
