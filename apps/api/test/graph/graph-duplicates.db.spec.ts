@@ -66,7 +66,7 @@ describeWithDb('GET /api/graph/duplicates (real Postgres)', () => {
 
     const out = await service.list(actor(user.id), { limit: 50 });
     expect(labels(out)).toEqual(['Avery | Avery Example', 'OAC | Org Alpha Consulting', 'Org Kappa Holding | Org Kappa Holdings']);
-    const kappa = out.pairs.find((p) => p.a.label.startsWith('Kappa'))!;
+    const kappa = out.pairs.find((p) => p.a.label.startsWith('Org Kappa'))!;
     expect(kappa.reasons).toContain('similar_name');
     expect(kappa.source).toBe('name_pass');
   });
