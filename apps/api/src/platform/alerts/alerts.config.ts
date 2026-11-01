@@ -7,7 +7,7 @@ import { webhooksModule } from '../webhooks/webhooks.config';
 import { AlertsWebhookAdapter, registerAlertWebhookEvents } from './alerts-webhooks.adapter';
 
 // =============================================================================
-// The kvox alerts slice (#795)
+// The alerts slice, as this app binds it (#795)
 // =============================================================================
 //
 // Rules over telemetry metrics, worker-node events and fleet health, incidents

@@ -12,12 +12,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 // =============================================================================
 //
 // `WebhooksService.emit` validates `data` against the event's registered schema (see
-// `kvox-webhook-events.ts`), writes one delivery row per subscribed endpoint and enqueues the
+// the sibling events file), writes one delivery row per subscribed endpoint and enqueues the
 // delivery jobs. It never calls a receiver, so this adapter does no network I/O inline, as the
-// port requires. The package calls `emit` from its own `kvox.webhook_emit` job, after the
+// port requires. The package calls `emit` from its own webhook-emit job, after the
 // triggering write committed.
 //
-// WHICH ORGANIZATION: every KVox event is the user's own (`audience: 'user'`), and an endpoint
+// WHICH ORGANIZATION: every domain event is the user's own (`audience: 'user'`), and an endpoint
 // belongs to an organization. The context normally carries one (the job's). When it does not:
 //
 //   - single-organization mode: pass `null`; the platform resolves the default organization;

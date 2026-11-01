@@ -1,8 +1,9 @@
 import { KVOX_WEBHOOK_EVENTS } from '@marinoscar/kvox-api/webhooks';
 import { registerWebhookEvent } from '@marinoscar/platform-api/webhooks';
+import { APP_SLUG } from '@app/shared';
 
 // =============================================================================
-// KVox's webhook events, registered with the platform webhooks catalog (#795)
+// The app's domain webhook events, registered with the platform webhooks catalog (#795)
 // =============================================================================
 //
 // Each entry of `KVOX_WEBHOOK_EVENTS` (pure data in `@marinoscar/kvox-api/webhooks`) becomes a
@@ -16,7 +17,7 @@ import { registerWebhookEvent } from '@marinoscar/platform-api/webhooks';
 // persisted in every subscription: never rename one.
 // =============================================================================
 
-/** The permission the owner of an endpoint must hold to receive each KVox event, by group. */
+/** The permission the owner of an endpoint must hold to receive each domain event, by group. */
 const PERMISSION_BY_GROUP: Readonly<Record<string, string>> = {
   Graph: 'graph:read',
   Notes: 'notes:read',
@@ -25,14 +26,14 @@ const PERMISSION_BY_GROUP: Readonly<Record<string, string>> = {
 
 let registered = false;
 
-/** Registers the KVox webhook events. Idempotent per process. */
+/** Registers the domain webhook events. Idempotent per process. */
 export function registerKvoxWebhookEvents(): void {
   if (registered) return;
   registered = true;
 
   for (const event of KVOX_WEBHOOK_EVENTS) {
     const permission = PERMISSION_BY_GROUP[event.group];
-    if (!permission) throw new Error(`KVox webhook event ${event.key} has no permission for group "${event.group}"`);
-    registerWebhookEvent({ ...event, permission, source: 'kvox' });
+    if (!permission) throw new Error(`Domain webhook event ${event.key} has no permission for group "${event.group}"`);
+    registerWebhookEvent({ ...event, permission, source: APP_SLUG });
   }
 }
