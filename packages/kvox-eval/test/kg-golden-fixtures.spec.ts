@@ -91,6 +91,9 @@ const identity = (f: GoldenFixture, key: string) =>
 
 const day = (iso: string) => iso.slice(0, 10);
 
+/** The tag of a long record that describes several meetings (#780): the one shape allowed past 700 words. */
+const LONG_RECORD_TAG = 'long-record';
+
 describe('kg golden set (issue #362)', () => {
   it('has at least 30 fixtures, each parsing against goldenFixtureSchema', () => {
     const files = listFixtureFiles(GOLDEN_MEETINGS_DIR);
@@ -129,7 +132,7 @@ describe('kg golden set (issue #362)', () => {
       }
     });
 
-    it('is shaped like a real meeting: 20–120 segments (or note-only) and a 200–700 word note', () => {
+    it('is shaped like a real meeting: 20–120 segments (or note-only) and a 200–700 word note (a long record: 6,000+ words)', () => {
       if (f.hasTranscript) {
         expect(f.segments.length).toBeGreaterThanOrEqual(20);
         expect(f.segments.length).toBeLessThanOrEqual(120);
@@ -139,8 +142,14 @@ describe('kg golden set (issue #362)', () => {
         for (const ev of allEvidence(f)) expect(ev.source).toBe('note');
       }
       const words = f.note.body.split(/\s+/).filter(Boolean).length;
-      expect(words).toBeGreaterThanOrEqual(200);
-      expect(words).toBeLessThanOrEqual(700);
+      if (f.tags.includes(LONG_RECORD_TAG)) {
+        // #780: a record of several meetings, a document and not a meeting note.
+        expect(f.sourceType).toBe('document');
+        expect(words).toBeGreaterThanOrEqual(6000);
+      } else {
+        expect(words).toBeGreaterThanOrEqual(200);
+        expect(words).toBeLessThanOrEqual(700);
+      }
     });
 
     it('cites only evidence that resolves: every segment exists and every quote is found verbatim', () => {
@@ -297,16 +306,18 @@ describe('kg golden set (issue #362)', () => {
     const items = fixtures.flatMap((f) => f.labels.items.map((i) => ({ f, i })));
     const tagged = (tag: string) => fixtures.filter((f) => f.tags.includes(tag));
 
-    // Ontology 1.4.0 (#776) added these without gold labels: Document is system-created and never
-    // extracted, and the Opportunity types and ORGANIZED are only labelled once the extractor
-    // proposes them (#780). This list is exact, so it can only shrink as labels land.
-    const UNLABELLED_1_4_ENTITIES = ['Document', 'Opportunity'];
-    const UNLABELLED_1_4_RELATIONS = ['COMPETING_FOR', 'ORGANIZED', 'PURSUED_BY', 'WITH_CLIENT'];
+    // Ontology 1.4.0 (#776) added Document and Opportunity and the relations ORGANIZED, WITH_CLIENT,
+    // PURSUED_BY and COMPETING_FOR. The one long record (m60, #780) labels all of them; the
+    // Opportunity and Document types and the three opportunity relations come from that record
+    // alone, so they need one label each where every other type needs ten (relations: three).
+    const FROM_THE_LONG_RECORD_ENTITIES = ['Document', 'Opportunity'];
+    const FROM_THE_LONG_RECORD_RELATIONS = ['COMPETING_FOR', 'PURSUED_BY', 'WITH_CLIENT'];
 
-    it('has ≥ 10 gold instances of every core + work entity-storage type', () => {
+    it('has ≥ 10 gold instances of every core + work entity-storage type (≥ 1 of Document and Opportunity)', () => {
       expect(ENTITY_STORAGE_TYPES.sort()).toEqual(['Document', 'Meeting', 'Opportunity', 'Organization', 'Person', 'Product', 'Project', 'Topic']);
-      for (const t of ENTITY_STORAGE_TYPES.filter((k) => !UNLABELLED_1_4_ENTITIES.includes(k))) {
-        expect({ t, n: entities.filter(({ e }) => e.type === t).length >= 10 }).toEqual({ t, n: true });
+      for (const t of ENTITY_STORAGE_TYPES) {
+        const min = FROM_THE_LONG_RECORD_ENTITIES.includes(t) ? 1 : 10;
+        expect({ t, n: entities.filter(({ e }) => e.type === t).length >= min }).toEqual({ t, n: true });
       }
     });
 
@@ -335,9 +346,10 @@ describe('kg golden set (issue #362)', () => {
     it('has ≥ 3 of every extractable relation type, and ≥ 3 of each item-column relation', () => {
       // Every relation except IDENTIFIED_AS, MENTIONS and SUPPORTED_BY: the six
       // edge relations as labels, the item-column ones as item fields.
-      expect(LABELLED_RELATION_TYPES).toEqual(expect.arrayContaining(UNLABELLED_1_4_RELATIONS));
-      for (const t of LABELLED_RELATION_TYPES.filter((k) => !UNLABELLED_1_4_RELATIONS.includes(k))) {
-        expect({ t, n: relations.filter(({ r }) => r.type === t).length >= 3 }).toEqual({ t, n: true });
+      expect(LABELLED_RELATION_TYPES).toEqual(expect.arrayContaining(FROM_THE_LONG_RECORD_RELATIONS));
+      for (const t of LABELLED_RELATION_TYPES) {
+        const min = FROM_THE_LONG_RECORD_RELATIONS.includes(t) ? 1 : 3;
+        expect({ t, n: relations.filter(({ r }) => r.type === t).length >= min }).toEqual({ t, n: true });
       }
       const columnRelations = {
         ABOUT: items.filter(({ i }) => i.subject).length,

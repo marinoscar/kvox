@@ -35,13 +35,13 @@ describe('seedGoldenGraph (PGlite)', () => {
   });
 
   it('seeds the pinned row counts', async () => {
-    expect(fixtures).toHaveLength(52);
-    expect(seeded.counts).toEqual({ entities: 214, relations: 330, items: 209, evidence: 965 });
+    expect(fixtures).toHaveLength(53);
+    expect(seeded.counts).toEqual({ entities: 260, relations: 479, items: 245, evidence: 1198 });
     const where = { ownerId: host.userId };
-    expect(await host.prisma.kgEntity.count({ where })).toBe(214);
-    expect(await host.prisma.kgRelation.count({ where })).toBe(330);
-    expect(await host.prisma.kgItem.count({ where })).toBe(209);
-    expect(await host.prisma.kgEvidence.count({ where })).toBe(965);
+    expect(await host.prisma.kgEntity.count({ where })).toBe(260);
+    expect(await host.prisma.kgRelation.count({ where })).toBe(479);
+    expect(await host.prisma.kgItem.count({ where })).toBe(245);
+    expect(await host.prisma.kgEvidence.count({ where })).toBe(1198);
   });
 
   it('maps every kg_evidence row of the eval user in idMap.evidenceSource', async () => {

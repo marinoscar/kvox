@@ -105,8 +105,12 @@ export function fixtureToInput(fixture: GoldenFixture): ExtractionInput {
     speakers,
     effectiveSchema: computeEffectiveSchema({ enabledDomains: fixtureDomains(fixture), userAttributes: [] }),
     guidance: null,
+    // A document fixture (#780) is a record that may hold several meetings; its owner, when the
+    // fixture names one, is a known entity the model may link by id.
+    ...(fixture.sourceType ? { sourceType: fixture.sourceType } : {}),
+    selfEntityId: fixture.selfEntityId,
     knownEntityCandidates: {
-      pinned: [],
+      pinned: known.filter((k) => k.id === fixture.selfEntityId),
       speakerPersons: known.filter((k) => linked.has(k.id)),
       organizations: [],
       contextPool: known,
