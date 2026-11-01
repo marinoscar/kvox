@@ -18,7 +18,7 @@ const C = '00000000-0000-4000-8000-00000000000c';
 
 let edgeRows: Array<Record<string, string>> = [];
 
-function harness() {
+function harness(selfId: string | null = null) {
   const queries: string[] = [];
   const prisma = {
     kgGraphLayout: {
@@ -61,7 +61,8 @@ function harness() {
   };
   const enqueuer = new GraphLayoutEnqueuer(jobsMock() as never);
   const ontology = { effectiveSchemaFor: jest.fn(async () => computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] })) };
-  const service = new GraphOverviewService(prisma as unknown as KvoxGraphDb, enqueuer, ontology as never);
+  const self = { entityId: jest.fn(async () => selfId) };
+  const service = new GraphOverviewService(prisma as unknown as KvoxGraphDb, enqueuer, ontology as never, self as never);
   return { service, prisma, queries, ontology };
 }
 
@@ -101,6 +102,23 @@ describe('GraphOverviewService filters', () => {
     expect(view.nodes.map((n) => n.id)).toEqual([A, C]);
     // typeCounts is never type-filtered: the chips still show every type.
     expect(view.typeCounts).toEqual({ Person: 2, Project: 1 });
+  });
+});
+
+describe('GraphOverviewService self node (#778)', () => {
+  it('marks only the chosen Person with isSelf', async () => {
+    const { service } = harness(C);
+    const view = await service.overview(OWNER);
+    expect(view.nodes.map((n) => [n.id, n.isSelf])).toEqual([
+      [A, undefined],
+      [B, undefined],
+      [C, true],
+    ]);
+  });
+
+  it('marks nothing when none is chosen', async () => {
+    const { service } = harness(null);
+    expect((await service.overview(OWNER)).nodes.some((n) => 'isSelf' in n)).toBe(false);
   });
 });
 

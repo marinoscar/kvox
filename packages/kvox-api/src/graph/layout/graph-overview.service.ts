@@ -18,7 +18,7 @@
 // `POST /api/graph/overview/refresh` — queue a re-layout (`graph:write`).
 // =============================================================================
 
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, Optional } from '@nestjs/common';
 import type { EffectiveSchema } from '@marinoscar/kvox-contract/ontology';
 
 import { READABLE_ENTITY_STATUSES } from '../read/readable.js';
@@ -38,6 +38,7 @@ import { GraphOntologyService } from '../ontology/graph-ontology.service.js';
 import { storedClustersSchema, storedPositionsSchema } from './layout-snapshot.js';
 import { KVOX_PRISMA } from '../../ports/index.js';
 import type { KvoxGraphDb } from '../data/graph-db.js';
+import { GraphSelfService } from '../self/graph-self.service.js';
 
 export const UNCONNECTED_CLUSTER_LABEL = 'Unconnected';
 
@@ -60,6 +61,7 @@ export class GraphOverviewService {
     @Inject(KVOX_PRISMA) private readonly prisma: KvoxGraphDb,
     private readonly enqueuer: GraphLayoutEnqueuer,
     private readonly ontology: GraphOntologyService,
+    @Optional() private readonly selfIdentity?: GraphSelfService,
   ) {}
 
   async overview(ownerId: string, query: GraphOverviewQuery = {}, timeZone = 'UTC'): Promise<GraphOverviewResponse> {
@@ -126,9 +128,11 @@ export class GraphOverviewService {
     const typeCounts = await readTypeCounts(this.prisma, ownerId, window);
 
     const liveNodes = snapshotNodes.filter(([id]) => keep(id));
+    // The Person the user chose as themselves (#778) is marked, so the explorer can draw it as "You".
+    const selfId = (await this.selfIdentity?.entityId(ownerId)) ?? null;
     const nodes = liveNodes.slice(0, OVERVIEW_MAX_NODES).map(([id, x, y, clusterId, , degree]) => {
       const entity = live.get(id) as LiveEntity;
-      return { id, label: entity.label, type: entity.type, x, y, clusterId, degree };
+      return { id, label: entity.label, type: entity.type, x, y, clusterId, degree, ...(id === selfId ? { isSelf: true } : {}) };
     });
 
     const nodeIds = nodes.map((n) => n.id);

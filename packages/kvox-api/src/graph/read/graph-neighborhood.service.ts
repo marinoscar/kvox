@@ -38,11 +38,12 @@
 // so the seeds, then the best-connected neighbours, survive the cap.
 // =============================================================================
 
-import { Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, Optional } from '@nestjs/common';
 import type { EffectiveRelationType, EffectiveSchema } from '@marinoscar/kvox-contract/ontology';
 
 import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-access.service.js';
 import { GraphOntologyService } from '../ontology/graph-ontology.service.js';
+import { GraphSelfService } from '../self/graph-self.service.js';
 import { itemValidAtSql, relationValidAtSql } from './as-of.js';
 import type {
   ExpandRequest,
@@ -138,6 +139,7 @@ export class GraphNeighborhoodService {
     @Inject(KVOX_PRISMA) private readonly prisma: KvoxGraphDb,
     private readonly access: GraphAccessService,
     private readonly ontology: GraphOntologyService,
+    @Optional() private readonly selfIdentity?: GraphSelfService,
   ) {}
 
   // ===========================================================================
@@ -442,10 +444,19 @@ export class GraphNeighborhoodService {
     ]);
     const mentions = new Map(mentionRows.map((r) => [r.id, r]));
     const evidence = new Map(evidenceRows.map((r) => [r.id, r]));
+    // The Person the user chose as themselves (#778); only looked up when a Person is in the slice.
+    const selfId = nodes.some((n) => n.nodeKind === 'entity' && n.type === 'Person')
+      ? ((await this.selfIdentity?.entityId(ownerId)) ?? null)
+      : null;
     return nodes.map((n) => {
       if (n.nodeKind === 'entity') {
         const r = mentions.get(n.id);
-        return { ...n, mentionCount: Number(r?.n ?? 0), lastSeenAt: r?.last ? new Date(r.last).toISOString() : null };
+        return {
+          ...n,
+          mentionCount: Number(r?.n ?? 0),
+          lastSeenAt: r?.last ? new Date(r.last).toISOString() : null,
+          ...(n.id === selfId ? { isSelf: true } : {}),
+        };
       }
       const r = evidence.get(n.id);
       return { ...n, lastSeenAt: r?.last ? new Date(r.last).toISOString() : null };
