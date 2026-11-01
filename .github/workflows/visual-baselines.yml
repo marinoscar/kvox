@@ -62,7 +62,7 @@ concurrency:
 jobs:
   regenerate:
     name: Regenerate baselines (pinned Playwright image)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
 
     # ⚠ THIS TAG MUST MATCH `ci.yml`'s `visual` job AND
     # `tests/visual/package.json`'s pinned `@playwright/test` EXACTLY. Three

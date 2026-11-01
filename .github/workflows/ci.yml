@@ -59,7 +59,7 @@ concurrency:
 jobs:
   build:
     name: Build & Test
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     env:
       NODE_ENV: test
     steps:
@@ -136,7 +136,7 @@ jobs:
 
   api-test:
     name: API Tests (shard ${{ matrix.shard }}/4)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     # No `needs:` — runs concurrently with `build`. Split out of `Build & Test`
     # because this suite alone was 7.5-8.4 min (see the note atop this file).
     # `jest --shard` splits by test FILE.
@@ -204,7 +204,7 @@ jobs:
   # concurrently.
   tooling:
     name: Repository tooling
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       # Full history: `changeset status` finds where HEAD diverged from `main`.
       - uses: actions/checkout@v6
@@ -258,7 +258,7 @@ jobs:
 
   web-test:
     name: Web Tests (shard ${{ matrix.shard }}/4)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     # No `needs:` — runs concurrently with `build`, like `openapi` and
     # `smoke` do. Split out of `Build & Test` and sharded across 4 runners
     # (see the note atop this file) because this suite alone now costs more
@@ -291,7 +291,7 @@ jobs:
 
   openapi:
     name: OpenAPI
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     # No `needs:` — this reads decorator metadata only and shares nothing with
     # the build job, so it runs concurrently rather than queueing behind it.
     steps:
@@ -332,7 +332,7 @@ jobs:
 
   smoke:
     name: Smoke (boot compiled API)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     # No `needs:` — runs concurrently with `build`, like `openapi` does.
     #
     # WHY THIS IS A SEPARATE JOB, given the note at the top of this file
@@ -479,7 +479,7 @@ jobs:
 
   db-test:
     name: DB Tests (shard ${{ matrix.shard }}/2)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     # No `needs:` — runs concurrently with `build`. Split out of `smoke`, where
     # it cost 2.8-4.5 min of a ~6 min job and sat on the critical path.
     #

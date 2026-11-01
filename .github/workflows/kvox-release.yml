@@ -50,7 +50,7 @@ env:
 jobs:
   version:
     name: Version pull request
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
@@ -114,7 +114,7 @@ jobs:
     name: Release gate
     needs: version
     if: needs.version.outputs.pending == '0'
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     # No credentials: read-only token, public registry queries only.
     permissions:
       contents: read
@@ -211,7 +211,7 @@ jobs:
     name: Publish to npm
     needs: gate
     if: needs.gate.outputs.publish == 'true'
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     # Required reviewer, main only (repository settings). The only job with
     # id-token: write, and the only one that can push a tag.
     environment: npm-publish
@@ -275,7 +275,7 @@ jobs:
     name: Publish dry run
     needs: gate
     if: needs.gate.outputs.dry_run == 'true'
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:

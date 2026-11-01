@@ -60,7 +60,7 @@ permissions:
 jobs:
   build:
     name: Build, check and pack
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -134,7 +134,7 @@ jobs:
 
   package-docs:
     name: Package docs
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -162,7 +162,7 @@ jobs:
 
   single-instance:
     name: Single instance
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -181,7 +181,7 @@ jobs:
     # version pull request that kvox-release.yml opens consumes the changesets
     # and is the one exception.
     if: github.event_name == 'pull_request' && github.head_ref != 'kvox-release/version'
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
@@ -206,7 +206,7 @@ jobs:
     # duplicated singleton, an optional peer that is really required) fails here.
     # examples/bare-host/README.md describes what it proves.
     needs: build
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
       fail-fast: false
