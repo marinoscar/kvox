@@ -244,12 +244,13 @@ describe('GraphExtractionService.estimate (#363)', () => {
     const input = makeInput({ transcript: null, segments: [], speakers: [] });
     input.note.bodyAtVersion = body;
     loader.load.mockResolvedValue(input as never);
-    // The whole note would not fit this window in one prompt; each ~2k-token chunk does.
-    resolver.resolve.mockResolvedValueOnce(resolution({ policy: { maxOutputTokens: 8_000, maxInputTokens: 20_000, reasoningEffort: 'none' } }));
+    // The whole note would not fit this window in one prompt; each ~2k-token chunk does (the
+    // window leaves room for the fixed prompt, which grows with the ontology).
+    resolver.resolve.mockResolvedValueOnce(resolution({ policy: { maxOutputTokens: 8_000, maxInputTokens: 24_000, reasoningEffort: 'none' } }));
     const out = await service.estimate(USER, IDS.note, 'gpt-4o');
     expect(out.requests).toBeGreaterThan(1);
     expect(out.fits).toBe(true);
-    expect(out.inputTokens).toBeGreaterThan(20_000);
+    expect(out.inputTokens).toBeGreaterThan(24_000);
   });
 
   it('404 for a note that is not yours', async () => {
