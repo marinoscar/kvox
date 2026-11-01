@@ -198,17 +198,23 @@ export function shownParamFromHidden(hidden: ReadonlySet<string>, all: readonly 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /**
- * An `as_of` date param: `YYYY-MM-DD`, or null for anything else.
+ * An `as_of` date param: a real calendar date `YYYY-MM-DD`, or null for
+ * anything else (`2024-02-31` included). It is a CALENDAR value, not a moment:
+ * the API compares it with calendar ranges at UTC midnight, so it never shifts
+ * with the viewer's zone and is returned unchanged.
  *
  * @stability experimental
  */
 export function parseAsOfParam(value: string | null): string | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  return Number.isNaN(Date.parse(`${value}T00:00:00Z`)) ? null : value;
+  const ms = Date.parse(`${value}T00:00:00Z`);
+  return Number.isNaN(ms) || new Date(ms).toISOString().slice(0, 10) !== value ? null : value;
 }
 
 /**
- * "Mar 2024" for a `YYYY-MM-DD`, read in UTC.
+ * "Mar 2024" for a `YYYY-MM-DD` calendar date (an `as_of` step). Read with the
+ * UTC fields on purpose: the value is a calendar date, not an instant, so
+ * reading it in the display zone would show the previous month west of UTC.
  *
  * @stability experimental
  */

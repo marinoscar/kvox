@@ -224,11 +224,13 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "description": "Sent when one of your recordings finishes transcribing and can be read, corrected and shared.",
       "channels": [
         "email",
-        "browser"
+        "browser",
+        "webhook"
       ],
       "declaredChannels": [
         "email",
-        "browser"
+        "browser",
+        "webhook"
       ],
       "defaultEnabled": true,
       "mandatory": false
@@ -239,11 +241,13 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "description": "Sent when one of your recordings could not be transcribed. Carries the reason and a link to retry it.",
       "channels": [
         "email",
-        "browser"
+        "browser",
+        "webhook"
       ],
       "declaredChannels": [
         "email",
-        "browser"
+        "browser",
+        "webhook"
       ],
       "defaultEnabled": true,
       "mandatory": false
@@ -254,11 +258,13 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "description": "Sent when someone in your organization shares an item with you or changes your role on it.",
       "channels": [
         "email",
-        "browser"
+        "browser",
+        "webhook"
       ],
       "declaredChannels": [
         "email",
-        "browser"
+        "browser",
+        "webhook"
       ],
       "defaultEnabled": true,
       "mandatory": false
@@ -269,11 +275,13 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "description": "Sent when a note you asked for finishes generating and can be read and edited.",
       "channels": [
         "email",
-        "browser"
+        "browser",
+        "webhook"
       ],
       "declaredChannels": [
         "email",
-        "browser"
+        "browser",
+        "webhook"
       ],
       "defaultEnabled": true,
       "mandatory": false
@@ -284,11 +292,13 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "description": "Sent when a note could not be generated. Carries the reason and a link to the Regenerate action.",
       "channels": [
         "email",
-        "browser"
+        "browser",
+        "webhook"
       ],
       "declaredChannels": [
         "email",
-        "browser"
+        "browser",
+        "webhook"
       ],
       "defaultEnabled": true,
       "mandatory": false
@@ -299,11 +309,13 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "description": "Sent when a data export you asked for is ready to download.",
       "channels": [
         "browser",
-        "push"
+        "push",
+        "webhook"
       ],
       "declaredChannels": [
         "browser",
-        "push"
+        "push",
+        "webhook"
       ],
       "defaultEnabled": true,
       "mandatory": false
@@ -314,11 +326,60 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "description": "Sent when a data export you asked for could not be created.",
       "channels": [
         "browser",
-        "push"
+        "push",
+        "webhook"
       ],
       "declaredChannels": [
         "browser",
+        "push",
+        "webhook"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "alerts.alert_fired",
+      "label": "Alert fired",
+      "description": "Sent to administrators who can view alerts when an alert rule starts firing.",
+      "channels": [
+        "email",
+        "browser",
         "push"
+      ],
+      "declaredChannels": [
+        "email",
+        "browser",
+        "push"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "alerts.alert_resolved",
+      "label": "Alert resolved",
+      "description": "Sent to administrators who can view alerts when a firing alert clears.",
+      "channels": [
+        "email",
+        "browser"
+      ],
+      "declaredChannels": [
+        "email",
+        "browser"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "webhooks.endpoint_disabled",
+      "label": "Webhook endpoint disabled",
+      "description": "Sent to the owner of a webhook endpoint when it is switched off after repeated failures or a 410 Gone.",
+      "channels": [
+        "email",
+        "browser"
+      ],
+      "declaredChannels": [
+        "email",
+        "browser"
       ],
       "defaultEnabled": true,
       "mandatory": false
@@ -437,6 +498,7 @@ exports[`Domain registrations characterization pure registry values NOTIFICATION
     "channels": [
       "email",
       "browser",
+      "webhook",
     ],
     "defaultEnabled": true,
     "description": "Sent when one of your recordings finishes transcribing and can be read, corrected and shared.",
@@ -447,6 +509,7 @@ exports[`Domain registrations characterization pure registry values NOTIFICATION
     "channels": [
       "email",
       "browser",
+      "webhook",
     ],
     "defaultEnabled": true,
     "description": "Sent when one of your recordings could not be transcribed. Carries the reason and a link to retry it.",
@@ -457,6 +520,7 @@ exports[`Domain registrations characterization pure registry values NOTIFICATION
     "channels": [
       "email",
       "browser",
+      "webhook",
     ],
     "defaultEnabled": true,
     "description": "Sent when someone in your organization shares an item with you or changes your role on it.",
@@ -467,6 +531,7 @@ exports[`Domain registrations characterization pure registry values NOTIFICATION
     "channels": [
       "email",
       "browser",
+      "webhook",
     ],
     "defaultEnabled": true,
     "description": "Sent when a note you asked for finishes generating and can be read and edited.",
@@ -477,6 +542,7 @@ exports[`Domain registrations characterization pure registry values NOTIFICATION
     "channels": [
       "email",
       "browser",
+      "webhook",
     ],
     "defaultEnabled": true,
     "description": "Sent when a note could not be generated. Carries the reason and a link to the Regenerate action.",
@@ -487,6 +553,7 @@ exports[`Domain registrations characterization pure registry values NOTIFICATION
     "channels": [
       "browser",
       "push",
+      "webhook",
     ],
     "defaultEnabled": true,
     "description": "Sent when a data export you asked for is ready to download.",
@@ -497,11 +564,43 @@ exports[`Domain registrations characterization pure registry values NOTIFICATION
     "channels": [
       "browser",
       "push",
+      "webhook",
     ],
     "defaultEnabled": true,
     "description": "Sent when a data export you asked for could not be created.",
     "key": "export.failed",
     "label": "Export failed",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+      "push",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent to administrators who can view alerts when an alert rule starts firing.",
+    "key": "alerts.alert_fired",
+    "label": "Alert fired",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent to administrators who can view alerts when a firing alert clears.",
+    "key": "alerts.alert_resolved",
+    "label": "Alert resolved",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent to the owner of a webhook endpoint when it is switched off after repeated failures or a 410 Gone.",
+    "key": "webhooks.endpoint_disabled",
+    "label": "Webhook endpoint disabled",
   },
 ]
 `;
@@ -523,5 +622,8 @@ exports[`Domain registrations characterization pure registry values Object.keys(
   "shared-with-you",
   "note-ready",
   "note-failed",
+  "alert-fired",
+  "alert-resolved",
+  "webhook-endpoint-disabled",
 ]
 `;

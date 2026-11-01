@@ -20,6 +20,9 @@ export default defineConfig({
     exclude: ['node_modules', 'dist'],
     env: {
       VITE_API_BASE_URL: 'http://localhost:3000/api',
+      // Times render in the display zone, which falls back to the device's: pin
+      // the device to UTC so a suite reads the same on every machine.
+      TZ: 'UTC',
     },
     coverage: {
       provider: 'v8',

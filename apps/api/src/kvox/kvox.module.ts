@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { KvoxWebhooksModule } from '@marinoscar/kvox-api/webhooks';
 
 import { platformKvoxModule } from '../platform-kvox/platform-kvox.module';
 import { AskConfig } from './ask/ask.config';
@@ -45,6 +46,9 @@ import { TranscriptsConfig } from './transcripts/transcripts.config';
     GraphRdfConfig,
     GraphBindingModule,
     AskConfig,
+    // Publishes four events to the user's outbound webhooks through the `KVOX_WEBHOOKS` port
+    // (#795). The events are registered in `kvox.manifest.ts`.
+    KvoxWebhooksModule.forRoot(),
   ],
 })
 export class KvoxModule {}

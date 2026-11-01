@@ -35,6 +35,8 @@
  * and the row below it mean different things because of it.
  */
 
+import { getDisplayTimeZone, zonedDateKey } from '@marinoscar/platform-web/timezone/headless';
+
 import type {
   TranscriptVersionSummary,
 } from '../clients/transcriptEditing.js';
@@ -59,13 +61,12 @@ export function authorLabel(version: TranscriptVersionSummary): string {
   return version.author.name || version.author.email || 'Someone';
 }
 
-/** `2026-09-14` in the VIEWER's timezone — grouping is by their day, not UTC's. */
-function localDayKey(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
+/**
+ * `2026-09-14` in the VIEWER's display time zone (the zone chosen in their
+ * profile, else the device's) — grouping is by their day, not UTC's.
+ */
+function viewerDayKey(iso: string, timeZone: string): string {
+  return zonedDateKey(iso, timeZone) ?? iso;
 }
 
 /**
@@ -74,10 +75,16 @@ function localDayKey(iso: string): string {
  * Pure, and exported for its own test: the rules above are invisible in a
  * rendered list and every one of them is a judgement somebody will later want
  * to change deliberately rather than by accident.
+ *
+ * `timeZone` names the zone whose calendar days split sessions; default the
+ * display zone. A component passes `useDisplayTimeZone()` so a saved profile
+ * re-groups the history.
  */
 export function groupVersionsIntoSessions(
   versions: readonly TranscriptVersionSummary[],
+  timeZone?: string,
 ): VersionSession[] {
+  const zone = timeZone ?? getDisplayTimeZone();
   const sessions: VersionSession[] = [];
 
   for (const version of versions) {
@@ -89,7 +96,7 @@ export function groupVersionsIntoSessions(
       !current.isAiOriginal &&
       !current.isRestore &&
       current.authorName === authorLabel(version) &&
-      localDayKey(current.latestAt) === localDayKey(version.createdAt);
+      viewerDayKey(current.latestAt, zone) === viewerDayKey(version.createdAt, zone);
 
     if (sameSession) {
       current.versions.push(version);

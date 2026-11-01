@@ -16,7 +16,9 @@ import type { KvoxWebHost } from '../headless/host.js';
 //                          imports `@marinoscar/platform-web/shell/headless` for
 //                          `createKvoxTheme`, the `shell` slice imports the
 //                          platform's shell and identity entries, and the
-//                          `copilot/ui` entry imports `@marinoscar/platform-web/ai/ui`);
+//                          `copilot/ui` entry imports `@marinoscar/platform-web/ai/ui`,
+//                          and any slice may import the display time zone entry,
+//                          `@marinoscar/platform-web/timezone/headless`);
 //                          no `*/headless` file
 //                          imports `@mui/*`, `@emotion/*` or `react-router-dom`,
 //                          or reaches into a `*/ui` folder. Needs `srcDir`.
@@ -82,6 +84,12 @@ const SLICE_PLATFORM_IMPORTS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
+// The platform specifiers ANY slice may import, matched exactly: the display
+// time zone store and formatters (no UI, no transport), so every slice renders
+// times in the user's zone. Without a `UserTimeZoneSync` in the host the store
+// answers the device's zone.
+const PACKAGE_PLATFORM_IMPORTS: readonly string[] = [`${PLATFORM_PREFIX}web/timezone/headless`];
+
 // The one platform import a kvox-web file may make: the Copilot settings card is
 // built on the platform's account sign-in card (issue #631), in that entry only.
 const COPILOT_UI_PLATFORM_IMPORT = `@marinoscar/${'platform'}-web/ai/ui`;
@@ -120,7 +128,9 @@ export function scanKvoxWebSources(srcDir: string): string[] {
     const text = stripComments(readFileSync(file, 'utf8'));
     for (const match of text.matchAll(IMPORT_RE)) {
       const specifier = match[1] ?? match[2] ?? match[3] ?? '';
-      const sliceAllowed = SLICE_PLATFORM_IMPORTS[parts[0] ?? '']?.includes(specifier) ?? false;
+      const sliceAllowed =
+        PACKAGE_PLATFORM_IMPORTS.includes(specifier) ||
+        (SLICE_PLATFORM_IMPORTS[parts[0] ?? '']?.includes(specifier) ?? false);
       const copilotAllowed = parts[0] === 'copilot' && parts[1] === 'ui' && specifier === COPILOT_UI_PLATFORM_IMPORT;
       if (specifier.startsWith(PLATFORM_PREFIX) && !sliceAllowed && !copilotAllowed) {
         problems.push(`${rel} imports ${specifier}: a kvox-web file must not depend on the platform`);

@@ -22,7 +22,13 @@
     "20260926050000_add_ask_conversations",
     "20260926231512_add_kg_exports",
     "20260927050000_ai_token_limits_follow_model",
+    "20261015125136_kvox_allowlist_reminders",
+    "20261015125334_kvox_scope_domain_permissions",
+    "20261015222003_kvox_object_ownership",
+    "20261016050000_drop_user_ai_credentials",
+    "20261016120000_onboarding_checklist_dismissed_at",
     "20261016120000_transcripts_org_id",
+    "20261016120100_transcript_shares_to_grants",
     "20261021200000_add_kg_item_kind_risk",
     "20261023033028_add_note_libraries",
     "20261026184116_add_kg_synonyms",
@@ -508,9 +514,27 @@
       "originId": "platform:0037_open_sharing_vocabularies",
       "sha256": "4b7047703bacab08af629004ff569e250869355acd03795f17d1b1e5b277c5e6",
       "since": "1.0.0"
+    },
+    {
+      "localDir": "20261101123234_add_worker_node_events",
+      "originId": "platform:0038_add_worker_node_events",
+      "sha256": "5775b304027a1cb77b30707093fd6be26290fd49df695f4d850e149fe265b196",
+      "since": "1.0.0"
+    },
+    {
+      "localDir": "20261101123235_add_webhooks",
+      "originId": "platform:0039_add_webhooks",
+      "sha256": "8f719dc380610f61133612a52921fa6d89ee21957635372c2bc4bdc69d4c0a92",
+      "since": "1.0.0"
+    },
+    {
+      "localDir": "20261101123236_add_alerts",
+      "originId": "platform:0040_add_alerts",
+      "sha256": "ec4af7e5123ecd8bb6faf3505893cb2efab4d793dae84a98d8b7f26f2dff3776",
+      "since": "1.0.0"
     }
   ],
-  "platformVersion": "1.0.0",
+  "platformVersion": "0.1.0-next.20",
   "rawSqlIndexes": [
     {
       "definition": "CREATE UNIQUE INDEX ask_messages_one_running_turn_uniq_idx ON public.ask_messages USING btree (conversation_id) WHERE ((role = 'assistant'::\"AskMessageRole\") AND (status = ANY (ARRAY['pending'::\"AskMessageStatus\", 'streaming'::\"AskMessageStatus\"])))",

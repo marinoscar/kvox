@@ -50,7 +50,10 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+
+import { KvoxTimeZoneService } from '../../core/index.js';
 
 import { KVOX_AUDIT, KVOX_JOBS, KVOX_PRISMA, type KvoxAuditPort, type KvoxJobsPort } from '../../ports/index.js';
 import type { KvoxTranscriptsDb, TranscriptExportRow } from '../data/transcripts-db.js';
@@ -132,6 +135,7 @@ export class TranscriptExportService {
     private readonly registry: TranscriptExporterRegistry,
     @Inject(KVOX_JOBS) private readonly jobs: KvoxJobsPort,
     @Inject(KVOX_AUDIT) private readonly auditPort: KvoxAuditPort,
+    @Optional() private readonly zones?: KvoxTimeZoneService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -158,6 +162,7 @@ export class TranscriptExportService {
     transcriptId: string,
     dto: CreateTranscriptExportDto,
     user: TranscriptsActor,
+    timeZoneHeader?: string,
   ): Promise<CreateExportResult> {
     // VIEW, not edit. Exporting reads; a viewer share is entitled to take the
     // conversation they were shown out of this application (spec §8's premise).
@@ -171,6 +176,11 @@ export class TranscriptExportService {
     }
 
     const options = this.parseOptions(exporter, dto.options);
+    // The requester's zone (profile, then X-Time-Zone, then UTC). It is part of the content address ONLY
+    // for a format that prints zone-dependent dates (the PDF cover), and it rides in the job payload.
+    const timeZone = exporter.localizesDates
+      ? ((await this.zones?.forRequest(user.id, timeZoneHeader)) ?? 'UTC')
+      : undefined;
     // ⚠ THE SPEAKER IDENTITIES ARE PART OF THE CONTENT ADDRESS (#323). Naming a
     // speaker does not create a version, but `materialize()` overlays the name
     // onto every version — so "v7 as JSON" rendered before "Speaker A" became
@@ -185,6 +195,7 @@ export class TranscriptExportService {
       contentFingerprint: identitiesFingerprint(
         parseSpeakerIdentities(transcript.speakerIdentities),
       ),
+      timeZone,
     });
     const now = new Date();
 
@@ -230,7 +241,7 @@ export class TranscriptExportService {
       reason: 'rerun',
       subjectType: TRANSCRIPT_SUBJECT_TYPE,
       subjectId: transcriptId,
-      payload: { exportId: row.id, transcriptId },
+      payload: { exportId: row.id, transcriptId, ...(timeZone ? { timeZone } : {}) },
       priority: EXPORT_JOB_PRIORITY,
       // See the file header: two formats of one transcript are distinct work.
       skipDedup: true,
@@ -296,7 +307,7 @@ export class TranscriptExportService {
    * duration, the version's author, the provider — is read here, from the rows,
    * so the exporters stay pure and the handler stays thin.
    */
-  async buildDocument(row: TranscriptExportRow): Promise<ExportDocument> {
+  async buildDocument(row: TranscriptExportRow, timeZone?: string): Promise<ExportDocument> {
     const transcript = await this.prisma.transcript.findUnique({
       where: { id: row.transcriptId },
       select: {
@@ -343,6 +354,7 @@ export class TranscriptExportService {
       createdAt: version?.createdAt ?? new Date(),
       exportedAt: new Date(),
       recordedAt: transcript.recordedAt,
+      ...(timeZone ? { timeZone } : {}),
       author: author ? { displayName: author.displayName ?? author.email, email: author.email } : null,
       provider: { id: transcript.provider, model: readModel(transcript.providerOptions) },
       state: materialized.state,

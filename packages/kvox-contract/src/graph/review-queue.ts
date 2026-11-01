@@ -58,7 +58,14 @@ export type SafePolicyWaitReason = z.infer<typeof safePolicyWaitReasonSchema>;
 export const reviewQueueGroupKeySchema = z.object({
   type: z.enum(['batch', 'library', 'other']),
   id: z.guid().nullable().describe('The batch or library id; null for `other` (a note imported outside any batch).'),
-  label: z.string(),
+  label: z.string().describe("The group's name. A `batch` is named `Import <day>`, the day cut in the requester's time zone."),
+  createdAt: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'When the import batch was created (ISO 8601), for `batch` and `library`; null for `other`. A client that renders its own label formats this instant in the display time zone.',
+    ),
 });
 
 /**

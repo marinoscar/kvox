@@ -377,8 +377,11 @@ export interface KvoxSettingsPort {
   patchSystem<T>(name: string, patch: Partial<T>, ctx: { actorUserId: string; ifMatchVersion?: number }): Promise<KvoxVersionedSettings<T>>;
   readUser<T>(userId: string, name: string): Promise<T>;
   patchUser<T>(userId: string, name: string, patch: Partial<T>): Promise<T>;
+  readUserTimeZone(userId: string): Promise<string | null>;   // Desktop: Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 ```
+
+`readUserTimeZone` is the zone the domain cuts calendar days in (the Ask prompt's "today", a meeting's date, graph activity buckets, export "saved" lines). A single-user Desktop has no profile: answer the device zone. Calendar-only values (valid ranges, an item's `occurred_at` / `due_at`, a bare `as_of`) are floating dates at UTC midnight and never read it. `@marinoscar/platform-contract` is a required peer of `@marinoscar/kvox-api` (Desktop already installs it through `@marinoscar/platform-web`).
 
 Rules: the slices declare two namespaces themselves (system `transcription` in `onModuleInit`, user `graph`); a missing row reads as the defaults at version 0; a patch is a JSON Merge Patch validated against the schema before anything is written; system patches are versioned (`ifMatchVersion`). **The host declares a third namespace the slices only read: the system `ai` namespace.** Fields read today: `maxInputTokens`, `maxOutputTokens` (both `number | null`, `null` means the model's own limit), `maxDocumentBytes` (notes), and, when the graph is installed, `graphEnabled` (the connected-knowledge switch; `false` or absent answers the graph's 409 `graph_disabled`) and `reasoningEffort`. Without the namespace `POST /api/notes` is a 500 (`Unknown system settings namespace "ai"`).
 

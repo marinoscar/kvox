@@ -459,6 +459,12 @@ export class GraphWriteService {
       if (relation.allowedPairs && !relation.allowedPairs.some(([a, b]) => a === fromType && b === toType)) {
         throw invalid(`'${input.type}' does not connect a ${fromType} to a ${toType}.`, 'toId');
       }
+      // PART_OF also runs Organization -> Organization (a sub-unit, ontology 1.4.0): an
+      // organization is never part of itself. Proposal resolution can fold two
+      // different refs onto one entity, so extraction's own ref check is not enough.
+      if (input.type === 'PART_OF' && input.fromId === input.toId) {
+        throw invalid("An organization cannot be part of itself: 'PART_OF' needs two different entities.", 'toId');
+      }
     } else {
       const speakerTranscriptId = await this.requireViewableSpeaker(tx, input.ownerId, input.fromSpeakerId!, input.evidenceAccess);
       if (claimedLink.speakerId !== undefined && claimedLink.speakerId !== input.fromSpeakerId) {

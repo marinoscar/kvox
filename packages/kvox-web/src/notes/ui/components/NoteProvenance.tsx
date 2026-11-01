@@ -61,6 +61,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import Alert from '@mui/material/Alert';
 import Link from '@mui/material/Link';
@@ -99,6 +100,8 @@ export interface NoteProvenanceProps {
 }
 
 export function NoteProvenance({ note, sourceName }: NoteProvenanceProps) {
+  // The date is the reader's, in their display zone; a saved profile re-renders it.
+  const zone = useDisplayTimeZone();
   const ref = noteSourceRef(note);
   const path = noteSourcePath(note);
   const label = ref ? (sourceName ?? noteSourceFallbackLabel(ref.type)) : null;
@@ -189,7 +192,7 @@ export function NoteProvenance({ note, sourceName }: NoteProvenanceProps) {
             </Typography>
           </>
         ) : null}
-        {`, ${formatShortDate(note.createdAt)}`}
+        {`, ${formatShortDate(note.createdAt, new Date(), zone)}`}
         {/* The model is named LAST and quietly. It is provenance — a reader
           comparing two notes needs to know they came from different models —
           but it is not what the sentence is about. */}

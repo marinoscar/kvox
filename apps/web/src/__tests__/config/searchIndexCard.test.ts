@@ -120,6 +120,8 @@ describe('USER_SETTINGS_SECTIONS — Search Indexing card (issue #191)', () => {
     expect(gated).toEqual([
       { path: '/settings/ai', permission: 'ai:use' },
       { path: '/settings/knowledge-graph', permission: 'graph:write' },
+      // #795: the packaged Webhooks card, gated on the string `/api/webhooks` enforces.
+      { path: '/settings/webhooks', permission: 'webhooks:read' },
     ]);
   });
 });

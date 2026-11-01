@@ -72,10 +72,10 @@ function itemPage(): RawItemPageRow[] {
   ];
 }
 
-function setup(options: { failOn?: 'entityPage' | 'upload' } = {}) {
+function setup(options: { failOn?: 'entityPage' | 'upload'; zone?: string; createdAt?: Date } = {}) {
   const prisma = {
     kgExport: {
-      findUnique: jest.fn().mockResolvedValue(exportRow()),
+      findUnique: jest.fn().mockResolvedValue(exportRow(options.createdAt ? { createdAt: options.createdAt } : {})),
       update: jest.fn().mockResolvedValue(exportRow()),
       findMany: jest.fn().mockResolvedValue([]),
       delete: jest.fn().mockResolvedValue({}),
@@ -157,11 +157,27 @@ function setup(options: { failOn?: 'entityPage' | 'upload' } = {}) {
     objects as never,
     auditPortOver(prisma),
     DEFAULT_KVOX_BRAND,
+    { forUser: jest.fn(async () => options.zone ?? 'UTC') } as never,
   );
   return { handler, prisma, source, objects, uploads, registry };
 }
 
 describe('KgExportHandler', () => {
+  it("dates the file name by the owner's day in their zone, not the UTC day", async () => {
+    // Requested 2026-09-02T02:30Z: still the 1st in Chicago, already the 2nd in Tokyo.
+    const createdAt = new Date('2026-09-02T02:30:00Z');
+    for (const [zone, day] of [
+      ['America/Chicago', '2026-09-01'],
+      ['Asia/Tokyo', '2026-09-02'],
+    ] as const) {
+      const { handler, objects } = setup({ zone, createdAt });
+      await handler.process(job({ mode: 'render', exportId: EXPORT }));
+      expect(objects.putStream).toHaveBeenCalledWith(
+        expect.objectContaining({ name: expect.stringMatching(new RegExp(`-graph-${day}\\.ttl$`)) }),
+      );
+    }
+  });
+
   it('declares the spec §11 profile and is server-only (no node result members)', () => {
     const { handler, registry } = setup();
     expect(handler.type).toBe('kg.export');

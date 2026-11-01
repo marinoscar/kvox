@@ -34,13 +34,17 @@ Resumable upload (`initUpload`, `signParts`, `completeUpload`, `abortUpload`), `
 
 `emit` and `subscribe` for in-process domain events after commit. Optional: the default is an in-process emitter.
 
+### KVOX_WEBHOOKS
+
+`emit(eventKey, data, { orgId, userId })` publishes one catalog event (`KVOX_WEBHOOK_EVENTS` of `@marinoscar/kvox-api/webhooks`) to the webhooks a user configured. Optional: unbound (KVox Desktop) the default is a no-op. `data` is ids and counts only, never content and never `sensitive` PersonFact data. A binding must not do network I/O inline: it may record delivery rows and enqueue the delivery job, nothing slower. The package calls it only from the `kvox.webhook_emit` job. `orgId` is `null` when the host should resolve the user's own organization.
+
 ### KVOX_PRISMA
 
 The host's Prisma client, seen through `KvoxPrismaClientLike`. A slice narrows it with the delegates it uses and builds raw SQL with the `Prisma` helper of `core`.
 
 ### KVOX_SETTINGS
 
-`registerNamespace`, `readSystem` / `patchSystem` (versioned, `If-Match` aware; `readSystem(name, { withUpdatedBy: true })` also returns who last changed the row and when, for an admin screen) and `readUser` / `patchUser` for the namespaces the domain owns. Never a secret. The slices also READ one system namespace they do not declare: `ai` (`maxInputTokens`, `maxOutputTokens`, `maxDocumentBytes`, each optional and `null` for "the model's own limit"), the deployment's AI spend caps, which the notes, transcripts (name check) and graph slices pass through the token budget. The host declares it (the web edition's is the platform AI slice's); a host that does not makes `POST /api/notes` fail with `Unknown system settings namespace "ai"`.
+`registerNamespace`, `readSystem` / `patchSystem` (versioned, `If-Match` aware; `readSystem(name, { withUpdatedBy: true })` also returns who last changed the row and when, for an admin screen) and `readUser` / `patchUser` for the namespaces the domain owns, plus `readUserTimeZone(userId)`: the user's IANA time zone, which every date the domain derives from an instant or from "now" follows (the web edition answers the stored profile zone, or `null` so the request's `X-Time-Zone` header and then UTC apply; KVox Desktop answers the device zone, `Intl.DateTimeFormat().resolvedOptions().timeZone`). Never a secret. The slices also READ one system namespace they do not declare: `ai` (`maxInputTokens`, `maxOutputTokens`, `maxDocumentBytes`, each optional and `null` for "the model's own limit"), the deployment's AI spend caps, which the notes, transcripts (name check) and graph slices pass through the token budget. The host declares it (the web edition's is the platform AI slice's); a host that does not makes `POST /api/notes` fail with `Unknown system settings namespace "ai"`.
 
 ### KVOX_SECRETS
 

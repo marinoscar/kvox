@@ -34,6 +34,7 @@ import { Alert, Box, Container, Paper, Snackbar, Typography } from '@mui/materia
 import { Navigate } from 'react-router-dom';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useSystemSettings } from '@marinoscar/platform-web/settings/headless';
+import { formatDateTime, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import type { SystemSettings } from '../../types';
 
@@ -78,6 +79,8 @@ export function SystemSettingsSection({
 }: SystemSettingsSectionProps) {
   const { hasPermission } = usePermissions();
   const { settings, isLoading, error, isSaving, updateSettings } = useSystemSettings<SystemSettings>();
+  // "Last updated ... on" is in the user's display zone; a saved profile re-renders it.
+  const zone = useDisplayTimeZone();
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -119,7 +122,15 @@ export function SystemSettingsSection({
         {settings?.updatedBy && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             Last updated by {settings.updatedBy.email} on{' '}
-            {new Date(settings.updatedAt).toLocaleString()}
+            {formatDateTime(settings.updatedAt, {
+              timeZone: zone,
+              year: 'numeric',
+              month: 'numeric',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: 'numeric',
+              second: 'numeric',
+            })}
           </Typography>
         )}
 

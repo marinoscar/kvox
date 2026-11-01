@@ -347,7 +347,14 @@ export class ProposalCommitService {
     await this.afterCommit(user.id, proposalId, outcome);
     // After the transaction committed (#591): one event per commit, whatever
     // merges it carried — `MergeService` emits nothing when handed our `tx`.
-    this.emitChanged(user.id, outcome.kind === 'import' ? 'import' : 'commit');
+    this.emitChanged(user.id, outcome.kind === 'import' ? 'import' : 'commit', {
+      proposalId,
+      counts: {
+        entitiesCreated: outcome.result.created.entities,
+        relationsCreated: outcome.result.created.relations,
+        entitiesLinked: outcome.result.linked,
+      },
+    });
     this.logger.log(
       `kg.commit proposal=${proposalId} created=${JSON.stringify(outcome.result.created)} ` +
         `linked=${outcome.result.linked} ms=${Date.now() - started}`,
@@ -463,9 +470,9 @@ export class ProposalCommitService {
    * The layout listener only counts and, at most, enqueues; a listener failure
    * must never fail a commit that already happened, hence the catch.
    */
-  private emitChanged(ownerId: string, reason: GraphChangedReason): void {
+  private emitChanged(ownerId: string, reason: GraphChangedReason, detail: Pick<GraphChangedEvent, 'proposalId' | 'counts'> = {}): void {
     try {
-      this.events.emit(GRAPH_CHANGED_EVENT, { ownerId, reason } satisfies GraphChangedEvent);
+      this.events.emit(GRAPH_CHANGED_EVENT, { ownerId, reason, ...detail } satisfies GraphChangedEvent);
     } catch (err) {
       this.logger.warn(`Could not emit graph.changed for user ${ownerId}: ${err instanceof Error ? err.message : String(err)}`);
     }

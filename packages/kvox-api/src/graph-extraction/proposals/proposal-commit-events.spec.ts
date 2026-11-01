@@ -34,12 +34,12 @@ function harness(txImpl?: (fn: (tx: unknown) => unknown) => unknown) {
 }
 
 describe('ProposalCommitService graph.changed (#591)', () => {
-  it("emits exactly one { ownerId, reason: 'commit' } for an extraction proposal", async () => {
+  it("emits exactly one { ownerId, reason: 'commit', proposalId, counts } for an extraction proposal", async () => {
     const { service, events, stub } = harness();
     stub('extraction');
     await service.commit(user, P);
     expect(events.emit).toHaveBeenCalledTimes(1);
-    expect(events.emit).toHaveBeenCalledWith('graph.changed', { ownerId: OWNER, reason: 'commit' });
+    expect(events.emit).toHaveBeenCalledWith('graph.changed', { ownerId: OWNER, reason: 'commit', ...{ proposalId: P, counts: { entitiesCreated: 0, relationsCreated: 0, entitiesLinked: 0 } } });
   });
 
   it("emits reason 'import' for an import proposal", async () => {
@@ -47,7 +47,7 @@ describe('ProposalCommitService graph.changed (#591)', () => {
     stub('import');
     await service.commit(user, P);
     expect(events.emit).toHaveBeenCalledTimes(1);
-    expect(events.emit).toHaveBeenCalledWith('graph.changed', { ownerId: OWNER, reason: 'import' });
+    expect(events.emit).toHaveBeenCalledWith('graph.changed', { ownerId: OWNER, reason: 'import', ...{ proposalId: P, counts: { entitiesCreated: 0, relationsCreated: 0, entitiesLinked: 0 } } });
   });
 
   it('emits after afterCommit ran', async () => {

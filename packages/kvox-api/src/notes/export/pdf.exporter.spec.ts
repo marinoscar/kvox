@@ -64,7 +64,7 @@ describe('PdfNoteExporter', () => {
     expect(text).toContain('(transcript)');
     expect(text).toContain('Concise Meeting Notes');
     expect(text).toContain('Version 3');
-    expect(text).toContain('2026-09-14T04:37:11.000Z');
+    expect(text).toContain('Sep 14, 2026, 04:37 UTC');
   });
 
   it('renders every block kind of the body into the page text', async () => {

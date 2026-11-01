@@ -68,16 +68,7 @@ import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/comm
 import type { Writable } from 'node:stream';
 import type PDFDocumentType from 'pdfkit';
 
-import {
-  DEFAULT_KVOX_BRAND,
-  KVOX_BRAND,
-  PDF_FONTS,
-  assertFontsPresent,
-  defaultPdfFontDir,
-  registerPdfFonts,
-  type KvoxBrand,
-  type KvoxPdfDocument,
-} from '../../core/index.js';
+import { assertFontsPresent, DEFAULT_KVOX_BRAND, defaultPdfFontDir, KVOX_BRAND, localDateKey, PDF_FONTS, registerPdfFonts, type KvoxBrand, type KvoxPdfDocument } from '../../core/index.js';
 import { TRANSCRIPTS_MODULE_OPTIONS, type ResolvedTranscriptsOptions } from '../transcripts.options.js';
 
 import {
@@ -153,6 +144,9 @@ export class PdfTranscriptExporter implements TranscriptExporter, OnModuleInit {
   private readonly logger = new Logger(PdfTranscriptExporter.name);
 
   readonly format = 'pdf';
+
+  /** The cover prints the recording's date, cut in the requester's zone. */
+  readonly localizesDates = true;
   readonly label = 'PDF';
   readonly mimeType = 'application/pdf';
   readonly extension = 'pdf';
@@ -246,7 +240,8 @@ export function drawCover(target: KvoxPdfDocument, doc: ExportDocument): void {
   pdf.moveDown(0.4);
 
   const facts = [
-    doc.createdAt.toISOString().slice(0, 10),
+    // The day of the recording in the requester's zone (the version's own date when none is recorded).
+    localDateKey(doc.recordedAt ?? doc.createdAt, doc.timeZone ?? 'UTC'),
     formatDuration(doc.durationMs),
     `Version ${doc.version}`,
   ];

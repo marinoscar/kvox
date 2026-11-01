@@ -81,7 +81,7 @@ describe('allowlistInvitationReminderEmail — the three constraints it inherits
     // The preheader carries it too, so the inbox list answers "is this about
     // me, and have I seen it already?" before the message is opened.
     expect(squish(rendered.html)).toContain(
-      `${data.recipientEmail} was invited on 15 January 2026 and has not signed in yet.`,
+      `${data.recipientEmail} was invited on Jan 15, 2026 (UTC) and has not signed in yet.`,
     );
   });
 
@@ -142,8 +142,8 @@ describe('allowlistInvitationReminderEmail — the date it says, and the count i
     // cannot say when is just the invitation sent twice.
     const rendered = allowlistInvitationReminderEmail(data);
 
-    expect(squish(rendered.html)).toContain('on 15 January 2026');
-    expect(rendered.text).toContain('on 15 January 2026');
+    expect(squish(rendered.html)).toContain('on Jan 15, 2026 (UTC)');
+    expect(rendered.text).toContain('on Jan 15, 2026 (UTC)');
     // NOT an ISO timestamp: the operational templates render those because
     // they are matched against audit rows; this one is read by a stranger.
     expect(rendered.html).not.toContain('2026-01-15T10:00:00.000Z');
@@ -151,14 +151,28 @@ describe('allowlistInvitationReminderEmail — the date it says, and the count i
   });
 
   it('renders the same date regardless of the server time zone', () => {
-    // The zone is pinned to UTC inside the template, so the rendered string is
-    // a pure function of the payload rather than of the host's `TZ`.
+    // With no render-context zone the day is cut in UTC, so the string is a pure function of the
+    // payload rather than of the host's `TZ`.
     const rendered = allowlistInvitationReminderEmail({
       ...data,
       invitedAt: new Date('2026-01-15T23:30:00.000Z'),
     });
 
-    expect(squish(rendered.html)).toContain('on 15 January 2026');
+    expect(squish(rendered.html)).toContain('on Jan 15, 2026 (UTC)');
+  });
+
+  it("renders the day in the render context's zone (the sending admin's) and names it", () => {
+    // 23:30Z on the 15th is still the 15th in Chicago and already the 16th in Tokyo.
+    const invitedAt = new Date('2026-01-15T23:30:00.000Z');
+    const base = createEmailRenderContext(EMAIL_MODULE_OPTIONS);
+
+    const chicago = allowlistInvitationReminderEmail({ ...data, invitedAt }, { ...base, timeZone: 'America/Chicago' });
+    expect(squish(chicago.html)).toContain('on Jan 15, 2026 (CST)');
+    expect(chicago.text).toContain('on Jan 15, 2026 (CST)');
+
+    const tokyo = allowlistInvitationReminderEmail({ ...data, invitedAt }, { ...base, timeZone: 'Asia/Tokyo' });
+    expect(squish(tokyo.html)).toContain('on Jan 16, 2026 (GMT+9)');
+    expect(squish(tokyo.html)).toContain('was invited on Jan 16, 2026 (GMT+9) and has not signed in yet');
   });
 
   it('says nothing about how many reminders have been sent, in any part', () => {

@@ -6,6 +6,7 @@
  */
 
 import { SAFE_POLICY_WAIT_REASONS } from '@marinoscar/kvox-contract/graph';
+import { formatDate, getDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 import type {
   CommitBatchResult,
@@ -104,22 +105,35 @@ export function countPhrase(count: number, one: string, many: string): string {
 
 const ISO_DAY = /^Import (\d{4})-(\d{2})-(\d{2})$/;
 
+const IMPORT_DAY_FORMAT: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+
 /**
  * The heading of one queue group: the library's name, the import's date, or
  * "Other notes" for notes imported outside any batch.
  *
+ * An import's day is the READER'S: with the key's `createdAt` (the batch's
+ * creation instant) it is formatted in `timeZone` (default the display zone);
+ * without one (an older server) the server's `Import <day>` label is used, whose
+ * day the API already cut in the requester's zone.
+ *
  * @param key - The group's key, as the API sends it.
+ * @param timeZone - The IANA zone to read `createdAt` in; default the display zone.
  * @returns The heading.
  *
  * @stability experimental
  */
-export function reviewGroupLabel(key: ReviewQueueGroupKey): string {
+export function reviewGroupLabel(key: ReviewQueueGroupKey, timeZone?: string): string {
   if (key.type === 'other') return 'Other notes';
   if (key.type === 'batch') {
+    if (key.createdAt) {
+      const text = formatDate(key.createdAt, { ...IMPORT_DAY_FORMAT, timeZone: timeZone ?? getDisplayTimeZone(), fallback: '' });
+      if (text) return `Import of ${text}`;
+    }
     const day = ISO_DAY.exec(key.label);
     if (day) {
+      // A calendar day already: rendered with the UTC fields so it is not shifted again.
       const date = new Date(Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3])));
-      return `Import of ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`;
+      return `Import of ${formatDate(date, { ...IMPORT_DAY_FORMAT, timeZone: 'UTC' })}`;
     }
     return key.label || 'Import';
   }

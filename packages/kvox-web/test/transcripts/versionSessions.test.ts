@@ -55,6 +55,18 @@ describe('groupVersionsIntoSessions', () => {
     expect(sessions).toHaveLength(2);
   });
 
+  it('splits at the midnight of the zone it is given, not the device’s', () => {
+    // 14:30 and 16:00 UTC on 14 Sep: the same day in Los Angeles (07:30, 09:00),
+    // either side of midnight in Tokyo (23:30 on the 14th, 01:00 on the 15th).
+    const versions = [
+      version(5, { createdAt: '2026-09-14T16:00:00.000Z' }),
+      version(4, { createdAt: '2026-09-14T14:30:00.000Z' }),
+    ];
+
+    expect(groupVersionsIntoSessions(versions, 'America/Los_Angeles')).toHaveLength(1);
+    expect(groupVersionsIntoSessions(versions, 'Asia/Tokyo')).toHaveLength(2);
+  });
+
   it('never folds version 1 into a session — it is the one row that is not an edit', () => {
     const sessions = groupVersionsIntoSessions([
       version(2),

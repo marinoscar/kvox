@@ -58,6 +58,7 @@ import {
 
 import { registerCredentialPurpose } from '@marinoscar/platform-api/credentials';
 
+import { registerKvoxWebhookEvents } from './platform-kvox/webhooks/kvox-webhook-events';
 import { TRANSCRIPTION_CREDENTIAL_PURPOSE_DEF } from './kvox/transcription/transcription.credential-purpose';
 
 let registered = false;
@@ -72,6 +73,8 @@ if (!registered) {
   // registered (#466). The platform's own purposes (`smtp`, `email_ses`,
   // `push_vapid`) are registered by `app-registrations/registrations.ts`.
   registerCredentialPurpose(TRANSCRIPTION_CREDENTIAL_PURPOSE_DEF);
+  // The four webhook events of the domain packages, with the permission an endpoint's owner must hold (#795).
+  registerKvoxWebhookEvents();
   // [registry:job-labels]
   // None: since #468 every job handler declares its own `label`, which the
   // platform registry records when the handler registers. The labels of the

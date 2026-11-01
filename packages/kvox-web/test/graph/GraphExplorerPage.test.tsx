@@ -783,7 +783,7 @@ describe('GraphExplorerPage — filters and time', () => {
     const canvas = await canvasReady();
     await user.click(await screen.findByRole('button', { name: 'Work domain', pressed: false }));
     expect(await screen.findByRole('button', { name: 'Work domain', pressed: true })).toBeInTheDocument();
-    expect(currentUrl().searchParams.get('types')).toBe('Project,Product,commitment,decision,risk');
+    expect(currentUrl().searchParams.get('types')).toBe('Project,Product,Opportunity,commitment,decision,risk');
     expect(currentUrl().searchParams.get('relTypes')).toBeNull();
     await waitFor(() =>
       expect(within(canvas).queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument(),
@@ -832,6 +832,7 @@ describe('GraphExplorerPage — filters and time', () => {
         HttpResponse.json({
           data: {
             bucket: 'month',
+            timeZone: 'UTC',
             series: [
               { start: '2026-01-01', total: 2, byType: { Person: 2 } },
               { start: '2026-03-01', total: 3, byType: { Person: 1, Organization: 2 } },

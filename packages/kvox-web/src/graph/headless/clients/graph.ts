@@ -238,7 +238,7 @@ export interface GraphEntityListParams {
    * pages); ignored when `q` is set.
    */
   sort?: 'updated' | 'viewed' | 'mentions';
-  /** With `sort: 'mentions'` only: count mentions recorded on or after this `YYYY-MM-DD` date or ISO datetime. */
+  /** With `sort: 'mentions'` only: count mentions recorded on or after this `YYYY-MM-DD` date or ISO datetime. A bare `YYYY-MM-DD` is the requester's local midnight: send the calendar day the user picked, in the display zone. */
   since?: string;
   /** The `nextCursor` of the previous page. */
   cursor?: string;
@@ -766,7 +766,7 @@ export interface EntityBrief {
  * @stability experimental
  */
 export interface EntityBriefParams {
-  /** Start of the "what changed" window (`YYYY-MM-DD` or ISO 8601). Omitted means the caller's last visit, else the digest's coverage, else 30 days before `asOf`. */
+  /** Start of the "what changed" window (`YYYY-MM-DD`, the requester's local midnight, or ISO 8601). Omitted means the caller's last visit, else the digest's coverage, else 30 days before `asOf`. */
   since?: string;
   /** Evaluate the brief as of this date or instant. With it, `digest` is `null`, nothing is enqueued and the last-viewed time is not moved. */
   asOf?: string;
@@ -1282,9 +1282,9 @@ export interface GraphActivityParams {
   ids: readonly string[];
   /** The bucket width. The API default is `month`. */
   bucket?: GraphActivityBucket;
-  /** Only evidence dated at or after this date (`YYYY-MM-DD`) or ISO 8601 instant. */
+  /** Only evidence dated at or after this date (`YYYY-MM-DD`) or ISO 8601 instant. A bare `YYYY-MM-DD` is the requester's local midnight: send the calendar day the user picked, in the display zone. */
   from?: string;
-  /** Only evidence dated before this date (`YYYY-MM-DD`) or ISO 8601 instant. */
+  /** Only evidence dated before this date (`YYYY-MM-DD`) or ISO 8601 instant. A bare `YYYY-MM-DD` is the requester's local midnight: send the calendar day the user picked, in the display zone. */
   to?: string;
 }
 
@@ -1294,7 +1294,7 @@ export interface GraphActivityParams {
  * @stability experimental
  */
 export interface GraphActivityBucketRow {
-  /** The first day of the bucket, `YYYY-MM-DD` (UTC). */
+  /** The first day of the bucket, `YYYY-MM-DD`: a calendar day of the response's `timeZone`. */
   start: string;
   /** The sum of `byType`. */
   total: number;
@@ -1308,7 +1308,7 @@ export interface GraphActivityBucketRow {
  * @stability experimental
  */
 export interface GraphActivityPoint {
-  /** The first day of the bucket, `YYYY-MM-DD` (UTC). */
+  /** The first day of the bucket, `YYYY-MM-DD`: a calendar day of the response's `timeZone`. */
   start: string;
   /** Evidence attributions of the entity in the bucket. */
   count: number;
@@ -1322,6 +1322,12 @@ export interface GraphActivityPoint {
 export interface GraphActivityResponse {
   /** The bucket width that was applied. */
   bucket: GraphActivityBucket;
+  /**
+   * The IANA zone the buckets were cut in: the requester's profile zone, else
+   * the `X-Time-Zone` header, else `UTC`. Each `start` is a day of this zone,
+   * and a `week` starts on Monday there.
+   */
+  timeZone: string;
   /** Stacked buckets with evidence, oldest first. */
   series: GraphActivityBucketRow[];
   /** Per requested id, the buckets with evidence, oldest first. Ids without evidence are absent. */
@@ -3084,9 +3090,9 @@ export interface GraphOverview {
 export interface GraphOverviewParams {
   /** Entity types / item kinds to keep; absent or empty = all. */
   types?: string[];
-  /** ISO date or datetime; keep entities with evidence at or after it. */
+  /** ISO date or datetime; keep entities with evidence at or after it. A bare `YYYY-MM-DD` is the requester's local midnight: send the calendar day the user picked, in the display zone. */
   from?: string;
-  /** ISO date or datetime; keep entities with evidence before it. */
+  /** ISO date or datetime; keep entities with evidence before it. A bare `YYYY-MM-DD` is the requester's local midnight: send the calendar day the user picked, in the display zone. */
   to?: string;
   /** Also return the edges among the returned nodes. */
   edges?: boolean;

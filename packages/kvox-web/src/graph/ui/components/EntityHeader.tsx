@@ -31,6 +31,7 @@ import type { ReactNode } from 'react';
 
 import type { GraphEntityDetail } from '../../headless/clients/graph.js';
 import { EntityTypeIcon } from './entityTypeIcon.js';
+import { formatDate, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 const MAX_ALIASES = 5;
 
@@ -46,11 +47,11 @@ export interface EntityHeaderProps {
   actions?: ReactNode;
 }
 
-function formatDay(iso: string | null): string | null {
+/** The day in the reader's display zone, or `null` when absent or unparseable. */
+function formatDay(iso: string | null, timeZone: string): string | null {
   if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+  const text = formatDate(iso, { dateStyle: 'medium', timeZone, fallback: '' });
+  return text === '' ? null : text;
 }
 
 function plural(count: number, one: string, many: string): string {
@@ -59,6 +60,7 @@ function plural(count: number, one: string, many: string): string {
 
 export function EntityHeader({ entity, typeLabel, canEdit, onEdit, onForget, onMerge, actions }: EntityHeaderProps) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const zone = useDisplayTimeZone();
   // Page-level read (not a sixth breakpoint gate): on a phone the Edit button
   // folds to an icon so a long name keeps the row without horizontal scroll.
   const theme = useTheme();
@@ -72,8 +74,8 @@ export function EntityHeader({ entity, typeLabel, canEdit, onEdit, onForget, onM
   const shown = showAllAliases ? aliases : aliases.slice(0, MAX_ALIASES);
   const hidden = aliases.length - shown.length;
 
-  const first = formatDay(entity.firstSeenAt);
-  const last = formatDay(entity.lastSeenAt);
+  const first = formatDay(entity.firstSeenAt, zone);
+  const last = formatDay(entity.lastSeenAt, zone);
   const seen = first && last ? (first === last ? `Seen ${first}` : `${first} – ${last}`) : first ?? last;
 
   const counts = [

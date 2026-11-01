@@ -54,12 +54,13 @@ describe('USER_SETTINGS_SECTIONS - Notifications card (issue #126)', () => {
   // regression that added a permission ANYWHERE in USER_SETTINGS_SECTIONS
   // would be exactly the kind of invented gate that CLAUDE.md's Settings UI
   // Pattern rule 3 warns against.
-  it('no card in USER_SETTINGS_SECTIONS declares a permission except the AI Provider (#477) and Knowledge graph (#369) cards', () => {
+  it('no card in USER_SETTINGS_SECTIONS declares a permission except the AI Provider (#477), Knowledge graph (#369) and Webhooks (#795) cards', () => {
     // Two deliberate exceptions. Since #369 the Knowledge graph card carries
     // `graph:write`, the exact string its attribute-definition write routes
     // enforce (Settings UI rule 3). Since #477 the AI Provider card carries
     // `ai:use`, the string the platform's per-user AI routes enforce. Every
-    // other card stays ungated.
+    // Since #795 the packaged Webhooks card carries `webhooks:read`, the string
+    // `/api/webhooks` enforces. Every other card stays ungated.
     const allCards = USER_SETTINGS_SECTIONS.flatMap((section) => section.cards);
     const gated = allCards
       .filter((card) => card.permission !== undefined)
@@ -67,6 +68,7 @@ describe('USER_SETTINGS_SECTIONS - Notifications card (issue #126)', () => {
     expect(gated).toEqual([
       { path: '/settings/ai', permission: 'ai:use' },
       { path: '/settings/knowledge-graph', permission: 'graph:write' },
+      { path: '/settings/webhooks', permission: 'webhooks:read' },
     ]);
   });
 });

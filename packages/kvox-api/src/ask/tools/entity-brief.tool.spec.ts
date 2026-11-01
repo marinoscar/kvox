@@ -75,6 +75,26 @@ describe('EntityBriefTool', () => {
     expect(service.getBrief).toHaveBeenLastCalledWith(ctx.user, ACME, { since: '2026-01-01', asOf: '2026-06-01', markViewed: false, enqueueStaleDigest: false });
   });
 
+  it("hands the asker's zone to the brief and shows instants as their local day, calendar values as stored", async () => {
+    const { tool, service } = build();
+    // The digest was generated 2026-09-02T02:30Z: still the 1st in Chicago, the 2nd in Tokyo.
+    service.getBrief.mockResolvedValue({
+      ...brief(false),
+      digest: { statements: [], coversUntil: '2026-09-01T00:00:00.000Z', generatedAt: '2026-09-02T02:30:00.000Z', model: 'gpt' },
+    } as never);
+    for (const [timeZone, day] of [
+      ['America/Chicago', '2026-09-01'],
+      ['Asia/Tokyo', '2026-09-02'],
+    ] as const) {
+      const ctx = makeCtx({ timeZone });
+      const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, ACME), since: '2026-09-01', asOf: null }));
+      expect(service.getBrief).toHaveBeenLastCalledWith(ctx.user, ACME, expect.objectContaining({ since: '2026-09-01', timeZone }));
+      expect((res.data as Record<string, unknown>).digestGeneratedAt).toBe(day);
+      // The event's own date is a calendar value: UTC midnight, never shifted by the zone.
+      expect((res.data as { whatChanged: Array<{ at: string }> }).whatChanged[0]?.at).toBe('2026-09-10');
+    }
+  });
+
   it('maps sections and the digest to handles, dropping personal facts', async () => {
     const { tool } = build();
     const ctx = makeCtx();

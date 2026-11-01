@@ -49,6 +49,7 @@ describe('NoteExportService', () => {
   let access: { require: jest.Mock };
   let objects: { signedUrlFor: jest.Mock };
   let jobs: { enqueue: jest.Mock; isRegistered: jest.Mock };
+  let zones: { forRequest: jest.Mock };
   let service: NoteExportService;
 
   const note = {
@@ -98,6 +99,8 @@ describe('NoteExportService', () => {
     objects = { signedUrlFor: jest.fn().mockResolvedValue(null) };
     jobs = { enqueue: jest.fn().mockResolvedValue({ id: 'job-1' }), isRegistered: jest.fn().mockReturnValue(true) };
 
+    // The profile zone, else the header, else UTC: here the "profile" is empty, so the header decides.
+    zones = { forRequest: jest.fn(async (_userId: string, header?: string) => header ?? 'UTC') };
     const registry = new NoteExporterRegistry();
 
     for (const exporter of [
@@ -116,6 +119,7 @@ describe('NoteExportService', () => {
       access as unknown as NoteAccessService,
       objects as unknown as NoteObjectsService,
       registry,
+      zones as never,
     );
   });
 
@@ -188,8 +192,51 @@ describe('NoteExportService', () => {
           format: 'markdown',
           version: 3,
           options: { includeFrontMatter: true },
+          timeZone: 'UTC',
         }),
       );
+    });
+
+    it("puts the requester's time zone in the content address and in the job payload", async () => {
+      // Every note format prints the "saved" and "Exported" times in the requester's zone, so a file
+      // rendered for Chicago must never be handed to somebody in Tokyo.
+      await service.requestExport(NOTE_ID, { format: 'pdf' }, USER, 'America/Chicago');
+      await service.requestExport(NOTE_ID, { format: 'pdf' }, USER, 'Asia/Tokyo');
+      await service.requestExport(NOTE_ID, { format: 'pdf' }, USER);
+
+      const hashes = prisma.noteExport.create.mock.calls.map((call) => call[0].data.optionsHash as string);
+      expect(new Set(hashes).size).toBe(3);
+      expect(hashes[0]).toBe(
+        hashExportRequest({ format: 'pdf', version: 3, options: prisma.noteExport.create.mock.calls[0]![0].data.options, timeZone: 'America/Chicago' }),
+      );
+      expect(jobs.enqueue.mock.calls.map((call) => call[0].payload.timeZone)).toEqual([
+        'America/Chicago',
+        'Asia/Tokyo',
+        'UTC',
+      ]);
+      expect(zones.forRequest).toHaveBeenCalledWith(USER.id, 'America/Chicago');
+    });
+
+    it('carries the zone into the document it builds', async () => {
+      prisma.note.findUnique.mockResolvedValue({ ...note, deletedAt: null, bodyFormat: 'markdown', template: null, provider: null, model: null });
+      prisma.noteVersion.findUnique.mockResolvedValue({
+        body: '# Hi',
+        bodyFormat: 'markdown',
+        createdAt: new Date('2026-09-12T10:00:00.000Z'),
+        author: null,
+      });
+      prisma.transcript.findUnique.mockResolvedValue({
+        title: 'Weekly Sync',
+        createdAt: new Date('2026-09-10T00:00:00.000Z'),
+        recordedAt: new Date('2026-09-12T16:30:00.000Z'),
+      });
+
+      const doc = await service.buildDocument(row() as never, 'Asia/Tokyo');
+
+      expect(doc.timeZone).toBe('Asia/Tokyo');
+      // The source date is the RECORDING instant, not the row's creation.
+      expect(doc.source.date?.toISOString()).toBe('2026-09-12T16:30:00.000Z');
+      expect((await service.buildDocument(row() as never)).timeZone).toBeUndefined();
     });
 
     it('gives a different hash to different options and to a different version', async () => {

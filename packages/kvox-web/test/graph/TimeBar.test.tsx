@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
+import { setPreferredTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
@@ -21,6 +22,7 @@ const NOW = new Date('2026-06-15T12:00:00Z');
 // 15 months of activity, so the axis counts in months and a quarter step is real.
 const ACTIVITY: GraphActivityResponse = {
   bucket: 'month',
+  timeZone: 'UTC',
   series: [
     { start: '2025-01-01', total: 2, byType: { Person: 2 } },
     { start: '2025-06-01', total: 3, byType: { Person: 1, Project: 2 } },
@@ -85,7 +87,7 @@ describe('TimeBar histogram', () => {
   });
 
   it('says so when there is nothing dated, and does not offer Play', () => {
-    render(<Harness activity={{ bucket: 'month', series: [], byEntity: {} }} />);
+    render(<Harness activity={{ bucket: 'month', timeZone: 'UTC', series: [], byEntity: {} }} />);
     expect(screen.queryAllByTestId('timebar-column')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled();
     expect(screen.getByTestId('timebar-status')).toHaveTextContent('No dated evidence yet');
@@ -109,6 +111,7 @@ describe('TimeBar histogram', () => {
 
     const short: GraphActivityResponse = {
       bucket: 'month',
+      timeZone: 'UTC',
       series: [{ start: '2026-04-01', total: 1, byType: { Person: 1 } }],
       byEntity: {},
     };
@@ -342,5 +345,43 @@ describe('TimeBar window classes', () => {
   it('is accessible as the compact strip', async () => {
     const { container } = render(<Harness windowClass="compact" stripExpanded={false} />);
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+describe('TimeBar calendar in the user\'s zone', () => {
+  // 20:00 UTC on 30 June: already 1 July in Tokyo, still 30 June in Los Angeles.
+  const LATE_JUNE = new Date('2026-06-30T20:00:00Z');
+  const toEnd = async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Set range' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Set the time range' });
+    return within(dialog).getByLabelText('To (included)');
+  };
+
+  it('runs the axis to the local today of the zone the API cut the buckets in', async () => {
+    render(<Harness now={LATE_JUNE} activity={{ ...ACTIVITY, timeZone: 'Asia/Tokyo' }} />);
+    // Today is in July in Tokyo, so the axis ends with the July bucket.
+    expect(await toEnd()).toHaveValue('2026-07-31');
+  });
+
+  it('ends on June for the same instant in Los Angeles', async () => {
+    render(<Harness now={LATE_JUNE} activity={{ ...ACTIVITY, timeZone: 'America/Los_Angeles' }} />);
+    expect(await toEnd()).toHaveValue('2026-06-30');
+  });
+
+  it('falls back to the display zone before the activity arrives', async () => {
+    setPreferredTimeZone('Asia/Tokyo');
+    render(<Harness now={LATE_JUNE} activity={null} />);
+    expect(await toEnd()).toHaveValue('2026-07-31');
+  });
+
+  it('draws the API\'s buckets at their own days, whatever the display zone', () => {
+    setPreferredTimeZone('America/Los_Angeles');
+    render(<Harness activity={{ ...ACTIVITY, timeZone: 'Asia/Tokyo' }} />);
+    expect(screen.getAllByTestId('timebar-column').map((c) => c.getAttribute('data-start'))).toEqual([
+      '2025-01-01',
+      '2025-06-01',
+      '2026-02-01',
+      '2026-03-01',
+    ]);
   });
 });

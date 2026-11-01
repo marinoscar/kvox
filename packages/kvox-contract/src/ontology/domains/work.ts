@@ -61,6 +61,71 @@ export const Project = defineEntityType({
 });
 
 /**
+ * Wire constant: opportunity.
+ *
+ * @stability experimental
+ */
+export const Opportunity = defineEntityType({
+  key: 'Opportunity',
+  domain: 'work',
+  label: 'Opportunity',
+  pluralLabel: 'Opportunities',
+  description:
+    'A potential piece of work or sale that is being pursued with a client and has not started yet, e.g. "the Org Alpha analytics engagement" or "the Product X renewal".',
+  disambiguation: [
+    'A Project is work that is under way or approved; an Opportunity is the pursuit before that. When an opportunity is won and work starts, the delivery effort is a Project and the Opportunity stays as the record of the pursuit.',
+    'A general wish or idea nobody is pursuing with a client is a Topic or a Claim, not an Opportunity.',
+    'The client is an Organization linked by WITH_CLIENT, never folded into the opportunity label.',
+    'Set stage, valueText, confidence and timing only when the source states them; never guess a value.',
+  ],
+  attributes: {
+    stage: {
+      kind: 'select',
+      label: 'Stage',
+      description: 'How far the pursuit has gone, only if the source says so.',
+      extractable: true,
+      options: {
+        choices: [
+          { value: 'identified', label: 'Identified' },
+          { value: 'shaping', label: 'Shaping' },
+          { value: 'proposed', label: 'Proposed' },
+          { value: 'won', label: 'Won' },
+          { value: 'lost', label: 'Lost' },
+          { value: 'dormant', label: 'Dormant' },
+        ],
+      },
+    },
+    valueText: {
+      kind: 'text',
+      label: 'Value',
+      description: 'The expected value or size as the source words it ("around 200 thousand", "a multi-year deal"), only if stated.',
+      extractable: true,
+    },
+    confidence: {
+      kind: 'select',
+      label: 'Confidence',
+      description: 'How likely the speakers say the opportunity is to close, only if they say so.',
+      extractable: true,
+      options: {
+        choices: [
+          { value: 'low', label: 'Low' },
+          { value: 'med', label: 'Medium' },
+          { value: 'high', label: 'High' },
+        ],
+      },
+    },
+    timing: {
+      kind: 'text',
+      label: 'Timing',
+      description: 'When a decision or start is expected, as the source words it ("end of Q3", "after the budget review"), only if stated.',
+      extractable: true,
+    },
+  },
+  sensitivityDefault: 'business',
+  alignment: 'schema:Offer',
+});
+
+/**
  * Wire constant: product.
  *
  * @stability experimental
@@ -229,7 +294,7 @@ export const workDomain = defineDomain({
   label: 'Work',
   alwaysOn: false,
   defaultEnabled: true,
-  entityTypes: [Project, Product, Commitment, Decision, Risk],
+  entityTypes: [Project, Product, Opportunity, Commitment, Decision, Risk],
   relationTypes: [
     defineRelationType({
       key: 'WORKS_FOR',
@@ -297,7 +362,37 @@ export const workDomain = defineDomain({
       key: 'ATTENDED',
       domain: 'work',
       label: 'Attended',
-      description: 'A person took part in a meeting.',
+      description:
+        'A person took part in a meeting, or was invited to or copied on it. Set attendance to invited for someone who was invited but not there, copied for someone who only received the material; when attendance is omitted the person attended.',
+      from: ['Person'],
+      to: ['Meeting'],
+      temporal: false,
+      exclusive: 'none',
+      props: {
+        attendance: {
+          kind: 'select',
+          label: 'Attendance',
+          description: 'Whether the person attended, was only invited, or was only copied; omitted means attended.',
+          extractable: true,
+          options: {
+            choices: [
+              { value: 'attended', label: 'Attended' },
+              { value: 'invited', label: 'Invited' },
+              { value: 'copied', label: 'Copied' },
+            ],
+          },
+        },
+      },
+      representation: { kind: 'edge' },
+      extractable: true,
+      alignment: 'schema:attendee',
+    }),
+    defineRelationType({
+      key: 'ORGANIZED',
+      domain: 'work',
+      label: 'Organized',
+      description:
+        'A person convened or hosted a meeting: "Person A set up the review" is Person A ORGANIZED the review meeting. Only when the source says who called or hosted it; being present is ATTENDED, and the organizer also attended is recorded with a separate ATTENDED.',
       from: ['Person'],
       to: ['Meeting'],
       temporal: false,
@@ -305,7 +400,7 @@ export const workDomain = defineDomain({
       props: {},
       representation: { kind: 'edge' },
       extractable: true,
-      alignment: 'schema:attendee',
+      alignment: 'schema:organizer',
     }),
     defineRelationType({
       key: 'DISCUSSED',
@@ -326,13 +421,14 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Part of',
       description:
-        'A project belongs to an organization, a meeting belongs to a project, or a topic is scoped under a project.',
-      from: ['Project', 'Meeting', 'Topic'],
+        'A project belongs to an organization, a meeting belongs to a project, a topic is scoped under a project, or an organization is a sub-unit of a larger one ("the data team at Org Alpha" is part of Org Alpha). An organization is never PART_OF itself.',
+      from: ['Project', 'Meeting', 'Topic', 'Organization'],
       to: ['Organization', 'Project'],
       allowedPairs: [
         ['Project', 'Organization'],
         ['Meeting', 'Project'],
         ['Topic', 'Project'],
+        ['Organization', 'Organization'],
       ],
       temporal: false,
       exclusive: 'none',
@@ -346,17 +442,18 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Involved in',
       description:
-        'A person has a stated role in a project, and optionally a stance toward it: "Joe is the budget approver for the Product X rollout and is skeptical of it" is Joe INVOLVED_IN Product X rollout {role: approver, stance: skeptical}.' +
+        'A person has a stated role in a project or an opportunity, and optionally a stance toward it: "Joe is the budget approver for the Product X rollout and is skeptical of it" is Joe INVOLVED_IN Product X rollout {role: approver, stance: skeptical}.' +
         ' Assigned tasks are Commitments with ASSIGNED_TO; attending one meeting about a project is ATTENDED + DISCUSSED, not INVOLVED_IN unless the source states a role. Set role only to the role the source states or clearly implies; if no role is stated, do not create INVOLVED_IN. Set stance only when the source states it or the person\'s position is unmistakably implied (an explicit objection, endorsement or refusal). Never infer stance from tone, a single question, or silence; when in doubt, omit it.',
       from: ['Person'],
-      to: ['Project'],
+      to: ['Project', 'Opportunity'],
       temporal: true,
       exclusive: 'none',
       props: {
         role: {
           kind: 'select',
           label: 'Role',
-          description: 'The role the person plays in the project, as the source states it.',
+          description:
+            'The role the person plays in the project or opportunity, as the source states it. decision_maker signs off, influencer sways the decision without signing, evaluator assesses the options, account_lead owns the relationship with the client.',
           required: true,
           extractable: true,
           options: {
@@ -369,6 +466,10 @@ export const workDomain = defineDomain({
               { value: 'approver', label: 'Approver' },
               { value: 'end_user', label: 'End user' },
               { value: 'advisor', label: 'Advisor' },
+              { value: 'decision_maker', label: 'Decision maker' },
+              { value: 'influencer', label: 'Influencer' },
+              { value: 'evaluator', label: 'Evaluator' },
+              { value: 'account_lead', label: 'Account lead' },
             ],
           },
         },
@@ -420,6 +521,12 @@ export const workDomain = defineDomain({
               { value: 'retired', label: 'Retired' },
             ],
           },
+        },
+        scale: {
+          kind: 'text',
+          label: 'Scale',
+          description: 'How widely the product is used, as the source words it ("120 seats", "two business units"), only if stated.',
+          extractable: true,
         },
       },
       representation: { kind: 'edge' },
@@ -494,11 +601,61 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Concerns',
       description:
-        'What a project is about: "The Product X rollout concerns Product X and licensing cost" gives the project CONCERNS the product and CONCERNS the topic.' +
-        ' A meeting covering a subject is DISCUSSED; CONCERNS ties a project to its own subject matter. A project that adopts or runs a product is USES; use CONCERNS for the product the effort is about.',
-      from: ['Project'],
-      to: ['Product', 'Topic'],
+        'What a project or an opportunity is about: "The Product X rollout concerns Product X and licensing cost" gives the project CONCERNS the product and CONCERNS the topic.' +
+        ' A meeting covering a subject is DISCUSSED; CONCERNS ties a project to its own subject matter. A project that adopts or runs a product is USES; use CONCERNS for the product the effort is about. An opportunity CONCERNS the product, topic or project it would deliver or extend.',
+      from: ['Project', 'Opportunity'],
+      to: ['Product', 'Topic', 'Project'],
+      allowedPairs: [
+        ['Project', 'Product'],
+        ['Project', 'Topic'],
+        ['Opportunity', 'Project'],
+        ['Opportunity', 'Product'],
+        ['Opportunity', 'Topic'],
+      ],
       temporal: false,
+      exclusive: 'none',
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: true,
+    }),
+    defineRelationType({
+      key: 'WITH_CLIENT',
+      domain: 'work',
+      label: 'With client',
+      description:
+        'The client an opportunity is being pursued with: "the Product X renewal with Org Alpha" is the renewal WITH_CLIENT Org Alpha. An opportunity has one current client; the vendor side that pursues it is PURSUED_BY.',
+      from: ['Opportunity'],
+      to: ['Organization'],
+      temporal: true,
+      exclusive: 'soft',
+      exclusiveScope: 'from',
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: true,
+    }),
+    defineRelationType({
+      key: 'PURSUED_BY',
+      domain: 'work',
+      label: 'Pursued by',
+      description:
+        'The organization that is going after an opportunity: "Org Beta is pursuing the Product X renewal" is the renewal PURSUED_BY Org Beta. Several organizations may pursue one together; a rival bidding for it is COMPETING_FOR, not PURSUED_BY.',
+      from: ['Opportunity'],
+      to: ['Organization'],
+      temporal: true,
+      exclusive: 'none',
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: true,
+    }),
+    defineRelationType({
+      key: 'COMPETING_FOR',
+      domain: 'work',
+      label: 'Competing for',
+      description:
+        'An organization is a rival bidder for an opportunity: "Org Gamma is also bidding on the Product X renewal" is Org Gamma COMPETING_FOR the renewal. Only when the source says the organization is bidding or in the running; the organization already pursuing it is PURSUED_BY.',
+      from: ['Organization'],
+      to: ['Opportunity'],
+      temporal: true,
       exclusive: 'none',
       props: {},
       representation: { kind: 'edge' },

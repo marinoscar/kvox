@@ -407,7 +407,8 @@ describeWithDb('Note exports (real Postgres)', () => {
       expect(text).toContain('(transcript)');
       expect(text).toContain(`${TITLE_PREFIX}Meeting recap`);
       expect(text).toContain('Version 2');
-      expect(text).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+      // The "saved" time is cut in the requester's zone (UTC here: no stored zone, no X-Time-Zone) and names it.
+      expect(text).toMatch(/saved [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{2}:\d{2} UTC/);
     }
 
     await prisma.note.update({ where: { id: noteId }, data: { templateId: null } });
