@@ -71,6 +71,11 @@ export interface GraphPreferencesSettings {
     /** Commit the confident rows of every note's draft automatically (#779). Absent means on. */
     autoCommitSafeRows?: boolean;
   };
+  /** The Person that is the account owner (#778); absent means none chosen. */
+  self?: {
+    /** The Person entity id. */
+    entityId: string | null;
+  };
 }
 
 /**
@@ -109,6 +114,11 @@ export interface GraphPreferencesPatch {
     minConfidence?: number | null;
     /** Commit confident rows automatically; `null` resets it (on). */
     autoCommitSafeRows?: boolean | null;
+  } | null;
+  /** Who you are in the graph (#778); `entityId: null` (or `self: null`) clears it. */
+  self?: {
+    /** The Person entity id to set, or null to clear it. */
+    entityId?: string | null;
   } | null;
 }
 
@@ -150,6 +160,11 @@ export interface ResolvedGraphPreferences {
     /** Whether the confident rows of every note's draft are committed automatically (#779). */
     autoCommitSafeRows: boolean;
   };
+  /** Who you are in the graph (#778): the stored Person id (it may be merged away; the API resolves it), or null. */
+  self: {
+    /** The chosen Person entity id, or null when none is chosen. */
+    entityId: string | null;
+  };
 }
 
 /**
@@ -167,6 +182,7 @@ export const GRAPH_PREFERENCE_DEFAULTS: ResolvedGraphPreferences = {
   },
   domains: { core: true, work: true, personal: false },
   review: { minConfidence: 0.7, autoCommitSafeRows: true },
+  self: { entityId: null },
 };
 
 /**
@@ -254,6 +270,7 @@ export function resolveGraphPreferences(
       minConfidence: value?.review?.minConfidence ?? d.review.minConfidence,
       autoCommitSafeRows: value?.review?.autoCommitSafeRows ?? d.review.autoCommitSafeRows,
     },
+    self: { entityId: value?.self?.entityId ?? d.self.entityId },
   };
 }
 

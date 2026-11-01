@@ -18,7 +18,7 @@ import { KvoxTimeZoneService } from '../../core/index.js';
 
 import { defaultSpeakerName, parseSpeakerIdentities } from '../../transcripts/index.js';
 import { NOTE_NOT_FOUND_MESSAGE, NoteOriginService } from '../../notes/index.js';
-import { GraphOntologyService } from '../../graph/index.js';
+import { GraphOntologyService, GraphSelfService } from '../../graph/index.js';
 import type { UserGuidance } from './dto/extraction.dto.js';
 import { MAX_KNOWN_ENTITIES, type ExtractionInput, type KnownEntityRow } from './extraction-context.js';
 import { KVOX_PRISMA } from '../../ports/index.js';
@@ -46,6 +46,7 @@ export class ExtractionInputLoader {
     private readonly origin: NoteOriginService,
     private readonly ontology: GraphOntologyService,
     @Optional() private readonly zones?: KvoxTimeZoneService,
+    @Optional() private readonly selfIdentity?: GraphSelfService,
   ) {}
 
   async load(args: LoadExtractionInput): Promise<ExtractionInput> {
@@ -133,9 +134,12 @@ export class ExtractionInputLoader {
         ? await this.rows({ ownerId: userId, ...LIVE }, CONTEXT_POOL_LIMIT)
         : [];
 
+    // The owner's own node (#778): a live Person of theirs, merges followed, else none.
+    const selfId = (await this.selfIdentity?.entityId(userId)) ?? null;
+
     const byIds = await this.rows({
       ownerId: userId,
-      id: { in: [...new Set([...pinnedIds, ...speakerPersonIds, ...orgIds, ...recentIds])] },
+      id: { in: [...new Set([...(selfId ? [selfId] : []), ...pinnedIds, ...speakerPersonIds, ...orgIds, ...recentIds])] },
     });
     const byId = new Map(byIds.map((r) => [r.id, r]));
     const pick = (ids: string[]) => ids.map((id) => byId.get(id)).filter((r): r is KnownEntityRow => r !== undefined);
@@ -177,6 +181,7 @@ export class ExtractionInputLoader {
       speakers,
       effectiveSchema,
       guidance: args.guidance,
+      self: selfId ? (byId.get(selfId) ?? null) : null,
       knownEntityCandidates: {
         pinned: pick(pinnedIds),
         speakerPersons: pick(speakerPersonIds),

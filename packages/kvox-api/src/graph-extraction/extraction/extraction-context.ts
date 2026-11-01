@@ -106,6 +106,12 @@ export interface ExtractionInput {
    * Absent or empty keeps today's behaviour: the Meeting is created by the system only.
    */
   proposeTypes?: readonly string[];
+  /**
+   * The Person the note's owner chose as themselves (`preferences.self.entityId`, resolved by
+   * `GraphSelfService`: live, merges followed), or null/absent. When present it leads the known
+   * entities, so it always has a `k#` the model can cite, and the prompt gains a `# You` section.
+   */
+  self?: KnownEntityRow | null;
   knownEntityCandidates: {
     pinned: KnownEntityRow[];
     speakerPersons: KnownEntityRow[];
@@ -187,6 +193,8 @@ export interface ExtractionContext {
   segments: SegmentLine[];
   segmentAlias: Map<string, SegmentAliasEntry>;
   knownEntities: KnownEntityEntry[];
+  /** The note owner's own node as a known entity (#778), or null when none is chosen. */
+  self: KnownEntityEntry | null;
   /** `k3` → entity id. */
   knownAlias: Map<string, string>;
   /** entity id → its entry. */
@@ -330,7 +338,9 @@ export function selectKnownEntities(input: ExtractionInput): KnownEntityRow[] {
 
   const out: KnownEntityRow[] = [];
   const seen = new Set<string>();
-  for (const bucket of [pinned, speakerPersons, organizations, fromContext, recentlyMentioned]) {
+  // The owner's own node leads (#778): it is always offered, so a `# You` section can name its `k#`.
+  const self = input.self ? [input.self] : [];
+  for (const bucket of [self, pinned, speakerPersons, organizations, fromContext, recentlyMentioned]) {
     for (const row of bucket) {
       if (out.length >= MAX_KNOWN_ENTITIES) return out;
       if (seen.has(row.id)) continue;
@@ -383,6 +393,7 @@ export function buildExtractionContext(input: ExtractionInput): ExtractionContex
   }));
   const knownAlias = new Map(knownEntities.map((k) => [k.alias, k.id]));
   const knownById = new Map(knownEntities.map((k) => [k.id, k]));
+  const self = input.self ? (knownById.get(input.self.id) ?? null) : null;
 
   // Speakers.
   const speakers: SpeakerLine[] = input.speakers.map((s) => ({
@@ -427,6 +438,7 @@ export function buildExtractionContext(input: ExtractionInput): ExtractionContex
     segments,
     segmentAlias,
     knownEntities,
+    self,
     knownAlias,
     knownById,
     speakers,

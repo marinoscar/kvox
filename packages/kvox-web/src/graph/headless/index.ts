@@ -24,6 +24,7 @@ export * from './hooks/useGraphImport.js';
 export * from './hooks/useGraphMentions.js';
 export * from './hooks/useGraphOntology.js';
 export * from './hooks/useGraphInsights.js';
+export * from './hooks/useGraphSelf.js';
 export * from './hooks/useGraphOverview.js';
 export * from './hooks/useGraphPreferences.js';
 export * from './hooks/useGraphProposal.js';

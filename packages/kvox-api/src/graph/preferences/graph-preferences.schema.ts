@@ -105,6 +105,17 @@ const graphReviewSchema = z
   })
   .strict();
 
+const graphSelfSchema = z
+  .object({
+    /**
+     * The Person entity that is the account owner (#778). `null` means none chosen. The id is
+     * checked when it is READ (`GraphSelfService`): it must be a live Person of the user, and a
+     * merged-away one is followed to its target.
+     */
+    entityId: z.uuid().nullable(),
+  })
+  .strict();
+
 const graphDomainsSchema = z
   .object({
     /**
@@ -190,6 +201,10 @@ export const graphPreferencesSchema = z
      * The explorer's saved lenses (GIC-17).
      */
     explorer: graphExplorerSchema.optional(),
+    /**
+     * Who the account owner is in the graph (#778).
+     */
+    self: graphSelfSchema.optional(),
   })
   .strict();
 
@@ -248,6 +263,11 @@ export const graphPreferencesPatchSchema = z
       .optional(),
     explorer: z
       .object({ lenses: graphLensesSchema.nullable().optional() })
+      .strict()
+      .nullable()
+      .optional(),
+    self: z
+      .object({ entityId: z.uuid().nullable().optional() })
       .strict()
       .nullable()
       .optional(),

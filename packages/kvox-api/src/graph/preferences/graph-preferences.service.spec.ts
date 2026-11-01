@@ -71,3 +71,31 @@ describe('auto-commit of safe rows (#779, ADR-0007)', () => {
     });
   });
 });
+
+describe('self identity (#778)', () => {
+  const ID = '0b1f1d1e-4f3a-4c52-9a77-3f4f6a2b9c10';
+  const patch = (value: unknown) => graphPreferencesPatchSchema.parse({ self: value });
+
+  it('defaults to no entity, and a stored namespace without it reads as none', () => {
+    expect(GRAPH_PREFERENCE_DEFAULTS.self.entityId).toBeNull();
+    expect(resolveGraphPreferences(undefined).self).toEqual({ entityId: null });
+    expect(resolveGraphPreferences(graphPreferencesSchema.parse({ review: { minConfidence: 0.8 } })).self.entityId).toBeNull();
+  });
+
+  it('stores the id only once chosen, and null (or the sub-object null) clears it', () => {
+    const chosen = mergeGraphPreferences(undefined, patch({ entityId: ID }));
+    expect(chosen).toEqual({ self: { entityId: ID } });
+    expect(resolveGraphPreferences(chosen).self.entityId).toBe(ID);
+    expect(mergeGraphPreferences(chosen, patch({ entityId: null }))).toBeUndefined();
+    expect(mergeGraphPreferences(chosen, patch(null))).toBeUndefined();
+    // another sub-object's patch leaves the choice alone
+    expect(mergeGraphPreferences(chosen, graphPreferencesPatchSchema.parse({ review: { minConfidence: 0.9 } }))?.self).toEqual({
+      entityId: ID,
+    });
+  });
+
+  it('refuses an id that is not a uuid', () => {
+    expect(() => patch({ entityId: 'not-an-id' })).toThrow();
+    expect(() => graphPreferencesSchema.parse({ self: { entityId: 'x' } })).toThrow();
+  });
+});

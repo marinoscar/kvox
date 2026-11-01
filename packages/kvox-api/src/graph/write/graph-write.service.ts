@@ -91,8 +91,11 @@ export interface CreateEntityInput {
   aliases?: AliasInput[];
   /** Provenance of the label's own alias row (rule 9). */
   labelSource: KgAliasSource;
-  /** At least one — enforced. */
-  evidence: EvidenceInput[];
+  /**
+   * At least one — enforced. A {@link ManualEvidence} (the owner as the source) is stored as-is:
+   * a Person the owner adds by hand for themselves (#778) has no note or transcript to cite.
+   */
+  evidence: GraphEvidenceInput[];
   /** The port answers for `evidence`, from `prefetchEvidence` before the transaction (#615). */
   evidenceAccess?: EvidenceAccess;
 }
@@ -235,7 +238,7 @@ export class GraphWriteService {
       ...(input.aliases ?? []),
     ]);
 
-    const evidence = await this.evidenceValidator.assertReadable(input.ownerId, input.evidence, tx, input.evidenceAccess);
+    const evidence = await this.readableEvidence(input.ownerId, input.evidence, tx, input.evidenceAccess);
 
     const entity = await tx.kgEntity.create({
       data: {

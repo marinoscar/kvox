@@ -1200,6 +1200,30 @@ document (a note whose body is the whole document), is read in **chunks**, insid
   entities and a lead-in of at most 800 characters), and the user's own key is spent N times.
   A note of about 6,000 words is four to five requests.
 
+### 6.7 Self identity (issue #778)
+
+Nothing in the graph used to say which Person is the account owner, so their name in a note
+scored 0.80 (exact match), under the 0.9 auto-link threshold, and their node was duplicated or
+left detached. The user now chooses it: the per-user preference `graph.self.entityId`
+(default `null`, sparse, PATCH `null` clears it; §10). Settings, Knowledge graph, "You in the
+graph" picks an existing Person, accepts a suggestion (a Person whose label or alias equals the
+profile name, `GET /api/graph/self`; **never applied without the user's click**) or adds a Person
+by hand (`POST /api/graph/self/person`, through `GraphWriteService`, cited "Set by hand").
+
+`GraphSelfService.resolve` turns the stored id into a Person that is live and the user's own,
+following `mergedIntoId` when it was merged; anything else reads as no self.
+
+- **Extraction.** The self Person leads the known entities (so it always has a `k#`), and the
+  user content gains a `# You` section, after the known entities, naming that handle and the
+  label and aliases, telling the model those names are the note's owner. With no self the
+  section and the prompt are exactly as before.
+- **Resolution.** In the `resolution` stage, a Person row whose label or alias, normalized as
+  resolution normalizes (`normalizeAlias`), equals the self's label or an alias is linked to the
+  self entity with `source: 'self'` and a score of at least 0.9 (`selfMatchScore`), without
+  candidate search or adjudication. A speaker-identified Person still wins first.
+- **Read side.** The explorer's slice nodes and overview nodes carry `isSelf: true` on that one
+  Person; the canvas draws it "You · label" with its own ring and always labels it.
+
 ## 7. Entity resolution (`kg.resolve`)
 
 Resolution runs in two places: **inline**, inside `kg.extract` itself, so
@@ -1904,6 +1928,7 @@ graph?: {
   domains?: { work: boolean; personal: boolean };                 // core is never stored (always on); personal default false
   review?: { minConfidence: number;                               // 0–1, default 0.7: the lowest confidence the safe policy accepts (§19.2)
            autoCommitSafeRows?: boolean };                      // default true: commit the safe rows of every note's draft automatically (ADR-0007); a library's own auto_commit overrides it
+  self?: { entityId: string | null };                             // default null: the Person that is the account owner (§6.7); read as preferences.self.entityId
 }
 ```
 

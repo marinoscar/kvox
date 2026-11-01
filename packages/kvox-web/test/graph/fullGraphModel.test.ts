@@ -34,6 +34,13 @@ describe('buildFullGraphState', () => {
     expect(edge).toMatchObject({ type: 'arrow', relationType: 'WORKS_FOR', curvature: 0 });
   });
 
+  it('marks the owner\'s own node from the overview (#778)', () => {
+    const nodes = overviewNodes.map((node) => (node.id === ANA_ID ? { ...node, isSelf: true } : node));
+    const state = buildFullGraphState({ nodes, edges: overviewEdges });
+    expect(state.graph.getNodeAttribute(ANA_ID, 'isSelf')).toBe(true);
+    expect(state.graph.getNodeAttribute(JOE_ID, 'isSelf')).toBeUndefined();
+  });
+
   it('skips an edge whose end is not returned, and a duplicate node', () => {
     const state = buildFullGraphState({
       nodes: [...overviewNodes, overviewNodes[0]],

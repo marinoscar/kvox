@@ -16,6 +16,7 @@ import {
   HEADING_RULES,
   HEADING_SPEAKERS,
   HEADING_TRANSCRIPT,
+  HEADING_YOU,
   ROLE_LINE,
   affiliationRule,
   assembleExtractionPrompt,
@@ -24,6 +25,46 @@ import {
   stakeholderExampleRule,
   subjectBoundaryRule,
 } from './prompt.js';
+
+describe('the # You section (#778)', () => {
+  const OWNER = '0f000000-0000-4000-8000-0000000000aa';
+  const owner = known(OWNER, 'Person', 'Avery Example', { aliases: ['Avery', 'A. Example'] });
+
+  it('is absent when no self entity is set, so the default prompt is unchanged', () => {
+    const { userContent } = assembleExtractionPrompt(makeContext());
+    expect(userContent).not.toContain(HEADING_YOU);
+    expect(makeContext().self).toBeNull();
+  });
+
+  it('names the owner by its known-entity handle, with the label and every alias, after the known entities', () => {
+    const ctx = makeContext({ self: owner });
+    expect(ctx.self).toMatchObject({ id: OWNER, label: 'Avery Example', aliases: ['Avery', 'A. Example'] });
+    const { userContent } = assembleExtractionPrompt(ctx);
+    const handle = ctx.self!.alias;
+    expect(userContent).toContain(`${handle} | Person | Avery Example | aka: Avery, A. Example`);
+    expect(userContent).toContain(HEADING_YOU);
+    expect(userContent).toContain(`The owner of this note is the known entity ${handle}. These names refer to the owner: Avery Example, Avery, A. Example.`);
+    expect(userContent).toContain(`use \`${handle}\` as the ref`);
+    expect(userContent.indexOf(HEADING_KNOWN_ENTITIES)).toBeLessThan(userContent.indexOf(HEADING_YOU));
+    expect(userContent.indexOf(HEADING_YOU)).toBeLessThan(userContent.indexOf(HEADING_SPEAKERS));
+  });
+
+  it('leads the known entities and is not offered twice when a bucket holds it too', () => {
+    const ctx = makeContext({ self: owner });
+    expect(ctx.knownEntities[0].id).toBe(OWNER);
+    expect(ctx.knownEntities[0].alias).toBe('k1');
+    const twice = makeContext({
+      self: owner,
+      knownEntityCandidates: { ...makeInput().knownEntityCandidates, recentlyMentioned: [owner] },
+    });
+    expect(twice.knownEntities.filter((k) => k.id === OWNER)).toHaveLength(1);
+  });
+
+  it('is dropped when the chosen entity is no longer live', () => {
+    const gone = known(OWNER, 'Person', 'Avery Example', { reviewStatus: 'merged', mergedIntoId: IDS.sarah });
+    expect(makeContext({ self: gone }).self).toBeNull();
+  });
+});
 
 describe('assembleExtractionPrompt (#363)', () => {
   it('pins the headings and their order', () => {

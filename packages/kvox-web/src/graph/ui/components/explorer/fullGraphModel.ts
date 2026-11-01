@@ -104,6 +104,7 @@ export function buildFullGraphState(
       image: style.image,
       iconColor: style.iconColor,
       ...(labelled.has(node.id) ? { forceLabel: true } : {}),
+      ...(node.isSelf === true ? { isSelf: true } : {}),
     });
   }
   const muted = edgeStyle(palette).color;

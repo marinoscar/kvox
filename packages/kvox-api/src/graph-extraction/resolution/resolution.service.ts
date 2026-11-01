@@ -10,6 +10,8 @@
 //   and flags for every entity row; never the graph (§8).
 //
 //     speaker-identified Person   → { ref, score: 1, source: 'speaker' }
+//     Person named as the owner   → { ref: self, score ≥ 0.9, source: 'self' } (#778): the label
+//                                   or an alias of the Person the user chose as themselves
 //     top ≥ autoLinkThreshold     → linked, source = the arm that found it
 //     top < newThreshold / none   → new
 //     between                     → adjudication (`graph.adjudicate`) when
@@ -33,7 +35,7 @@
 // ⚠ One log line per run, ids and counts only — never a label or a quote.
 // =============================================================================
 
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 
 import { defaultSpeakerName, parseSpeakerIdentities } from '../../transcripts/index.js';
 import { normalizeForMatch } from '../extraction/extraction-context.js';
@@ -45,7 +47,7 @@ import type {
   ProposalItemFlag,
   ProposalResolution,
 } from '../proposals/proposal-payload.schema.js';
-import { normalizeAlias, rethrowRateLimit } from '../../graph/index.js';
+import { GraphSelfService, mentionsSelf, normalizeAlias, rethrowRateLimit } from '../../graph/index.js';
 import type { AdjudicationPair } from './adjudication-prompt.js';
 import { AdjudicationService, type AdjudicationResult } from './adjudication.service.js';
 import { CandidateService, type CandidateMention } from './candidate.service.js';
@@ -56,6 +58,7 @@ import {
   bandFor,
   rankCandidates,
   scoreCandidate,
+  selfMatchScore,
   sourceForArm,
   type Band,
   type RankedCandidate,
@@ -91,6 +94,8 @@ export interface ResolutionStats {
   adjudicated: number;
   uncertain: number;
   speaker: number;
+  /** Mentions linked to the owner's own node (#778); absent when none. */
+  self?: number;
   vectorArm: string;
   adjudication?: string;
   ms: number;
@@ -174,6 +179,7 @@ export class ResolutionService {
     private readonly features: ContextFeatureService,
     private readonly embedder: GraphEmbedder,
     private readonly adjudication: AdjudicationService,
+    @Optional() private readonly selfIdentity?: GraphSelfService,
   ) {}
 
   // ===========================================================================
@@ -306,6 +312,27 @@ export class ResolutionService {
           flags: [],
         });
         stats.speaker += 1;
+      }
+    }
+
+    // The owner's own node (#778): a Person named by the label or an alias of the Person the user
+    // chose as themselves links to it outright, above the auto-link threshold, whatever else matches.
+    const self = (await this.selfIdentity?.resolve(userId)) ?? null;
+    if (self) {
+      const score = selfMatchScore(thresholds.autoLinkThreshold);
+      for (const row of toResolve) {
+        if (decisions.has(row.id) || row.payload.type !== 'Person' || !mentionsSelf(self, row.payload)) continue;
+        decisions.set(row.id, {
+          resolution: {
+            ref: self.entityId,
+            score,
+            source: 'self',
+            candidates: [{ entityId: self.entityId, label: self.label, type: 'Person', score, signals: ['self'] }],
+            adjudication: null,
+          },
+          flags: [],
+        });
+        stats.self = (stats.self ?? 0) + 1;
       }
     }
 

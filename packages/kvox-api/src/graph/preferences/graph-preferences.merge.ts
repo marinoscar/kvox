@@ -145,6 +145,14 @@ export function mergeGraphPreferences(
     };
   }
 
+  // `self.entityId` (#778): stored only once a person chose one; `null` (or the sub-object `null`) clears it.
+  if (patch.self === null) {
+    delete merged.self;
+  } else if (patch.self !== undefined && patch.self.entityId !== undefined) {
+    if (patch.self.entityId === null) delete merged.self;
+    else merged.self = { entityId: patch.self.entityId };
+  }
+
   // `explorer.lenses` (GIC-17): the whole list is replaced; `null` deletes it (and the empty object).
   if (patch.explorer === null) {
     delete merged.explorer;
