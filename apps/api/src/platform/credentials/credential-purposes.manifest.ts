@@ -12,6 +12,7 @@
 //   push_vapid     platform `PUSH_VAPID_CREDENTIAL_PURPOSE_DEF` (same string as this app's)
 //   storage        platform `STORAGE_CREDENTIAL_PURPOSE_DEF` (#469; the object store's secret
 //                  access key, `storage/default`, entered at /admin/settings/storage)
+//   webhook_signing  the webhooks slice's signing secrets (deployment, organization and user tiers)
 //   telemetry_greptime  the telemetry slice's two GreptimeDB passwords (#471), names
 //                  `reader` and `admin`. The slice exports the purpose string but no
 //                  definition, so the definition is this app's.
@@ -35,11 +36,15 @@
 // =============================================================================
 
 import { AI_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/ai';
-import { registerCredentialPurpose } from '@marinoscar/platform-api/credentials';
+import { registerCredentialPurpose, registerUserCredentialPurpose } from '@marinoscar/platform-api/credentials';
 import { SES_CREDENTIAL_PURPOSE_DEF, SMTP_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/email';
 import { PUSH_VAPID_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/notifications';
 import { STORAGE_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/storage';
 import { TELEMETRY_GREPTIME_CREDENTIAL_PURPOSE } from '@marinoscar/platform-api/telemetry';
+import {
+  WEBHOOK_SIGNING_CREDENTIAL_PURPOSE_DEF,
+  WEBHOOK_SIGNING_USER_CREDENTIAL_PURPOSE_DEF,
+} from '@marinoscar/platform-api/webhooks';
 
 let registered = false;
 
@@ -55,6 +60,10 @@ export function registerKvoxCredentialPurposes(): void {
   // The platform AI slice's deployment and organization provider keys (#473). A user's
   // own key is `user_ai_keys`, never a credential.
   registerCredentialPurpose(AI_CREDENTIAL_PURPOSE_DEF);
+  // Webhook signing secrets (#795): the deployment's and an organization's tier,
+  // then a member's own.
+  registerCredentialPurpose(WEBHOOK_SIGNING_CREDENTIAL_PURPOSE_DEF);
+  registerUserCredentialPurpose(WEBHOOK_SIGNING_USER_CREDENTIAL_PURPOSE_DEF);
   registerCredentialPurpose({
     purpose: TELEMETRY_GREPTIME_CREDENTIAL_PURPOSE,
     owner: 'telemetry',

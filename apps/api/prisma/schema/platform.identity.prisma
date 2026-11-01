@@ -111,6 +111,9 @@ model User {
   // composed from package:storage.prisma
   storageObjects         StorageObject[]         @relation("UserStorageObjects")
 
+  // composed from package:webhooks.prisma
+  webhookEndpoints WebhookEndpoint[] @relation("WebhookEndpointOwner")
+
   // composed from app:kvox.ask.prisma
   // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
   // Ask conversations (issue #376, epic #348). CASCADES — a saved question
@@ -579,6 +582,9 @@ model Organization {
   // composed from package:storage.prisma
   storageObjects      StorageObject[]
   storageObjectChunks StorageObjectChunk[]
+
+  // composed from package:webhooks.prisma
+  webhookEndpoints WebhookEndpoint[]
 
   // composed from app:kvox.transcripts.prisma
   // Back-relations onto the platform's Organization (an `extend model` block holds back-relation fields only).

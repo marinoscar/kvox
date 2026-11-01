@@ -88,6 +88,8 @@ const KVOX_JOB_TYPES = [
   'job.history.purge',
   'nodes.fleet.sweep',
   'nodes.fleet.prune',
+  // node events retention (platform next.20)
+  'nodes.node_events_purge',
   // storage, notifications, backup (platform-owned after #469, #470, #471)
   'storage.cleanup.stale-uploads',
   // this app's storage handler (#480): the Danger Zone's `files` category
@@ -111,6 +113,16 @@ const KVOX_JOB_TYPES = [
   'ai.audio.speech',
   'ai.runs.purge',
   'ai.usage.purge',
+  // platform webhooks slice (#795): registered by `WebhooksModule.forRoot`, strings are the platform's.
+  'webhooks.deliver',
+  'webhooks.fanout',
+  'webhooks.deliveries_purge',
+  // platform alerts slice (#795): registered by `AlertsModule.forRoot`.
+  'alerts.evaluate',
+  'alerts.evaluate_event',
+  'alerts.incidents_purge',
+  // the domain packages' webhook publisher (`@marinoscar/kvox-api/webhooks`, #795)
+  'kvox.webhook_emit',
   // retired by #468 step 6: handlers deleted, labels kept
   'example.echo',
   'example.checksum',

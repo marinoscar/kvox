@@ -30,6 +30,8 @@ import { kvoxNotesUserSettingsSections } from '@marinoscar/kvox-web/notes/ui';
 import { kvoxSearchUserSettingsSections } from '@marinoscar/kvox-web/search/ui';
 import { dangerZoneSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 import { dataExportSettingsPage } from '@marinoscar/platform-web/exports/ui';
+// Webhooks (#795): the per-user card, from the webhooks slice as data.
+import { webhooksUserSettingsSections } from '@marinoscar/platform-web/webhooks/ui';
 // Getting Started (#279, epic #271) — the same icon the admin `Setup` card
 // carries, on purpose: the two are the same idea on two axes (this deployment
 // vs. this account), and a user who has seen one recognises the other.
@@ -202,6 +204,14 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
     // on the same page only for the holder of its own permission, decided by the API.
     label: 'Your data',
     cards: [{ ...dataExportSettingsPage.card, Icon: dataExportSettingsPage.Icon }],
+  },
+  // #795: `Integrations`, APPENDED before the pinned Danger Zone. The caller's own
+  // outbound webhook endpoints. `webhooks:read` is the exact string `/api/webhooks` enforces: an
+  // ORG permission every org role holds by default, but a grant a deployment can withhold, so the
+  // card mirrors it. Writes (`webhooks:write`) are gated inside the page.
+  {
+    label: 'Integrations',
+    cards: [...webhooksUserSettingsSections.integrations],
   },
   {
     // Issue #80. A THIRD GROUP, LAST, AND ON ITS OWN — not a fourth card under
