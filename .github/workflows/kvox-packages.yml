@@ -154,11 +154,17 @@ jobs:
       # broken {@link}), then README, TSDoc tag and entry-point checks.
       - run: npm run check:kvox-package-docs
 
+      # Uploaded from main only, kept 7 days: a 4,400-file upload on every PR
+      # run filled the repository's artifact storage quota, and a full quota
+      # must not fail the docs check itself.
       - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
         with:
           name: kvox-api-reference
           path: packages/*/docs-api/html
           if-no-files-found: error
+          retention-days: 7
 
   single-instance:
     name: Single instance
