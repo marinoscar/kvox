@@ -96,7 +96,14 @@ export function createRecordingKvoxAudit(): RecordingKvoxAudit {
  */
 export interface RecordingKvoxWebhooks extends KvoxWebhooksPort {
   /** Every emit, in order. */
-  readonly emitted: Array<{ eventKey: string; data: unknown; ctx: KvoxWebhookContext }>;
+  readonly emitted: Array<{
+    /** The event key emitted. */
+    eventKey: string;
+    /** The payload passed to the port. */
+    data: unknown;
+    /** The context (user and organization) passed to the port. */
+    ctx: KvoxWebhookContext;
+  }>;
 }
 
 /**

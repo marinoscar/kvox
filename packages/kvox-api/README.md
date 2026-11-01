@@ -135,6 +135,8 @@ What a host implements, binds or registers. The per-port table (web adapter path
 | `KVOX_SETTINGS`, `KvoxSettingsPort` | ports | Versioned system namespaces and per-user namespaces. |
 | `KVOX_SECRETS`, `KvoxSecretsPort` | ports | Provider keys the domain owns; `status` never returns material. |
 | `KVOX_AUDIT`, `KvoxAuditPort` | ports | Audit rows (optional). |
+| `KVOX_WEBHOOKS`, `KvoxWebhooksPort` | ports | Emit a catalog webhook event (identifiers and counts only); the host binds it to its webhook registry. |
+| `KvoxWebhooksModule` | webhooks | The module that registers the `kvox.webhook_emit` job and emits through `KVOX_WEBHOOKS`. |
 | `KVOX_BRAND` | core | The product name and footer line `KvoxPortsModule.forRoot({ brand })` provides to the PDF exporter. |
 | `KvoxPortsModule`, `KvoxPortBindings` | core | The global module a host calls `forRoot` on to bind the ports. |
 | `KVOX_AUTH_PERMISSIONS` | core | The token under which a slice module provides its option-name to permission-string map; `KvoxAuthFromOptions` routes resolve through it. |
