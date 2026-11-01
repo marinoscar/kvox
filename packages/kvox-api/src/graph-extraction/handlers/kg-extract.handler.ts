@@ -255,7 +255,12 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
     });
     const guidance = (guidanceRow?.userGuidance ?? null) as KgExtractGuidance | null;
 
-    const input = await this.loader.load({ userId, noteId, noteVersion: payload.noteVersion, guidance });
+    // #780 / #778: THE ONE PLACE the owner's own Person entity enters an extraction. When #778 lands
+    // the per-user `self` graph preference, read it here (`preferences.self.entityId`) instead of
+    // null; the loader, the context and the Document's PREPARED_FOR edge already honour it.
+    const selfEntityId: string | null = null;
+
+    const input = await this.loader.load({ userId, noteId, noteVersion: payload.noteVersion, guidance, selfEntityId });
     const ctx = buildExtractionContext(input);
 
     // #777: a long note is several chunks, one structured call each, run in order. A short

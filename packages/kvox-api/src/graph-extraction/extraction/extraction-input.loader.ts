@@ -37,6 +37,12 @@ export interface LoadExtractionInput {
   /** The version to extract from. Defaults to the note's current version. */
   noteVersion?: number;
   guidance: UserGuidance | null;
+  /**
+   * The owner's own Person entity (#780). The one caller that reads it from the per-user graph
+   * preferences (`preferences.self.entityId`, #778) is `KgExtractHandler`; the loader only
+   * threads it through. Null or absent: no self entity.
+   */
+  selfEntityId?: string | null;
 }
 
 @Injectable()
@@ -107,7 +113,10 @@ export class ExtractionInputLoader {
     const effectiveSchema = await this.ontology.effectiveSchemaFor(userId);
 
     // Known-entity candidates, per priority bucket (the pure builder merges).
-    const pinnedIds = args.guidance?.pinnedEntityIds ?? [];
+    const selfEntityId = args.selfEntityId ?? null;
+    // The owner is always a candidate for the known-entities list, ahead of any pin, so the
+    // model can link them as an organizer or attendee by id.
+    const pinnedIds = [...new Set([...(selfEntityId ? [selfEntityId] : []), ...(args.guidance?.pinnedEntityIds ?? [])])];
     const speakerPersonIds = [...new Set(links.map((l) => l.toId))];
     const worksFor = speakerPersonIds.length
       ? await this.prisma.kgRelation.findMany({
@@ -185,6 +194,8 @@ export class ExtractionInputLoader {
         recentlyMentioned: pick(recentIds),
       },
       existingMeeting,
+      sourceType: note.sourceType,
+      selfEntityId,
       // The note owner's zone: the meeting date is the local day of the recording.
       timeZone: (await this.zones?.forUser(userId)) ?? 'UTC',
     };
