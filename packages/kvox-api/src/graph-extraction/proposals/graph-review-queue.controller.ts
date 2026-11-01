@@ -13,7 +13,7 @@ import {
 } from '@marinoscar/kvox-contract/graph';
 
 import { ApiDataResponse, CurrentGraphActor, GRAPH_READ_PERMISSION, GRAPH_WRITE_PERMISSION, type GraphActor } from '../../graph/index.js';
-import { KvoxAuth } from '../../core/index.js';
+import { KvoxAuth, TimeZoneHeader } from '../../core/index.js';
 import { ProposalBatchCommitService } from './proposal-batch-commit.service.js';
 
 class CommitBatchBodyDto extends createZodDto(commitBatchSchema) {}
@@ -51,8 +51,9 @@ export class GraphReviewQueueController {
   async queue(
     @Query(new ZodValidationPipe(reviewQueueQuerySchema)) query: ReviewQueueQuery,
     @CurrentGraphActor() user: GraphActor,
+    @TimeZoneHeader() timeZoneHeader?: string,
   ): Promise<ReviewQueueResponse> {
-    return this.batch.reviewQueue(user, query.limit);
+    return this.batch.reviewQueue(user, query.limit, timeZoneHeader);
   }
 
   @Post('proposals/commit-batch')

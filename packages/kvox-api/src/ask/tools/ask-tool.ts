@@ -19,6 +19,7 @@
 // turns it into `ok: false`. Anything else a tool throws is a bug.
 // =============================================================================
 
+import { localDateKey, pickTimeZone } from '../../core/index.js';
 import { z } from 'zod';
 
 import type { GraphActor } from '../../graph/index.js';
@@ -41,6 +42,13 @@ export interface AskToolContext {
   /** The conversation's scope entity, if any (#376); #378 pre-registers it. */
   scopeEntityId: string | null;
   now: Date;
+  /**
+   * The asker's IANA time zone (absent: UTC). Dates the tools derive from INSTANTS
+   * (first/last seen, recording dates, a digest's generation time) are shown as the
+   * asker's local day; calendar values (`occurredAt`, `dueAt`, validity, `asOf`) are
+   * floating dates and stay as stored.
+   */
+  timeZone?: string;
   /**
    * The resolved model's `countTokens` (#360's `AiModelResolution`), used to
    * hold a result to `ASK_TOOL_RESULT_MAX_TOKENS`. Absent → a conservative
@@ -120,6 +128,19 @@ export function isoDate(value: Date | string | null | undefined): string | null 
   if (value === null || value === undefined) return null;
   const d = typeof value === 'string' ? new Date(value) : value;
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+/**
+ * The asker's local `YYYY-MM-DD` of an INSTANT (a timestamp column), or null. Use {@link isoDate}
+ * for a calendar value instead: it is a floating date and must not shift with anybody's zone.
+ */
+export function localInstantDate(
+  value: Date | string | null | undefined,
+  timeZone: string | undefined,
+): string | null {
+  if (value === null || value === undefined) return null;
+  const d = typeof value === 'string' ? new Date(value) : value;
+  return Number.isNaN(d.getTime()) ? null : localDateKey(d, pickTimeZone(timeZone));
 }
 
 /** Whitespace-collapsed and cut to `max` characters, with an ellipsis when cut. */

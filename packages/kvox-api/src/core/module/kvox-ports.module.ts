@@ -20,8 +20,10 @@ import {
   KVOX_PRISMA,
   KVOX_SECRETS,
   KVOX_SETTINGS,
+  KVOX_WEBHOOKS,
   type KvoxAiPort,
   type KvoxAuditPort,
+  type KvoxWebhooksPort,
   type KvoxEventsPort,
   type KvoxIdentityPort,
   type KvoxJobsPort,
@@ -33,6 +35,7 @@ import {
 } from '../../ports/index.js';
 import { DEFAULT_KVOX_BRAND, KVOX_BRAND, type KvoxBrand } from '../brand/kvox-brand.js';
 import { KvoxEventEmitterEvents } from '../events/kvox-event-emitter.events.js';
+import { KvoxTimeZoneService } from '../time-zone/kvox-time-zone.service.js';
 
 /** The optional peer that provides Nest's shared event emitter, loaded on first use. */
 const EVENT_EMITTER_PACKAGE = '@nestjs/event-emitter';
@@ -92,8 +95,8 @@ export type KvoxPortBinding<T> =
   | KvoxFactoryBinding<T>;
 
 /**
- * The bindings of every port. The first eight are required; `events` and `audit`
- * are optional and default to an in-process emitter and a no-op.
+ * The bindings of every port. The first eight are required; `events`, `audit`
+ * and `webhooks` are optional and default to an in-process emitter and two no-ops.
  *
  * @extensionPoint token
  * @stability experimental
@@ -119,6 +122,8 @@ export interface KvoxPortBindings {
   events?: KvoxPortBinding<KvoxEventsPort>;
   /** The audit port, bound to `KVOX_AUDIT`. Optional; defaults to a no-op. */
   audit?: KvoxPortBinding<KvoxAuditPort>;
+  /** The webhook port, bound to `KVOX_WEBHOOKS`. Optional; defaults to a no-op (Desktop binds none). */
+  webhooks?: KvoxPortBinding<KvoxWebhooksPort>;
   /** Modules the bindings' providers need (a binding by `useClass` resolves its dependencies from them). */
   imports?: ModuleMetadata['imports'];
 }
@@ -149,7 +154,18 @@ export const NOOP_KVOX_AUDIT: KvoxAuditPort = Object.freeze({
   },
 });
 
-type RequiredPort = Exclude<keyof KvoxPortBindings, 'events' | 'audit' | 'imports'>;
+/**
+ * A webhook port that publishes nothing: the default when a host binds none.
+ *
+ * @stability experimental
+ */
+export const NOOP_KVOX_WEBHOOKS: KvoxWebhooksPort = Object.freeze({
+  async emit(): Promise<void> {
+    // Intentionally empty.
+  },
+});
+
+type RequiredPort = Exclude<keyof KvoxPortBindings, 'events' | 'audit' | 'webhooks' | 'imports'>;
 
 /** Required ports in the order they are reported, with their tokens. */
 const REQUIRED: ReadonlyArray<readonly [RequiredPort, symbol, string]> = [
@@ -251,7 +267,11 @@ export class KvoxPortsModule {
       isBinding(bindings.audit)
         ? provider(KVOX_AUDIT, bindings.audit as KvoxPortBinding<unknown>)
         : { provide: KVOX_AUDIT, useValue: NOOP_KVOX_AUDIT },
+      isBinding(bindings.webhooks)
+        ? provider(KVOX_WEBHOOKS, bindings.webhooks as KvoxPortBinding<unknown>)
+        : { provide: KVOX_WEBHOOKS, useValue: NOOP_KVOX_WEBHOOKS },
       { provide: KVOX_BRAND, useValue: options.brand ?? DEFAULT_KVOX_BRAND },
+      KvoxTimeZoneService,
     );
 
     return {
@@ -259,7 +279,7 @@ export class KvoxPortsModule {
       global: true,
       imports: bindings.imports ?? [],
       providers,
-      exports: [...REQUIRED.map(([, token]) => token), KVOX_EVENTS, KVOX_AUDIT, KVOX_BRAND],
+      exports: [...REQUIRED.map(([, token]) => token), KVOX_EVENTS, KVOX_AUDIT, KVOX_WEBHOOKS, KVOX_BRAND, KvoxTimeZoneService],
     };
   }
 }

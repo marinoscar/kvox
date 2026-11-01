@@ -83,14 +83,17 @@ function build() {
     }),
   };
 
+  const zones = { forUser: jest.fn().mockResolvedValue('Asia/Tokyo') };
+
   const handler = new TranscriptExportHandler(
     { registerHandler: jest.fn() } as unknown as KvoxJobsPort,
     prisma as unknown as KvoxTranscriptsDb,
     exports as unknown as TranscriptExportService,
     objects as unknown as TranscriptObjectsService,
+    zones as never,
   );
 
-  return { handler, prisma, exports, objects, registry, written };
+  return { handler, prisma, exports, objects, registry, written, zones };
 }
 
 describe('TranscriptExportHandler', () => {
@@ -107,6 +110,21 @@ describe('TranscriptExportHandler', () => {
 
     expect(registry.registerHandler).toHaveBeenCalledWith(handler);
     expect(handler.type).toBe('transcript.export');
+  });
+
+  it('builds the document in the zone the request was made in, else the requester\'s own, for a format that prints dates', async () => {
+    const { handler, exports, prisma, zones } = build();
+    const pdf = { render: jest.fn(async (_d: unknown, _o: unknown, out: PassThrough) => void out.end('pdf')), extension: 'pdf', mimeType: 'application/pdf', localizesDates: true };
+    exports.exporterFor.mockReturnValue(pdf as never);
+    prisma.transcriptExport.findUnique.mockResolvedValue(exportRow({ format: 'pdf' }));
+
+    await handler.process({ id: 'job-1', payload: { exportId: EXPORT_ID, timeZone: 'America/Chicago' } } as unknown as KvoxJob);
+    expect(exports.buildDocument).toHaveBeenLastCalledWith(expect.anything(), 'America/Chicago');
+    expect(zones.forUser).not.toHaveBeenCalled();
+
+    await handler.process({ id: 'job-2', payload: { exportId: EXPORT_ID } } as unknown as KvoxJob);
+    expect(zones.forUser).toHaveBeenCalledWith('user-1');
+    expect(exports.buildDocument).toHaveBeenLastCalledWith(expect.anything(), 'Asia/Tokyo');
   });
 
   it('declares a five-minute ceiling and two attempts', () => {

@@ -57,6 +57,7 @@ describe('NoteExportHandler', () => {
     filenameFor: jest.Mock;
   };
   let objects: { putStream: jest.Mock };
+  let zones: { forUser: jest.Mock };
   let handler: NoteExportHandler;
   let render: jest.Mock;
   let uploaded: { id: string; size: number };
@@ -95,11 +96,13 @@ describe('NoteExportHandler', () => {
       }),
     };
 
+    zones = { forUser: jest.fn().mockResolvedValue('Asia/Tokyo') };
     handler = new NoteExportHandler(
       { registerHandler: jest.fn() } as unknown as KvoxJobsPort,
       prisma as unknown as KvoxNotesDb,
       exports as unknown as NoteExportService,
       objects as unknown as NoteObjectsService,
+      zones as never,
     );
   });
 
@@ -130,6 +133,17 @@ describe('NoteExportHandler', () => {
       where: { id: 'export-1' },
       data: { status: 'ready', objectId: 'object-1', error: null },
     });
+  });
+
+  it('builds the document in the zone the request was made in, else the requester\'s own', async () => {
+    await handler.process({ id: 'job-1', payload: { exportId: 'export-1', timeZone: 'America/Chicago' } } as unknown as Job);
+    expect(exports.buildDocument).toHaveBeenLastCalledWith(expect.anything(), 'America/Chicago');
+    expect(zones.forUser).not.toHaveBeenCalled();
+
+    // A job queued before the zone rode in the payload (or with an unusable one) asks for the requester's.
+    await handler.process({ id: 'job-3', payload: { exportId: 'export-1', timeZone: 'Not/AZone' } } as unknown as Job);
+    expect(zones.forUser).toHaveBeenCalledWith('owner-1');
+    expect(exports.buildDocument).toHaveBeenLastCalledWith(expect.anything(), 'Asia/Tokyo');
   });
 
   it('does nothing for a job naming no export, or an export that is gone', async () => {

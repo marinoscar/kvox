@@ -10,11 +10,11 @@ const write = (k: string, props: unknown) => validateProps(on, k, props, { relat
 
 describe('stakeholder and market relations (#663)', () => {
   it('declares all eight with the endpoints of the issue', () => {
-    expect(rel('INVOLVED_IN')).toMatchObject({ from: ['Person'], to: ['Project'], temporal: true, exclusive: 'none' });
+    expect(rel('INVOLVED_IN')).toMatchObject({ from: ['Person'], to: ['Project', 'Opportunity'], temporal: true, exclusive: 'none' });
     expect(rel('USES')).toMatchObject({ from: ['Organization', 'Project'], to: ['Product'], temporal: true });
     expect(rel('OFFERED_BY')).toMatchObject({ from: ['Product'], to: ['Organization'], exclusive: 'soft', exclusiveScope: 'from' });
     expect(rel('CUSTOMER_OF')).toMatchObject({ from: ['Organization'], to: ['Organization'], temporal: true });
-    expect(rel('CONCERNS')).toMatchObject({ from: ['Project'], to: ['Product', 'Topic'], temporal: false });
+    expect(rel('CONCERNS')).toMatchObject({ from: ['Project', 'Opportunity'], to: ['Product', 'Topic', 'Project'], temporal: false });
     expect(rel('KNOWS_ABOUT')).toMatchObject({ from: ['Person'], to: ['Topic', 'Product'], temporal: false });
   });
 

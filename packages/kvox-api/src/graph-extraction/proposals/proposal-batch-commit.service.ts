@@ -21,7 +21,7 @@
 // ⚠ Logs and audit meta carry ids and counts only.
 // =============================================================================
 
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import type {
   CommitBatchDto,
   CommitBatchResponse,
@@ -33,7 +33,7 @@ import type {
 import { GraphAccessService, GraphOntologyService, GraphPreferencesService } from '../../graph/index.js';
 import type { GraphActor, InputJsonValue, KvoxGraphDb } from '../../graph/index.js';
 import { KVOX_AUDIT, KVOX_PRISMA, type KvoxAuditPort } from '../../ports/index.js';
-import { Prisma } from '../../core/index.js';
+import { KvoxTimeZoneService, Prisma, localDateKey } from '../../core/index.js';
 import { reviewOnlyTypes } from '../extraction/precheck.js';
 import { ProposalCommitService } from './proposal-commit.service.js';
 import { ProposalsService } from './proposals.service.js';
@@ -125,6 +125,7 @@ export class ProposalBatchCommitService {
     private readonly ontology: GraphOntologyService,
     private readonly access: GraphAccessService,
     @Inject(KVOX_AUDIT) private readonly audit: KvoxAuditPort,
+    @Optional() private readonly zones?: KvoxTimeZoneService,
   ) {}
 
   // ===========================================================================
@@ -132,10 +133,15 @@ export class ProposalBatchCommitService {
   // ===========================================================================
 
   /** The caller's open drafts, grouped by library / batch, with safe vs waiting counts. */
-  async reviewQueue(user: GraphActor, limit: number = BATCH_MAX_PROPOSALS): Promise<ReviewQueueResponse> {
+  async reviewQueue(
+    user: GraphActor,
+    limit: number = BATCH_MAX_PROPOSALS,
+    timeZoneHeader?: string,
+  ): Promise<ReviewQueueResponse> {
     const [prefs, schema] = await Promise.all([this.prefs.get(user.id), this.ontology.effectiveSchemaFor(user.id)]);
     const minConfidence = prefs.review.minConfidence;
     const reviewOnly = reviewOnlyTypes(schema);
+    const timeZone = (await this.zones?.forRequest(user.id, timeZoneHeader)) ?? 'UTC';
 
     const drafts = await this.prisma.kgProposal.findMany({
       where: { ownerId: user.id, status: 'draft', kind: 'extraction' },
@@ -193,9 +199,20 @@ export class ProposalBatchCommitService {
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
       const key = batch
         ? batch.libraryId
-          ? { type: 'library' as const, id: batch.libraryId, label: libraryName.get(batch.libraryId) ?? 'Library' }
-          : { type: 'batch' as const, id: batch.id, label: `Import ${batch.createdAt.toISOString().slice(0, 10)}` }
-        : { type: 'other' as const, id: null, label: 'Individual notes' };
+          ? {
+              type: 'library' as const,
+              id: batch.libraryId,
+              label: libraryName.get(batch.libraryId) ?? 'Library',
+              createdAt: batch.createdAt.toISOString(),
+            }
+          : {
+              type: 'batch' as const,
+              id: batch.id,
+              // The day the batch was imported, in the requester's zone.
+              label: `Import ${localDateKey(batch.createdAt, timeZone)}`,
+              createdAt: batch.createdAt.toISOString(),
+            }
+        : { type: 'other' as const, id: null, label: 'Individual notes', createdAt: null };
       const gk = `${key.type}:${key.id ?? ''}`;
       let group = groups.get(gk);
       if (!group) {

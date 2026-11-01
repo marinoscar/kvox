@@ -228,6 +228,24 @@ describe('PdfTranscriptExporter', () => {
     }
   });
 
+  it("dates the cover by the RECORDING, in the requester's time zone", async () => {
+    // Recorded 2026-10-27T02:30Z: still the evening of the 26th in Chicago, already the 27th in Tokyo.
+    const recordedAt = new Date('2026-10-27T02:30:00.000Z');
+    const coverDate = async (timeZone?: string): Promise<string | undefined> => {
+      const capture = captureText();
+      try {
+        await renderToBuffer(exporter(), fixtureDocument({ recordedAt, ...(timeZone ? { timeZone } : {}) }));
+        return capture.calls.find((call) => /^\d{4}-\d{2}-\d{2}\s/.test(call))?.slice(0, 10);
+      } finally {
+        capture.restore();
+      }
+    };
+
+    expect(await coverDate('America/Chicago')).toBe('2026-10-26');
+    expect(await coverDate('Asia/Tokyo')).toBe('2026-10-27');
+    expect(await coverDate()).toBe('2026-10-27');
+  });
+
   it('omits the cover block when asked, and still renders the body', async () => {
     const capture = captureText();
 

@@ -366,7 +366,8 @@ one of these three moments.
 
 ### 5.1 Entity types
 
-Nine entity types (`Topic` and `Product` arrived in 1.3.0), one event anchor
+Eleven entity types (`Topic` and `Product` arrived in 1.3.0, `Opportunity` and
+`Document` in 1.4.0), one event anchor
 and two item-backed fact types (`Claim`, `PersonFact`) plus the `Commitment`,
 `Decision` and `Risk` item types, each with a one-line disambiguation rule against its
 nearest neighbour, because the failure mode a narrow ontology exists to
@@ -411,7 +412,35 @@ an uploaded document — still gets a `Meeting`: its date is whatever the user
 supplied in Context if that names one, else the note's own `createdAt`, and
 either way `Meeting.dateSource` records which (`'stated' | 'note_created_at'`)
 so a later "why does this say September when the call was in July" question
-has a straight answer rather than a silent guess. *Domain:* `core` (§17.2).
+has a straight answer rather than a silent guess. Ontology 1.4.0 adds two
+attributes, `occurredOn` (date, only if the source states it) and
+`meetingKind` (client, internal, partner, other). The system still creates the
+one `Meeting` per transcript or single note, so the type stays
+`extractable: false` and is not offered to the model. A host that extracts a
+document recording several meetings opts in per run with
+`buildOfferedSchema(schema, guidance, { proposeTypes: ['Meeting'] })` (or
+`ExtractionInput.proposeTypes`); nothing sets it yet, the extractor change is
+#780. *Domain:* `core` (§17.2).
+
+**Opportunity** — a potential piece of work or sale being pursued with a
+client that has not started yet: "the Org Alpha analytics engagement," "the
+Product X renewal." *Negative:* a `Project` is work under way or approved, an
+`Opportunity` is the pursuit before that (when it is won and work starts, the
+delivery effort is a `Project` and the `Opportunity` stays as the record of
+the pursuit); a wish nobody pursues with a client is a `Topic` or a `Claim`;
+the client is an `Organization` linked by `WITH_CLIENT`, never folded into the
+label. Attributes (all extractable, only when stated): `stage` (identified,
+shaping, proposed, won, lost, dormant), `valueText` (text), `confidence` (low,
+med, high) and `timing` (text). Aligned to `schema:Offer`. *Domain:* `work`
+(§17.2), so it disappears with the domain. Added in ontology 1.4.0.
+
+**Document** — a document shown, shared or recorded in a meeting (a deck, a
+proposal). Created by the system, never proposed by extraction
+(`extractable: false`); a document merely mentioned in conversation is not a
+row. Attributes (system-set): `title`, `preparedOn` (date), `classification`
+(text). `RECORDED_IN` (Meeting → Document) and `PREPARED_FOR` (Document →
+Person) are likewise system-written. Aligned to `schema:DigitalDocument`.
+*Domain:* `core` (§17.2). Added in ontology 1.4.0.
 
 **Commitment** — a task with an *owner* and, optionally, a *counterparty* and
 a *due date*, stated or clearly implied by the source text. `status`:
@@ -466,7 +495,11 @@ decision nor a commitment: "Kappa's CIO is leaving in March," "the budget was
 cut 20%," "the pilot moved to Q2." Properties: `subject` (the entity it is
 about), `statement`, `occurred_at`, `superseded_by`. This is the unit of
 "what's changed" — §9's entity brief is, structurally, mostly a query over
-`Claim`s newer than the reader's last visit. *Domain:* `core` (§17.2).
+`Claim`s newer than the reader's last visit. Ontology 1.4.0 adds `claimKind`
+(fact, metric, buying_signal, warning_sign, pain_point, priority; a plain
+statement is `fact`), `value` (text, copied as written, for a metric) and
+`unit` (text), all extractable and only when the source makes them clear.
+*Domain:* `core` (§17.2).
 
 **PersonFact** — a `Claim` whose `subject` is a `Person` and whose content is
 about that person as an individual rather than about their work: an
@@ -498,22 +531,28 @@ than no relation at all.
 
 | Relationship | From → To | Notes |
 |---|---|---|
-| `ATTENDED` | Person → Meeting | |
+| `ATTENDED` | Person → Meeting | Optional prop `attendance` (attended, invited, copied); omitted means attended (1.4.0) |
+| `ORGANIZED` | Person → Meeting | Non-temporal; who convened or hosted the meeting; `schema:organizer` (1.4.0) |
 | `WORKS_FOR` | Person → Organization | Temporal (§5.4); normally exclusive (soft) |
 | `HAS_ROLE` | Person → Organization | Props: `{ title, businessUnit? }` (`businessUnit` optional, #440 / ontology 1.2.0); temporal (§5.4), one edge per role period; normally exclusive (soft). Identity is `title` plus `businessUnit`, the latter declared `identity: true` (#440): a relation prop with that flag takes part in identity like a `required` one, except a null/absent value on either side matches anything — so `{VP, Supply Chain}` → `{VP, Finance}` is a new role that closes the old one, while `{VP}` and `{VP, Supply Chain}` are one fact (the evidence attaches; a unit the stored edge lacks is not written onto it) |
 | `REPORTS_TO` | Person → Person | Temporal (§5.4); normally exclusive (soft) |
 | `IDENTIFIED_AS` | Speaker → Person | The one relation whose source is not a `kg_entities` row at all — see §5.1 |
 | `DISCUSSED` | Meeting → Project \| Topic \| Product \| Organization | Widened in ontology 1.3.0; same key |
 | `ABOUT` | Claim \| Decision \| Commitment \| Risk → Person \| Organization \| Project \| Product \| Topic | Product and Topic added in 1.3.0; Risk as a source in 1.3.0 |
-| `PART_OF` | Project → Organization; Meeting → Project; Topic → Project | Two endpoints pairs sharing one relation type, disambiguated by the endpoint types actually present |
+| `PART_OF` | Project → Organization; Meeting → Project; Topic → Project; Organization → Organization (1.4.0) | Endpoint pairs sharing one relation type, disambiguated by the endpoint types actually present. The organization pair is a sub-unit; an organization is never part of itself (rejected by extraction validation and by `GraphWriteService`) |
 | `BROADER` | Topic → Topic | Non-temporal, no exclusivity; `skos:broader`. Rolls a narrower topic up into a theme (1.3.0) |
-| `INVOLVED_IN` | Person → Project | Temporal; props `{ role (required), stance? }`. `role`: sponsor, owner, lead, contributor, stakeholder, approver, end_user, advisor. `stance`: champion, supportive, neutral, skeptical, resistant, only when stated or unmistakably implied, never from tone (1.3.0) |
-| `USES` | Organization \| Project → Product | Temporal; prop `stage?` (evaluating, piloting, rolling_out, adopted, retired). Exclusive (soft) within one source and product, with `stage` declared `identity: true`: a stage change (piloting → adopted) is a new fact that closes the earlier row through the §5.4 closing rule (1.3.0) |
+| `INVOLVED_IN` | Person → Project \| Opportunity | Temporal; props `{ role (required), stance? }`. `role`: sponsor, owner, lead, contributor, stakeholder, approver, end_user, advisor, plus decision_maker, influencer, evaluator, account_lead (1.4.0; Opportunity target also 1.4.0). `stance`: champion, supportive, neutral, skeptical, resistant, only when stated or unmistakably implied, never from tone (1.3.0) |
+| `USES` | Organization \| Project → Product | Temporal; props `stage?` (evaluating, piloting, rolling_out, adopted, retired) and `scale?` (text, 1.4.0, not part of identity). Exclusive (soft) within one source and product, with `stage` declared `identity: true`: a stage change (piloting → adopted) is a new fact that closes the earlier row through the §5.4 closing rule (1.3.0) |
 | `OFFERED_BY` | Product → Organization | The vendor; temporal and exclusive (soft) per product, so a change of vendor closes the old edge (1.3.0). `schema:manufacturer` |
 | `CUSTOMER_OF` | Organization → Organization | Temporal, directed (customer first) (1.3.0) |
 | `PARTNER_OF` | Organization → Organization | Temporal, **symmetric**: stored once, deduplicated in both directions like `FRIEND_OF` (1.3.0) |
 | `COMPETITOR_OF` | Organization → Organization | Temporal, **symmetric** (1.3.0) |
-| `CONCERNS` | Project → Product \| Topic | Non-temporal; what a project is about (1.3.0) |
+| `CONCERNS` | Project → Product \| Topic; Opportunity → Project \| Product \| Topic (1.4.0) | Non-temporal; what a project or opportunity is about (1.3.0). Declared as explicit pairs, so Project → Project is not allowed |
+| `WITH_CLIENT` | Opportunity → Organization | Temporal, exclusive (soft) per opportunity: the current client (1.4.0) |
+| `PURSUED_BY` | Opportunity → Organization | Temporal, not exclusive: the organization(s) going after it (1.4.0) |
+| `COMPETING_FOR` | Organization → Opportunity | Temporal, not exclusive: a rival bidder (1.4.0) |
+| `RECORDED_IN` | Meeting → Document | Non-temporal, system-written, never extracted (1.4.0) |
+| `PREPARED_FOR` | Document → Person | Non-temporal, system-written, never extracted (1.4.0) |
 | `KNOWS_ABOUT` | Person → Topic \| Product | Non-temporal; prop `level?` (aware, practitioner, expert); `schema:knowsAbout`. The personal `INTERESTED_IN` stays separate (1.3.0) |
 | `DECIDED_IN` | Decision → Meeting | |
 | `CREATED_IN` | Commitment → Meeting | |
@@ -965,7 +1004,7 @@ call returns, so a failed extraction still records what was asked, and a
 reviewer questioning why a particular item was (or wasn't) proposed can see
 the exact context the model reasoned from.
 
-**Job execution profile:** `{ maxRuntimeMs: 20 * 60_000, maxAttempts: 1 }`
+**Job execution profile:** `{ maxRuntimeMs: 96 * 60_000 (12 chunks x 8 min, §6.6), maxAttempts: 1 }`
 (raised from 10 minutes by #435 to make room for the one truncation re-ask
 below). One attempt, for the identical reason `note.generate` carries `maxAttempts:
 1` (`docs/specs/notes.md` §1.3 decision 3, restated by
@@ -1109,6 +1148,51 @@ full. #435 fixes all three:
   included**, into `stats.usage`: a truncated answer still spent the user's
   tokens and is billed all the same, so recording it as zero (the pre-#435
   behaviour) understated what the run actually cost.
+
+### 6.6 Long notes: chunked extraction (issue #777)
+
+One answer can carry only so many rows (§6, row caps), so a long note, above all an imported
+document (a note whose body is the whole document), is read in **chunks**, inside the same
+`kg.extract` job. The code is `extraction/chunker.ts`, `chunked-run.ts`, `merge-chunks.ts` and
+`chunk-resume.ts`, all pure except the handler.
+
+- **Threshold and split.** A body of at most 3,000 tokens (the model's own `countTokens`) is one
+  chunk covering the whole body: its request is the single-call request. A longer body is split on
+  Markdown heading boundaries first, then blank-line paragraphs, then lines (a table row or a list
+  item with its continuation lines is never cut), then sentences, and packed up to about 2,000
+  tokens per chunk. Fenced code blocks are not split at headings or paragraphs. A note that came
+  from a transcript is never chunked (its body is a summary and its lines are cited by id).
+- **Bound.** At most 12 chunks. A longer body gets larger chunks, never more calls, and a chunk the
+  model's window cannot hold is refused as before (per chunk). `profile.maxRuntimeMs` is
+  12 x 8 minutes = 96 minutes (each chunk keeps room for its one truncation re-ask); `maxAttempts`
+  stays 1.
+- **Map.** One `generateStructured` call per chunk, sequential. Row caps apply per chunk (§6, row
+  caps), and a truncation re-ask halves the caps for that chunk only. The prompt adds `Part i of n
+  of one note; propose only what this part supports.` and, from the second part on, the previous
+  part's last paragraph marked `[context only — do not cite]`. The known-entities list, the meeting
+  header and the Context are shared by every chunk. The role line asks for everything the text
+  supports with a citation; rule 2 (never propose a row you cannot cite) is unchanged.
+- **Citations.** Each chunk is validated against its own text, so a quote is found only if it is in
+  that part (the lead-in is not citable). A located note quote's offsets are shifted by the chunk's
+  start, so evidence spans are absolute offsets into the note version's body.
+- **Reduce.** Entities merge by type and normalized label or alias (the resolution stage's
+  `normalizedNames`; a re-stated known `k#` entity merges by ref), with evidence and aliases
+  unioned; local refs are renumbered and relations and items re-pointed; identical relations (type,
+  endpoints, dates, props) and items (kind, statement hash, subject) are one row with unioned
+  evidence; a relation whose endpoints merged into one entity is dropped. Validation counts are
+  summed. The deterministic Meeting row is added once, over the whole note. Resolution and the other
+  stages run on the merged rows as before.
+- **Resume.** After each chunk but the last, the validated outcomes so far are saved in
+  `kg_proposals.commit_log` (internal, never serialized, empty until a commit) with the usage so
+  far; a job the queue runs again (a deferred rate limit, a reaped lease) continues after the last
+  completed chunk when the note version and the split are the same. The state is cleared on
+  `draft` and on `failed`. `stats.chunks = { total, completed }` is the client-visible progress.
+  No schema change.
+- **Estimate.** `requests` is the number of chunks; `inputTokens` sums the chunk prompts; `fits`
+  needs every chunk to fit.
+- **Cost.** Input tokens grow with the note (each chunk repeats the system prompt, the known
+  entities and a lead-in of at most 800 characters), and the user's own key is spent N times.
+  A note of about 6,000 words is four to five requests.
 
 ## 7. Entity resolution (`kg.resolve`)
 
@@ -1843,7 +1927,7 @@ directory:
 
 | Job type | Profile | Node-eligible? | Reasoning |
 |---|---|---|---|
-| `kg.extract` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §6 — user's own AI key, `maxAttempts: 1` for the identical reason `note.generate` carries it; raised from 10 to 20 minutes by #435 to make room for the one truncation re-ask |
+| `kg.extract` | `{ maxRuntimeMs: 96m, maxAttempts: 1 }` | **No** | §6 — user's own AI key, `maxAttempts: 1` for the identical reason `note.generate` carries it; raised from 10 to 20 minutes by #435 to make room for the one truncation re-ask |
 | `kg.resolve` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §7 — same credential reasoning; a bulk re-scan spends the same per-user key |
 | `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — **built, issue #372** (`packages/kvox-api/src/graph/brief/entity-digest.handler.ts`, not `graph/handlers/` — the same "extraction lives beside its module" deviation `kg.extract` already takes); same credential reasoning; deduplicated per entity |
 | `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Embeds through `KvoxAi.embed` (feature `graph_embed`, via `GraphEmbedder`) on the user's own key, resolved by the platform; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
@@ -2614,11 +2698,24 @@ line this document draws for v1.
 
 ### 17.4 Versioning and maintenance
 
-**Current version and changelog.** The definition is at 1.3.0
-(`packages/kvox-contract/src/ontology/version.ts`, `CHANGELOG`): `Topic`,
-`Product`, the `Risk` item type, `BROADER`, `DISCUSSED`/`PART_OF`/`ABOUT`
-widening and the stakeholder and market relations (§5.1, §5.2). It is a minor
-bump, so `ONTOLOGY_MIGRATIONS` stays empty.
+**Current version and changelog.** The definition is at 1.4.0
+(`packages/kvox-contract/src/ontology/version.ts`, `CHANGELOG`): `Opportunity`
+and `Document`, `Meeting.occurredOn`/`meetingKind`, `Claim.claimKind`/`value`/`unit`,
+`ORGANIZED`, `WITH_CLIENT`, `PURSUED_BY`, `COMPETING_FOR`, `RECORDED_IN`,
+`PREPARED_FOR`, `ATTENDED.attendance`, `USES.scale`, the new `INVOLVED_IN`
+target and roles, and `PART_OF` between organizations (§5.1, §5.2). 1.3.0
+before it added `Topic`, `Product`, the `Risk` item type, `BROADER`, the
+`DISCUSSED`/`PART_OF`/`ABOUT` widening and the stakeholder and market
+relations. Both are minor bumps, so `ONTOLOGY_MIGRATIONS` stays empty.
+
+**Deferred in 1.4.0 (#776).** `STATED_BY` (Claim → Person) is not declared:
+`kg_relations.from_id` and `to_id` reference `kg_entities`, and a `Claim` is a
+`kg_items` row, so an item cannot be a relation endpoint. The only way an
+item points at an entity is a dedicated `kg_items` column (`subject_id`,
+`owner_person_id`, `counterparty_id`, `meeting_id`, the `item_column`
+representation), so `STATED_BY` needs a new column and a `@marinoscar/kvox-db`
+migration. The extractor opt-in for `Meeting` and the gold labels for the new
+types follow in #780.
 
 **Semver on the definition file.** Every graph row — `kg_entities`,
 `kg_relations`, `kg_items` — carries the `ontology_version` it was written

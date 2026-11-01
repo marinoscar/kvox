@@ -10,6 +10,7 @@ import { join } from 'node:path';
 
 import { buildPermissionCatalog, catalogGrants, permissionRegistry, roleRegistry, userOwnedModelRegistry } from '@marinoscar/platform-api/core';
 import '@marinoscar/platform-api/ai/testing';
+import '@marinoscar/platform-api/alerts/testing';
 import '@marinoscar/platform-api/credentials/testing';
 import '@marinoscar/platform-api/db-backup/testing';
 import '@marinoscar/platform-api/doctor/testing';
@@ -25,6 +26,8 @@ import '@marinoscar/platform-api/sharing/testing';
 import '@marinoscar/platform-api/storage/testing';
 import '@marinoscar/platform-api/telemetry/testing';
 import '@marinoscar/platform-api/user-data/testing';
+import '@marinoscar/platform-api/webhooks/testing';
+import { RAW_SQL_INDEXES } from '@marinoscar/platform-db';
 import type { DoctorConformanceFixture } from '@marinoscar/platform-api/doctor/testing';
 import { discoverControllers } from '@marinoscar/platform-api/identity/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
@@ -328,6 +331,12 @@ runPlatformConformance({
     // MaintenanceGuard is the only global guard; the app registers none of its own.
     host: { rootModule: AppModule },
     doctorReadOnly: { fixture: doctorConformanceFixture },
+    // The webhooks slice (#795): exact route permissions, signing and rotation, the egress guard,
+    // secrecy, nothing sent inline, and visibility across owners and organizations.
+    webhooks: {},
+    // The alerts slice (#795): routes, kinds, starter rules, the one-open-incident index,
+    // idempotent evaluation, dispatch after the committed write.
+    alerts: { rawSqlIndexNames: RAW_SQL_INDEXES.map((index) => index.name) },
     settings: {
       permissions: permissionRegistry.list(),
       catalog: {

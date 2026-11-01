@@ -14,6 +14,7 @@ Status: experimental.
 - **AI helpers**: `aiProviderThrottleKey(userId)` (one bucket per user, never a shared one), `TRANSCRIPTION_THROTTLE_KEY`, and the token budget (`computeTokenBudget`, `outputTokensForPrompt`, `budgetRefusalMessage`, `assertWithinBudget`, which refuses with numbers and throws `KvoxAiBudgetError`, and never truncates).
 - **Streaming**: `StreamFlusher` (about 250 ms or N characters, whichever first) and the offset-resumable SSE helpers (`KvoxStreamCursor`, `resolveStreamOffset`, `parseLastEventId`, the frame builders) and `KvoxRowStreamPoller`, the poll loop the note and Ask streams share (a durable row, read by primary key every interval, tailed as SSE; a push is rejected because the job may run on another replica).
 - **HTTP**: `versionETag` and `matchesETag`.
+- **Time zones**: every calendar day the domain derives from an instant or from "now" follows the user's zone, never the server's. `KvoxTimeZoneService` (provided globally by `KvoxPortsModule`) resolves it: the settings port's `readUserTimeZone(userId)` (the stored profile zone; Desktop's device zone), then the request's `X-Time-Zone` header (the `@TimeZoneHeader()` parameter decorator), then UTC (`forRequest(userId, header)`; `forUser(userId)` outside a request). The pure helpers (`localDateKey`, `localDayStart`, `localTimeOfDay`, `pickTimeZone`, `instantFromDayOrIso`, `dayKeyToFloatingDate`) sit on `@marinoscar/platform-contract/timezone`, the one platform import an API slice may make. **Calendar-only values** (valid ranges, an item's `occurred_at` / `due_at`, date attributes, a bare `as_of`) are floating dates at UTC midnight and are never converted; a bare `since` / `from` / `to` over a TIMESTAMP column is local midnight in the requester's zone (`instantBoundOr400` in the graph read layer).
 - **Events**: `KvoxEventEmitterEvents`.
 - **Database**: `Prisma.sql`, `Prisma.raw`, `Prisma.join` from `@prisma/client-runtime-utils`, loaded on first use.
 
@@ -23,7 +24,7 @@ Status: experimental.
 
 ## Peer dependencies
 
-`@marinoscar/kvox-contract`, `@nestjs/common`, `@nestjs/core`, `reflect-metadata`, `rxjs` and `zod` (the slice's own and `ports`'), all required. Three peers are optional and loaded lazily, so importing the slice never needs them: `@nestjs/event-emitter` (the shared emitter), `@nestjs/swagger` (the bearer-auth marker) and `@prisma/client-runtime-utils` (the `Prisma` helper).
+`@marinoscar/kvox-contract`, `@marinoscar/platform-contract` (its `timezone` subpath only), `@nestjs/common`, `@nestjs/core`, `reflect-metadata`, `rxjs` and `zod` (the slice's own and `ports`'), all required. Three peers are optional and loaded lazily, so importing the slice never needs them: `@nestjs/event-emitter` (the shared emitter), `@nestjs/swagger` (the bearer-auth marker) and `@prisma/client-runtime-utils` (the `Prisma` helper).
 
 ## Configuration
 

@@ -117,7 +117,7 @@ describe('KgExtractHandler (#363)', () => {
   it('declares its profile, and is server-only', () => {
     const { handler } = harness();
     expect(handler.type).toBe('kg.extract');
-    expect(handler.profile).toEqual({ maxRuntimeMs: 1_200_000, maxAttempts: 1 });
+    expect(handler.profile).toEqual({ maxRuntimeMs: 5_760_000, maxAttempts: 1 });
     expect((handler as unknown as Record<string, unknown>).nodeResultSchema).toBeUndefined();
     expect((handler as unknown as Record<string, unknown>).persistNodeResult).toBeUndefined();
   });

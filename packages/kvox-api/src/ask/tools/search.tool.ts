@@ -22,7 +22,7 @@ import { SEARCH_TRANSCRIPT_VISIBILITY, SearchService, type SearchTranscriptVisib
 import type { KvoxAskDb } from '../data/ask-db.js';
 import {
   clip,
-  isoDate,
+  localInstantDate,
   jsonNullableEnum,
   jsonNullableInteger,
   jsonString,
@@ -113,7 +113,7 @@ export class SearchTool implements AskTool<SearchToolInput> {
         kind,
         title: r.title,
         excerpt: first ? clip(snippetToText(first.html), QUOTE_MAX_CHARS) : null,
-        at: isoDate(dates.get(`${kind}:${r.id}`) ?? r.updatedAt),
+        at: localInstantDate(dates.get(`${kind}:${r.id}`) ?? r.updatedAt, ctx.timeZone),
         startMs,
       };
     });

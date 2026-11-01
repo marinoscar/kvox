@@ -475,6 +475,36 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
       },
     ],
   },
+  {
+    // The webhooks slice (#795): three tiers of the same routes.
+    name: 'Webhooks',
+    tags: [
+      {
+        name: 'Webhooks',
+        description:
+          'Signed outbound webhooks. `/api/webhooks` (a member\'s own endpoints; `webhooks:*`), `/api/org/webhooks` ' +
+          '(the organization\'s; `org_webhooks:*`) and `/api/admin/webhooks` (the deployment\'s; `system_webhooks:*`) ' +
+          'share one shape: endpoints, an event catalog, a delivery log, `test` and `redeliver`. The signing secret ' +
+          '(`whsec_...`) is returned once, by create and by `rotate-secret`; verify deliveries with ' +
+          '`verifyWebhookSignature` from `@marinoscar/platform-contract/webhooks`. Another owner\'s or organization\'s ' +
+          'endpoint is a 404.',
+      },
+    ],
+  },
+  {
+    // The alerts slice (#795).
+    name: 'Alerts',
+    tags: [
+      {
+        name: 'Alerts',
+        description:
+          'Alert rules over telemetry metrics, worker-node events and fleet health (`/api/admin/alerts`). Rules are ' +
+          'created disabled; `POST /rules/:id/test` evaluates one without storing anything. Incidents move ' +
+          'pending, firing, resolved; acknowledging one does not resolve it. `alerts:read` and `alerts:write` ' +
+          '(Admin only).',
+      },
+    ],
+  },
 ];
 
 for (const group of TAG_GROUPS) {

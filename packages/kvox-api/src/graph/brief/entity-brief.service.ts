@@ -42,6 +42,7 @@ import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-ac
 import { KG_ENTITY_DIGEST_JOB_TYPE, KG_SUBJECT_ENTITY } from '../job-types.js';
 import { GraphOntologyService } from '../ontology/graph-ontology.service.js';
 import { AsOfParseError, parseAsOf } from '../read/as-of.js';
+import { instantBoundOr400 } from '../read/read-params.js';
 import { withGraphStatementTimeout } from '../read/graph-query-timeout.js';
 import {
   briefItems,
@@ -86,8 +87,14 @@ const SEARCH_QUERY_MAX = 256;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface EntityBriefOptions {
-  /** Raw `since` (`YYYY-MM-DD` or ISO datetime with offset). */
+  /**
+   * Raw `since` (`YYYY-MM-DD` or ISO datetime with offset). It bounds INSTANTS (when a fact was
+   * recorded), so a bare day is local midnight in `timeZone`. `asOf` below keeps UTC midnight: it
+   * is read against calendar predicates (validity ranges, `occurred_at`).
+   */
   since?: string;
+  /** The requester's IANA zone `since` is read in (default UTC). */
+  timeZone?: string;
   /** Raw `as_of`. */
   asOf?: string;
   markViewed: boolean;
@@ -101,6 +108,17 @@ function parseInstantOr400(raw: string | undefined, now: Date): Date | null {
   if (raw === undefined || raw === '') return null;
   try {
     return parseAsOf(raw, now);
+  } catch (err) {
+    if (err instanceof AsOfParseError) throw new BadRequestException(err.message);
+    throw err;
+  }
+}
+
+/** `since` → the instant it names (a bare day is local midnight in `timeZone`), or a 400. */
+function parseSinceOr400(raw: string | undefined, timeZone: string, now: Date): Date | null {
+  if (raw === undefined || raw === '') return null;
+  try {
+    return instantBoundOr400(raw, timeZone, now);
   } catch (err) {
     if (err instanceof AsOfParseError) throw new BadRequestException(err.message);
     throw err;
@@ -140,7 +158,7 @@ export class EntityBriefService {
     const now = new Date();
     const asOfSet = opts.asOf !== undefined && opts.asOf !== '';
     const asOf = parseInstantOr400(opts.asOf, now) ?? now;
-    const querySince = parseInstantOr400(opts.since, now);
+    const querySince = parseSinceOr400(opts.since, opts.timeZone ?? 'UTC', now);
 
     const [schema, lastViewedAt, digestRow] = await Promise.all([
       this.ontology.effectiveSchemaFor(ownerId),

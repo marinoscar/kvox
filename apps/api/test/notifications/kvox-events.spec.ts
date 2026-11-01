@@ -54,13 +54,17 @@ const EXPECTED: ExpectedEvent[] = [
   { key: 'nodes.node_offline', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'node-offline' },
   { key: 'db_backup.backup_failed', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'backup-failed' },
   { key: 'db_backup.restore_completed', channels: ['email', 'browser'], mandatory: true, defaultEnabled: true, emailTemplate: 'restore-completed' },
-  { key: 'transcripts.transcript_ready', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'transcript-ready' },
-  { key: 'transcripts.transcript_failed', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'transcript-failed' },
-  { key: 'sharing.shared_with_you', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'shared-with-you' },
-  { key: 'notes.note_ready', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'note-ready' },
-  { key: 'notes.note_failed', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'note-failed' },
-  { key: 'export.ready', channels: ['browser', 'push'], mandatory: false, defaultEnabled: true },
-  { key: 'export.failed', channels: ['browser', 'push'], mandatory: false, defaultEnabled: true },
+  { key: 'transcripts.transcript_ready', channels: ['email', 'browser', 'webhook'], mandatory: false, defaultEnabled: true, emailTemplate: 'transcript-ready' },
+  { key: 'transcripts.transcript_failed', channels: ['email', 'browser', 'webhook'], mandatory: false, defaultEnabled: true, emailTemplate: 'transcript-failed' },
+  { key: 'sharing.shared_with_you', channels: ['email', 'browser', 'webhook'], mandatory: false, defaultEnabled: true, emailTemplate: 'shared-with-you' },
+  { key: 'notes.note_ready', channels: ['email', 'browser', 'webhook'], mandatory: false, defaultEnabled: true, emailTemplate: 'note-ready' },
+  { key: 'notes.note_failed', channels: ['email', 'browser', 'webhook'], mandatory: false, defaultEnabled: true, emailTemplate: 'note-failed' },
+  { key: 'export.ready', channels: ['browser', 'push', 'webhook'], mandatory: false, defaultEnabled: true },
+  { key: 'export.failed', channels: ['browser', 'push', 'webhook'], mandatory: false, defaultEnabled: true },
+  // The alerts and webhooks slices (#795), appended.
+  { key: 'alerts.alert_fired', channels: ['email', 'browser', 'push'], mandatory: false, defaultEnabled: true, emailTemplate: 'alert-fired' },
+  { key: 'alerts.alert_resolved', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'alert-resolved' },
+  { key: 'webhooks.endpoint_disabled', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'webhook-endpoint-disabled' },
 ];
 
 type BrowserRender = (data: unknown) => { title: string; body: string; link?: string };
@@ -70,7 +74,7 @@ function browserRender(key: string): BrowserRender | undefined {
 }
 
 describe('the events the application ships', () => {
-  it('registers exactly the seventeen events, in the preferences matrix order', () => {
+  it('registers exactly the twenty events, in the preferences matrix order', () => {
     expect(listNotificationEvents().map((event) => event.key)).toEqual(EXPECTED.map((event) => event.key));
   });
 

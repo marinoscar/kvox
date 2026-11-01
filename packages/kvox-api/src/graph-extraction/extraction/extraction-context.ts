@@ -31,6 +31,7 @@
 // all pure and tested here rather than split across a query.
 // =============================================================================
 
+import { localDateKey } from '../../core/index.js';
 import type {
   EffectiveAttribute,
   EffectiveEntityType,
@@ -100,6 +101,11 @@ export interface ExtractionInput {
   speakers: Array<{ id: string; label: string | null; displayName: string | null; personEntityId: string | null }>;
   effectiveSchema: EffectiveSchema;
   guidance: UserGuidance | null;
+  /**
+   * Opt-in system-created types this run may propose (see `OfferedSchemaOptions`).
+   * Absent or empty keeps today's behaviour: the Meeting is created by the system only.
+   */
+  proposeTypes?: readonly string[];
   knownEntityCandidates: {
     pinned: KnownEntityRow[];
     speakerPersons: KnownEntityRow[];
@@ -111,6 +117,12 @@ export interface ExtractionInput {
   };
   /** The Meeting whose `props.transcriptId`/`noteId` matches. */
   existingMeeting: { id: string } | null;
+  /**
+   * The note owner's IANA time zone (absent: UTC). The meeting date is the day the recording
+   * (or the note) falls on IN THIS ZONE: a call recorded at 21:30 in Chicago on the 26th is the
+   * 26th, not the 27th it is in UTC.
+   */
+  timeZone?: string;
 }
 
 export interface SegmentAliasEntry {
@@ -169,7 +181,7 @@ export interface ExtractionContext {
   note: { id: string; title: string; body: string; version: number; contextText: string | null };
   transcript: { id: string; title: string } | null;
   meetingTitle: string;
-  /** `YYYY-MM-DD` (UTC). */
+  /** `YYYY-MM-DD`, the day of the recording (or the note) in the owner's zone; stored as a floating date. */
   meetingDate: string;
   dateSource: DateSource;
   segments: SegmentLine[];
@@ -239,12 +251,38 @@ export function offeredAttributes(attrs: readonly EffectiveAttribute[]): Effecti
 // The offered schema
 // -----------------------------------------------------------------------------
 
-export function buildOfferedSchema(schema: EffectiveSchema, guidance: UserGuidance | null): OfferedSchema {
+/**
+ * What `buildOfferedSchema` may offer beyond the default. Empty by default, so
+ * every current caller is unchanged.
+ */
+export interface OfferedSchemaOptions {
+  /**
+   * Entity types that are system-created by default (`extractable: false`, today
+   * only `Meeting`) but that this run may propose. The host opts in for a source
+   * that records several meetings (#776, #780); the type must still exist in the
+   * effective schema, be non-deprecated and pass guidance. Items and unknown
+   * keys are ignored.
+   */
+  proposeTypes?: readonly string[];
+}
+
+/** The system-created types a host may opt in to proposing. */
+export const OPT_IN_PROPOSABLE_TYPES: readonly string[] = ['Meeting'];
+
+export function buildOfferedSchema(
+  schema: EffectiveSchema,
+  guidance: UserGuidance | null,
+  options: OfferedSchemaOptions = {},
+): OfferedSchema {
   const typeFilter = guidance?.entityTypes ? new Set(guidance.entityTypes) : null;
   const relationFilter = guidance?.relationTypes ? new Set(guidance.relationTypes) : null;
+  const optedIn = new Set((options.proposeTypes ?? []).filter((k) => OPT_IN_PROPOSABLE_TYPES.includes(k)));
 
   const proposable = schema.entityTypes.filter(
-    (t) => t.extractable && !t.deprecated && (typeFilter === null || typeFilter.has(t.key)),
+    (t) =>
+      (t.extractable || (optedIn.has(t.key) && t.storage === 'entity')) &&
+      !t.deprecated &&
+      (typeFilter === null || typeFilter.has(t.key)),
   );
   const entityTypes = proposable.filter((t) => t.storage === 'entity');
   const itemTypes = proposable.filter((t) => t.storage === 'item');
@@ -358,7 +396,7 @@ export function buildExtractionContext(input: ExtractionInput): ExtractionContex
 
   // Meeting date.
   const recordedAt = input.transcript?.recordedAt ?? null;
-  const meetingDate = isoDay(recordedAt ?? input.note.createdAt);
+  const meetingDate = localDateKey(recordedAt ?? input.note.createdAt, input.timeZone ?? 'UTC');
   const recordedAtEdited =
     input.transcript !== null &&
     Math.abs(input.transcript.recordedAt.getTime() - input.transcript.createdAt.getTime()) >
@@ -393,7 +431,7 @@ export function buildExtractionContext(input: ExtractionInput): ExtractionContex
     knownById,
     speakers,
     effectiveSchema: input.effectiveSchema,
-    offered: buildOfferedSchema(input.effectiveSchema, input.guidance),
+    offered: buildOfferedSchema(input.effectiveSchema, input.guidance, { proposeTypes: input.proposeTypes }),
     guidance,
     existingMeetingId: input.existingMeeting?.id ?? null,
   };

@@ -10,6 +10,8 @@
 // =============================================================================
 
 import { BadRequestException } from '@nestjs/common';
+
+import { localDayStart } from '../../core/index.js';
 import { ITEM_KINDS, type EffectiveSchema, type KgItemKind } from '@marinoscar/kvox-contract/ontology';
 
 import { AsOfParseError, parseAsOf } from './as-of.js';
@@ -107,4 +109,25 @@ export function asOfOr400(raw: string | undefined, now: Date = new Date()): Date
     if (err instanceof AsOfParseError) throw new BadRequestException(err.message);
     throw err;
   }
+}
+
+/**
+ * A `since` / `from` / `to` bound over a TIMESTAMP column (a recording time, a mention's
+ * `created_at`) → the instant it names, or a 400.
+ *
+ * THE RULE, once: a BARE DAY (`2026-10-26`) in an instant filter means LOCAL MIDNIGHT in the
+ * requester's `timeZone`, so "from the 26th" starts when the user's 26th starts. A full ISO
+ * datetime is itself. This is deliberately NOT {@link asOfOr400}: `as_of` is evaluated against
+ * calendar predicates (a relation's validity range, an item's `occurred_at`), which are floating
+ * dates at UTC midnight, so a bare `as_of` stays `00:00:00Z` whatever anybody's zone.
+ *
+ * @param raw - the raw parameter.
+ * @param timeZone - the requester's IANA zone.
+ * @param now - the clock (never read here).
+ * @returns the instant.
+ */
+export function instantBoundOr400(raw: string, timeZone: string, now: Date = new Date()): Date {
+  // Calendar-impossible days (`2026-02-30`) and malformed values are the parser's 400.
+  const parsed = asOfOr400(raw, now);
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? localDayStart(raw, timeZone) : parsed;
 }

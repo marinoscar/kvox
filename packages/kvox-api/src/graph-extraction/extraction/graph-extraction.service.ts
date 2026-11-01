@@ -33,7 +33,8 @@ import type {
 import { buildExtractionContext, type ExtractionContext } from './extraction-context.js';
 import { ExtractionInputLoader } from './extraction-input.loader.js';
 import { buildExtractionOutputSchema } from './output-schema.js';
-import { assembleExtractionPrompt, type ExtractionPrompt } from './prompt.js';
+import { assembleExtractionPrompt, type ExtractionPrompt, type PromptChunk } from './prompt.js';
+import { chunkContext, chunksFor, promptChunk } from './chunked-run.js';
 import { extractionRowCaps, type ExtractionRowCaps } from './row-caps.js';
 import {
   KVOX_AUDIT,
@@ -155,12 +156,13 @@ export function planExtraction(
     Partial<Pick<GraphAiRun, 'reasoningEffort'>>,
   ctx: ExtractionContext,
   capsOverride?: ExtractionRowCaps,
+  chunk?: PromptChunk,
 ): ExtractionPlan {
   const budget = extractionBudget(resolution);
   const effort = resolution.reasoningEffort ?? resolution.policy.reasoningEffort;
 
   const assemble = (caps: ExtractionRowCaps) => {
-    const prompt = assembleExtractionPrompt(ctx, caps);
+    const prompt = assembleExtractionPrompt(ctx, caps, chunk);
     const schema = buildExtractionOutputSchema(ctx, caps);
     return { caps, prompt, schema, promptTokens: measurePrompt(resolution, prompt, schema) };
   };
@@ -399,17 +401,26 @@ export class GraphExtractionService {
     guidance: UserGuidance | null,
   ): Promise<ExtractionEstimate> {
     const input = await this.loader.load({ userId, noteId: note.id, noteVersion: note.currentVersion, guidance });
-    const plan = planExtraction(resolution, buildExtractionContext(input));
-    const inputTokens = plan.promptTokens;
+    const ctx = buildExtractionContext(input);
+    // #777: one request per chunk; the estimate sums them and `fits` holds only when EVERY chunk fits.
+    const chunks = chunksFor(ctx, resolution.countTokens);
+    const plans = chunks.map((chunk) =>
+      planExtraction(resolution, chunkContext(ctx, chunk), undefined, promptChunk(chunk)),
+    );
+    const fits = plans.every((p) => p.promptTokens <= p.budget.availableInputTokens);
+    // A refusal names the chunk that does not fit, so a non-fitting estimate reports the largest prompt.
+    const inputTokens = fits
+      ? plans.reduce((sum, p) => sum + p.promptTokens, 0)
+      : Math.max(...plans.map((p) => p.promptTokens));
     return {
       providerId: resolution.providerId,
       model: resolution.model,
       inputTokens,
-      // What the run would actually request for THIS prompt (#436).
-      maxOutputTokens: plan.maxOutputTokens,
-      availableInputTokens: plan.budget.availableInputTokens,
-      fits: inputTokens <= plan.budget.availableInputTokens,
-      requests: 1,
+      // What the largest request would ask for (#436).
+      maxOutputTokens: Math.max(...plans.map((p) => p.maxOutputTokens)),
+      availableInputTokens: plans[0].budget.availableInputTokens,
+      fits,
+      requests: plans.length,
       keyConfigured: resolution.keyConfigured,
     };
   }

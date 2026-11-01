@@ -61,7 +61,7 @@ import { GraphNeighborhoodService } from './graph-neighborhood.service.js';
 import { GraphPathsService } from './graph-paths.service.js';
 import { GraphActivityService } from './graph-activity.service.js';
 import { GraphReadService } from './graph-read.service.js';
-import { KvoxAuth } from '../../core/index.js';
+import { KvoxAuth, KvoxTimeZoneService, TimeZoneHeader } from '../../core/index.js';
 import { GRAPH_READ_PERMISSION } from '../graph.permissions.js';
 import { CurrentGraphActor } from '../graph-actor.js';
 import type { GraphActor } from '../graph-actor.js';
@@ -93,7 +93,7 @@ export class GraphReadController {
     private readonly pathFinder: GraphPathsService,
     private readonly connector: GraphConnectService,
     private readonly activityReader: GraphActivityService,
-
+    private readonly zones: KvoxTimeZoneService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -131,8 +131,11 @@ export class GraphReadController {
   async list(
     @Query(new ZodValidationPipe(listEntitiesQuerySchema)) query: ListEntitiesQuery,
     @CurrentGraphActor() user: GraphActor,
+    @TimeZoneHeader() timeZoneHeader?: string,
   ): Promise<ListEntitiesResponse> {
-    return this.reads.listEntities(user, query);
+    // `since` bounds mention instants: a bare day is local midnight in the requester's zone.
+    const timeZone = query.since ? await this.zones.forRequest(user.id, timeZoneHeader) : undefined;
+    return this.reads.listEntities(user, query, timeZone);
   }
 
   @Get('entities/:id')
@@ -345,7 +348,8 @@ export class GraphReadController {
       'in `ids` counts once for each end. `total` is the sum of `byType`.\n' +
       '- The time of a citation is its transcript\'s `recorded_at` or its note\'s `created_at` ' +
       '(the meeting date), falling back to the citation\'s own creation time when the source is gone.\n' +
-      '- `from` (inclusive) and `to` (exclusive) restrict the evidence time. Buckets are UTC; weeks start Monday. ' +
+      '- `from` (inclusive) and `to` (exclusive) restrict the evidence time; a bare `YYYY-MM-DD` is local midnight that day. ' +
+      "Buckets are days of YOUR time zone (your profile zone, else the `X-Time-Zone` header, else UTC), echoed as `timeZone`; weeks start Monday there. " +
       'Only buckets with evidence are returned.\n' +
       `- At most **${GRAPH_ACTIVITY_MAX_IDS} ids**; more is a **400**.\n\n` +
       '`sensitive` person facts contribute nothing. If any id is not one of your readable nodes the ' +
@@ -354,8 +358,8 @@ export class GraphReadController {
   })
   @ApiQuery({ name: 'ids', required: true, type: String, description: `Comma-separated entity ids, at most ${GRAPH_ACTIVITY_MAX_IDS}` })
   @ApiQuery({ name: 'bucket', required: false, enum: ['week', 'month'], description: 'Default month' })
-  @ApiQuery({ name: 'from', required: false, type: String, description: 'YYYY-MM-DD or ISO 8601 with offset' })
-  @ApiQuery({ name: 'to', required: false, type: String, description: 'YYYY-MM-DD or ISO 8601 with offset' })
+  @ApiQuery({ name: 'from', required: false, type: String, description: 'YYYY-MM-DD (local midnight in your time zone) or ISO 8601 with offset' })
+  @ApiQuery({ name: 'to', required: false, type: String, description: 'YYYY-MM-DD (local midnight in your time zone) or ISO 8601 with offset' })
   @ApiDataResponse(GraphActivityResponseDto, { description: 'The stacked buckets and the per-entity series' })
   @ApiResponse({ status: 400, description: 'Invalid parameter, or more than the id limit' })
   @ApiResponse({ status: 404, description: 'An id is not one of your readable nodes' })
@@ -363,8 +367,10 @@ export class GraphReadController {
   async activity(
     @Query(new ZodValidationPipe(graphActivityQuerySchema)) query: GraphActivityQuery,
     @CurrentGraphActor() user: GraphActor,
+    @TimeZoneHeader() timeZoneHeader?: string,
   ): Promise<GraphActivityResponse> {
-    return this.activityReader.activity(user, query);
+    const timeZone = await this.zones.forRequest(user.id, timeZoneHeader);
+    return this.activityReader.activity(user, query, { timeZone });
   }
 
   // ---------------------------------------------------------------------------

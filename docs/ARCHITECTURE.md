@@ -1000,7 +1000,7 @@ The domain tables below (transcripts, notes, search, the `kg_*` graph tables, As
   no foreign key (the queue purges finished jobs). Batch counts are `GROUP BY` aggregates, never
   columns. No raw-SQL index: the one uniqueness rule is a plain composite `@@unique`.
 - `kg_entities` - The Connected Knowledge graph foundation's node table — Person, Organization,
-  Project, Meeting (issue #351, epic #344), plus Topic and Product (ontology 1.3.0), `type` a plain ontology key (#350), never a Prisma
+  Project, Meeting (issue #351, epic #344), plus Topic and Product (ontology 1.3.0), Opportunity and Document (ontology 1.4.0), `type` a plain ontology key (#350), never a Prisma
   enum, so a new type costs zero migrations. `embedding vector(1536)` reuses `SearchEmbedding`'s
   exact model/dimension contract rather than a second convention; `merged_into_id` self-relation
   (SetNull) is set once §7's entity resolution merges this row into another. `owner_id` **Cascade**

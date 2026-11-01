@@ -49,8 +49,10 @@ describe('graphDisplay', () => {
       'Organization',
       'Meeting',
       'Topic',
+      'Document',
       'Project',
       'Product',
+      'Opportunity',
     ]);
     expect(indexableEntityTypes(null).map((t) => t.key)).toContain('Person');
   });

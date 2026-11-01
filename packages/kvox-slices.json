@@ -11,7 +11,8 @@
     "graph": ["ports", "core", "testing", "transcripts", "notes", "search"],
     "graph-extraction": ["ports", "core", "testing", "graph", "notes", "search", "transcripts"],
     "graph-rdf": ["ports", "core", "testing", "graph", "graph-extraction", "transcripts", "notes"],
-    "ask": ["ports", "core", "testing", "graph", "notes", "search", "transcripts"]
+    "ask": ["ports", "core", "testing", "graph", "notes", "search", "transcripts"],
+    "webhooks": ["ports", "core", "graph", "transcripts"]
   },
   "kvox-web": {
     "core": [],

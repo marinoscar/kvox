@@ -8,3 +8,4 @@ export * from './prisma.port.js';
 export * from './settings.port.js';
 export * from './secrets.port.js';
 export * from './audit.port.js';
+export * from './webhooks.port.js';

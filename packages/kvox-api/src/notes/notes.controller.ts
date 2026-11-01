@@ -117,7 +117,7 @@ import {
   createNoteExportSchema,
   type CreateNoteExportDto,
 } from './dto/note-export.dto.js';
-import { KvoxAuth, matchesETag, versionETag } from '../core/index.js';
+import { KvoxAuth, TimeZoneHeader, matchesETag, versionETag } from '../core/index.js';
 import { ApiDataResponse } from '../transcripts/index.js';
 import { CurrentActor, type NotesActor } from './notes-actor.js';
 import { NOTES_READ_PERMISSION, NOTES_WRITE_PERMISSION } from './notes.permissions.js';
@@ -721,8 +721,9 @@ export class NotesController {
     @Body(new ZodValidationPipe(createNoteExportSchema)) dto: CreateNoteExportDto,
     @CurrentActor() user: NotesActor,
     @Res({ passthrough: true }) reply: FastifyReply,
+    @TimeZoneHeader() timeZoneHeader?: string,
   ) {
-    const result = await this.exports.requestExport(id, dto, user);
+    const result = await this.exports.requestExport(id, dto, user, timeZoneHeader);
 
     reply.status(result.created ? HttpStatus.ACCEPTED : HttpStatus.OK);
 

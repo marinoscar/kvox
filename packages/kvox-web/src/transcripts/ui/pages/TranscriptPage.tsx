@@ -176,6 +176,7 @@ import { ExportDialog } from '../components/ExportDialog.js';
 import { RecordedAtDialog } from '../components/RecordedAtDialog.js';
 import { formatDuration, formatTimestamp } from '../../headless/utils/playbackIntervals.js';
 import { hasPlaybackRendition } from '../../headless/utils/transcriptDisplay.js';
+import { formatDateTime, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 /**
  * Should a document-level transport shortcut be ignored for this event?
@@ -210,15 +211,18 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 }
 
-const RECORDED_AT_FORMAT = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
-
-/** The header's "Recorded …" date, in the viewer's locale and zone (#352). */
-export function formatRecordedAt(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? 'at an unknown time' : RECORDED_AT_FORMAT.format(date);
+/**
+ * The header's "Recorded …" date, in the viewer's locale and display time zone
+ * (#352): the zone chosen in their profile, else the device's. `timeZone`
+ * overrides it.
+ */
+export function formatRecordedAt(iso: string, timeZone?: string): string {
+  return formatDateTime(iso, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone,
+    fallback: 'at an unknown time',
+  });
 }
 
 /** The speaker-people slot's default: nobody is a known person. */
@@ -253,6 +257,8 @@ export interface TranscriptPageProps {
  */
 export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {}) {
   const host = useKvoxHost();
+  // "Recorded …" is in the viewer's display zone; a saved profile re-renders it.
+  const zone = useDisplayTimeZone();
   const ShareDialog = sharing?.ShareDialog;
   const NotesSection = slots?.NotesSection;
   const SelectionActions = slots?.SelectionActions;
@@ -985,7 +991,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
         {/* When the recording was made, not when it was uploaded (#352) — the
             meeting date connected knowledge dates everything against. */}
         <Typography variant="caption" color="text.secondary">
-          Recorded {formatRecordedAt(transcript.recordedAt)}
+          Recorded {formatRecordedAt(transcript.recordedAt, zone)}
         </Typography>
         {/* Only once there is something to save. Before the transcript is
             ready there are no segments and no corrections, and a second

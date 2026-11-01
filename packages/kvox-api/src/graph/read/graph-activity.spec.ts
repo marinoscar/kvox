@@ -13,6 +13,7 @@ describe('shapeActivity (GIC-15)', () => {
       row('2026-02-01', 'c', 'Person', 3),
     ]);
     expect(shaped.bucket).toBe('month');
+    expect(shaped.timeZone).toBe('UTC');
     expect(shaped.series).toEqual([
       { start: '2026-01-01', total: 6, byType: { Person: 2, Project: 4 } },
       { start: '2026-02-01', total: 4, byType: { Person: 4 } },
@@ -36,19 +37,24 @@ describe('shapeActivity (GIC-15)', () => {
   });
 
   it('is empty without rows', () => {
-    expect(shapeActivity('month', [])).toEqual({ bucket: 'month', series: [], byEntity: {} });
+    expect(shapeActivity('month', [])).toEqual({ bucket: 'month', timeZone: 'UTC', series: [], byEntity: {} });
+    expect(shapeActivity('week', [], 'Asia/Tokyo').timeZone).toBe('Asia/Tokyo');
   });
 });
 
 describe('GraphActivityService (mocked)', () => {
   const A = '00000000-0000-4000-8000-00000000000a';
 
-  function service(opts: { readable?: boolean; rows?: unknown[]; failWith?: unknown } = {}) {
+  function service(opts: { readable?: boolean; rows?: unknown[]; failWith?: unknown; zoneKnown?: boolean } = {}) {
     const tx = {
       $executeRaw: jest.fn().mockResolvedValue(0),
       $queryRaw: opts.failWith ? jest.fn().mockRejectedValue(opts.failWith) : jest.fn().mockResolvedValue(opts.rows ?? []),
     };
-    const prisma = { $transaction: jest.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
+    const prisma = {
+      $transaction: jest.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
+      // `pg_timezone_names`: does Postgres know the zone?
+      $queryRaw: jest.fn().mockResolvedValue(opts.zoneKnown === false ? [] : [{ '?column?': 1 }]),
+    };
     const neighborhood = {
       assertReadableNodes: jest.fn(async () => {
         if (opts.readable === false) throw new NotFoundException('Entity not found');
@@ -75,6 +81,45 @@ describe('GraphActivityService (mocked)', () => {
     expect(res.series).toEqual([{ start: '2026-01-01', total: 2, byType: { Person: 2 } }]);
     expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("cuts the buckets in the requester's zone: a bound parameter, echoed in the response", async () => {
+    const { svc, tx } = service({ rows: [row('2026-10-26', A, 'Person', 1)] });
+    const res = await svc.activity({ id: 'u1' }, { ids: [A], bucket: 'week' }, { timeZone: 'America/Chicago' });
+    expect(res.timeZone).toBe('America/Chicago');
+    const [strings, ...values] = tx.$queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+    expect(values).toContain('America/Chicago');
+    // The local wall-clock truncation: the SQL converts to the zone first, never 'UTC' as a literal.
+    expect(strings.join('?')).toContain('AT TIME ZONE ');
+    expect(strings.join('?')).not.toContain("AT TIME ZONE 'UTC'");
+  });
+
+  it('reads a bare from/to day as local midnight in that zone, and a full instant as itself', async () => {
+    const { svc, tx } = service();
+    await svc.activity(
+      { id: 'u1' },
+      { ids: [A], bucket: 'month', from: '2026-10-26', to: '2026-11-01T00:00:00Z' },
+      { timeZone: 'America/Chicago' },
+    );
+    const [, ...values] = tx.$queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+    const dates = values.filter((v): v is Date => v instanceof Date).map((d) => d.toISOString());
+    // 2026-10-26 starts at 05:00Z in Chicago (CDT); the explicit instant is untouched.
+    expect(dates).toContain('2026-10-26T05:00:00.000Z');
+    expect(dates).toContain('2026-11-01T00:00:00.000Z');
+  });
+
+  it('falls back to UTC when Postgres does not know the zone, and asks once per zone', async () => {
+    const unknown = service({ zoneKnown: false });
+    const res = await unknown.svc.activity({ id: 'u1' }, { ids: [A], bucket: 'month' }, { timeZone: 'Europe/Fictional' });
+    expect(res.timeZone).toBe('UTC');
+
+    const known = service();
+    await known.svc.activity({ id: 'u1' }, { ids: [A], bucket: 'month' }, { timeZone: 'Asia/Tokyo' });
+    await known.svc.activity({ id: 'u1' }, { ids: [A], bucket: 'month' }, { timeZone: 'Asia/Tokyo' });
+    expect(known.prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    // UTC is never queried.
+    await known.svc.activity({ id: 'u1' }, { ids: [A], bucket: 'month' });
+    expect(known.prisma.$queryRaw).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a bad from/to as a 400', async () => {

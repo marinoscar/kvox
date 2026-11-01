@@ -8,6 +8,7 @@ import { userEvent } from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
+import { setPreferredTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import { describe, expect, it } from 'vitest';
 
 import { createFakeKvoxWebHost, fakeApiError, renderWithKvoxHost } from '../../src/core/testing/index.js';
@@ -80,9 +81,10 @@ function queueOf(groups: ReviewQueueGroup[], truncated = false): ReviewQueueResp
 }
 
 const libraryGroup = () =>
-  group({ type: 'library', id: LIBRARY_ID, label: 'Work notes' }, [proposal(1), proposal(2, { stale: true })]);
-const batchGroup = () => group({ type: 'batch', id: BATCH_ID, label: 'Import 2026-10-23' }, [proposal(3)]);
-const otherGroup = () => group({ type: 'other', id: null, label: 'Individual notes' }, [proposal(4)]);
+  group({ type: 'library', id: LIBRARY_ID, label: 'Work notes', createdAt: '2026-10-20T09:00:00.000Z' }, [proposal(1), proposal(2, { stale: true })]);
+const batchGroup = () =>
+  group({ type: 'batch', id: BATCH_ID, label: 'Import 2026-10-23', createdAt: '2026-10-23T15:00:00.000Z' }, [proposal(3)]);
+const otherGroup = () => group({ type: 'other', id: null, label: 'Individual notes', createdAt: null }, [proposal(4)]);
 
 function makeHost(
   permissions: string[],
@@ -254,6 +256,19 @@ describe('review queue helpers', () => {
     expect(reviewGroupLabel({ type: 'other', id: null, label: 'Individual notes' })).toBe('Other notes');
     expect(reviewGroupLabel({ type: 'library', id: LIBRARY_ID, label: 'Work notes' })).toBe('Work notes');
     expect(reviewGroupLabel({ type: 'batch', id: BATCH_ID, label: 'Import 2026-10-23' })).toBe('Import of Oct 23, 2026');
+  });
+
+  it('dates an import by its createdAt in the display zone, else by the server label', () => {
+    // 20:00 UTC on 23 October: 24 October in Tokyo, 23 October in Los Angeles.
+    const key = { type: 'batch' as const, id: BATCH_ID, label: 'Import 2026-10-23', createdAt: '2026-10-23T20:00:00.000Z' };
+    const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+    expect(reviewGroupLabel(key, 'Asia/Tokyo')).toBe(`Import of ${day('2026-10-24')}`);
+    expect(reviewGroupLabel(key, 'America/Los_Angeles')).toBe(`Import of ${day('2026-10-23')}`);
+    setPreferredTimeZone('Asia/Tokyo');
+    expect(reviewGroupLabel(key)).toBe(`Import of ${day('2026-10-24')}`);
+    // Without createdAt (an older server), the server's local-day label, never shifted again.
+    expect(reviewGroupLabel({ ...key, createdAt: null })).toBe(`Import of ${day('2026-10-23')}`);
+    expect(reviewGroupLabel({ ...key, createdAt: 'garbage' })).toBe(`Import of ${day('2026-10-23')}`);
   });
 
   it('targets a group by library, batch or non-stale ids', () => {

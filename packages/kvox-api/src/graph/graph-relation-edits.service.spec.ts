@@ -46,7 +46,7 @@ interface EdgeRow {
   review_status: string;
 }
 
-function setup(opts: { edges?: EdgeRow[]; toType?: string } = {}) {
+function setup(opts: { edges?: EdgeRow[]; toType?: string; now?: string; zone?: string } = {}) {
   const edges = opts.edges ?? [];
   const tx = {
     $queryRaw: jest.fn(async (strings: TemplateStringsArray) => {
@@ -95,7 +95,7 @@ function setup(opts: { edges?: EdgeRow[]; toType?: string } = {}) {
   const entities = { enqueueFollowUps: jest.fn(async () => undefined) };
   class Fixed extends GraphRelationEditsService {
     protected override now(): Date {
-      return new Date('2026-10-17T15:00:00Z');
+      return new Date(opts.now ?? '2026-10-17T15:00:00Z');
     }
   }
   const service = new Fixed(
@@ -106,6 +106,7 @@ function setup(opts: { edges?: EdgeRow[]; toType?: string } = {}) {
     entities as unknown as GraphEntitiesService,
     events as unknown as KvoxEventsPort,
     auditPortOver(prisma),
+    { forRequest: jest.fn(async (_u: string, header?: string) => opts.zone ?? header ?? 'UTC') } as never,
   );
   return { service, tx, prisma, access, write, events, entities };
 }
@@ -158,6 +159,31 @@ describe('GraphRelationEditsService.set', () => {
     expect(input.evidence[0].quote).toBe('Set by hand: Jenny Kim reports to Mark Chen');
     expect(result).toMatchObject({ created: true, evidenceId: EVIDENCE, closedRelationIds: [], flags: [] });
     expect(result.relation).toMatchObject({ id: NEW_EDGE, valid: { from: '2026-10-17T00:00:00.000Z', to: null, precision: 'day' } });
+  });
+
+  it("defaults the start to the requester's TODAY: 02:30Z on the 27th is the 26th in Chicago, the 27th in Tokyo", async () => {
+    // The validity range is a calendar value: the day is cut in the zone, then stored at UTC midnight.
+    for (const [zone, day] of [
+      ['America/Chicago', '2026-10-26T00:00:00.000Z'],
+      ['Asia/Tokyo', '2026-10-27T00:00:00.000Z'],
+    ] as const) {
+      const { service, write } = setup({ now: '2026-10-27T02:30:00Z', zone });
+      await service.set(JENNY, { type: 'REPORTS_TO', toId: MARK }, user, zone);
+      const [, input] = write.createRelation.mock.calls[0] as unknown as [unknown, Record<string, any>];
+      expect(input.valid.from.toISOString()).toBe(day);
+    }
+  });
+
+  it('reads the header zone for a user with no stored zone, and ignores the zone when validFrom is given', async () => {
+    const { service, write } = setup({ now: '2026-10-27T02:30:00Z' });
+    await service.set(JENNY, { type: 'REPORTS_TO', toId: MARK }, user, 'America/Chicago');
+    const [, input] = write.createRelation.mock.calls[0] as unknown as [unknown, Record<string, any>];
+    expect(input.valid.from.toISOString()).toBe('2026-10-26T00:00:00.000Z');
+
+    const explicit = setup({ now: '2026-10-27T02:30:00Z' });
+    await explicit.service.set(JENNY, { type: 'REPORTS_TO', toId: MARK, validFrom: '2026-03-01' }, user, 'America/Chicago');
+    const [, given] = explicit.write.createRelation.mock.calls[0] as unknown as [unknown, Record<string, any>];
+    expect(given.valid.from.toISOString()).toBe('2026-03-01T00:00:00.000Z');
   });
 
   it("closes the person's still-open REPORTS_TO to someone else at the new start, linked to the new edge (§5.4)", async () => {

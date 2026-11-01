@@ -28,7 +28,7 @@ import {
 import type { ExtractionRowCaps } from './row-caps.js';
 
 export const ROLE_LINE =
-  'You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Precision matters more than completeness.';
+  'You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Cover everything the text supports with a citation.';
 
 export const HEADING_RULES = '## Rules';
 export const HEADING_ENTITY_TYPES = '## Entity types';
@@ -65,6 +65,17 @@ export const FACT_KIND_DEFINITIONS: Record<string, string> = {
   person_fact:
     'A statement about a person as an individual (an interest, preference, personal detail or communication style), never about their job. Mark `sensitivity` honestly: `sensitive` for health, legal, financial or similarly weighty information, `personal` otherwise, `business` only when it is work-relevant.',
 };
+
+/** One chunk of a long note (#777): which part this call reads, and the read-only lead-in. */
+export interface PromptChunk {
+  /** 0-based. */
+  index: number;
+  count: number;
+  /** The previous part's last paragraph; shown as context, never citable. */
+  leadIn: string | null;
+}
+
+export const CHUNK_CONTEXT_MARKER = '[context only — do not cite]';
 
 export interface ExtractionPrompt {
   systemPrompt: string;
@@ -304,7 +315,11 @@ export function formatTimestamp(ms: number): string {
  * `caps` (#435) adds the row-cap rule; the handler and the estimate always
  * pass it, so what is recorded and counted is what is sent.
  */
-export function assembleExtractionPrompt(ctx: ExtractionContext, caps?: ExtractionRowCaps): ExtractionPrompt {
+export function assembleExtractionPrompt(
+  ctx: ExtractionContext,
+  caps?: ExtractionRowCaps,
+  chunk?: PromptChunk,
+): ExtractionPrompt {
   const system: string[] = [
     ROLE_LINE,
     '',
@@ -344,7 +359,13 @@ export function assembleExtractionPrompt(ctx: ExtractionContext, caps?: Extracti
     }
   }
 
-  user.push('', `${HEADING_NOTE} (version ${ctx.note.version})`, ctx.note.body);
+  user.push('', `${HEADING_NOTE} (version ${ctx.note.version})`);
+  if (chunk && chunk.count > 1) {
+    // #777: `ctx.note.body` is this part only; quotes are located in it.
+    user.push(`Part ${chunk.index + 1} of ${chunk.count} of one note; propose only what this part supports.`);
+    if (chunk.leadIn) user.push(CHUNK_CONTEXT_MARKER, chunk.leadIn, '[end of context]');
+  }
+  user.push(ctx.note.body);
 
   if (ctx.transcript !== null) {
     user.push('', HEADING_TRANSCRIPT);

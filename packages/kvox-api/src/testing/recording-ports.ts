@@ -9,6 +9,8 @@ import type {
   KvoxSecretsPort,
   KvoxSettingsNamespaceDef,
   KvoxSettingsPort,
+  KvoxWebhookContext,
+  KvoxWebhooksPort,
 } from '../ports/index.js';
 
 /**
@@ -88,6 +90,39 @@ export function createRecordingKvoxAudit(): RecordingKvoxAudit {
 }
 
 /**
+ * A {@link KvoxWebhooksPort} that records.
+ *
+ * @stability experimental
+ */
+export interface RecordingKvoxWebhooks extends KvoxWebhooksPort {
+  /** Every emit, in order. */
+  readonly emitted: Array<{
+    /** The event key emitted. */
+    eventKey: string;
+    /** The payload passed to the port. */
+    data: unknown;
+    /** The context (user and organization) passed to the port. */
+    ctx: KvoxWebhookContext;
+  }>;
+}
+
+/**
+ * Builds a webhook port that keeps what it is given.
+ *
+ * @returns the recording port.
+ * @stability experimental
+ */
+export function createRecordingKvoxWebhooks(): RecordingKvoxWebhooks {
+  const emitted: RecordingKvoxWebhooks['emitted'] = [];
+  return {
+    emitted,
+    async emit(eventKey, data, ctx) {
+      emitted.push({ eventKey, data, ctx });
+    },
+  };
+}
+
+/**
  * Builds an in-process events port (an emitter of its own).
  *
  * @returns the port.
@@ -105,6 +140,13 @@ export function createInMemoryKvoxEvents(): KvoxEventsPort {
 export interface InMemoryKvoxSettings extends KvoxSettingsPort {
   /** The declared namespaces, by `scope:name`. */
   readonly namespaces: ReadonlyMap<string, KvoxSettingsNamespaceDef>;
+  /**
+   * Sets the zone `readUserTimeZone` answers for one user (`null` clears it).
+   *
+   * @param userId - the user.
+   * @param timeZone - an IANA zone id, or `null`.
+   */
+  setUserTimeZone(userId: string, timeZone: string | null): void;
 }
 
 /**
@@ -119,6 +161,7 @@ export function createInMemoryKvoxSettings(): InMemoryKvoxSettings {
   const namespaces = new Map<string, KvoxSettingsNamespaceDef>();
   const system = new Map<string, { value: unknown; version: number }>();
   const user = new Map<string, unknown>();
+  const zones = new Map<string, string>();
 
   const declared = (scope: 'system' | 'user', name: string): KvoxSettingsNamespaceDef => {
     const def = namespaces.get(`${scope}:${name}`);
@@ -166,6 +209,15 @@ export function createInMemoryKvoxSettings(): InMemoryKvoxSettings {
       const next = merged(def, user.get(`${userId}:${name}`) ?? def.defaults, patch);
       user.set(`${userId}:${name}`, next);
       return next as T;
+    },
+
+    async readUserTimeZone(userId: string) {
+      return zones.get(userId) ?? null;
+    },
+
+    setUserTimeZone(userId: string, timeZone: string | null) {
+      if (timeZone === null) zones.delete(userId);
+      else zones.set(userId, timeZone);
     },
   };
 }

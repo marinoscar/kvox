@@ -117,6 +117,22 @@ describe('GetEntityTool', () => {
     expectNoUuid(res.data);
   });
 
+  it("shows first and last seen as the asker's local day (instants), not the UTC day", async () => {
+    // 2026-10-27T02:30Z is still the 26th in Chicago and already the 27th in Tokyo.
+    const instants = { firstSeenAt: '2026-10-27T02:30:00.000Z', lastSeenAt: '2026-10-27T02:30:00.000Z' };
+    for (const [timeZone, day] of [
+      ['America/Chicago', '2026-10-26'],
+      ['Asia/Tokyo', '2026-10-27'],
+      [undefined, '2026-10-27'],
+    ] as const) {
+      const { tool, graphRead } = build({});
+      graphRead.getEntity.mockResolvedValueOnce({ ...detail({}), ...instants });
+      const ctx = makeCtx(timeZone ? { timeZone } : {});
+      const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SARAH, 'Sarah') }));
+      expect(res.data).toMatchObject({ firstSeen: day, lastSeen: day });
+    }
+  });
+
   it('shows personal attributes only with the opt-in — never sensitive ones', async () => {
     const { tool } = build(PROPS);
     const ctx = makeCtx({ personalFactsAllowed: true });

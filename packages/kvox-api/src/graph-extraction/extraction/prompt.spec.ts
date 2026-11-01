@@ -41,7 +41,7 @@ describe('assembleExtractionPrompt (#363)', () => {
       HEADING_NOTE,
       HEADING_TRANSCRIPT,
     ]).toEqual([
-      'You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Precision matters more than completeness.',
+      'You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Cover everything the text supports with a citation.',
       '## Rules',
       '## Entity types',
       '## Relation types',
@@ -313,7 +313,7 @@ describe('assembleExtractionPrompt (#363)', () => {
       expect(example).toContain(row);
     }
     // The vocabularies come from the registry's own relation lines.
-    expect(systemPrompt).toContain('role (select, sponsor|owner|lead|contributor|stakeholder|approver|end_user|advisor)');
+    expect(systemPrompt).toContain('role (select, sponsor|owner|lead|contributor|stakeholder|approver|end_user|advisor|decision_maker|influencer|evaluator|account_lead)');
     expect(systemPrompt).toContain('stance (select, champion|supportive|neutral|skeptical|resistant)');
     expect(systemPrompt).toContain('stage (select, evaluating|piloting|rolling_out|adopted|retired)');
     // Stance is only proposed when the source states one.
@@ -357,5 +357,22 @@ describe('assembleExtractionPrompt (#363)', () => {
     expect(rule).toBe(
       'Propose at most 10 entities, 7 relations and 5 facts. If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.',
     );
+  });
+});
+
+describe('assembleExtractionPrompt chunk header (#777)', () => {
+  const ctx = makeContext();
+
+  it('a single chunk produces the same prompt as no chunk', () => {
+    expect(assembleExtractionPrompt(ctx, undefined, { index: 0, count: 1, leadIn: null })).toEqual(assembleExtractionPrompt(ctx));
+  });
+
+  it('a later part carries the part header and a read-only lead-in before the body', () => {
+    const { userContent } = assembleExtractionPrompt(ctx, undefined, { index: 1, count: 3, leadIn: 'Previous paragraph.' });
+    const header = userContent.indexOf('Part 2 of 3 of one note; propose only what this part supports.');
+    const lead = userContent.indexOf('[context only — do not cite]\nPrevious paragraph.\n[end of context]');
+    expect(header).toBeGreaterThan(-1);
+    expect(lead).toBeGreaterThan(header);
+    expect(userContent.indexOf(ctx.note.body)).toBeGreaterThan(lead);
   });
 });

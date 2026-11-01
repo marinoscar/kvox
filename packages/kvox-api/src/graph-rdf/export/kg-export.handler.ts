@@ -44,9 +44,10 @@
 // or statement. `errorMessage` is short and generic for the same reason.
 // =============================================================================
 
-import { Injectable, Logger, type OnModuleInit, Inject } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit, Inject, Optional } from '@nestjs/common';
 
-import { KVOX_BRAND, type KvoxBrand } from '../../core/index.js';
+
+import { KVOX_BRAND, KvoxTimeZoneService, type KvoxBrand } from '../../core/index.js';
 import { ONTOLOGY, ONTOLOGY_VERSION, kvNamespace } from '@marinoscar/kvox-contract/ontology';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -99,6 +100,7 @@ export class KgExportHandler implements KvoxJobHandler, OnModuleInit {
     private readonly objects: GraphObjectsService,
     @Inject(KVOX_AUDIT) private readonly auditPort: KvoxAuditPort,
     @Inject(KVOX_BRAND) private readonly brand: KvoxBrand,
+    @Optional() private readonly zones?: KvoxTimeZoneService,
   ) {
     this.ns = kvNamespace(brand.appSlug);
   }
@@ -179,7 +181,7 @@ export class KgExportHandler implements KvoxJobHandler, OnModuleInit {
     const { body, done } = this.objects.putStream({
       // A pure function of the row: a retry overwrites, never orphans.
       storageKey: `graph/${row.ownerId}/exports/${row.id}.${info.extension}`,
-      name: graphExportFilename(this.brand.appSlug, row.createdAt, format),
+      name: graphExportFilename(this.brand.appSlug, row.createdAt, format, await this.zones?.forUser(row.ownerId)),
       mimeType: info.mimeType,
       ownerId: row.ownerId,
       metadata: { exportId: row.id, format, kind: 'graph-export' },

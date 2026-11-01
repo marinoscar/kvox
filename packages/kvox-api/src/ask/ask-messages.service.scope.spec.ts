@@ -86,6 +86,14 @@ describe('AskMessagesService.post with a scope (GIC-17)', () => {
     expect(enqueued[0].payload.scope).toEqual({ entityIds: [ENTITY], evidenceIds: [] });
   });
 
+  it("carries the asker's request time zone in the job payload", async () => {
+    const { service, enqueued } = setup();
+    await service.post(OWNER, CONV, { content: 'hello' }, 'America/Chicago');
+    await service.post(OWNER, CONV, { content: 'hello' });
+    expect(enqueued[0].payload.timeZone).toBe('America/Chicago');
+    expect('timeZone' in enqueued[1].payload).toBe(false);
+  });
+
   it('adds no scope to the payload when none, or an empty one, is sent', async () => {
     const { service, enqueued } = setup();
     await service.post(OWNER, CONV, { content: 'hello' });
