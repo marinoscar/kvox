@@ -1,16 +1,26 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { createZodDto } from 'nestjs-zod';
-import { graphSelfResponseSchema, type GraphSelfResponse } from '@marinoscar/kvox-contract/graph';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ZodValidationPipe, createZodDto } from 'nestjs-zod';
+import {
+  createSelfPersonSchema,
+  graphSelfEntitySchema,
+  graphSelfResponseSchema,
+  type CreateSelfPersonDto,
+  type GraphSelfEntity,
+  type GraphSelfResponse,
+} from '@marinoscar/kvox-contract/graph';
 
 import { KvoxAuth } from '../../core/index.js';
 import { ApiDataResponse } from '../api-data-response.js';
 import { CurrentGraphActor } from '../graph-actor.js';
 import type { GraphActor } from '../graph-actor.js';
-import { GRAPH_READ_PERMISSION } from '../graph.permissions.js';
+import { GraphEntitiesService } from '../graph-entities.service.js';
+import { GRAPH_READ_PERMISSION, GRAPH_WRITE_PERMISSION } from '../graph.permissions.js';
 import { GraphSelfService } from './graph-self.service.js';
 
 export class GraphSelfResponseDto extends createZodDto(graphSelfResponseSchema) {}
+export class CreateSelfPersonBodyDto extends createZodDto(createSelfPersonSchema) {}
+export class GraphSelfEntityDto extends createZodDto(graphSelfEntitySchema) {}
 
 // =============================================================================
 // GraphSelfController (#778; docs/specs/ontology.md §6.1)
@@ -24,7 +34,10 @@ export class GraphSelfResponseDto extends createZodDto(graphSelfResponseSchema) 
 @ApiTags('Graph')
 @Controller('graph/self')
 export class GraphSelfController {
-  constructor(private readonly self: GraphSelfService) {}
+  constructor(
+    private readonly self: GraphSelfService,
+    private readonly entities: GraphEntitiesService,
+  ) {}
 
   @Get()
   @KvoxAuth(GRAPH_READ_PERMISSION)
@@ -52,5 +65,25 @@ export class GraphSelfController {
       suggestions: answer.suggestions.map(wire),
       displayName: answer.displayName,
     };
+  }
+
+  @Post('person')
+  @KvoxAuth(GRAPH_WRITE_PERMISSION)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Add a Person for yourself',
+    description:
+      'Creates a Person in your graph to stand for you, for when none exists yet, cited as ' +
+      '"Set by hand". It does not choose it: set `graph.self.entityId` with `PATCH /api/user-settings` ' +
+      'to the returned `id`. Requires `graph:write`.',
+  })
+  @ApiBody({ type: CreateSelfPersonBodyDto })
+  @ApiDataResponse(GraphSelfEntityDto, { status: 201, description: 'The new Person' })
+  @ApiResponse({ status: 400, description: 'An empty or too long name' })
+  async createPerson(
+    @Body(new ZodValidationPipe(createSelfPersonSchema)) body: CreateSelfPersonDto,
+    @CurrentGraphActor() user: GraphActor,
+  ): Promise<GraphSelfEntity> {
+    return this.entities.createSelfPerson(user, body.label);
   }
 }

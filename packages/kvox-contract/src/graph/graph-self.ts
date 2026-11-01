@@ -51,3 +51,19 @@ export const graphSelfResponseSchema = z.object({
  * @stability experimental
  */
 export type GraphSelfResponse = z.infer<typeof graphSelfResponseSchema>;
+
+/**
+ * Zod schema for `POST /api/graph/self/person`.
+ *
+ * @stability experimental
+ */
+export const createSelfPersonSchema = z.object({
+  label: z.string().trim().min(1).max(200).describe('The name to show for you in your graph.'),
+});
+
+/**
+ * The parsed shape of {@link createSelfPersonSchema}.
+ *
+ * @stability experimental
+ */
+export type CreateSelfPersonDto = z.infer<typeof createSelfPersonSchema>;

@@ -721,6 +721,15 @@ describe('GraphWriteService', () => {
       ]);
     });
 
+    it('createEntity takes a ManualEvidence too (#778): stored with the reserved IRI, without the validator', async () => {
+      const { service, tx, asTx, validator } = setup();
+      await service.createEntity(asTx, { ...baseEntity, evidence: [new ManualEvidence('Set by hand: Avery Example is you')] }, schema);
+      expect(validator.assertReadable).not.toHaveBeenCalled();
+      expect(tx.kgEvidence.createMany.mock.calls[0][0].data).toEqual([
+        expect.objectContaining({ subjectKind: 'entity', sourceIri: MANUAL_EVIDENCE_SOURCE_IRI, noteId: null }),
+      ]);
+    });
+
     it('validates only the wire rows of a mixed batch, keeping their order', async () => {
       const { service, tx, asTx, validator } = setup();
       await service.createRelation(asTx, { ...baseRelation, evidence: [manual(), ...evidence] }, schema);

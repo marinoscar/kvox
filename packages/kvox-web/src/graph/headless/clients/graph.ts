@@ -3035,6 +3035,8 @@ export interface GraphOverviewNode {
   clusterId: number;
   /** Readable edges the entity has in the whole graph. */
   degree: number;
+  /** True on the Person the user chose as themselves (#778); absent otherwise. */
+  isSelf?: boolean;
 }
 
 /**

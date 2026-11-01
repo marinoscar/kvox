@@ -51,6 +51,7 @@ import { KG_PERSON_TYPE } from './purge/kg-purge.service.js';
 import { GraphOntologyService } from './ontology/graph-ontology.service.js';
 import { toGraphHttpException } from './write/graph-write.errors.js';
 import { GraphWriteService, type EntityUpdateResult } from './write/graph-write.service.js';
+import { ManualEvidence } from './write/manual-evidence.js';
 import {
   KVOX_AUDIT,
   KVOX_EVENTS,
@@ -149,6 +150,43 @@ export class GraphEntitiesService {
     }
 
     return toGraphEntityResponse(result.entity, aliases);
+  }
+
+  /**
+   * `POST /api/graph/self/person` (#778): a Person the owner adds by hand to stand for themselves.
+   *
+   * The one place a user creates an entity without a source note: through
+   * `GraphWriteService.createEntity` in one transaction, cited by a server-authored
+   * {@link ManualEvidence} ("Set by hand: …") so the `kg_assert_has_evidence` trigger holds. The
+   * label is also the first alias. After the commit, outside the transaction: the audit row (ids
+   * only), the guarded follow-ups and `graph.changed`. Choosing the Person as yourself is a
+   * separate write to the `graph` user-settings namespace.
+   */
+  async createSelfPerson(user: GraphActor, label: string): Promise<{ id: string; label: string; aliases: string[] }> {
+    const schema = await this.ontology.effectiveSchemaFor(user.id);
+    let entity: KgEntity;
+    try {
+      entity = await this.prisma.$transaction((tx) =>
+        this.write.createEntity(
+          tx,
+          {
+            ownerId: user.id,
+            type: 'Person',
+            label,
+            reviewStatus: 'accepted',
+            labelSource: 'user',
+            evidence: [new ManualEvidence(`Set by hand: ${label.trim()} is you`)],
+          },
+          schema,
+        ),
+      );
+    } catch (err) {
+      throw toGraphHttpException(err, this.logger) ?? err;
+    }
+    await this.audit(user.id, entity.id, { created: 'self_person' });
+    await this.enqueueFollowUps(user.id, entity.id);
+    this.events.emit(GRAPH_CHANGED_EVENT, { ownerId: user.id, reason: 'manual_edit' } satisfies GraphChangedEvent);
+    return { id: entity.id, label: entity.label, aliases: [] };
   }
 
   /**

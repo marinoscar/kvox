@@ -98,6 +98,9 @@ export function diameterOf(attrs: Attributes): number {
   return nodeDiameter(attrs.size as number | undefined, attrs.isSeed === true);
 }
 
+/** What the owner's own node's label starts with (#778). */
+export const SELF_LABEL_PREFIX = 'You · ';
+
 /** The zoom range over which label text keeps its screen size; beyond it the text scales with the camera. */
 export const LABEL_SCREEN_ZOOM_RANGE: readonly [number, number] = [0.4, 2.5];
 
@@ -152,7 +155,10 @@ export function clusterSize(memberCount: number, scale: LabelScale): number {
 export function toNodeDatum(id: string, attrs: Attributes, theme: CanvasTheme, scale: LabelScale = UNSCALED): NodeData {
   const diameter = diameterOf(attrs);
   const item = attrs.nodeKind === 'item';
-  const label = typeof attrs.label === 'string' ? attrs.label : '';
+  const self = attrs.isSelf === true;
+  const name = typeof attrs.label === 'string' ? attrs.label : '';
+  // The owner's own node reads "You · <label>" (#778).
+  const label = self ? `${SELF_LABEL_PREFIX}${name}` : name;
   const icon = iconSource(attrs.image, attrs.iconColor);
   const stubCount = typeof attrs.stubCount === 'number' ? attrs.stubCount : null;
   const style: Record<string, unknown> = {
@@ -200,7 +206,7 @@ export function toNodeDatum(id: string, attrs: Attributes, theme: CanvasTheme, s
       entityType: attrs.entityType,
       isSeed: attrs.isSeed === true,
       isStub: attrs.isStub === true,
-      isSelf: attrs.isSelf === true,
+      isSelf: self,
       ...(typeof attrs.memberCount === 'number' ? { memberCount: attrs.memberCount } : {}),
     },
     style,
