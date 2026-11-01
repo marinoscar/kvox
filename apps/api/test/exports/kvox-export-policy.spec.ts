@@ -69,6 +69,8 @@ function contextOver(db: ExportDb, overrides: Partial<ExportContext> = {}): Expo
     datamodel,
     pageSize: 2,
     now: new Date('2026-01-01T00:00:00.000Z'),
+    // The caller's display time zone (required since platform next.18).
+    timeZone: 'UTC',
     ...overrides,
   };
 }
