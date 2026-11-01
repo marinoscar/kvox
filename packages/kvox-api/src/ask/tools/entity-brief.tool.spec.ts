@@ -87,8 +87,8 @@ describe('EntityBriefTool', () => {
       ['Asia/Tokyo', '2026-09-02'],
     ] as const) {
       const ctx = makeCtx({ timeZone });
-      const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, ACME), since: '2026-09-01', asOf: null }));
-      expect(service.getBrief).toHaveBeenLastCalledWith(ctx.user, ACME, expect.objectContaining({ since: '2026-09-01', timeZone }));
+      const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, KAPPA), since: '2026-09-01', asOf: null }));
+      expect(service.getBrief).toHaveBeenLastCalledWith(ctx.user, KAPPA, expect.objectContaining({ since: '2026-09-01', timeZone }));
       expect((res.data as Record<string, unknown>).digestGeneratedAt).toBe(day);
       // The event's own date is a calendar value: UTC midnight, never shifted by the zone.
       expect((res.data as { whatChanged: Array<{ at: string }> }).whatChanged[0]?.at).toBe('2026-09-10');
