@@ -1,5 +1,12 @@
 # @marinoscar/kvox-db
 
+## 0.1.0-next.23
+
+### Minor Changes
+
+- e908255: Commit the confident rows of every note's graph proposal automatically, by default (#779). The auto-commit job now runs for every note, not only notes of a note library, and applies the same safe policy as the Review Queue: ambiguous or possible-duplicate matches, closings, low-confidence rows and sensitive person facts still wait for a person. A new graph preference, `review.autoCommitSafeRows` ("Commit confident rows automatically", on by default, no backfill needed), controls it; a note library's own auto-commit setting, when set to on or off, overrides the preference for that library's notes. The library setting is now three-way: `autoCommit` is `null` (follow the preference), `true` or `false`, in the contract, the API and the library page. The domain migration makes the column nullable and turns the old never-chosen `false` into `null`. The note page gains a "Re-run extraction" action, which replaces an earlier open draft once the new one is ready.
+- 88236d3: The graph now knows who the account owner is (#778). A new per-user graph preference, `self.entityId` (none by default), names the Person that is you; Settings, Knowledge graph has a "You in the graph" control to pick an existing Person, accept a suggestion that matches your profile name, or add a Person by hand. Nothing is ever chosen for you. When it is set, extraction tells the model those names are the note's owner and offers the Person as a known entity, a mention of the owner's name or an alias links to it at or above the auto-link threshold, and the graph explorer draws the node as "You" with its own ring and always labels it. The read APIs mark it with `isSelf`. A graph without a chosen Person is unchanged, and so is the extraction prompt.
+
 ## 0.1.0-next.22
 
 ## 0.1.0-next.21

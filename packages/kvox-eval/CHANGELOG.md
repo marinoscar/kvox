@@ -1,5 +1,19 @@
 # @marinoscar/kvox-eval
 
+## 0.1.0-next.23
+
+### Minor Changes
+
+- dc85b1e: Graph extraction reads a document or record that describes several meetings (#780). When a note was made from an uploaded document and has no transcript behind it, extraction may propose Meetings: each with its own `occurredOn` and `meetingKind`, its organizer (ORGANIZED) and its attendees (ATTENDED with `attendance`), all cited. Two or more proposed meetings replace the system Meeting, and each fact is attached to the meeting it was cited under; fewer than two keep the system Meeting, so a single-meeting note and every transcript extract exactly as before, with an unchanged prompt. Chunked extraction merges a meeting restated in two parts by its normalised title and date.
+
+  A document-origin note also gets one system Document row (the note's title, `preparedOn` when the date is stated), cited like the system Meeting, with RECORDED_IN from each meeting. `ExtractionInput` and `LoadExtractionInput` accept an optional `selfEntityId` (default null): when set, the owner is offered as a known entity and the Document gets PREPARED_FOR to them. `ExtractionInput.sourceType` carries the note's source type; the loader fills it. The evaluation harness gains a long-record fixture and the pass criteria for it.
+
+- fe86689: Ontology 1.4.0 (#776). Contract package, ontology entry point: the `Opportunity` entity type (work) with `stage`, `valueText`, `confidence` and `timing`; the `Document` entity type (core, system-created, never extracted) with `title`, `preparedOn` and `classification`; new relations `ORGANIZED`, `WITH_CLIENT`, `PURSUED_BY`, `COMPETING_FOR` (work) and `RECORDED_IN`, `PREPARED_FOR` (core, system-written); `Meeting` gains `occurredOn` and `meetingKind`; `Claim` gains `claimKind`, `value` and `unit`; `ATTENDED` gains `attendance`; `USES` gains `scale`; `INVOLVED_IN` also reaches an Opportunity and its role gains `decision_maker`, `influencer`, `evaluator` and `account_lead`; `CONCERNS` gains Opportunity to Project, Product and Topic; `PART_OF` allows Organization to Organization. All additive, recorded in `shipped-keys.ts`, no migration. API package: the extraction prompt, output schema and RDF exports pick the additions up from the registry; `buildOfferedSchema` takes an optional `proposeTypes` so a host can opt in to proposing a `Meeting` (off by default, unchanged behaviour); the graph write service refuses an organization that is part of itself. Web package: the explorer palette and pictograms cover Opportunity and Document. Eval package: the parity request snapshots carry the longer extraction prompt. `STATED_BY` (Claim to Person) is deferred because a claim is a graph item row, which cannot be a relation endpoint without a new column and migration.
+
+### Patch Changes
+
+- 61a1c83: Test data, evaluation fixtures and code examples no longer borrow well-known fictional brands; they use invented placeholders (Org Kappa, Org Lambda, Org Sigma, Org Omega, Org Theta). No keys, schemas or behaviour change.
+
 ## 0.1.0-next.22
 
 ### Patch Changes

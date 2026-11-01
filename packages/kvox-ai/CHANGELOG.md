@@ -1,5 +1,11 @@
 # @marinoscar/kvox-ai
 
+## 0.1.0-next.23
+
+### Patch Changes
+
+- 61a1c83: Test data, evaluation fixtures and code examples no longer borrow well-known fictional brands; they use invented placeholders (Org Kappa, Org Lambda, Org Sigma, Org Omega, Org Theta). No keys, schemas or behaviour change.
+
 ## 0.1.0-next.22
 
 ### Patch Changes
