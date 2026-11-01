@@ -8,7 +8,8 @@
 //
 //   - ENTITIES are deduped by type + normalized label/alias (the resolution
 //     stage's `normalizedNames`); a re-stated KNOWN entity (`k#` ref) merges by
-//     ref. Evidence is unioned, aliases unioned, props fill gaps (first wins).
+//     ref. A MEETING is the exception (#780): two meetings of one record can share
+//     a title ("weekly sync"), so it dedupes by normalized title + `occurredOn`. Evidence is unioned, aliases unioned, props fill gaps (first wins).
 //   - Local refs are renumbered `e1…` and every relation / item endpoint is
 //     re-pointed to the merged ref. A known `{ entityId }` endpoint is untouched.
 //   - RELATIONS with the same type, endpoints, dates and props, and ITEMS with
@@ -20,6 +21,7 @@
 // =============================================================================
 
 import { normalizedNames } from '../resolution/candidate.service.js';
+import { normalizeForMatch } from './extraction-context.js';
 import type { EndpointRef, ProposalItemFlag } from '../proposals/proposal-payload.schema.js';
 import type { EvidenceDraft, ProposedRow, ValidationStats } from './validate.js';
 
@@ -50,6 +52,21 @@ function unionEvidence(into: EvidenceDraft[], more: EvidenceDraft[]): void {
       into.push(e);
     }
   }
+}
+
+type EntityPayloadLike = { type: string; label: string; aliases: string[]; props: Record<string, unknown> };
+
+/**
+ * The keys an entity is deduped under. A Meeting is one key: its normalized title and the date
+ * it occurred on (empty when none is stated), so a record's weekly meetings stay apart and one
+ * meeting restated in two chunks becomes one row.
+ */
+export function entityDedupKeys(payload: EntityPayloadLike): string[] {
+  if (payload.type === 'Meeting') {
+    const day = typeof payload.props.occurredOn === 'string' ? payload.props.occurredOn : '';
+    return [`Meeting|${normalizeForMatch(payload.label)}|${day}`];
+  }
+  return normalizedNames(payload.label, payload.aliases).map((n) => `${payload.type}|${n}`);
 }
 
 function unionFlags(a: ProposalItemFlag[], b: ProposalItemFlag[]): ProposalItemFlag[] {
@@ -90,7 +107,7 @@ export function mergeChunkResults(outcomes: ChunkOutcome[]): MergedResult {
     const refMap = new Map<string, string>(); // chunk-local ref → merged ref
     for (const row of outcome.rows) {
       if (row.kind !== 'entity') continue;
-      const names = normalizedNames(row.payload.label, row.payload.aliases).map((n) => `${row.payload.type}|${n}`);
+      const names = entityDedupKeys(row.payload);
       const known = KNOWN_REF.test(row.payload.ref) ? byKnownRef.get(row.payload.ref) : undefined;
       const existing = known ?? names.map((n) => byName.get(n)).find((m) => m !== undefined);
       if (existing) {

@@ -235,6 +235,26 @@ export function stakeholderExampleRule(ctx: ExtractionContext): string | null {
   );
 }
 
+/**
+ * The several-meetings rule (#780): a document or record may describe more than one meeting.
+ * Present only for a document-origin run that is offered Meeting; DERIVED from the offered
+ * relations, so ORGANIZED and ATTENDED are named only when they are offered.
+ */
+export function documentMeetingsRule(ctx: ExtractionContext): string | null {
+  if (!ctx.documentOrigin || !offeredTypeKeys(ctx).has('Meeting')) return null;
+  const offered = (key: string) => ctx.offered.relationTypes.some((r) => r.type.key === key);
+  const attendees = offered('ATTENDED')
+    ? ' Give every person who took part ATTENDED to that Meeting (`attendance` invited or copied only when the document says they were invited or only copied), each citing the passage that names them.'
+    : '';
+  const organizer = offered('ORGANIZED') ? ' Give the person who convened or hosted it ORGANIZED, when the document says who.' : '';
+  return (
+    'This source is a document or record and may describe several meetings. Propose each separately dated meeting as its own Meeting with a new ref: its label from its heading or subject, `occurredOn` only from a date the document states for that meeting, `meetingKind` only when the document makes the kind clear; cite its heading or opening line.' +
+    attendees +
+    organizer +
+    ' Link each fact to the meeting it came from. State a meeting once, however many parts of the document mention it. A document that records one meeting needs no Meeting row: use `meeting`.'
+  );
+}
+
 function rules(ctx: ExtractionContext, caps?: ExtractionRowCaps): string[] {
   const hasContext = offeredContextText(ctx.note.contextText) !== null;
   const citeRule = hasContext
@@ -248,6 +268,8 @@ function rules(ctx: ExtractionContext, caps?: ExtractionRowCaps): string[] {
   if (boundary) extra.push(boundary);
   const example = stakeholderExampleRule(ctx);
   if (example) extra.push(example);
+  const meetings = documentMeetingsRule(ctx);
+  if (meetings) extra.push(meetings);
   if (caps) extra.push(rowCapsRule(ctx, caps));
   return [
     citeRule,

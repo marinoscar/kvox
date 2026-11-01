@@ -67,6 +67,12 @@ export function offeredContextText(contextText: string | null | undefined): stri
 /** The ref of the deterministic Meeting row, and the endpoint the model uses for it. */
 export const MEETING_REF = 'meeting';
 
+/** The ref of the deterministic Document row a document-origin note gets (#780). */
+export const DOCUMENT_REF = 'document';
+
+/** What a note was made from: `NoteSourceType`, as far as extraction cares. */
+export type ExtractionSourceType = 'transcript' | 'note' | 'document';
+
 /** Review statuses a known entity may carry to be offered. */
 const LIVE_REVIEW_STATUSES = new Set(['accepted', 'edited']);
 
@@ -106,6 +112,18 @@ export interface ExtractionInput {
    * Absent or empty keeps today's behaviour: the Meeting is created by the system only.
    */
   proposeTypes?: readonly string[];
+  /**
+   * What the note was made from. `'document'` (an uploaded document or record, no
+   * transcript behind it) turns on Meeting proposals and adds the system Document
+   * row (#780). Absent or any other value keeps today's behaviour.
+   */
+  sourceType?: ExtractionSourceType;
+  /**
+   * The owner's own Person entity id when no resolved `self` row is given (evaluation
+   * fixtures set it directly). `self` wins when present. The resolved id is the target of
+   * the Document's PREPARED_FOR edge (#780); absent or null: no such edge.
+   */
+  selfEntityId?: string | null;
   /**
    * The Person the note's owner chose as themselves (`preferences.self.entityId`, resolved by
    * `GraphSelfService`: live, merges followed), or null/absent. When present it leads the known
@@ -205,6 +223,13 @@ export interface ExtractionContext {
   /** Only when the reviewer pinned something or wrote instructions. */
   guidance: { pinnedAliases: string[]; instructions: string } | null;
   existingMeetingId: string | null;
+  /**
+   * A document or record with no transcript behind it (#780): extraction may propose
+   * Meetings, and the system adds one Document row. False for every transcript.
+   */
+  documentOrigin: boolean;
+  /** The owner's own Person entity id (#778), or null. Only PREPARED_FOR reads it. */
+  selfEntityId: string | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -415,6 +440,9 @@ export function buildExtractionContext(input: ExtractionInput): ExtractionContex
   const dateSource: DateSource =
     recordedAtEdited || namesADate(input.note.contextText) ? 'stated' : 'note_created_at';
 
+  // A document or record (no transcript) may hold several meetings (#780).
+  const documentOrigin = input.sourceType === 'document' && input.transcript === null;
+
   // Guidance.
   const pinnedAliases = (input.guidance?.pinnedEntityIds ?? [])
     .map((id) => knownById.get(id)?.alias)
@@ -443,8 +471,12 @@ export function buildExtractionContext(input: ExtractionInput): ExtractionContex
     knownById,
     speakers,
     effectiveSchema: input.effectiveSchema,
-    offered: buildOfferedSchema(input.effectiveSchema, input.guidance, { proposeTypes: input.proposeTypes }),
+    offered: buildOfferedSchema(input.effectiveSchema, input.guidance, {
+      proposeTypes: documentOrigin ? [...(input.proposeTypes ?? []), 'Meeting'] : input.proposeTypes,
+    }),
     guidance,
     existingMeetingId: input.existingMeeting?.id ?? null,
+    documentOrigin,
+    selfEntityId: input.self?.id ?? input.selfEntityId ?? null,
   };
 }

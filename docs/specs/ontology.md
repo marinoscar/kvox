@@ -422,11 +422,11 @@ has a straight answer rather than a silent guess. Ontology 1.4.0 adds two
 attributes, `occurredOn` (date, only if the source states it) and
 `meetingKind` (client, internal, partner, other). The system still creates the
 one `Meeting` per transcript or single note, so the type stays
-`extractable: false` and is not offered to the model. A host that extracts a
-document recording several meetings opts in per run with
-`buildOfferedSchema(schema, guidance, { proposeTypes: ['Meeting'] })` (or
-`ExtractionInput.proposeTypes`); nothing sets it yet, the extractor change is
-#780. *Domain:* `core` (§17.2).
+`extractable: false` and is not offered to the model, except for a document
+or record (§6.8): there the extractor proposes each separately dated meeting,
+through `buildOfferedSchema(schema, guidance, { proposeTypes: ['Meeting'] })`
+(or `ExtractionInput.proposeTypes`), which a document-origin note turns on by
+itself (#780). *Domain:* `core` (§17.2).
 
 **Opportunity** — a potential piece of work or sale being pursued with a
 client that has not started yet: "the Org Alpha analytics engagement," "the
@@ -445,7 +445,8 @@ proposal). Created by the system, never proposed by extraction
 (`extractable: false`); a document merely mentioned in conversation is not a
 row. Attributes (system-set): `title`, `preparedOn` (date), `classification`
 (text). `RECORDED_IN` (Meeting → Document) and `PREPARED_FOR` (Document →
-Person) are likewise system-written. Aligned to `schema:DigitalDocument`.
+Person) are likewise system-written. A document-origin note gets exactly one
+(§6.8). Aligned to `schema:DigitalDocument`.
 *Domain:* `core` (§17.2). Added in ontology 1.4.0.
 
 **Commitment** — a task with an *owner* and, optionally, a *counterparty* and
@@ -1223,6 +1224,29 @@ following `mergedIntoId` when it was merged; anything else reads as no self.
   candidate search or adjudication. A speaker-identified Person still wins first.
 - **Read side.** The explorer's slice nodes and overview nodes carry `isSelf: true` on that one
   Person; the canvas draws it "You · label" with its own ring and always labels it.
+
+### 6.8 A document that records several meetings (issue #780)
+
+A note made from an uploaded document or record (`sourceType = document`, no transcript behind it)
+may describe more than one meeting. For such a note, and only for it, the run is different:
+
+- **Meetings are proposed.** `Meeting` is offered to the model (`proposeTypes`), with a prompt rule:
+  one Meeting per separately dated meeting, `occurredOn` and `meetingKind` only when stated, each
+  attendee `ATTENDED` (`attendance` invited or copied only when stated), the host `ORGANIZED`, every
+  row cited. A transcript's prompt and rows are unchanged.
+- **The rule.** `addDeterministicRows` counts the new Meetings the model proposed (not a re-stated
+  known one). Two or more replace the system Meeting: the `meeting` row is not added, and anything
+  that pointed at `meeting` (a commitment's or decision's meeting, an edge) is re-pointed at the
+  proposed meeting whose first citation is the last at or before the row's own. Fewer than two keep
+  the system Meeting, and a lone proposed one is folded into it. Chunk merging dedupes a Meeting by
+  normalized title and `occurredOn`, so a weekly meeting stays one row per date.
+- **The Document.** One system row (ref `document`, label and `title` = the note's title,
+  `preparedOn` when the date is stated), cited with the note's title like the system Meeting, with
+  `RECORDED_IN` from each meeting. `PREPARED_FOR` goes to the owner's own Person (§6.7) only when
+  one is chosen; the loader resolves it and it is offered to the model as a known entity too. The
+  Document and its edges still reach the graph only through the proposal's commit.
+- **Evaluation.** `m60` (`kvox-eval`, fixtures README) is an invented 6,000-word record of six
+  meetings; `kg-long-record.spec.ts` asserts the pass criteria through this pipeline.
 
 ## 7. Entity resolution (`kg.resolve`)
 

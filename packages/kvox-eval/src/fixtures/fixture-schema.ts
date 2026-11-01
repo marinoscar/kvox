@@ -166,6 +166,17 @@ export const goldenFixtureSchema = z.object({
   contextText: z.string().nullable(),
   /** false = a note-only meeting: no speakers, no segments, note evidence only. */
   hasTranscript: z.boolean(),
+  /**
+   * What the note was made from (#780). `document` marks a record that may describe several
+   * meetings: extraction proposes Meetings and the system adds a Document. Null (the default)
+   * is every other fixture: unchanged behaviour.
+   */
+  sourceType: z.enum(['document']).nullable().default(null),
+  /**
+   * The id (a `knownEntities` id) of the note owner's own Person, where the fixture supplies one
+   * (#780; the per-user `self` preference of #778 in the product). Null: none.
+   */
+  selfEntityId: z.string().nullable().default(null),
   speakers: z.array(z.object({ id: z.string(), label: z.string(), displayName: z.string().nullable() })),
   segments: z.array(
     z.object({

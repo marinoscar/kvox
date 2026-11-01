@@ -255,6 +255,8 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
     });
     const guidance = (guidanceRow?.userGuidance ?? null) as KgExtractGuidance | null;
 
+    // The loader resolves the owner's own Person (#778) and the context derives the Document's
+    // PREPARED_FOR target from it (#780).
     const input = await this.loader.load({ userId, noteId, noteVersion: payload.noteVersion, guidance });
     const ctx = buildExtractionContext(input);
 

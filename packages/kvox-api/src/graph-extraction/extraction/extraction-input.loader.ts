@@ -190,6 +190,7 @@ export class ExtractionInputLoader {
         recentlyMentioned: pick(recentIds),
       },
       existingMeeting,
+      sourceType: note.sourceType,
       // The note owner's zone: the meeting date is the local day of the recording.
       timeZone: (await this.zones?.forUser(userId)) ?? 'UTC',
     };

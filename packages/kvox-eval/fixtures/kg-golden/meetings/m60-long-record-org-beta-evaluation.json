@@ -1,0 +1,3892 @@
+{
+  "id": "m60",
+  "title": "Org Beta Product X Evaluation: Meeting Record",
+  "tags": [
+    "long-record",
+    "multi-meeting",
+    "document-record",
+    "note-only",
+    "opportunity",
+    "org-hierarchy"
+  ],
+  "recordedAt": "2026-06-03T09:00:00.000Z",
+  "contextText": "Prepared on 3 June 2026 for Avery Example, who owns the Org Beta account at Org Alpha.",
+  "hasTranscript": false,
+  "sourceType": "document",
+  "selfEntityId": "g-person-avery-example",
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Org Beta Product X Evaluation: Meeting Record\n\nPrepared for Avery Example, who owns the Org Beta account at Org Alpha. Prepared on 3 June 2026.\n\nThis record collects six meetings held between February and May 2026 about whether Org Beta should adopt Product X, a route planning platform offered by Org Alpha. Each section lists who organised the meeting, who took part and what was decided. It is a working record for the account team and is not a contract.\n\n## Parties and participants\n\nPurpose and method. The account team keeps one record per evaluation so that anyone who joins later can see how a decision was reached. The record follows the meetings in the order they were held. The attendee lists are copied from the minutes, and a person who was invited but did not take part, or who only received the minutes, is marked as such. Numbers are quoted as they were stated in the meeting and have not been audited. Where a meeting reached a decision it is listed under the heading Decisions, and every action carries a name and a date.\n\nOrg Alpha is the vendor of Product X. Org Beta is the client and operates a network of six warehouses with its own trucks and contracted carriers. Org Gamma is a rival supplier that currently provides Product Y, an older planning tool, to Org Beta.\n\nOrg Alpha Field Services is the services unit of Org Alpha and runs every installation and rollout.\nOrg Alpha Data Platform is the engineering unit of Org Alpha that builds and supports Product X.\nOrg Beta Logistics is the logistics division of Org Beta and operates the warehouses and the trucking network.\nOrg Beta Finance is the finance division of Org Beta and owns budgets, controls and compliance.\nOrg Beta IT is the technology division of Org Beta and runs its data and integration systems.\nOrg Beta IT Security is the security unit inside the technology side of Org Beta.\n\nParticipants, in the order the groups appear:\n\nAvery Example is the Account Executive at Org Alpha.\nJordan Sample is the Solutions Engineer in Org Alpha Field Services, part of Org Alpha.\nCasey Placeholder is the Director of Field Services in Org Alpha Field Services, part of Org Alpha.\nMorgan Demo is the Data Platform Lead in Org Alpha Data Platform, part of Org Alpha.\nTaylor Fixture is the Customer Success Manager at Org Alpha.\nRiley Testcase is the Legal Counsel at Org Alpha.\nSam Example is the Pricing Analyst at Org Alpha.\nDrew Sample is the Product Specialist in Org Alpha Data Platform, part of Org Alpha.\nOakley Fixture is the Implementation Consultant in Org Alpha Field Services, part of Org Alpha.\nBlair Example is the VP of Operations in Org Beta Logistics, part of Org Beta.\nKendall Sample is the Finance Director in Org Beta Finance, part of Org Beta.\nReese Placeholder is the Chief Information Officer in Org Beta IT, part of Org Beta.\nHarper Demo is the Head of IT Security in Org Beta IT Security, part of Org Beta.\nEmery Fixture is the Logistics Planner in Org Beta Logistics, part of Org Beta.\nRowan Testcase is the Warehouse Manager in Org Beta Logistics, part of Org Beta.\nSkyler Example is the Procurement Manager at Org Beta.\nDakota Sample is the Finance Analyst in Org Beta Finance, part of Org Beta.\nFinley Placeholder is the Data Engineer in Org Beta IT, part of Org Beta.\nJules Demo is the Compliance Officer in Org Beta Finance, part of Org Beta.\nSage Fixture is the Operations Analyst in Org Beta Logistics, part of Org Beta.\nAlexis Testcase is the Transport Supervisor in Org Beta Logistics, part of Org Beta.\nCameron Example is the Program Manager at Org Beta.\nDevon Sample is the Controller in Org Beta Finance, part of Org Beta.\nLennon Placeholder is the Security Analyst in Org Beta IT Security, part of Org Beta.\nParker Demo is the Chief Executive Officer at Org Beta.\nPeyton Fixture is the Integration Architect in Org Beta IT, part of Org Beta.\n\nThe opportunity is Org Beta Product X Opportunity: Org Alpha is pursuing a three-year agreement with Org Beta for Product X across all six sites. Org Gamma is also bidding for the work. The opportunity is expected to be worth about 1.2 million over three years, the team rates the chance of success as medium, and a decision is expected by the end of June 2026.\n\nBlair Example, Kendall Sample and Reese Placeholder are the decision makers for Org Beta. Emery Fixture and Rowan Testcase influence the decision because the planners and the warehouse depend on the result. Harper Demo and Skyler Example evaluate the offer for security and for procurement. Avery Example leads the account for Org Alpha.\n\n## Meeting 1: Discovery Workshop\n\nDate: 10 February 2026\nOrganizer: Avery Example\nAttended: Avery Example (Org Alpha, Account Executive), Jordan Sample (Org Alpha Field Services, Solutions Engineer), Casey Placeholder (Org Alpha Field Services, Director of Field Services), Blair Example (Org Beta Logistics, VP of Operations), Emery Fixture (Org Beta Logistics, Logistics Planner), Rowan Testcase (Org Beta Logistics, Warehouse Manager), Sage Fixture (Org Beta Logistics, Operations Analyst), Alexis Testcase (Org Beta Logistics, Transport Supervisor), Reese Placeholder (Org Beta IT, Chief Information Officer)\nInvited, did not attend: Skyler Example (Org Beta, Procurement Manager)\n\nAvery Example opened the workshop by explaining why Org Alpha asked for it: Org Beta had mentioned at the end of last year that its planners still build the daily truck routes by hand, and Org Alpha believes Product X can take most of that work off their desks. Blair Example answered that the logistics division had been looking for something like this for two years but had never found the time to run a proper evaluation. He said the goal of the morning was to leave with a shared picture of the problem and a short list of next steps.\n\nBlair Example then described the network. Org Beta Logistics moves about 4,200 pallets a day across six sites, with a mix of its own trucks and contracted carriers. Emery Fixture added that the plan for the next morning is normally frozen at six in the evening, and that anything that changes after that, such as a late order or a truck that breaks down, is patched by phone. Rowan Testcase described the view from the warehouse floor: loading bays are booked in half hour slots, and when a truck arrives early or late the whole sequence of bays slips and the loaders lose most of an hour.\n\nSage Fixture shared the numbers the operations team tracks every week. Average on-time delivery across the network was 87 percent last quarter, and the team would like to reach 95 percent by the end of the year. Alexis Testcase said that most of the misses come from the same few routes, where drivers run into the end of their permitted hours before the last drop. Casey Placeholder noted that Org Alpha Field Services has seen the same pattern at other customers and that route planning that respects driver hours from the start usually removes about half of such misses.\n\nJordan Sample walked the group through the first version of the architecture overview on a whiteboard. Product X reads orders, vehicle availability and driver hours, builds a plan, and writes it back to the transport system. It does not replace the transport system or the warehouse system. Emery Fixture asked how often the plan can be recalculated, and Jordan Sample said that a full recalculation takes a few minutes, so a late change in the afternoon can be absorbed without rebuilding the whole plan. Blair Example said that this was the single capability his team cared about most.\n\nThe group spent some time on what the organisation uses today. Org Beta runs Product Y, an older planning tool offered by Org Gamma, for reporting and for a basic route suggestion. Emery Fixture said the planners mostly ignore the suggestions and use the tool to look up past plans. Reese Placeholder joined the call for the last part of the morning and wanted to know whether Product X would make the move away from Product Y difficult. Jordan Sample said that Org Alpha would run both side by side during a pilot and would not ask Org Beta to retire Product Y until the numbers justified it.\n\nReese Placeholder is the person who signs off any new system that touches the network, and he asked three questions: where the data would be stored, who at Org Alpha could see it, and how long a pilot would take. Avery Example promised written answers to all three. Blair Example said that he would sponsor the evaluation inside the logistics division and that the finance division would need to be brought in early because the budget cycle closes at the end of June. Skyler Example had been invited to represent procurement but could not attend; Blair Example asked that the notes be sent to Skyler Example the same day.\n\nNear the end the group agreed to learn from one site before committing to a wider plan. Rowan Testcase offered the Northern site, because it is the smallest of the six and its manager is willing to change how bays are scheduled. Casey Placeholder said Org Alpha Field Services could staff a small team there for a month. Nobody objected, and Blair Example asked Avery Example to record it as the proposed first step.\n\nThe conversation about driver hours deserves a note of its own. Alexis Testcase explained that permitted hours differ between the company's own drivers and the contracted carriers, and that the rules also change with the length of the route and the time of year. Casey Placeholder said that Org Alpha models these rules as constraints that the planner can read, so that a supervisor can see why a plan was built the way it was. Emery Fixture said that explaining a plan to a driver who disagrees with it is a large part of the supervisor's day, so a plan that comes with its reasons would help.\n\nSage Fixture asked how the tool deals with seasonal peaks. Jordan Sample said that Product X plans each day from the orders and vehicles available that day, so a peak is simply a larger input, but that the planners should expect to review more plans on peak days and should be given time for it. Blair Example said that the peak before the winter holidays is the real test and that any rollout plan has to avoid the weeks around it.\n\nSummary of the workshop. The group agreed that route planning is the first topic for the evaluation, and that data location, price and the effect on planners are the three questions to answer before any commitment is made.\n\nDecisions: none were taken in this workshop; the choice of pilot site was left to the next meeting.\n\nActions. Avery Example will send the discovery summary to Blair Example by 17 February 2026. Jordan Sample will prepare the architecture overview for Reese Placeholder by 24 February 2026. Emery Fixture will share the route data for the Northern site with Jordan Sample by 20 February 2026.\n\n## Meeting 2: Logistics Requirements Review\n\nDate: 4 March 2026\nOrganizer: Blair Example\nAttended: Blair Example (Org Beta Logistics, VP of Operations), Avery Example (Org Alpha, Account Executive), Jordan Sample (Org Alpha Field Services, Solutions Engineer), Morgan Demo (Org Alpha Data Platform, Data Platform Lead), Emery Fixture (Org Beta Logistics, Logistics Planner), Rowan Testcase (Org Beta Logistics, Warehouse Manager), Finley Placeholder (Org Beta IT, Data Engineer), Peyton Fixture (Org Beta IT, Integration Architect), Sage Fixture (Org Beta Logistics, Operations Analyst), Cameron Example (Org Beta, Program Manager)\nInvited, did not attend: Kendall Sample (Org Beta Finance, Finance Director)\n\nBlair Example convened the review to turn the workshop into requirements. He started by saying that Org Beta Logistics wants a pilot at the Northern site and that Cameron Example, the program manager at Org Beta, will coordinate everything on the Org Beta side. Kendall Sample had been invited from finance and sent her apologies, with a note that she would read the minutes.\n\nEmery Fixture presented how planning works at the Northern site today. Manual route planning takes planners roughly 3 hours per site every morning, and at the Northern site two planners do it with spreadsheets that were built over many years. Sage Fixture showed the spreadsheet and explained the rules that live only in people's heads, such as which customers refuse deliveries before eight and which docks cannot take the long trailers.\n\nMorgan Demo explained how Product X represents such rules. Each rule becomes a constraint with a name and an owner, and the planners can switch constraints on and off to see how the plan changes. Jordan Sample added that Org Alpha would capture the rules together with Emery Fixture during the first two weeks of the pilot, instead of asking the planners to fill in a form. Emery Fixture said he liked that approach because the rules are easier to explain at a screen than on paper.\n\nFinley Placeholder and Peyton Fixture represented Org Beta IT. They described the interfaces that Product X would use: the transport system exposes orders and vehicle data through a nightly export and a small interface for status updates, while the older warehouse system at two sites has no interface at all and only produces a printed report. Peyton Fixture said that the lack of a connector for the legacy warehouse system is the biggest technical gap, because the printed report is the only record of dock bookings at the Northern site.\n\nMorgan Demo agreed that this is a real gap and said Org Alpha Data Platform has a connector for the newer warehouse system but not for the legacy one. The options discussed were to build a small reader for the report, to ask Org Beta IT to export the bookings as a file, or to enter the bookings by hand during the pilot. Finley Placeholder preferred the file export and offered to provide a sample extract so that Morgan Demo could judge the effort.\n\nRowan Testcase raised the people side. Planners have used spreadsheets for a long time and some of them may resist moving to a new tool, especially if they think it is meant to replace them. Blair Example said that the pilot must show planners that the tool removes the repetitive part of their morning and leaves the judgement to them. Avery Example suggested naming one planner as the lead user who helps shape the tool, and Emery Fixture volunteered.\n\nThe group then discussed how to measure the pilot. Sage Fixture proposed three measures: planning time per site per morning, on-time delivery on the pilot routes, and the number of late changes handled without a phone call. Jordan Sample agreed and asked that the baseline for each be recorded during the two weeks before the pilot starts. Blair Example accepted and asked Avery Example to include the measures in the written plan.\n\nReese Placeholder had asked in the workshop where data would live. Avery Example reported that Org Alpha would answer in writing in the next review, together with the security questionnaire that Org Beta IT Security would send. Blair Example said he wanted that answer before the pilot kickoff, not after.\n\nSage Fixture also described how the Northern site handles returns, which turned out to matter for the design. Returned goods arrive on the same trucks that make deliveries, and the planners today reserve a fixed share of each truck for them. Morgan Demo said that Product X can treat the reserved share as a constraint and later learn the actual share from the data, and Jordan Sample added that this is one of the first things Org Alpha will check in the pilot.\n\nCameron Example described how the pilot will be run on the Org Beta side. There will be a weekly check-in with the planners, a short written summary for the finance and security teams every two weeks, and a final review once the pilot has run for a full month. Blair Example said that he wanted the summaries to be short enough that a busy executive reads them, and Cameron Example agreed to keep each to one page.\n\nDecisions. The pilot will start at the Northern site, and Org Beta will not run Product X at the other five sites until the pilot has been evaluated. The group did not consider the alternative of a pilot at the largest site, which Rowan Testcase said carries too much risk for a first trial.\n\nActions. Rowan Testcase will arrange the Northern site visit by 11 March 2026. Finley Placeholder will provide a sample data extract to Morgan Demo by 13 March 2026. Morgan Demo will scope the data integration by 18 March 2026.\n\n## Meeting 3: Security and Compliance Review\n\nDate: 25 March 2026\nOrganizer: Avery Example\nAttended: Avery Example (Org Alpha, Account Executive), Harper Demo (Org Beta IT Security, Head of IT Security), Lennon Placeholder (Org Beta IT Security, Security Analyst), Jules Demo (Org Beta Finance, Compliance Officer), Riley Testcase (Org Alpha, Legal Counsel), Morgan Demo (Org Alpha Data Platform, Data Platform Lead), Drew Sample (Org Alpha Data Platform, Product Specialist), Reese Placeholder (Org Beta IT, Chief Information Officer), Finley Placeholder (Org Beta IT, Data Engineer)\nInvited, did not attend: Kendall Sample (Org Beta Finance, Finance Director)\nCopied on the minutes: Parker Demo (Org Beta, Chief Executive Officer)\n\nAvery Example organised the security review at the request of Reese Placeholder, who had asked in the first two meetings where the data would be stored and who could see it. Harper Demo led for Org Beta IT Security with Lennon Placeholder, and Jules Demo attended for compliance. Parker Demo, the chief executive officer of Org Beta, was copied on the minutes only, as is usual for any new system that touches customer data. Kendall Sample was invited but did not join.\n\nHarper Demo opened with the requirement that matters most to Org Beta: Org Beta IT Security requires data to stay inside the country, and any processing outside the country needs a written exception signed by the chief information officer. Jules Demo explained that the requirement comes from a contract with one of the largest customers of Org Beta and from internal policy, and that it applies to order data, vehicle data and driver data alike.\n\nMorgan Demo described the hosting options for Product X. The standard offering runs in a shared region outside the country. A dedicated deployment inside the country is possible but takes longer to set up, and Org Alpha Data Platform has done it twice before. Drew Sample, the product specialist, said that the dedicated deployment adds about six weeks to the schedule and a monthly hosting fee, which Sam Example will price separately.\n\nRiley Testcase handled the legal side. She explained that Org Alpha signs a data processing agreement with every customer, and that the standard terms say processing happens in the shared region unless the customer chooses otherwise. For Org Beta the agreement would name the in-country deployment and list every person at Org Alpha who can access the data. Jules Demo asked that the list also state how access is logged, and Riley Testcase agreed to add a section.\n\nLennon Placeholder asked about authentication and about how Org Alpha staff reach the system for support. Drew Sample said support staff use short-lived access that has to be approved by a named person at Org Beta, and that every session is recorded. Harper Demo said she would want to test this herself and proposed a penetration test window before any production data is loaded.\n\nReese Placeholder joined for the last part and summarised his position. He is comfortable with a pilot on a dedicated deployment inside the country using masked data, but he will not approve production data in the shared region. Avery Example said that Org Alpha would plan for the dedicated deployment from the start, so the timeline would not change later.\n\nFinley Placeholder raised one more question about the nightly export. Order data from the transport system contains customer names and delivery addresses, and he asked whether the pilot could use masked names. Morgan Demo said that the planner does not need names to build routes and that masking is easy to add. Harper Demo agreed and made it a condition for the pilot.\n\nThe group also touched on retention. Jules Demo said that planning data should be deleted after thirteen months unless Org Beta asks to keep it, and Drew Sample confirmed that retention is a setting per customer. Riley Testcase will reflect the period in the agreement.\n\nJules Demo described how audits work at Org Beta. Every system that holds operational data is reviewed once a year, and the reviewers expect to see an owner, a list of users, a record of changes and a tested way to remove data on request. Drew Sample said that Org Alpha can provide all four as reports from the system, and Harper Demo said that she would rather see them produced live in front of the reviewers than described in a document.\n\nThe group briefly compared the in-country option with an arrangement in which Org Beta would host the system itself. Morgan Demo thought that self-hosting would give Org Beta the most control but would also move the work of updates and monitoring to Org Beta IT, which is already stretched. Reese Placeholder agreed that his team would not welcome the extra work and preferred that Org Alpha operate the environment under the agreement.\n\nDecisions. Org Beta and Org Alpha will use the dedicated in-country deployment for the pilot and for production, with masked customer names during the pilot. The shared region offering was ruled out for Org Beta.\n\nActions. Harper Demo will send the security questionnaire to Riley Testcase by 1 April 2026. Riley Testcase will return the signed data processing terms by 8 April 2026. Lennon Placeholder will open a penetration test window by 15 April 2026.\n\n## Meeting 4: Internal Pricing Huddle\n\nDate: 15 April 2026\nOrganizer: Casey Placeholder\nAttended: Casey Placeholder (Org Alpha Field Services, Director of Field Services), Avery Example (Org Alpha, Account Executive), Sam Example (Org Alpha, Pricing Analyst), Jordan Sample (Org Alpha Field Services, Solutions Engineer), Taylor Fixture (Org Alpha, Customer Success Manager), Riley Testcase (Org Alpha, Legal Counsel)\nInvited, did not attend: Morgan Demo (Org Alpha Data Platform, Data Platform Lead)\n\nCasey Placeholder called the huddle inside Org Alpha to agree on the price before the proposal goes to Org Beta. Avery Example opened by reviewing where the opportunity stands: the pilot at the Northern site is agreed, the in-country deployment is agreed, and the next step is a written proposal for a three-year agreement across all six sites. Morgan Demo was invited but was travelling and sent comments by message.\n\nSam Example presented the pricing model. The price has four parts: the licence, which scales with the number of sites; the dedicated deployment, which adds a monthly hosting fee; the services from Org Alpha Field Services for the rollout; and support. Sam Example said that Org Alpha's blended margin target for this deal is 38 percent and that the dedicated deployment pulls the margin down by about three points unless the hosting fee is raised.\n\nCasey Placeholder asked how the price compares with what Org Beta pays today. Avery Example said that Org Beta pays Org Gamma a yearly fee for Product Y, which Blair Example had mentioned in passing, and that the fee is lower than the proposed price but covers a fraction of the functionality. Avery Example added that Org Gamma has been invited to bid for the work and is likely to compete on price. Skyler Example in procurement had said that Org Beta always asks for at least two quotes.\n\nThe discussion on competition took a while. Jordan Sample thought Org Gamma would struggle with the driver hours rules because Product Y does not model them, and Taylor Fixture added that two of her other customers had left Org Gamma for exactly that reason. Avery Example warned that Kendall Sample in finance is price sensitive and may ask for a discount whatever the functional comparison says, so the proposal should show the value in terms she cares about, such as the saving in planner hours and in missed deliveries.\n\nRiley Testcase raised the contract terms. Org Beta will ask for a termination clause if the on-time delivery numbers do not improve, and she suggested offering a milestone-based clause tied to the pilot results rather than an open exit. Casey Placeholder accepted this in principle and asked Riley Testcase to draft the language so that the milestone is measured by the same three measures the logistics team defined.\n\nOn the discount, Sam Example proposed a pilot discount of fifteen percent on the first year and no discount on later years. Casey Placeholder asked what it would cost to match a lower price from Org Gamma and Sam Example answered that a discount above twenty percent would push the margin under the floor. Casey Placeholder said that anything above fifteen percent needs her approval and that of the finance team at Org Alpha.\n\nTaylor Fixture, the customer success manager, reminded the group that the rollout needs a training plan from the start, because the planners are the people who decide whether the tool lives. She offered to own the plan and to run the first sessions at the Northern site herself.\n\nJordan Sample reported on the technical readiness for the proposal. The dedicated deployment had been tested on a smaller scale, and the data integration for the newer warehouse system worked. The connector for the legacy system remained to be decided, and Jordan Sample suggested that the proposal list it as a separate item with its own estimate rather than hiding it in the services price. Casey Placeholder agreed that this was more honest and would also help Org Beta decide how much to spend on it.\n\nAvery Example described the people at Org Beta who would shape the decision, as far as Org Alpha could tell. Blair Example is enthusiastic and would like to start in the autumn. Kendall Sample will look hardest at the price. Reese Placeholder will care mostly about security and operations, and Harper Demo will check every claim about it. The group agreed that the proposal should speak to each of them in the order in which they will read it.\n\nDecisions. Org Alpha will offer a three-year price with a pilot discount of fifteen percent on the first year. Any larger discount needs the approval of Casey Placeholder.\n\nActions. Sam Example will complete the pricing model by 22 April 2026. Casey Placeholder will approve the discount by 24 April 2026. Taylor Fixture will outline the training plan by 30 April 2026.\n\n## Meeting 5: Proposal Walkthrough with Finance\n\nDate: 6 May 2026\nOrganizer: Avery Example\nAttended: Avery Example (Org Alpha, Account Executive), Kendall Sample (Org Beta Finance, Finance Director), Devon Sample (Org Beta Finance, Controller), Dakota Sample (Org Beta Finance, Finance Analyst), Skyler Example (Org Beta, Procurement Manager), Blair Example (Org Beta Logistics, VP of Operations), Cameron Example (Org Beta, Program Manager), Sam Example (Org Alpha, Pricing Analyst)\nInvited, did not attend: Reese Placeholder (Org Beta IT, Chief Information Officer)\nCopied on the minutes: Parker Demo (Org Beta, Chief Executive Officer)\n\nAvery Example organised the walkthrough so that Org Beta Finance could see the proposal before it was formally submitted. Kendall Sample led for finance with Devon Sample, the controller, and Dakota Sample, a finance analyst. Skyler Example attended for procurement, and Blair Example and Cameron Example represented the logistics side. Reese Placeholder was invited but had a conflicting meeting, and Parker Demo was copied on the minutes.\n\nAvery Example began with the value case. Using the baseline numbers from the pilot period, the proposal estimates that Product X would cut manual planning time by about half across the six sites and would lift on-time delivery by several points. Kendall Sample asked for the calculation behind each claim and Dakota Sample took notes. Sam Example then presented the price. The three-year price in the proposal is 1.2 million, with the pilot discount applied to the first year.\n\nKendall Sample is price sensitive and she said so directly. She asked why the dedicated deployment costs more than the shared region and whether Org Beta could negotiate the hosting fee separately. Sam Example explained the cost of running a separate environment, and Avery Example added that Org Beta had required the in-country deployment, not Org Alpha. Kendall Sample accepted the explanation but asked for a version of the price with the hosting fee shown as its own line.\n\nDevon Sample asked about the payment schedule and whether Org Beta could pay yearly in advance in exchange for a lower price. Sam Example said that Org Alpha could consider a modest reduction for upfront payment and would bring a number to the next meeting. Devon Sample also asked about currency, since part of the hosting is priced in another currency, and Sam Example confirmed the proposal would fix the price in the local currency.\n\nSkyler Example described the procurement process. Any contract above a set limit needs two quotes, a signed supplier questionnaire and approval from the finance committee, which meets once a month. The next committee meeting is in the second half of May and the one after that is at the end of June. Skyler Example said that the budget cycle closes at the end of June and that anything not approved by then waits until the next year.\n\nThat timing worried Blair Example, who said the logistics division wants to start the rollout in the autumn. Kendall Sample replied that finance can approve the budget in time if the proposal is complete and if the pilot results are available before the end of June. She promised to confirm in writing how the approval route works.\n\nCameron Example raised the question of competing offers. Skyler Example confirmed that Org Gamma has submitted an indication of interest for the work and is in the running with a lower price for Product Y extended with new modules. Avery Example said that Org Alpha would not compete on price alone and offered to arrange a reference call with another customer that had moved from Org Gamma.\n\nDevon Sample asked about the risk that the budget approval slips past the end of June. Kendall Sample said that this risk is real and that finance would prefer a decision at the May committee if possible, with the contract signed in June. Everyone agreed that the schedule was tight but possible.\n\nDakota Sample asked how the savings had been calculated and whether the estimate was robust. Avery Example explained that the proposal used the baseline recorded before the pilot and the early pilot results, and that it applied a conservative factor to the second and third years. Dakota Sample said that finance usually rebuilds such calculations before it relies on them, which Avery Example welcomed.\n\nThe conversation turned briefly to training. Cameron Example asked who would train the planners at the other five sites, and Sam Example said the services price included three training days per site delivered by Org Alpha. Blair Example said that he would prefer the Northern site planners to train their peers, since they now know the tool from the inside, and the group agreed to consider a mixed approach.\n\nDecisions. Org Beta Finance will take the proposal to the finance committee in the second half of May, with the hosting fee shown as its own line. The group agreed to ask Org Alpha for a revised proposal that reflects this.\n\nActions. Avery Example will send the revised proposal by 8 May 2026. Skyler Example will issue the procurement checklist by 13 May 2026. Kendall Sample will confirm the budget approval route by 20 May 2026.\n\n## Meeting 6: Decision Meeting and Rollout Planning\n\nDate: 27 May 2026\nOrganizer: Cameron Example\nAttended: Cameron Example (Org Beta, Program Manager), Avery Example (Org Alpha, Account Executive), Blair Example (Org Beta Logistics, VP of Operations), Kendall Sample (Org Beta Finance, Finance Director), Reese Placeholder (Org Beta IT, Chief Information Officer), Harper Demo (Org Beta IT Security, Head of IT Security), Emery Fixture (Org Beta Logistics, Logistics Planner), Rowan Testcase (Org Beta Logistics, Warehouse Manager), Oakley Fixture (Org Alpha Field Services, Implementation Consultant), Taylor Fixture (Org Alpha, Customer Success Manager), Riley Testcase (Org Alpha, Legal Counsel), Alexis Testcase (Org Beta Logistics, Transport Supervisor)\nInvited, did not attend: Parker Demo (Org Beta, Chief Executive Officer)\n\nCameron Example convened the decision meeting after the finance committee had reviewed the proposal. The aim was to hear the result of the pilot, to decide whether to proceed, and to start the rollout plan. Parker Demo was invited as executive sponsor but could not attend and asked that the outcome be sent to him in writing. Oakley Fixture and Taylor Fixture attended for Org Alpha to prepare the rollout and the training plan.\n\nEmery Fixture presented the results from the Northern site, which had run Product X for three weeks. The pilot at the Northern site cut planning time by 41 percent, and the two planners now finish the morning plan in under two hours instead of three. On-time delivery on the pilot routes was higher than the baseline, although the sample was small. Rowan Testcase said the loaders noticed the difference at the dock because trucks arrived in a more even sequence.\n\nAlexis Testcase described what he had seen as transport supervisor. Drivers received plans that respected their permitted hours, and the number of late changes handled by phone fell. He reported one problem: the printed report from the legacy warehouse system still had to be keyed in every day because the file export from Org Beta IT arrived only twice a week. Emery Fixture added that this was the only part of the day that the planners disliked.\n\nHarper Demo reported on the security work. The penetration test found no critical findings, and the three medium findings had been fixed by Org Alpha Data Platform within a week. She confirmed that the dedicated deployment inside the country satisfied the requirement of Org Beta IT Security, and that she had no objection to the move to production data after the agreement was signed.\n\nKendall Sample reported that the finance committee had approved the budget in principle. The committee wanted the contract signed by the end of June and a clause tying later payments to the on-time delivery measures. Riley Testcase said that Org Alpha could accept such a clause as long as the measures were the three that had been agreed in March. Kendall Sample agreed and said finance was comfortable with the price, now that the hosting fee was shown separately.\n\nReese Placeholder spoke last on the topic of the decision. He said the pilot had answered his three questions from the workshop: the data stays inside the country, only named people at Org Alpha can reach it, and the pilot took a month. He asked that the legacy warehouse connector be treated as a requirement for the rollout and not as an extra. Avery Example agreed and Oakley Fixture added it to the rollout plan as the first item for the Northern site and the second site.\n\nBlair Example proposed a phased rollout: the Northern site first, then two sites in September and the last three before the end of the year. Oakley Fixture confirmed that Org Alpha Field Services could staff this and that the training plan from Taylor Fixture would run in parallel with each wave. Cameron Example would own the schedule on the Org Beta side and report progress at a monthly steering meeting.\n\nThe group also listed what could still go wrong. The main risk is that the legal review of the contract overruns the end of June, which would push the start of the rollout into the next budget year. A second risk is that the connector for the legacy warehouse system is late. Blair Example asked that both be reviewed at each steering meeting.\n\nParker Demo had sent a short message before the meeting saying that he wanted the rollout to protect service levels during the busy season above all else. Cameron Example read it out. Blair Example said that the phased plan already respects this, because the last three sites would start only after the busiest weeks, and that any change to the plan goes to Parker Demo directly.\n\nTaylor Fixture presented the outline of the training plan. Each wave starts with a half day for planners, a half day for supervisors and a short session for the warehouse leads, followed by two weeks in which an Org Alpha consultant sits with the planners during the morning. Emery Fixture said that the sessions should use the sites' own data, because planners trust examples they recognise. Taylor Fixture agreed and said that this is how the Northern site sessions were run.\n\nDecisions. Org Beta will proceed with Product X and will start with a phased rollout from September 2026. The contract will include a clause that ties later payments to the agreed on-time delivery measures.\n\nActions. Cameron Example will schedule the rollout kickoff for 15 June 2026. Oakley Fixture will draft the rollout plan by 12 June 2026. Riley Testcase will send the contract draft by 5 June 2026. Taylor Fixture will set up the training plan by 19 June 2026.\n\n## Closing notes\n\nThree themes ran through all six meetings. The first is trust in the data: every group asked where it lives, who can see it and how to remove it, and the answer of a dedicated deployment inside the country settled most of that. The second is the planners themselves: each meeting returned to the question of whether the people who build the plans today will use a tool that builds them for them, and the pilot gave a first answer. The third is the calendar: the budget cycle, the contract review and the busy season all press on the same few weeks.\n\nFor the account team the practical lesson is to keep the proposal simple and the evidence close. Org Beta decides in small steps, each with a different person in charge, and each step went more smoothly when the previous one had been written down clearly. The record will be updated after the rollout kickoff.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-person-avery-example",
+      "type": "Person",
+      "label": "Avery Example",
+      "aliases": [
+        "Avery"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-blair-example",
+      "type": "Person",
+      "label": "Blair Example",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-org-alpha",
+      "type": "Organization",
+      "label": "Org Alpha",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-org-beta",
+      "type": "Organization",
+      "label": "Org Beta",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "alpha",
+        "type": "Organization",
+        "label": "Org Alpha",
+        "aliases": [],
+        "existingId": "g-org-org-alpha",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Alpha is the vendor of Product X."
+          }
+        ]
+      },
+      {
+        "key": "beta",
+        "type": "Organization",
+        "label": "Org Beta",
+        "aliases": [],
+        "existingId": "g-org-org-beta",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta is the client and operates a network of six warehouses"
+          }
+        ]
+      },
+      {
+        "key": "gamma",
+        "type": "Organization",
+        "label": "Org Gamma",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Gamma is a rival supplier that currently provides Product Y"
+          }
+        ]
+      },
+      {
+        "key": "u-org-alpha-field-services",
+        "type": "Organization",
+        "label": "Org Alpha Field Services",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Alpha Field Services is the services unit of Org Alpha and runs every installation and rollout."
+          }
+        ]
+      },
+      {
+        "key": "u-org-alpha-data-platform",
+        "type": "Organization",
+        "label": "Org Alpha Data Platform",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Alpha Data Platform is the engineering unit of Org Alpha that builds and supports Product X."
+          }
+        ]
+      },
+      {
+        "key": "u-org-beta-logistics",
+        "type": "Organization",
+        "label": "Org Beta Logistics",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta Logistics is the logistics division of Org Beta and operates the warehouses and the trucking network."
+          }
+        ]
+      },
+      {
+        "key": "u-org-beta-finance",
+        "type": "Organization",
+        "label": "Org Beta Finance",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta Finance is the finance division of Org Beta and owns budgets, controls and compliance."
+          }
+        ]
+      },
+      {
+        "key": "u-org-beta-it",
+        "type": "Organization",
+        "label": "Org Beta IT",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta IT is the technology division of Org Beta and runs its data and integration systems."
+          }
+        ]
+      },
+      {
+        "key": "u-org-beta-it-security",
+        "type": "Organization",
+        "label": "Org Beta IT Security",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta IT Security is the security unit inside the technology side of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "avery",
+        "type": "Person",
+        "label": "Avery Example",
+        "aliases": [],
+        "existingId": "g-person-avery-example",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example is the Account Executive at Org Alpha."
+          }
+        ]
+      },
+      {
+        "key": "jordan",
+        "type": "Person",
+        "label": "Jordan Sample",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Jordan Sample is the Solutions Engineer in Org Alpha Field Services, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "key": "casey",
+        "type": "Person",
+        "label": "Casey Placeholder",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Casey Placeholder is the Director of Field Services in Org Alpha Field Services, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "key": "morgan",
+        "type": "Person",
+        "label": "Morgan Demo",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Morgan Demo is the Data Platform Lead in Org Alpha Data Platform, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "key": "taylor",
+        "type": "Person",
+        "label": "Taylor Fixture",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Taylor Fixture is the Customer Success Manager at Org Alpha."
+          }
+        ]
+      },
+      {
+        "key": "riley",
+        "type": "Person",
+        "label": "Riley Testcase",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Riley Testcase is the Legal Counsel at Org Alpha."
+          }
+        ]
+      },
+      {
+        "key": "sam",
+        "type": "Person",
+        "label": "Sam Example",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sam Example is the Pricing Analyst at Org Alpha."
+          }
+        ]
+      },
+      {
+        "key": "drew",
+        "type": "Person",
+        "label": "Drew Sample",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Drew Sample is the Product Specialist in Org Alpha Data Platform, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "key": "oakley",
+        "type": "Person",
+        "label": "Oakley Fixture",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Oakley Fixture is the Implementation Consultant in Org Alpha Field Services, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "key": "blair",
+        "type": "Person",
+        "label": "Blair Example",
+        "aliases": [],
+        "existingId": "g-person-blair-example",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example is the VP of Operations in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "kendall",
+        "type": "Person",
+        "label": "Kendall Sample",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kendall Sample is the Finance Director in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "reese",
+        "type": "Person",
+        "label": "Reese Placeholder",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Reese Placeholder is the Chief Information Officer in Org Beta IT, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "harper",
+        "type": "Person",
+        "label": "Harper Demo",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Harper Demo is the Head of IT Security in Org Beta IT Security, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "emery",
+        "type": "Person",
+        "label": "Emery Fixture",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Emery Fixture is the Logistics Planner in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "rowan",
+        "type": "Person",
+        "label": "Rowan Testcase",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Rowan Testcase is the Warehouse Manager in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "skyler",
+        "type": "Person",
+        "label": "Skyler Example",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Skyler Example is the Procurement Manager at Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "dakota",
+        "type": "Person",
+        "label": "Dakota Sample",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Dakota Sample is the Finance Analyst in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "finley",
+        "type": "Person",
+        "label": "Finley Placeholder",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Finley Placeholder is the Data Engineer in Org Beta IT, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "jules",
+        "type": "Person",
+        "label": "Jules Demo",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Jules Demo is the Compliance Officer in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "sage",
+        "type": "Person",
+        "label": "Sage Fixture",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sage Fixture is the Operations Analyst in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "alexis",
+        "type": "Person",
+        "label": "Alexis Testcase",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alexis Testcase is the Transport Supervisor in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "cameron",
+        "type": "Person",
+        "label": "Cameron Example",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Cameron Example is the Program Manager at Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "devon",
+        "type": "Person",
+        "label": "Devon Sample",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Devon Sample is the Controller in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "lennon",
+        "type": "Person",
+        "label": "Lennon Placeholder",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Lennon Placeholder is the Security Analyst in Org Beta IT Security, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "parker",
+        "type": "Person",
+        "label": "Parker Demo",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Parker Demo is the Chief Executive Officer at Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "peyton",
+        "type": "Person",
+        "label": "Peyton Fixture",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Peyton Fixture is the Integration Architect in Org Beta IT, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "prod-x",
+        "type": "Product",
+        "label": "Product X",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Alpha is the vendor of Product X."
+          }
+        ]
+      },
+      {
+        "key": "prod-y",
+        "type": "Product",
+        "label": "Product Y",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Gamma is a rival supplier that currently provides Product Y, an older planning tool, to Org Beta."
+          }
+        ]
+      },
+      {
+        "key": "t-route",
+        "type": "Topic",
+        "label": "Route planning",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The group agreed that route planning is the first topic for the evaluation"
+          }
+        ]
+      },
+      {
+        "key": "t-res",
+        "type": "Topic",
+        "label": "Data residency",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta IT Security requires data to stay inside the country"
+          }
+        ]
+      },
+      {
+        "key": "pilot",
+        "type": "Project",
+        "label": "Northern Site Pilot",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "status": "active"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example convened the review to turn the workshop into requirements. He started by saying that Org Beta Logistics wants a pilot at the Northern site"
+          }
+        ]
+      },
+      {
+        "key": "doc",
+        "type": "Document",
+        "label": "Org Beta Product X Evaluation: Meeting Record",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "title": "Org Beta Product X Evaluation: Meeting Record",
+          "preparedOn": "2026-06-03"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "# Org Beta Product X Evaluation: Meeting Record"
+          }
+        ]
+      },
+      {
+        "key": "opp",
+        "type": "Opportunity",
+        "label": "Org Beta Product X Opportunity",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "stage": "proposed",
+          "valueText": "about 1.2 million over three years",
+          "confidence": "med",
+          "timing": "a decision is expected by the end of June 2026"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The opportunity is Org Beta Product X Opportunity: Org Alpha is pursuing a three-year agreement with Org Beta for Product X across all six sites."
+          }
+        ]
+      },
+      {
+        "key": "meeting-1",
+        "type": "Meeting",
+        "label": "Discovery Workshop",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "occurredOn": "2026-02-10",
+          "meetingKind": "client"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 1: Discovery Workshop"
+          }
+        ]
+      },
+      {
+        "key": "meeting-2",
+        "type": "Meeting",
+        "label": "Logistics Requirements Review",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "occurredOn": "2026-03-04",
+          "meetingKind": "client"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 2: Logistics Requirements Review"
+          }
+        ]
+      },
+      {
+        "key": "meeting-3",
+        "type": "Meeting",
+        "label": "Security and Compliance Review",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "occurredOn": "2026-03-25",
+          "meetingKind": "client"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 3: Security and Compliance Review"
+          }
+        ]
+      },
+      {
+        "key": "meeting-4",
+        "type": "Meeting",
+        "label": "Internal Pricing Huddle",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "occurredOn": "2026-04-15",
+          "meetingKind": "internal"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 4: Internal Pricing Huddle"
+          }
+        ]
+      },
+      {
+        "key": "meeting-5",
+        "type": "Meeting",
+        "label": "Proposal Walkthrough with Finance",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "occurredOn": "2026-05-06",
+          "meetingKind": "client"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 5: Proposal Walkthrough with Finance"
+          }
+        ]
+      },
+      {
+        "key": "meeting-6",
+        "type": "Meeting",
+        "label": "Decision Meeting and Rollout Planning",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "occurredOn": "2026-05-27",
+          "meetingKind": "client"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 6: Decision Meeting and Rollout Planning"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "PART_OF",
+        "from": "u-org-alpha-field-services",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Alpha Field Services is the services unit of Org Alpha and runs every installation and rollout."
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "u-org-alpha-data-platform",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Alpha Data Platform is the engineering unit of Org Alpha that builds and supports Product X."
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "u-org-beta-logistics",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta Logistics is the logistics division of Org Beta and operates the warehouses and the trucking network."
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "u-org-beta-finance",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta Finance is the finance division of Org Beta and owns budgets, controls and compliance."
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "u-org-beta-it",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta IT is the technology division of Org Beta and runs its data and integration systems."
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "u-org-beta-it-security",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta IT Security is the security unit inside the technology side of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "avery",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example is the Account Executive at Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "avery",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Account Executive"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example is the Account Executive at Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "jordan",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Jordan Sample is the Solutions Engineer in Org Alpha Field Services, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "jordan",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Solutions Engineer",
+          "businessUnit": "Field Services"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Jordan Sample is the Solutions Engineer in Org Alpha Field Services, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "casey",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Casey Placeholder is the Director of Field Services in Org Alpha Field Services, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "casey",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Director of Field Services",
+          "businessUnit": "Field Services"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Casey Placeholder is the Director of Field Services in Org Alpha Field Services, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "morgan",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Morgan Demo is the Data Platform Lead in Org Alpha Data Platform, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "morgan",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Data Platform Lead",
+          "businessUnit": "Data Platform"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Morgan Demo is the Data Platform Lead in Org Alpha Data Platform, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "taylor",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Taylor Fixture is the Customer Success Manager at Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "taylor",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Customer Success Manager"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Taylor Fixture is the Customer Success Manager at Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "riley",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Riley Testcase is the Legal Counsel at Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "riley",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Legal Counsel"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Riley Testcase is the Legal Counsel at Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "sam",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sam Example is the Pricing Analyst at Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "sam",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Pricing Analyst"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sam Example is the Pricing Analyst at Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "drew",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Drew Sample is the Product Specialist in Org Alpha Data Platform, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "drew",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Product Specialist",
+          "businessUnit": "Data Platform"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Drew Sample is the Product Specialist in Org Alpha Data Platform, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "oakley",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Oakley Fixture is the Implementation Consultant in Org Alpha Field Services, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "oakley",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Implementation Consultant",
+          "businessUnit": "Field Services"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Oakley Fixture is the Implementation Consultant in Org Alpha Field Services, part of Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "blair",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example is the VP of Operations in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "blair",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "VP of Operations",
+          "businessUnit": "Logistics"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example is the VP of Operations in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "kendall",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kendall Sample is the Finance Director in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "kendall",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Finance Director",
+          "businessUnit": "Finance"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kendall Sample is the Finance Director in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "reese",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Reese Placeholder is the Chief Information Officer in Org Beta IT, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "reese",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Chief Information Officer",
+          "businessUnit": "IT"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Reese Placeholder is the Chief Information Officer in Org Beta IT, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "harper",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Harper Demo is the Head of IT Security in Org Beta IT Security, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "harper",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Head of IT Security",
+          "businessUnit": "IT Security"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Harper Demo is the Head of IT Security in Org Beta IT Security, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "emery",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Emery Fixture is the Logistics Planner in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "emery",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Logistics Planner",
+          "businessUnit": "Logistics"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Emery Fixture is the Logistics Planner in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "rowan",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Rowan Testcase is the Warehouse Manager in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "rowan",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Warehouse Manager",
+          "businessUnit": "Logistics"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Rowan Testcase is the Warehouse Manager in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "skyler",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Skyler Example is the Procurement Manager at Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "skyler",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Procurement Manager"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Skyler Example is the Procurement Manager at Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "dakota",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Dakota Sample is the Finance Analyst in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "dakota",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Finance Analyst",
+          "businessUnit": "Finance"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Dakota Sample is the Finance Analyst in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "finley",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Finley Placeholder is the Data Engineer in Org Beta IT, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "finley",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Data Engineer",
+          "businessUnit": "IT"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Finley Placeholder is the Data Engineer in Org Beta IT, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "jules",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Jules Demo is the Compliance Officer in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "jules",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Compliance Officer",
+          "businessUnit": "Finance"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Jules Demo is the Compliance Officer in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "sage",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sage Fixture is the Operations Analyst in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "sage",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Operations Analyst",
+          "businessUnit": "Logistics"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sage Fixture is the Operations Analyst in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "alexis",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alexis Testcase is the Transport Supervisor in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "alexis",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Transport Supervisor",
+          "businessUnit": "Logistics"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alexis Testcase is the Transport Supervisor in Org Beta Logistics, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "cameron",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Cameron Example is the Program Manager at Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "cameron",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Program Manager"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Cameron Example is the Program Manager at Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "devon",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Devon Sample is the Controller in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "devon",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Controller",
+          "businessUnit": "Finance"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Devon Sample is the Controller in Org Beta Finance, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "lennon",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Lennon Placeholder is the Security Analyst in Org Beta IT Security, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "lennon",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Security Analyst",
+          "businessUnit": "IT Security"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Lennon Placeholder is the Security Analyst in Org Beta IT Security, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "parker",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Parker Demo is the Chief Executive Officer at Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "parker",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Chief Executive Officer"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Parker Demo is the Chief Executive Officer at Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "peyton",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Peyton Fixture is the Integration Architect in Org Beta IT, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "peyton",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Integration Architect",
+          "businessUnit": "IT"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Peyton Fixture is the Integration Architect in Org Beta IT, part of Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "OFFERED_BY",
+        "from": "prod-x",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Alpha is the vendor of Product X."
+          }
+        ]
+      },
+      {
+        "type": "OFFERED_BY",
+        "from": "prod-y",
+        "to": "gamma",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Gamma is a rival supplier that currently provides Product Y, an older planning tool, to Org Beta."
+          }
+        ]
+      },
+      {
+        "type": "USES",
+        "from": "beta",
+        "to": "prod-y",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "stage": "adopted"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta runs Product Y, an older planning tool offered by Org Gamma, for reporting and for a basic route suggestion."
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "pilot",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example convened the review to turn the workshop into requirements. He started by saying that Org Beta Logistics wants a pilot at the Northern site"
+          }
+        ]
+      },
+      {
+        "type": "WITH_CLIENT",
+        "from": "opp",
+        "to": "beta",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The opportunity is Org Beta Product X Opportunity: Org Alpha is pursuing a three-year agreement with Org Beta for Product X across all six sites."
+          }
+        ]
+      },
+      {
+        "type": "PURSUED_BY",
+        "from": "opp",
+        "to": "alpha",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The opportunity is Org Beta Product X Opportunity: Org Alpha is pursuing a three-year agreement with Org Beta for Product X across all six sites."
+          }
+        ]
+      },
+      {
+        "type": "COMPETING_FOR",
+        "from": "gamma",
+        "to": "opp",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Gamma is also bidding for the work."
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "blair",
+        "to": "opp",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "decision_maker"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example, Kendall Sample and Reese Placeholder are the decision makers for Org Beta. Emery Fixture and Rowan Testcase influence the decision because the planners and the warehouse depend on the result. Harper Demo and Skyler Example evaluate the offer for security and for procurement. Avery Example leads the account for Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "kendall",
+        "to": "opp",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "decision_maker"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example, Kendall Sample and Reese Placeholder are the decision makers for Org Beta. Emery Fixture and Rowan Testcase influence the decision because the planners and the warehouse depend on the result. Harper Demo and Skyler Example evaluate the offer for security and for procurement. Avery Example leads the account for Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "reese",
+        "to": "opp",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "decision_maker"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example, Kendall Sample and Reese Placeholder are the decision makers for Org Beta. Emery Fixture and Rowan Testcase influence the decision because the planners and the warehouse depend on the result. Harper Demo and Skyler Example evaluate the offer for security and for procurement. Avery Example leads the account for Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "emery",
+        "to": "opp",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "influencer"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example, Kendall Sample and Reese Placeholder are the decision makers for Org Beta. Emery Fixture and Rowan Testcase influence the decision because the planners and the warehouse depend on the result. Harper Demo and Skyler Example evaluate the offer for security and for procurement. Avery Example leads the account for Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "rowan",
+        "to": "opp",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "influencer"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example, Kendall Sample and Reese Placeholder are the decision makers for Org Beta. Emery Fixture and Rowan Testcase influence the decision because the planners and the warehouse depend on the result. Harper Demo and Skyler Example evaluate the offer for security and for procurement. Avery Example leads the account for Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "harper",
+        "to": "opp",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "evaluator"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example, Kendall Sample and Reese Placeholder are the decision makers for Org Beta. Emery Fixture and Rowan Testcase influence the decision because the planners and the warehouse depend on the result. Harper Demo and Skyler Example evaluate the offer for security and for procurement. Avery Example leads the account for Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "skyler",
+        "to": "opp",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "evaluator"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example, Kendall Sample and Reese Placeholder are the decision makers for Org Beta. Emery Fixture and Rowan Testcase influence the decision because the planners and the warehouse depend on the result. Harper Demo and Skyler Example evaluate the offer for security and for procurement. Avery Example leads the account for Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "avery",
+        "to": "opp",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "account_lead"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example, Kendall Sample and Reese Placeholder are the decision makers for Org Beta. Emery Fixture and Rowan Testcase influence the decision because the planners and the warehouse depend on the result. Harper Demo and Skyler Example evaluate the offer for security and for procurement. Avery Example leads the account for Org Alpha."
+          }
+        ]
+      },
+      {
+        "type": "KNOWS_ABOUT",
+        "from": "morgan",
+        "to": "prod-x",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "level": "expert"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Morgan Demo explained how Product X represents such rules."
+          }
+        ]
+      },
+      {
+        "type": "KNOWS_ABOUT",
+        "from": "drew",
+        "to": "prod-x",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "level": "expert"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Drew Sample, the product specialist, said that the dedicated deployment adds about six weeks"
+          }
+        ]
+      },
+      {
+        "type": "ORGANIZED",
+        "from": "avery",
+        "to": "meeting-1",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Organizer: Avery Example"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "avery",
+        "to": "meeting-1",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example (Org Alpha, Account Executive)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jordan",
+        "to": "meeting-1",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Jordan Sample (Org Alpha Field Services, Solutions Engineer)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "casey",
+        "to": "meeting-1",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Casey Placeholder (Org Alpha Field Services, Director of Field Services)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "blair",
+        "to": "meeting-1",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example (Org Beta Logistics, VP of Operations)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "emery",
+        "to": "meeting-1",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Emery Fixture (Org Beta Logistics, Logistics Planner)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "rowan",
+        "to": "meeting-1",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Rowan Testcase (Org Beta Logistics, Warehouse Manager)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sage",
+        "to": "meeting-1",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sage Fixture (Org Beta Logistics, Operations Analyst)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "alexis",
+        "to": "meeting-1",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alexis Testcase (Org Beta Logistics, Transport Supervisor)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "reese",
+        "to": "meeting-1",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Reese Placeholder (Org Beta IT, Chief Information Officer)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "skyler",
+        "to": "meeting-1",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "attendance": "invited"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Skyler Example (Org Beta, Procurement Manager)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting-1",
+        "to": "t-route",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 1: Discovery Workshop"
+          }
+        ]
+      },
+      {
+        "type": "ORGANIZED",
+        "from": "blair",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Organizer: Blair Example"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "blair",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example (Org Beta Logistics, VP of Operations)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "avery",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example (Org Alpha, Account Executive)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jordan",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Jordan Sample (Org Alpha Field Services, Solutions Engineer)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "morgan",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Morgan Demo (Org Alpha Data Platform, Data Platform Lead)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "emery",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Emery Fixture (Org Beta Logistics, Logistics Planner)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "rowan",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Rowan Testcase (Org Beta Logistics, Warehouse Manager)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "finley",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Finley Placeholder (Org Beta IT, Data Engineer)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "peyton",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Peyton Fixture (Org Beta IT, Integration Architect)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sage",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sage Fixture (Org Beta Logistics, Operations Analyst)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "cameron",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Cameron Example (Org Beta, Program Manager)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "kendall",
+        "to": "meeting-2",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "attendance": "invited"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kendall Sample (Org Beta Finance, Finance Director)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting-2",
+        "to": "pilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 2: Logistics Requirements Review"
+          }
+        ]
+      },
+      {
+        "type": "ORGANIZED",
+        "from": "avery",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Organizer: Avery Example"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "avery",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example (Org Alpha, Account Executive)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "harper",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Harper Demo (Org Beta IT Security, Head of IT Security)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "lennon",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Lennon Placeholder (Org Beta IT Security, Security Analyst)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jules",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Jules Demo (Org Beta Finance, Compliance Officer)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "riley",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Riley Testcase (Org Alpha, Legal Counsel)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "morgan",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Morgan Demo (Org Alpha Data Platform, Data Platform Lead)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "drew",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Drew Sample (Org Alpha Data Platform, Product Specialist)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "reese",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Reese Placeholder (Org Beta IT, Chief Information Officer)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "finley",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Finley Placeholder (Org Beta IT, Data Engineer)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "parker",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "attendance": "copied"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Parker Demo (Org Beta, Chief Executive Officer)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "kendall",
+        "to": "meeting-3",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "attendance": "invited"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kendall Sample (Org Beta Finance, Finance Director)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting-3",
+        "to": "t-res",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 3: Security and Compliance Review"
+          }
+        ]
+      },
+      {
+        "type": "ORGANIZED",
+        "from": "casey",
+        "to": "meeting-4",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Organizer: Casey Placeholder"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "casey",
+        "to": "meeting-4",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Casey Placeholder (Org Alpha Field Services, Director of Field Services)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "avery",
+        "to": "meeting-4",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example (Org Alpha, Account Executive)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sam",
+        "to": "meeting-4",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sam Example (Org Alpha, Pricing Analyst)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jordan",
+        "to": "meeting-4",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Jordan Sample (Org Alpha Field Services, Solutions Engineer)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "taylor",
+        "to": "meeting-4",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Taylor Fixture (Org Alpha, Customer Success Manager)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "riley",
+        "to": "meeting-4",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Riley Testcase (Org Alpha, Legal Counsel)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "morgan",
+        "to": "meeting-4",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "attendance": "invited"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Morgan Demo (Org Alpha Data Platform, Data Platform Lead)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting-4",
+        "to": "gamma",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 4: Internal Pricing Huddle"
+          }
+        ]
+      },
+      {
+        "type": "ORGANIZED",
+        "from": "avery",
+        "to": "meeting-5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Organizer: Avery Example"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "avery",
+        "to": "meeting-5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example (Org Alpha, Account Executive)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "kendall",
+        "to": "meeting-5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kendall Sample (Org Beta Finance, Finance Director)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "devon",
+        "to": "meeting-5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Devon Sample (Org Beta Finance, Controller)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "dakota",
+        "to": "meeting-5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Dakota Sample (Org Beta Finance, Finance Analyst)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "skyler",
+        "to": "meeting-5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Skyler Example (Org Beta, Procurement Manager)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "blair",
+        "to": "meeting-5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example (Org Beta Logistics, VP of Operations)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "cameron",
+        "to": "meeting-5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Cameron Example (Org Beta, Program Manager)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sam",
+        "to": "meeting-5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sam Example (Org Alpha, Pricing Analyst)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "reese",
+        "to": "meeting-5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "attendance": "invited"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Reese Placeholder (Org Beta IT, Chief Information Officer)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "parker",
+        "to": "meeting-5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "attendance": "copied"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Parker Demo (Org Beta, Chief Executive Officer)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting-5",
+        "to": "prod-x",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 5: Proposal Walkthrough with Finance"
+          }
+        ]
+      },
+      {
+        "type": "ORGANIZED",
+        "from": "cameron",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Organizer: Cameron Example"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "cameron",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Cameron Example (Org Beta, Program Manager)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "avery",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example (Org Alpha, Account Executive)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "blair",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Blair Example (Org Beta Logistics, VP of Operations)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "kendall",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kendall Sample (Org Beta Finance, Finance Director)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "reese",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Reese Placeholder (Org Beta IT, Chief Information Officer)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "harper",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Harper Demo (Org Beta IT Security, Head of IT Security)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "emery",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Emery Fixture (Org Beta Logistics, Logistics Planner)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "rowan",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Rowan Testcase (Org Beta Logistics, Warehouse Manager)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "oakley",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Oakley Fixture (Org Alpha Field Services, Implementation Consultant)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "taylor",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Taylor Fixture (Org Alpha, Customer Success Manager)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "riley",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Riley Testcase (Org Alpha, Legal Counsel)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "alexis",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alexis Testcase (Org Beta Logistics, Transport Supervisor)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "parker",
+        "to": "meeting-6",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "attendance": "invited"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Parker Demo (Org Beta, Chief Executive Officer)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting-6",
+        "to": "pilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "## Meeting 6: Decision Meeting and Rollout Planning"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "commitment",
+        "subject": "beta",
+        "owner": "avery",
+        "counterparty": "blair",
+        "title": "Send the discovery summary",
+        "statement": "Avery Example will send the discovery summary to Blair Example by 17 February 2026.",
+        "status": "open",
+        "occurredAt": "2026-02-10",
+        "dueAt": "2026-02-17",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example will send the discovery summary to Blair Example by 17 February 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "beta",
+        "owner": "avery",
+        "counterparty": "reese",
+        "title": "Answer the three questions in writing",
+        "statement": "Avery Example promised written answers to all three.",
+        "status": "open",
+        "occurredAt": "2026-02-10",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example promised written answers to all three."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "beta",
+        "owner": "jordan",
+        "counterparty": "reese",
+        "title": "Prepare the architecture overview",
+        "statement": "Jordan Sample will prepare the architecture overview for Reese Placeholder by 24 February 2026.",
+        "status": "open",
+        "occurredAt": "2026-02-10",
+        "dueAt": "2026-02-24",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Jordan Sample will prepare the architecture overview for Reese Placeholder by 24 February 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "emery",
+        "counterparty": "jordan",
+        "title": "Share the Northern site route data",
+        "statement": "Emery Fixture will share the route data for the Northern site with Jordan Sample by 20 February 2026.",
+        "status": "open",
+        "occurredAt": "2026-02-10",
+        "dueAt": "2026-02-20",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Emery Fixture will share the route data for the Northern site with Jordan Sample by 20 February 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "rowan",
+        "counterparty": null,
+        "title": "Arrange the Northern site visit",
+        "statement": "Rowan Testcase will arrange the Northern site visit by 11 March 2026.",
+        "status": "open",
+        "occurredAt": "2026-03-04",
+        "dueAt": "2026-03-11",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Rowan Testcase will arrange the Northern site visit by 11 March 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "finley",
+        "counterparty": "morgan",
+        "title": "Provide a sample data extract",
+        "statement": "Finley Placeholder will provide a sample data extract to Morgan Demo by 13 March 2026.",
+        "status": "open",
+        "occurredAt": "2026-03-04",
+        "dueAt": "2026-03-13",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Finley Placeholder will provide a sample data extract to Morgan Demo by 13 March 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "prod-x",
+        "owner": "morgan",
+        "counterparty": null,
+        "title": "Scope the data integration",
+        "statement": "Morgan Demo will scope the data integration by 18 March 2026.",
+        "status": "open",
+        "occurredAt": "2026-03-04",
+        "dueAt": "2026-03-18",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Morgan Demo will scope the data integration by 18 March 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "beta",
+        "owner": "harper",
+        "counterparty": "riley",
+        "title": "Send the security questionnaire",
+        "statement": "Harper Demo will send the security questionnaire to Riley Testcase by 1 April 2026.",
+        "status": "open",
+        "occurredAt": "2026-03-25",
+        "dueAt": "2026-04-01",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Harper Demo will send the security questionnaire to Riley Testcase by 1 April 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "beta",
+        "owner": "riley",
+        "counterparty": "harper",
+        "title": "Return the signed data processing terms",
+        "statement": "Riley Testcase will return the signed data processing terms by 8 April 2026.",
+        "status": "open",
+        "occurredAt": "2026-03-25",
+        "dueAt": "2026-04-08",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Riley Testcase will return the signed data processing terms by 8 April 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "prod-x",
+        "owner": "lennon",
+        "counterparty": null,
+        "title": "Open a penetration test window",
+        "statement": "Lennon Placeholder will open a penetration test window by 15 April 2026.",
+        "status": "open",
+        "occurredAt": "2026-03-25",
+        "dueAt": "2026-04-15",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Lennon Placeholder will open a penetration test window by 15 April 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "prod-x",
+        "owner": "sam",
+        "counterparty": null,
+        "title": "Complete the pricing model",
+        "statement": "Sam Example will complete the pricing model by 22 April 2026.",
+        "status": "open",
+        "occurredAt": "2026-04-15",
+        "dueAt": "2026-04-22",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sam Example will complete the pricing model by 22 April 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "alpha",
+        "owner": "casey",
+        "counterparty": null,
+        "title": "Approve the discount",
+        "statement": "Casey Placeholder will approve the discount by 24 April 2026.",
+        "status": "open",
+        "occurredAt": "2026-04-15",
+        "dueAt": "2026-04-24",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Casey Placeholder will approve the discount by 24 April 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "alpha",
+        "owner": "taylor",
+        "counterparty": null,
+        "title": "Outline the training plan",
+        "statement": "Taylor Fixture will outline the training plan by 30 April 2026.",
+        "status": "open",
+        "occurredAt": "2026-04-15",
+        "dueAt": "2026-04-30",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Taylor Fixture will outline the training plan by 30 April 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "alpha",
+        "owner": "avery",
+        "counterparty": "kendall",
+        "title": "Send the revised proposal",
+        "statement": "Avery Example will send the revised proposal by 8 May 2026.",
+        "status": "open",
+        "occurredAt": "2026-05-06",
+        "dueAt": "2026-05-08",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Avery Example will send the revised proposal by 8 May 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "beta",
+        "owner": "skyler",
+        "counterparty": null,
+        "title": "Issue the procurement checklist",
+        "statement": "Skyler Example will issue the procurement checklist by 13 May 2026.",
+        "status": "open",
+        "occurredAt": "2026-05-06",
+        "dueAt": "2026-05-13",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Skyler Example will issue the procurement checklist by 13 May 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "beta",
+        "owner": "kendall",
+        "counterparty": null,
+        "title": "Confirm the budget approval route",
+        "statement": "Kendall Sample will confirm the budget approval route by 20 May 2026.",
+        "status": "open",
+        "occurredAt": "2026-05-06",
+        "dueAt": "2026-05-20",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kendall Sample will confirm the budget approval route by 20 May 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "cameron",
+        "counterparty": null,
+        "title": "Schedule the rollout kickoff",
+        "statement": "Cameron Example will schedule the rollout kickoff for 15 June 2026.",
+        "status": "open",
+        "occurredAt": "2026-05-27",
+        "dueAt": "2026-06-15",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Cameron Example will schedule the rollout kickoff for 15 June 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "oakley",
+        "counterparty": null,
+        "title": "Draft the rollout plan",
+        "statement": "Oakley Fixture will draft the rollout plan by 12 June 2026.",
+        "status": "open",
+        "occurredAt": "2026-05-27",
+        "dueAt": "2026-06-12",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Oakley Fixture will draft the rollout plan by 12 June 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "beta",
+        "owner": "riley",
+        "counterparty": "kendall",
+        "title": "Send the contract draft",
+        "statement": "Riley Testcase will send the contract draft by 5 June 2026.",
+        "status": "open",
+        "occurredAt": "2026-05-27",
+        "dueAt": "2026-06-05",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Riley Testcase will send the contract draft by 5 June 2026."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "taylor",
+        "counterparty": null,
+        "title": "Set up the training plan",
+        "statement": "Taylor Fixture will set up the training plan by 19 June 2026.",
+        "status": "open",
+        "occurredAt": "2026-05-27",
+        "dueAt": "2026-06-19",
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Taylor Fixture will set up the training plan by 19 June 2026."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Start the pilot at the Northern site",
+        "statement": "The pilot will start at the Northern site, and Org Beta will not run Product X at the other five sites until the pilot has been evaluated.",
+        "status": null,
+        "occurredAt": "2026-03-04",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "rejectedOption": "a pilot at the largest site"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The pilot will start at the Northern site, and Org Beta will not run Product X at the other five sites until the pilot has been evaluated."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "beta",
+        "owner": null,
+        "counterparty": null,
+        "title": "Use the dedicated in-country deployment",
+        "statement": "Org Beta and Org Alpha will use the dedicated in-country deployment for the pilot and for production, with masked customer names during the pilot.",
+        "status": null,
+        "occurredAt": "2026-03-25",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "rejectedOption": "the shared region offering"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta and Org Alpha will use the dedicated in-country deployment for the pilot and for production, with masked customer names during the pilot."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "alpha",
+        "owner": null,
+        "counterparty": null,
+        "title": "Offer a three-year price with a pilot discount",
+        "statement": "Org Alpha will offer a three-year price with a pilot discount of fifteen percent on the first year.",
+        "status": null,
+        "occurredAt": "2026-04-15",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Alpha will offer a three-year price with a pilot discount of fifteen percent on the first year."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "prod-x",
+        "owner": null,
+        "counterparty": null,
+        "title": "Proceed with a phased rollout",
+        "statement": "Org Beta will proceed with Product X and will start with a phased rollout from September 2026.",
+        "status": null,
+        "occurredAt": "2026-05-27",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta will proceed with Product X and will start with a phased rollout from September 2026."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "u-org-beta-logistics",
+        "owner": null,
+        "counterparty": null,
+        "title": "Pallets moved per day",
+        "statement": "Org Beta Logistics moves about 4,200 pallets a day across six sites",
+        "status": null,
+        "occurredAt": "2026-02-10",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "claimKind": "metric",
+          "value": "4200",
+          "unit": "pallets per day"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta Logistics moves about 4,200 pallets a day across six sites"
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "u-org-beta-logistics",
+        "owner": null,
+        "counterparty": null,
+        "title": "On-time delivery last quarter",
+        "statement": "Average on-time delivery across the network was 87 percent last quarter",
+        "status": null,
+        "occurredAt": "2026-02-10",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "claimKind": "metric",
+          "value": "87",
+          "unit": "percent"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Average on-time delivery across the network was 87 percent last quarter"
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "u-org-beta-logistics",
+        "owner": null,
+        "counterparty": null,
+        "title": "Manual planning time per site",
+        "statement": "Manual route planning takes planners roughly 3 hours per site every morning",
+        "status": null,
+        "occurredAt": "2026-03-04",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "claimKind": "metric",
+          "value": "3",
+          "unit": "hours per site per morning"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Manual route planning takes planners roughly 3 hours per site every morning"
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "opp",
+        "owner": null,
+        "counterparty": null,
+        "title": "Margin target for the deal",
+        "statement": "Org Alpha's blended margin target for this deal is 38 percent",
+        "status": null,
+        "occurredAt": "2026-04-15",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "claimKind": "metric",
+          "value": "38",
+          "unit": "percent"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Alpha's blended margin target for this deal is 38 percent"
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "opp",
+        "owner": null,
+        "counterparty": null,
+        "title": "Three-year price",
+        "statement": "The three-year price in the proposal is 1.2 million",
+        "status": null,
+        "occurredAt": "2026-05-06",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "claimKind": "metric",
+          "value": "1.2 million",
+          "unit": "three-year price"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The three-year price in the proposal is 1.2 million"
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Planning time reduction in the pilot",
+        "statement": "The pilot at the Northern site cut planning time by 41 percent",
+        "status": null,
+        "occurredAt": "2026-05-27",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "claimKind": "metric",
+          "value": "41",
+          "unit": "percent"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The pilot at the Northern site cut planning time by 41 percent"
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "t-res",
+        "owner": null,
+        "counterparty": null,
+        "title": "Data must stay inside the country",
+        "statement": "Org Beta IT Security requires data to stay inside the country",
+        "status": null,
+        "occurredAt": "2026-03-25",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "claimKind": "priority"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Beta IT Security requires data to stay inside the country"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "prod-x",
+        "owner": null,
+        "counterparty": null,
+        "title": "No connector for the legacy warehouse system",
+        "statement": "Product X has no connector for the legacy warehouse system, and the printed dock report is the only record of bookings at the Northern site.",
+        "status": "open",
+        "occurredAt": "2026-03-04",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "high",
+          "riskKind": "issue",
+          "mitigation": "build a small reader for the report or export the bookings as a file"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the lack of a connector for the legacy warehouse system is the biggest technical gap"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "t-res",
+        "owner": null,
+        "counterparty": null,
+        "title": "Data residency could delay hosting",
+        "statement": "The requirement to keep data inside the country adds a dedicated deployment and about six weeks to the schedule.",
+        "status": "open",
+        "occurredAt": "2026-03-25",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "high",
+          "riskKind": "blocker"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the dedicated deployment adds about six weeks to the schedule"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Planners may resist the new tool",
+        "statement": "Some planners may resist moving away from spreadsheets if they think the tool is meant to replace them.",
+        "status": "open",
+        "occurredAt": "2026-03-04",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "risk"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "some of them may resist moving to a new tool"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "gamma",
+        "owner": null,
+        "counterparty": null,
+        "title": "Org Gamma may undercut the price",
+        "statement": "Org Gamma is likely to compete on price for the work.",
+        "status": "open",
+        "occurredAt": "2026-04-15",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "risk"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Org Gamma has been invited to bid for the work and is likely to compete on price"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "u-org-beta-finance",
+        "owner": null,
+        "counterparty": null,
+        "title": "Budget approval could slip past the end of June",
+        "statement": "The budget cycle closes at the end of June, and anything not approved by then waits until the next year.",
+        "status": "open",
+        "occurredAt": "2026-05-06",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "high",
+          "riskKind": "risk"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the budget cycle closes at the end of June and that anything not approved by then waits until the next year"
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "Decisions: none were taken in this workshop; the choice of pilot site was left to the next meeting.",
+        "why": "No decision was taken in the first meeting; the choice of pilot site is a decision of the second."
+      },
+      {
+        "quote": "Skyler Example had been invited to represent procurement but could not attend",
+        "why": "An invited person who did not attend is ATTENDED with attendance invited, not attended."
+      },
+      {
+        "quote": "Parker Demo, the chief executive officer of Org Beta, was copied on the minutes only",
+        "why": "Someone copied on the minutes is ATTENDED with attendance copied, and has no INVOLVED_IN role in the opportunity."
+      }
+    ]
+  }
+}

@@ -29,6 +29,12 @@
 // `addDeterministicRows` then adds what the model never emits: the Meeting row
 // (ref `meeting`) and one ATTENDED row per identified speaker. Every
 // commitment/decision gets `meeting: { ref: 'meeting' }`.
+//
+// A document or record (#780) is the one source that may hold several meetings: the
+// model may propose Meetings, and when it proposes two or more the system Meeting is
+// not added (see `addDeterministicRows`). Such a note also gets one system Document
+// row (ref `document`) with RECORDED_IN from each meeting and, when the owner's own
+// Person is known, PREPARED_FOR to it.
 // =============================================================================
 
 import { buildPropsSchema, type EffectiveEntityType, type EffectiveSchema } from '@marinoscar/kvox-contract/ontology';
@@ -45,6 +51,7 @@ import {
 import { statementHash } from '../../graph/index.js';
 import {
   CONTEXT_ALIAS,
+  DOCUMENT_REF,
   MEETING_REF,
   NOTE_ALIAS,
   normalizeForMatch,
@@ -420,7 +427,7 @@ function validateEntity(
     return null;
   };
   // A second row claiming the same ref, or a ref shaped like one we reserve.
-  if (ref.length === 0 || ref.length > 40 || ref === MEETING_REF || info.has(ref)) return drop('invalid');
+  if (ref.length === 0 || ref.length > 40 || ref === MEETING_REF || ref === DOCUMENT_REF || info.has(ref)) return drop('invalid');
   if (!type) {
     info.set(ref, { type: e.type, survived: false });
     return drop('unknownType');
@@ -460,7 +467,8 @@ function validateEntity(
       label,
       aliases: cleanAliases(label, e.aliases),
       props,
-      occurredAt: null,
+      // A proposed Meeting's date is the one the source states (#780); the system Meeting gets the meeting date.
+      occurredAt: type.key === 'Meeting' ? normalizeIsoDate(props.occurredOn as string | undefined) : null,
     },
     resolution,
     flags,
@@ -660,23 +668,117 @@ function meetingEvidence(ctx: ExtractionContext, rows: ProposedRow[]): EvidenceD
   };
 }
 
+type EntityRow = Extract<ProposedRow, { kind: 'entity' }>;
+
+/** Where in the note body a row's first citation starts; null when it cites no located note text. */
+function firstNoteOffset(row: ProposedRow): number | null {
+  let first: number | null = null;
+  for (const e of row.evidence) {
+    if (e.source === 'note' && e.charStart !== null && (first === null || e.charStart < first)) first = e.charStart;
+  }
+  return first;
+}
+
+/** The Meetings the model proposed itself (a `k#` ref is a restated known entity, not a new meeting). */
+function proposedMeetings(rows: ProposedRow[]): EntityRow[] {
+  return rows.filter(
+    (row): row is EntityRow => row.kind === 'entity' && row.payload.type === 'Meeting' && !KNOWN_REF.test(row.payload.ref),
+  );
+}
+
+/** A copy of `row` with every endpoint passed through `fn`. */
+function mapEndpoints(row: ProposedRow, fn: (ep: EndpointRef, row: ProposedRow) => EndpointRef): ProposedRow {
+  const map = (ep: EndpointRef | null): EndpointRef | null => (ep === null ? null : fn(ep, row));
+  if (row.kind === 'relation') {
+    return { ...row, payload: { ...row.payload, from: map(row.payload.from)!, to: map(row.payload.to)! } };
+  }
+  if (row.kind === 'item') {
+    const payload = row.payload;
+    return {
+      ...row,
+      payload: {
+        ...payload,
+        subject: map(payload.subject),
+        owner: map(payload.owner),
+        counterparty: map(payload.counterparty),
+        meeting: map(payload.meeting),
+      },
+    };
+  }
+  return row;
+}
+
+const isRef = (ep: EndpointRef, ref: string): boolean => 'ref' in ep && ep.ref === ref;
+
+/**
+ * Which proposed meeting a row that pointed at the system Meeting belongs to: the last meeting
+ * whose first citation starts at or before the row's own, else the first. A record lists its
+ * meetings in order, so "the most recent heading above the text it cites" is the meeting.
+ */
+function meetingFor(row: ProposedRow, meetings: EntityRow[]): string {
+  const at = firstNoteOffset(row);
+  const ordered = meetings
+    .map((m) => ({ ref: m.payload.ref, at: firstNoteOffset(m) ?? Number.MAX_SAFE_INTEGER }))
+    .sort((a, b) => a.at - b.at);
+  if (at === null) return ordered[0].ref;
+  let pick = ordered[0].ref;
+  for (const m of ordered) if (m.at <= at) pick = m.ref;
+  return pick;
+}
+
 /**
  * Prepend the Meeting row and append one ATTENDED per identified speaker. A
  * speaker's endpoint is the Person it is IDENTIFIED_AS, else a proposed
  * Person row carrying the speaker's name; a speaker with neither is skipped
  * (resolution may still link the name later). An ATTENDED the model already
  * proposed for the same person is kept instead of a second one.
+ *
+ * A document or record (#780, `ctx.documentOrigin`) differs in two ways:
+ *
+ * - THE MEETING RULE. When the model proposed TWO OR MORE new Meetings, those are the
+ *   meetings and the system Meeting is not added: anything that pointed at `meeting` is
+ *   re-pointed at the proposed meeting it was cited under. Fewer than two, and the system
+ *   Meeting stays: a single proposed Meeting is folded into it (its endpoints re-pointed,
+ *   its row dropped). A transcript never takes this path.
+ * - THE DOCUMENT. One system Document row (the note's title, `preparedOn` when the date is
+ *   stated), cited like the system Meeting, with RECORDED_IN from each meeting and
+ *   PREPARED_FOR to `ctx.selfEntityId` when it is set.
  */
 export function addDeterministicRows(
   ctx: ExtractionContext,
   result: Extract<ValidationResult, { ok: true }>,
 ): Extract<ValidationResult, { ok: true }> {
-  const rows = [...result.rows];
+  let rows = [...result.rows];
   const stats: ValidationStats = JSON.parse(JSON.stringify(result.stats));
   const evidence = meetingEvidence(ctx, rows);
   const out: ProposedRow[] = [];
 
-  if (evidence && ctx.effectiveSchema.entityType('Meeting')) {
+  // --- which meetings this note has ---------------------------------------------
+  let useSystemMeeting = true;
+  if (ctx.documentOrigin) {
+    const proposed = proposedMeetings(rows);
+    if (proposed.length >= 2) {
+      useSystemMeeting = false;
+      rows = rows.map((row) =>
+        mapEndpoints(row, (ep, r) => (isRef(ep, MEETING_REF) ? { ref: meetingFor(r, proposed) } : ep)),
+      );
+      // The system-only attributes the model cannot state (`noteId` lets a re-run find them).
+      rows = rows.map((row) => {
+        if (row.kind !== 'entity' || !proposed.includes(row)) return row;
+        const props: Record<string, unknown> = { ...row.payload.props, noteId: ctx.note.id };
+        if (typeof props.occurredOn === 'string') props.dateSource = 'stated';
+        return { ...row, payload: { ...row.payload, props } };
+      });
+    } else if (proposed.length === 1) {
+      const only = proposed[0].payload.ref;
+      rows = rows
+        .filter((row) => row !== proposed[0])
+        .map((row) => mapEndpoints(row, (ep) => (isRef(ep, only) ? { ref: MEETING_REF } : ep)));
+      stats.proposed.entities -= 1;
+    }
+  }
+
+  if (useSystemMeeting && evidence && ctx.effectiveSchema.entityType('Meeting')) {
     const props: Record<string, unknown> = { dateSource: ctx.dateSource, noteId: ctx.note.id };
     if (ctx.transcript) props.transcriptId = ctx.transcript.id;
     if (result.topics.length > 0) props.topics = result.topics;
@@ -696,7 +798,53 @@ export function addDeterministicRows(
     });
     stats.proposed.entities += 1;
   }
+
+  // --- the Document (#780) --------------------------------------------------------
+  const documentRows: ProposedRow[] = [];
+  let n = rows.filter((row) => row.kind === 'relation').length;
+  if (ctx.documentOrigin && evidence && ctx.effectiveSchema.entityType('Document')) {
+    const props: Record<string, unknown> = { title: ctx.note.title.slice(0, 200) };
+    if (ctx.dateSource === 'stated') props.preparedOn = ctx.meetingDate;
+    documentRows.push({
+      kind: 'entity',
+      payload: {
+        ref: DOCUMENT_REF,
+        type: 'Document',
+        label: ctx.note.title.slice(0, 200) || 'Document',
+        aliases: [],
+        props,
+        occurredAt: null,
+      },
+      resolution: null,
+      flags: [],
+      evidence: [evidence],
+    });
+    stats.proposed.entities += 1;
+
+    const link = (type: string, from: EndpointRef, to: EndpointRef, cite: EvidenceDraft[]) => {
+      if (!ctx.effectiveSchema.relationType(type)) return;
+      n += 1;
+      documentRows.push({
+        kind: 'relation',
+        payload: { ref: `r${n}`, type, from, to, props: {}, validFrom: null, validTo: null, precision: 'unknown' },
+        resolution: null,
+        flags: [],
+        evidence: cite,
+      });
+      stats.proposed.relations += 1;
+    };
+    if (useSystemMeeting) {
+      link('RECORDED_IN', { ref: MEETING_REF }, { ref: DOCUMENT_REF }, [evidence]);
+    } else {
+      for (const m of proposedMeetings(rows)) {
+        link('RECORDED_IN', { ref: m.payload.ref }, { ref: DOCUMENT_REF }, m.evidence.slice(0, 1));
+      }
+    }
+    if (ctx.selfEntityId) link('PREPARED_FOR', { ref: DOCUMENT_REF }, { entityId: ctx.selfEntityId }, [evidence]);
+  }
+  out.push(...documentRows.filter((row) => row.kind === 'entity'));
   out.push(...rows);
+  out.push(...documentRows.filter((row) => row.kind === 'relation'));
 
   const attended = ctx.offered.relationTypes.find((r) => r.type.key === 'ATTENDED');
   if (evidence && attended && ctx.transcript) {
@@ -709,7 +857,6 @@ export function addDeterministicRows(
     const personRows = rows.filter(
       (row): row is Extract<ProposedRow, { kind: 'entity' }> => row.kind === 'entity' && row.payload.type === 'Person',
     );
-    let n = rows.filter((row) => row.kind === 'relation').length;
     for (const speaker of ctx.speakers) {
       if (!speaker.name || !speaker.firstSegmentAlias) continue;
       let from: EndpointRef | null = null;
