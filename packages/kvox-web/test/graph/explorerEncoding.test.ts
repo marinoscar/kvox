@@ -81,7 +81,7 @@ function chroma(hex: string): number {
 function ontologyWithPlannedTypes(): GraphOntology {
   const base = mockGraphOntology(['core', 'work', 'personal']);
   const template = base.entityTypes.find((t) => t.key === 'Project')!;
-  const planned = ['Topic', 'Product', 'Risk']
+  const planned = ['Topic', 'Product', 'Risk', 'Opportunity', 'Document']
     .filter((key) => !base.entityTypes.some((t) => t.key === key))
     .map((key) => ({
       ...template,
@@ -164,6 +164,8 @@ describe('encodingFor and the ontology', () => {
         'commitment',
         'decision',
         'claim',
+        'Opportunity',
+        'Document',
       ]) {
         expect(keys, expected).toContain(expected);
       }
@@ -204,6 +206,8 @@ describe('encodingFor and the ontology', () => {
     expect(icon('Interest')).toBe('star');
     expect(icon('Trip')).toBe('plane');
     expect(icon('Milestone')).toBe('milestone');
+    expect(icon('Opportunity')).toBe('target');
+    expect(icon('Document')).toBe('file');
   });
 
   it('an entity type and an item kind of the same name are one encoding (Risk and risk)', () => {

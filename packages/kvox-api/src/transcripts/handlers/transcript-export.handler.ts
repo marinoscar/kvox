@@ -58,7 +58,10 @@
 // `alreadyDone` below.
 // =============================================================================
 
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+
+import { isValidTimeZone, KvoxTimeZoneService } from '../../core/index.js';
+
 
 import {
   KVOX_JOBS,
@@ -100,6 +103,7 @@ export class TranscriptExportHandler implements KvoxJobHandler, OnModuleInit {
     @Inject(KVOX_PRISMA) private readonly prisma: KvoxTranscriptsDb,
     private readonly exports: TranscriptExportService,
     private readonly objects: TranscriptObjectsService,
+    @Optional() private readonly zones?: KvoxTimeZoneService,
   ) {}
 
   onModuleInit(): void {
@@ -136,7 +140,7 @@ export class TranscriptExportHandler implements KvoxJobHandler, OnModuleInit {
     }
 
     try {
-      await this.render(row);
+      await this.render(row, readString(job.payload, 'timeZone'));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -160,7 +164,7 @@ export class TranscriptExportHandler implements KvoxJobHandler, OnModuleInit {
   }
 
   /** Materialize, render, upload, record. */
-  private async render(row: TranscriptExportRow): Promise<void> {
+  private async render(row: TranscriptExportRow, zoneFromPayload: string | null): Promise<void> {
     const exporter = this.exports.exporterFor(row.format);
 
     if (!exporter) {
@@ -173,7 +177,13 @@ export class TranscriptExportHandler implements KvoxJobHandler, OnModuleInit {
       );
     }
 
-    const doc = await this.exports.buildDocument(row);
+    // The zone the request was made in (the job payload); a job queued without one reads the requester's.
+    const timeZone = isValidTimeZone(zoneFromPayload)
+      ? zoneFromPayload
+      : exporter.localizesDates
+        ? ((await this.zones?.forUser(row.requestedById)) ?? 'UTC')
+        : undefined;
+    const doc = await this.exports.buildDocument(row, timeZone);
     const options = this.exports.optionsOf(row, exporter);
     const filename = exportFilename(doc.title, doc.version, exporter.extension);
 

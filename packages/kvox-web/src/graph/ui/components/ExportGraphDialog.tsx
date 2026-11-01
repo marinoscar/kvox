@@ -41,6 +41,7 @@ import { useState } from 'react';
 
 import { useGraphExport, type UseGraphExportOptions } from '../../headless/hooks/useGraphExport.js';
 import type { GraphExport, GraphExportFormat } from '../../headless/clients/graph.js';
+import { formatDate, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 export interface ExportGraphDialogProps {
   open: boolean;
@@ -61,14 +62,15 @@ function openDownload(url: string): void {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+/** `27 Oct 2026` (the locale's order) in the reader's display zone. */
+function formatDay(iso: string, timeZone: string): string {
+  return formatDate(iso, { day: 'numeric', month: 'short', year: 'numeric', timeZone });
 }
 
-function statusText(e: GraphExport): string {
+function statusText(e: GraphExport, timeZone: string): string {
   switch (e.status) {
     case 'ready':
-      return `Ready · expires ${formatDate(e.expiresAt)}`;
+      return `Ready · expires ${formatDay(e.expiresAt, timeZone)}`;
     case 'failed':
       return 'Failed';
     default:
@@ -79,6 +81,7 @@ function statusText(e: GraphExport): string {
 export function ExportGraphDialog({ open, onClose, pollOptions }: ExportGraphDialogProps) {
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
+  const zone = useDisplayTimeZone();
   const [format, setFormat] = useState<GraphExportFormat>('jsonld');
   const exporter = useGraphExport(open, pollOptions);
   const busy = exporter.phase === 'working';
@@ -195,8 +198,8 @@ export function ExportGraphDialog({ open, onClose, pollOptions }: ExportGraphDia
                     }
                   >
                     <ListItemText
-                      primary={`${FORMAT_LABEL[e.format]} · ${formatDate(e.createdAt)}`}
-                      secondary={statusText(e)}
+                      primary={`${FORMAT_LABEL[e.format]} · ${formatDay(e.createdAt, zone)}`}
+                      secondary={statusText(e, zone)}
                     />
                   </ListItem>
                 ))}

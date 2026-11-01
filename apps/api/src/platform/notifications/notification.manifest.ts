@@ -10,8 +10,8 @@
 //
 // ORDER IS LOAD-BEARING, because each step validates against the one before it:
 //
-//   1. the platform channels (`email`, `browser`, `push`); no Android channel,
-//      this app has no Android client;
+//   1. the platform channels (`email`, `browser`, `push`) and the webhooks slice's
+//      `webhook` channel; no Android channel, this app has no Android client;
 //   2. the email rendering context (layout theme and the brand mark);
 //   3. the platform email templates (`user-welcome`, `broadcast`,
 //      `backup-failed`, ...);
@@ -28,9 +28,20 @@ import {
   BROADCASTS_NOTIFICATIONS,
   NODES_NOTIFICATIONS,
   OPS_NOTIFICATIONS,
+  registerNotificationChannels,
   registerNotifications,
   registerPlatformNotificationChannels,
 } from '@marinoscar/platform-api/notifications';
+import {
+  ALERTS_NOTIFICATIONS,
+  registerAlertsEmailTemplates,
+} from '@marinoscar/platform-api/alerts';
+import {
+  WEBHOOKS_NOTIFICATIONS,
+  WEBHOOK_NOTIFICATION_CHANNEL,
+  registerWebhooksEmailTemplates,
+  withWebhookChannel,
+} from '@marinoscar/platform-api/webhooks';
 import {
   configureEmailRendering,
   registerEmailTemplates,
@@ -53,9 +64,16 @@ if (!registered) {
   registered = true;
 
   registerPlatformNotificationChannels();
+  // The webhooks slice's channel: a member's notifications, forwarded to their own webhook
+  // endpoints (`notification.<eventKey>`). Its sender comes with `WebhooksModule`. Events opt in
+  // with `withWebhookChannel` below; security, operational and broadcast events stay off it.
+  registerNotificationChannels([WEBHOOK_NOTIFICATION_CHANNEL]);
   configureEmailRendering(EMAIL_MODULE_OPTIONS);
   registerPlatformEmailTemplates();
   registerEmailTemplates(KVOX_EMAIL_TEMPLATES);
+  // The alerts slice's two templates and the webhooks slice's one.
+  registerAlertsEmailTemplates();
+  registerWebhooksEmailTemplates();
   // This app's wording for `user-welcome` and `allowlist-invitation` (#470).
   registerKvoxEmailTemplateOverrides();
 
@@ -66,9 +84,12 @@ if (!registered) {
     ...OPS_NOTIFICATIONS,
     ...NODES_NOTIFICATIONS,
     ...DB_BACKUP_NOTIFICATIONS,
-    ...TRANSCRIPTS_NOTIFICATIONS,
-    ...SHARING_NOTIFICATIONS,
-    ...NOTES_NOTIFICATIONS,
-    ...EXPORTS_NOTIFICATIONS,
+    ...withWebhookChannel(TRANSCRIPTS_NOTIFICATIONS),
+    ...withWebhookChannel(SHARING_NOTIFICATIONS),
+    ...withWebhookChannel(NOTES_NOTIFICATIONS),
+    ...withWebhookChannel(EXPORTS_NOTIFICATIONS),
+    ...ALERTS_NOTIFICATIONS,
+    // `webhooks.endpoint_disabled`: sent to the owner of a switched-off endpoint.
+    ...WEBHOOKS_NOTIFICATIONS,
   ]);
 }

@@ -22,7 +22,8 @@
 // `graph:read_any` (§12).
 // =============================================================================
 
-import { ConflictException, Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException, Inject, Optional } from '@nestjs/common';
+
 import { ONTOLOGY_VERSION, kvNamespace } from '@marinoscar/kvox-contract/ontology';
 
 import { contentDisposition } from '../../notes/index.js';
@@ -31,7 +32,7 @@ import type { CreateGraphExportResponse, GraphExportList, KgExportView } from '.
 import { GraphExportSource } from './graph-export.source.js';
 import { graphExportFilename, type GraphExportFormat } from './graph-export-formats.js';
 import { graphFingerprint } from './graph-fingerprint.js';
-import { KVOX_BRAND, type KvoxBrand } from '../../core/index.js';
+import { KVOX_BRAND, KvoxTimeZoneService, type KvoxBrand } from '../../core/index.js';
 import { KVOX_PRISMA, KVOX_JOBS, type KvoxJobsPort } from '../../ports/index.js';
 import type { KvoxGraphDb, KgExportRow as KgExport, KgExportFormatValue as KgExportFormat } from '../../graph/index.js';
 
@@ -83,6 +84,7 @@ export class GraphExportService {
     private readonly objects: GraphObjectsService,
     @Inject(KVOX_JOBS) private readonly jobs: KvoxJobsPort,
     @Inject(KVOX_BRAND) private readonly brand: KvoxBrand,
+    @Optional() private readonly zones?: KvoxTimeZoneService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -182,7 +184,9 @@ export class GraphExportService {
   /** One row as the API reports it, signing a download when it is ready. */
   async view(row: KgExport): Promise<KgExportView> {
     const format = row.format as GraphExportFormat;
-    const filename = graphExportFilename(this.brand.appSlug, row.createdAt, format);
+    // Dated by the owner's day (their profile zone), not the server's.
+    const timeZone = await this.zones?.forUser(row.ownerId);
+    const filename = graphExportFilename(this.brand.appSlug, row.createdAt, format, timeZone);
     let downloadUrl: string | null = null;
     if (row.status === 'ready' && row.objectId) {
       const signed = await this.objects.signedUrlFor(

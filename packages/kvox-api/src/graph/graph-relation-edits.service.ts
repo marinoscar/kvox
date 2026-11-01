@@ -50,7 +50,9 @@
 // ⚠ Never log or audit a label or a quote: ids, types and counts only.
 // =============================================================================
 
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+
+import { dayKeyToFloatingDate, KvoxTimeZoneService, localDateKey } from '../core/index.js';
 import {
   MANUAL_RELATION_TYPES,
   type CreateManualRelationDto,
@@ -88,10 +90,13 @@ export const GRAPH_RELATION_REMOVED_ACTION = 'graph.relation_removed';
 
 const MANUAL_TYPES: ReadonlySet<string> = new Set(MANUAL_RELATION_TYPES);
 
-/** The UTC day `iso` names (`YYYY-MM-DD`), or today's. */
-function dayStart(iso: string | undefined, now: Date): Date {
-  const day = iso ?? now.toISOString().slice(0, 10);
-  return new Date(`${day}T00:00:00.000Z`);
+/**
+ * The floating date (UTC midnight) of the day `iso` names (`YYYY-MM-DD`), or of the requester's
+ * TODAY: the day `now` falls on in their time zone. The validity range is a calendar value, so the
+ * day is cut in the user's zone but stored at UTC midnight.
+ */
+function dayStart(iso: string | undefined, now: Date, timeZone: string): Date {
+  return dayKeyToFloatingDate(iso ?? localDateKey(now, timeZone));
 }
 
 /** The sentence the manual citation reads as. Labels are the owner's own data; never logged. */
@@ -131,6 +136,7 @@ export class GraphRelationEditsService {
     private readonly entities: GraphEntitiesService,
     @Inject(KVOX_EVENTS) private readonly events: KvoxEventsPort,
     @Inject(KVOX_AUDIT) private readonly auditPort: KvoxAuditPort,
+    @Optional() private readonly zones?: KvoxTimeZoneService,
   ) {}
 
   /** "Today", for a set without `validFrom` (a test seam). */
@@ -139,7 +145,12 @@ export class GraphRelationEditsService {
   }
 
   /** `POST /api/graph/entities/:id/relations`. */
-  async set(id: string, dto: CreateManualRelationDto, user: GraphActor): Promise<CreateManualRelationResponse> {
+  async set(
+    id: string,
+    dto: CreateManualRelationDto,
+    user: GraphActor,
+    timeZoneHeader?: string,
+  ): Promise<CreateManualRelationResponse> {
     const from = (await this.access.require(user.id, 'entity', id, 'edit', user.permissions)) as KgEntityRow;
     const to = (await this.access.require(user.id, 'entity', dto.toId, 'edit', user.permissions)) as KgEntityRow;
     if (from.id === to.id) throw new BadRequestException('A relation needs two different entities.');
@@ -156,7 +167,9 @@ export class GraphRelationEditsService {
       props.title = dto.props.title;
       if (dto.props.businessUnit) props.businessUnit = dto.props.businessUnit;
     }
-    const start = dayStart(dto.validFrom, this.now());
+    // Only a set WITHOUT `validFrom` reads the zone: "today" is the requester's today (profile zone, then X-Time-Zone, then UTC).
+    const timeZone = dto.validFrom ? 'UTC' : ((await this.zones?.forRequest(user.id, timeZoneHeader)) ?? 'UTC');
+    const start = dayStart(dto.validFrom, this.now(), timeZone);
     const evidence = new ManualEvidence(manualRelationQuote(dto.type, from.label, to.label, dto.props));
 
     let outcome: { relationId: string; created: boolean; evidenceId: string; closed: string[]; flags: TemporalFlag[] };

@@ -123,6 +123,7 @@ Everything lives in `ui/components/explorer/paths/`; the page only wires slots t
 - **Play** steps the window one bucket every 800 ms and is off under `prefers-reduced-motion`.
 - **Keyboard and screen reader**: the two handles are `role="slider"` (arrows move one bucket, Shift+arrows a quarter); "Set range" opens two date fields (`SetRangeSheet`), the alternative on every window class.
 - **Sizes**: compact, a 28px sparkline strip that expands on tap to 120px (44px handles); medium 96px; expanded 112px.
+- **Calendar**: the axis is in calendar days of the user's display time zone, because the API cuts the buckets in the requester's zone (the response's `timeZone`; a week starts on the local Monday). Days are date keys (`YYYY-MM-DD`) and their arithmetic runs on day numbers, so a DST week is still seven days; "today" is `zonedDateKey(now)` (`todayKey` in `timeAxis.ts`), an instant ("Show in TimeBar") lands in the bucket of its local day, and labels read the calendar date as is. The Time control's presets (Last 30 and 90 days, Last year) end at the user's local tomorrow, and a range ending on or before the local today is evaluated `as_of` its end. A bare `from`, `to` or `since` the explorer sends (the full view's overview filter, Start here's "active in the last 30 days") is that local calendar day, which the API reads as local midnight; `as_of` and the as-of slider's `YYYY-MM-01` steps stay calendar dates (the current month is the local one).
 
 ### Insights (GIC-16, #677, epic #661)
 

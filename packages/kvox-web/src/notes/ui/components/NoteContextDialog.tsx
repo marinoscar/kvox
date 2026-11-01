@@ -36,6 +36,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNoteGenerationContext } from '../../headless/hooks/useNoteGenerationContext.js';
 import type { NoteGenerationContext } from '../../headless/clients/notes.js';
 import { KvoxCopyButton as CopyButton } from '../../../core/ui/index.js';
+import { formatDateTime, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 /** Above this many characters the view is truncated (copy/download are not). */
 export const CONTEXT_TRUNCATE_THRESHOLD = 1_000_000;
@@ -80,11 +81,11 @@ export function contextFileName(noteTitle?: string): string {
   return `${base || 'note'} – context.txt`;
 }
 
-function formatCapturedAt(iso: string | null): string | null {
+/** When the context was captured, in the reader's display zone, or `null`. */
+function formatCapturedAt(iso: string | null, timeZone: string): string | null {
   if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const text = formatDateTime(iso, { dateStyle: 'medium', timeStyle: 'short', timeZone, fallback: '' });
+  return text === '' ? null : text;
 }
 
 function formatTokens(prompt: number | null, completion: number | null): string | null {
@@ -94,9 +95,9 @@ function formatTokens(prompt: number | null, completion: number | null): string 
   return parts.length > 0 ? parts.join(' / ') : null;
 }
 
-function headerFacts(context: NoteGenerationContext): string[] {
+function headerFacts(context: NoteGenerationContext, timeZone: string): string[] {
   const facts: string[] = [];
-  const captured = formatCapturedAt(context.capturedAt);
+  const captured = formatCapturedAt(context.capturedAt, timeZone);
   if (captured) facts.push(`Captured ${captured}`);
   if (context.templateNameSnapshot) facts.push(context.templateNameSnapshot);
 
@@ -212,6 +213,7 @@ export function NoteContextDialog({
   // The `down('sm')` compact-window convention shared with the other note
   // dialogs — never `md`.
   const isCompactWindow = useMediaQuery(theme.breakpoints.down('sm'));
+  const zone = useDisplayTimeZone();
 
   const { context, isLoading, error, refresh } = useNoteGenerationContext(noteId, {
     enabled: open,
@@ -264,7 +266,7 @@ export function NoteContextDialog({
       );
     }
 
-    const facts = headerFacts(context);
+    const facts = headerFacts(context, zone);
 
     return (
       <Stack spacing={2}>

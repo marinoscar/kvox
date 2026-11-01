@@ -24,6 +24,7 @@ import type { KvoxAskDb } from '../data/ask-db.js';
 import {
   clip,
   isoDate,
+  localInstantDate,
   jsonNullableString,
   jsonString,
   objectParameters,
@@ -68,6 +69,7 @@ export class EntityBriefTool implements AskTool<EntityBriefToolInput> {
     const target = resolveHandleOrThrow(ctx, args.entity, ['ent']);
     const res = await this.brief.getBrief(ctx.user, target.id, {
       since: args.since,
+      ...(ctx.timeZone ? { timeZone: ctx.timeZone } : {}),
       asOf: args.asOf,
       markViewed: false,
       enqueueStaleDigest: false,
@@ -120,7 +122,11 @@ export class EntityBriefTool implements AskTool<EntityBriefToolInput> {
     };
 
     const data = {
-      window: { since: isoDate(res.window.since), asOf: isoDate(res.window.asOf) },
+      window: {
+        since: localInstantDate(res.window.since, ctx.timeZone),
+        // A given `asOf` is a calendar day (UTC midnight, echoed as stored); the defaulted one is `now`, an instant.
+        asOf: args.asOf ? isoDate(res.window.asOf) : localInstantDate(res.window.asOf, ctx.timeZone),
+      },
       digest: res.digest
         ? res.digest.statements.map((s) => ({
             text: clip(s.text, STATEMENT_MAX_CHARS),
@@ -128,7 +134,7 @@ export class EntityBriefTool implements AskTool<EntityBriefToolInput> {
           }))
         : null,
       digestStale: res.digestStale,
-      digestGeneratedAt: res.digest ? isoDate(res.digest.generatedAt) : null,
+      digestGeneratedAt: res.digest ? localInstantDate(res.digest.generatedAt, ctx.timeZone) : null,
       whatChanged: section(sections.whatChanged),
       decisions: section(sections.decisions),
       openCommitments: {

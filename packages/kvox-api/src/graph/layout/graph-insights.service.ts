@@ -29,7 +29,7 @@
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
-import { Prisma } from '../../core/index.js';
+import { pickTimeZone, Prisma } from '../../core/index.js';
 import { KVOX_PRISMA } from '../../ports/index.js';
 import type { KvoxGraphDb } from '../data/graph-db.js';
 import { GraphOntologyService } from '../ontology/graph-ontology.service.js';
@@ -68,6 +68,8 @@ export interface GraphInsightsOptions {
   now?: Date;
   /** Overrides the 3 s statement budget. */
   timeoutMs?: number;
+  /** The requester's IANA zone the sentences' dates are cut in (default UTC). */
+  timeZone?: string;
 }
 
 interface LiveEntity {
@@ -130,6 +132,7 @@ export class GraphInsightsService {
     options: GraphInsightsOptions = {},
   ): Promise<GraphInsightsResponse> {
     const now = options.now ?? new Date();
+    const timeZone = options.timeZone ?? 'UTC';
     const days = WINDOW_DAYS[window];
     const from = new Date(now.getTime() - days * DAY_MS);
     const previousFrom = new Date(now.getTime() - 2 * days * DAY_MS);
@@ -156,7 +159,7 @@ export class GraphInsightsService {
         relationTypes: f.relation_types,
         lastEvidenceAt: f.last_at.toISOString(),
         evidenceBefore: f.before_count,
-        reason: `You haven't discussed ${f.a_label} with ${f.b_label} since ${formatDay(f.last_at)}.`,
+        reason: `You haven't discussed ${f.a_label} with ${f.b_label} since ${formatDay(f.last_at, timeZone)}.`,
       })),
       openRisks,
     };
@@ -398,6 +401,7 @@ export function risingReason(count: number, previous: number, days: number): str
     : `Came up in ${what} in ${span}, up from ${previous} before.`;
 }
 
-function formatDay(d: Date): string {
-  return d.toLocaleDateString('en-US', { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' });
+/** `Oct 26, 2026`: the DATE ONLY of an instant, in the requester's zone (`lastEvidenceAt` stays the ISO instant). */
+export function formatDay(d: Date, timeZone: string): string {
+  return d.toLocaleDateString('en-US', { timeZone: pickTimeZone(timeZone), year: 'numeric', month: 'short', day: 'numeric' });
 }

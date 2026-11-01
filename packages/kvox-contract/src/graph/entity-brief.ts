@@ -58,7 +58,7 @@ export const entityBriefQuerySchema = z.object({
   since: dateOrDatetime
     .optional()
     .describe(
-      'Start of the "what changed" window. Default: when you last opened this brief, else the digest\'s ' +
+      'Start of the "what changed" window (`YYYY-MM-DD` = local midnight that day in your time zone). Default: when you last opened this brief, else the digest\'s ' +
         '`coversUntil`, else 30 days before `as_of`.',
     ),
   as_of: dateOrDatetime

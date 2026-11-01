@@ -32,7 +32,7 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { formatPrecisionDate } from '../../../../headless/utils/graphDisplay.js';
+import { formatDate, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import type { ExplorerMode } from '../explorerEncoding.js';
 import { evidenceSourceTitle } from '../inspector/EvidenceCard.js';
 import { TypeGlyph } from '../inspector/TypeGlyph.js';
@@ -64,6 +64,7 @@ export interface PathStripProps {
 }
 
 function QuoteLine({ hop, quote, touch, onOpenEdge }: { hop: PathHopView; quote: HopQuote | undefined; touch: boolean; onOpenEdge: (edgeId: string) => void }) {
+  const zone = useDisplayTimeZone();
   if (!quote || quote.status === 'loading') {
     return <Skeleton variant="text" width="90%" aria-label="Loading the quote" />;
   }
@@ -83,7 +84,8 @@ function QuoteLine({ hop, quote, touch, onOpenEdge }: { hop: PathHopView; quote:
     );
   }
   const title = evidenceSourceTitle(link);
-  const date = formatPrecisionDate(link.createdAt, 'day');
+  // When the citation was recorded: an instant, shown in the reader's display zone.
+  const date = formatDate(link.createdAt, { dateStyle: 'medium', timeZone: zone, fallback: 'Date unknown' });
   const href = link.source.available ? link.source.href : null;
   const more = Math.max(hop.evidenceCount, 1) - 1;
   return (

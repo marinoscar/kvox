@@ -104,6 +104,10 @@ interface SetupOptions {
   contextWindowTokens?: number;
   execute?: jest.Mock;
   options?: Parameters<typeof resolveAskOptions>[0];
+  /** The turn's clock (`toolCtx.now`). */
+  now?: Date;
+  /** The time zone service; absent means the handler falls back to UTC. */
+  zones?: { forUser: jest.Mock };
 }
 
 function setup(opts: SetupOptions = {}) {
@@ -197,7 +201,7 @@ function setup(opts: SetupOptions = {}) {
   };
 
   const handles = new HandleRegistry();
-  const toolCtx = { user: { id: USER }, handles, personalFactsAllowed: false, scopeEntityId: null, now: new Date() };
+  const toolCtx = { user: { id: USER }, handles, personalFactsAllowed: false, scopeEntityId: null, now: opts.now ?? new Date() };
   const toolset = {
     definitions: jest.fn(() => [{ name: 'search', description: 'Search', parameters: { type: 'object' } }]),
     createContext: jest.fn().mockResolvedValue(toolCtx),
@@ -225,6 +229,7 @@ function setup(opts: SetupOptions = {}) {
     toolset as never,
     visibility as never,
     resolveAskOptions(opts.options),
+    opts.zones as never,
   );
   let now = 1_000_000;
   handler.clock = () => now;
@@ -474,6 +479,34 @@ describe('AskRespondHandler (#378)', () => {
       expect(system).toContain('starting points only, not evidence');
       expect(system).not.toContain(ENTITY);
       expect(t.final().citations).toEqual([expect.objectContaining({ marker: 'ent1', valid: true, id: ENTITY })]);
+    });
+
+    it("states the asker's local date in the prompt, from the zone captured when the question was posted", async () => {
+      // 2026-10-27T02:42Z: Monday the 26th at 21:42 in Chicago.
+      const zones = { forUser: jest.fn(async () => 'Asia/Tokyo') };
+      const t = setup({ now: new Date('2026-10-27T02:42:00Z'), zones });
+      await t.handler.process(job(payload({ timeZone: 'America/Chicago' })));
+      expect(t.requests[0].messages[0].content).toContain('Today is 2026-10-26 (Monday), 21:42 in America/Chicago.');
+      expect(t.toolset.createContext).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ timeZone: 'America/Chicago' }),
+      );
+      // The payload's zone wins: the user is not looked up.
+      expect(zones.forUser).not.toHaveBeenCalled();
+    });
+
+    it("reads the user's zone when the job carries none (a job queued before the field existed)", async () => {
+      const zones = { forUser: jest.fn(async () => 'Asia/Tokyo') };
+      const t = setup({ now: new Date('2026-10-27T02:42:00Z'), zones });
+      await t.handler.process(job(payload()));
+      expect(zones.forUser).toHaveBeenCalledWith(USER);
+      expect(t.requests[0].messages[0].content).toContain('Today is 2026-10-27 (Tuesday), 11:42 in Asia/Tokyo.');
+    });
+
+    it('treats an unusable payload zone like a missing one, and falls back to UTC without a zone service', async () => {
+      const t = setup({ now: new Date('2026-10-27T02:42:00Z') });
+      await t.handler.process(job(payload({ timeZone: 'Not/AZone' })));
+      expect(t.requests[0].messages[0].content).toContain('Today is 2026-10-27 (Tuesday), 02:42 in UTC.');
     });
 
     it('names nothing when the selection is no longer readable, and the turn still answers (GIC-17)', async () => {

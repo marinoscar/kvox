@@ -58,6 +58,7 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 import { SegmentList } from '../components/SegmentList.js';
 import { useTranscriptVersions } from '../../headless/hooks/useTranscriptVersions.js';
@@ -150,7 +151,10 @@ export function TranscriptHistoryPage() {
     }
   }, [host, confirmRestore, currentVersion, id, navigate, refresh]);
 
-  const sessions = groupVersionsIntoSessions(versions);
+  // Sessions split at the viewer's midnight, in their display zone; a saved
+  // profile re-groups them.
+  const zone = useDisplayTimeZone();
+  const sessions = groupVersionsIntoSessions(versions, zone);
 
   if (isLoading) {
     return (

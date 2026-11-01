@@ -2,6 +2,7 @@ import { APP_NAME, TAGLINE } from '@app/shared';
 import {
   SafeHtml,
   TRANSACTIONAL_EMAIL_HEADERS,
+  formatEmailDate,
   html,
   plainText,
   renderLayout,
@@ -163,31 +164,6 @@ declare module '@marinoscar/platform-api/email' {
 }
 
 /**
- * The date the invitation was issued, as a human reads it.
- *
- * NOT `toISOString()`, which is what `role-changed.email.ts`,
- * `test-email.email.ts` and the operational templates use — and the divergence
- * is the point. Those timestamps exist to be matched against an audit row or a
- * log line, so UTC precision beats readability. This one exists to let a
- * stranger think "oh, that was back in January", and `2026-01-15T10:00:00.000Z`
- * is a worse answer to that than `15 January 2026`.
- *
- * `en-GB` with an explicit `UTC` zone: day-before-month is unambiguous where
- * `1/15/2026` versus `15/1/2026` is not, and pinning the zone keeps the
- * rendered string a pure function of its input rather than of the server's
- * `TZ`. The server does not know the reader's zone, and a day's drift does not
- * matter in a sentence whose whole meaning is "a while ago".
- */
-function formatInvitedOn(value: Date): string {
-  return value.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
-/**
  * Render the reminder.
  */
 export function allowlistInvitationReminderEmail(
@@ -195,7 +171,11 @@ export function allowlistInvitationReminderEmail(
   ctx?: EmailRenderContext,
 ): RenderedEmail {
   const invitedBy = data.invitedBy?.trim();
-  const invitedOn = formatInvitedOn(data.invitedAt);
+  // The day the invitation was issued, as a human reads it (`Jan 15, 2026 (CST)`), cut in the zone of
+  // the render context: the sending administrator's, which the service passes as `NotifyOptions.timeZone`
+  // (the recipient is an address with no account, so there is no zone of their own). NOT `toISOString()`:
+  // the operational templates print ISO to be matched against an audit row; this one is read by a stranger.
+  const invitedOn = formatEmailDate(data.invitedAt, ctx);
 
   // "Reminder:" leads the subject line, because the inbox list is where a
   // reader decides whether this is the message they already have. Naming the

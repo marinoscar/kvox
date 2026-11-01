@@ -53,7 +53,10 @@
 // from becoming an oracle for the existence of somebody else's note.
 // =============================================================================
 
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+
+import { KvoxTimeZoneService } from '../../core/index.js';
+
 
 import {
   KVOX_AUDIT,
@@ -169,6 +172,7 @@ export class NoteExportService {
     private readonly access: NoteAccessService,
     private readonly objects: NoteObjectsService,
     private readonly registry: NoteExporterRegistry,
+    @Optional() private readonly zones?: KvoxTimeZoneService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -195,6 +199,7 @@ export class NoteExportService {
     noteId: string,
     dto: CreateNoteExportDto,
     user: RequestUser,
+    timeZoneHeader?: string,
   ): Promise<CreateNoteExportResult> {
     // `notes:write`, not `notes:read`. Unlike a transcript — where a viewer
     // share may take the conversation they were shown out of the application —
@@ -212,7 +217,11 @@ export class NoteExportService {
     }
 
     const options = this.parseOptions(exporter, dto.options);
-    const optionsHash = hashExportRequest({ format: exporter.format, version, options });
+    // Every note format prints the version's "saved" time, the "Exported" time and the source date, cut in the
+    // requester's zone (profile, then X-Time-Zone, then UTC). The zone is part of the content address, so the
+    // same export asked for from another zone is rendered again, and it rides in the job payload.
+    const timeZone = (await this.zones?.forRequest(user.id, timeZoneHeader)) ?? 'UTC';
+    const optionsHash = hashExportRequest({ format: exporter.format, version, options, timeZone });
     const now = new Date();
 
     const existing = await this.prisma.noteExport.findFirst({
@@ -277,7 +286,7 @@ export class NoteExportService {
       reason: 'rerun',
       subjectType: NOTE_SUBJECT_TYPE,
       subjectId: noteId,
-      payload: { exportId: row.id, noteId },
+      payload: { exportId: row.id, noteId, timeZone },
       priority: NOTE_EXPORT_JOB_PRIORITY,
       // See the file header: three formats of one note are distinct work.
       skipDedup: true,
@@ -386,7 +395,7 @@ export class NoteExportService {
    * restore replays — and an export that quietly shipped the live copy would be
    * a file whose stated version does not match its contents.
    */
-  async buildDocument(row: NoteExport): Promise<NoteExportDocument> {
+  async buildDocument(row: NoteExport, timeZone?: string): Promise<NoteExportDocument> {
     const note = await this.prisma.note.findUnique({
       where: { id: row.noteId },
       include: { template: { select: { name: true } } },
@@ -413,6 +422,7 @@ export class NoteExportService {
       version: row.version,
       createdAt: version.createdAt,
       exportedAt: new Date(),
+      ...(timeZone ? { timeZone } : {}),
       author: version.author
         ? {
             displayName: version.author.displayName ?? version.author.email,
@@ -462,14 +472,14 @@ export class NoteExportService {
     if (note.sourceType === 'transcript' && note.sourceTranscriptId) {
       const transcript = await this.prisma.transcript.findUnique({
         where: { id: note.sourceTranscriptId },
-        select: { title: true, createdAt: true },
+        select: { title: true, createdAt: true, recordedAt: true },
       });
 
       return {
         type: 'transcript',
         id: note.sourceTranscriptId,
         title: transcript?.title ?? 'Deleted recording',
-        date: transcript?.createdAt ?? null,
+        date: transcript?.recordedAt ?? transcript?.createdAt ?? null,
       };
     }
 

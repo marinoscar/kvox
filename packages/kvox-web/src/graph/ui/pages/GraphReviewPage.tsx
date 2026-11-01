@@ -43,6 +43,7 @@ import { useKvoxHost } from '../../../core/headless/index.js';
 import { importStatsOf } from '../../headless/clients/graph.js';
 import type { ProposalSummary } from '../../headless/clients/graph.js';
 import { useGraphReviewQueue } from '../../headless/hooks/useGraphReviewQueue.js';
+import { formatDate, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 const SKELETON_ROWS = 4;
 
@@ -98,6 +99,8 @@ function countsLine(proposal: ProposalSummary): string {
  */
 export function GraphReviewPage() {
   const host = useKvoxHost();
+  // Each draft's day in the reader's display zone; a saved profile re-renders it.
+  const zone = useDisplayTimeZone();
   const queue = useGraphReviewQueue();
   const rows = queue.items.flatMap((proposal) => {
     const target = reviewTarget(proposal, host.links);
@@ -163,12 +166,11 @@ export function GraphReviewPage() {
                 <ListItemButton component={RouterLink} to={href}>
                   <ListItemText
                     primary={title}
-                    secondary={`${countsLine(proposal)} · ${new Date(
-                      proposal.createdAt
-                    ).toLocaleDateString(undefined, {
+                    secondary={`${countsLine(proposal)} · ${formatDate(proposal.createdAt, {
                       day: 'numeric',
                       month: 'short',
                       year: 'numeric',
+                      timeZone: zone,
                     })}`}
                     slotProps={{ primary: { noWrap: true } }}
                   />

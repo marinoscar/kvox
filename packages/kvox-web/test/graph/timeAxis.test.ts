@@ -1,3 +1,4 @@
+import { setPreferredTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -15,6 +16,10 @@ import {
   rangeLabel,
   snapRange,
   zoomDomain,
+  addDaysToKey,
+  dayKeyOf,
+  todayDay,
+  todayKey,
 } from '../../src/graph/ui/components/explorer/timebar/timeAxis.js';
 import {
   activeEntities,
@@ -27,7 +32,7 @@ import type { GraphActivityResponse } from '../../src/graph/headless/clients/gra
 
 const day = (value: string) => parseDay(value)!;
 
-describe('the TimeBar calendar (UTC)', () => {
+describe('the TimeBar calendar (day numbers, device zone UTC)', () => {
   it('parses only real calendar days', () => {
     expect(parseDay('2026-02-28')).not.toBeNull();
     expect(parseDay('2026-02-30')).toBeNull();
@@ -109,6 +114,7 @@ describe('the TimeBar calendar (UTC)', () => {
 
 const activity: GraphActivityResponse = {
   bucket: 'month',
+  timeZone: 'UTC',
   series: [
     { start: '2026-01-01', total: 3, byType: { Person: 2, Project: 1 } },
     { start: '2026-03-01', total: 5, byType: { Person: 1, Project: 4 } },
@@ -153,5 +159,73 @@ describe('the TimeBar model', () => {
     expect([...dimmedFrom(visible, new Set(['joe']))!].sort()).toEqual(['ana', 'ghost', 'productx']);
     expect(dimmedFrom(visible, null)).toBeNull();
     expect(dimmedFrom(visible, new Set())).toBeNull();
+  });
+});
+
+/**
+ * The axis is the user's calendar (#time-zones): the API cuts buckets in the
+ * requester's zone, so the same instant can sit in another bucket for a viewer
+ * in Tokyo than for one in Los Angeles.
+ */
+describe('the TimeBar calendar in the display zone', () => {
+  const TOKYO = 'Asia/Tokyo';
+  const LA = 'America/Los_Angeles';
+  // 20:00 UTC on 31 March: 05:00 on 1 April in Tokyo, 13:00 on 31 March in Los Angeles.
+  const LATE_MARCH_UTC = '2026-03-31T20:00:00Z';
+
+  it('reads today as the local calendar day, either side of midnight', () => {
+    expect(todayKey(Date.parse(LATE_MARCH_UTC), TOKYO)).toBe('2026-04-01');
+    expect(todayKey(Date.parse(LATE_MARCH_UTC), LA)).toBe('2026-03-31');
+    expect(todayDay(new Date(LATE_MARCH_UTC), TOKYO)).toBe(day('2026-04-01'));
+  });
+
+  it('defaults to the display zone', () => {
+    setPreferredTimeZone(TOKYO);
+    expect(todayKey(Date.parse(LATE_MARCH_UTC))).toBe('2026-04-01');
+    expect(dayKeyOf(LATE_MARCH_UTC)).toBe('2026-04-01');
+    setPreferredTimeZone(LA);
+    expect(todayKey(Date.parse(LATE_MARCH_UTC))).toBe('2026-03-31');
+  });
+
+  it('puts an instant in the bucket of its local day: April in Tokyo, March in Los Angeles', () => {
+    expect(rangeForInstant(LATE_MARCH_UTC, 'month', TOKYO)).toEqual({ from: '2026-04-01', to: '2026-05-01' });
+    expect(rangeForInstant(LATE_MARCH_UTC, 'month', LA)).toEqual({ from: '2026-03-01', to: '2026-04-01' });
+    // Tuesday 31 March vs Wednesday 1 April: both in the week of Monday 30 March.
+    expect(rangeForInstant(LATE_MARCH_UTC, 'week', TOKYO)).toEqual({ from: '2026-03-30', to: '2026-04-06' });
+    // A bare day is a calendar day already and never shifts with the zone.
+    expect(rangeForInstant('2026-03-31', 'month', TOKYO)).toEqual({ from: '2026-03-01', to: '2026-04-01' });
+  });
+
+  it('starts a week on the local Monday: Sunday 23:30 in Los Angeles is still the previous week', () => {
+    // 2026-03-09T06:30Z is Sunday 8 March 23:30 PDT (DST began that morning) and Monday 15:30 in Tokyo.
+    expect(rangeForInstant('2026-03-09T06:30:00Z', 'week', LA)).toEqual({ from: '2026-03-02', to: '2026-03-09' });
+    expect(rangeForInstant('2026-03-09T06:30:00Z', 'week', TOKYO)).toEqual({ from: '2026-03-09', to: '2026-03-16' });
+  });
+
+  it('keeps a DST week seven calendar days long (the local week is 167 or 169 hours)', () => {
+    // US DST ends Sunday 1 November 2026: the week of Monday 26 October has 169 local hours.
+    const week = rangeForInstant('2026-10-28T12:00:00Z', 'week', LA)!;
+    expect(week).toEqual({ from: '2026-10-26', to: '2026-11-02' });
+    expect(addBuckets(day(week.from), 'week', 1)).toBe(day('2026-11-02'));
+    expect(bucketsBetween(day('2026-10-26'), day('2026-11-16'), 'week').map(formatDay)).toEqual([
+      '2026-10-26',
+      '2026-11-02',
+      '2026-11-09',
+    ]);
+    // 00:30 local on Monday 2 November (UTC−8 after the change) is in the next week.
+    expect(rangeForInstant('2026-11-02T08:30:00Z', 'week', LA)).toEqual({ from: '2026-11-02', to: '2026-11-09' });
+    expect(rangeForInstant('2026-11-02T07:30:00Z', 'week', LA)).toEqual({ from: '2026-10-26', to: '2026-11-02' });
+  });
+
+  it('counts calendar days on date keys, across a DST change', () => {
+    expect(addDaysToKey('2026-03-07', 2)).toBe('2026-03-09');
+    expect(addDaysToKey('2026-11-02', -30)).toBe('2026-10-03');
+    expect(addDaysToKey('nope', 1)).toBeNull();
+  });
+
+  it('labels a bucket by its calendar date whatever the display zone', () => {
+    setPreferredTimeZone(LA);
+    expect(bucketLabel(day('2026-04-01'), 'month')).toBe('Apr 2026');
+    expect(bucketLabel(day('2026-03-30'), 'week')).toBe('30 Mar 2026');
   });
 });

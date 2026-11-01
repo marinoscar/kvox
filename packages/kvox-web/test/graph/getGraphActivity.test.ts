@@ -13,6 +13,7 @@ const B = '00000000-0000-4000-8000-00000000000b';
 
 const response: GraphActivityResponse = {
   bucket: 'month',
+  timeZone: 'UTC',
   series: [{ start: '2026-01-01', total: 2, byType: { Person: 2 } }],
   byEntity: { [A]: [{ start: '2026-01-01', count: 2 }] },
 };

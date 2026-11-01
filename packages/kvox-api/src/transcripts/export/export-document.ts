@@ -154,6 +154,11 @@ export interface ExportDocument {
    * builder was not given one. Optional so a document built before #571 still compiles.
    */
   recordedAt?: Date | null;
+  /**
+   * The requester's IANA time zone (absent: UTC). A renderer that prints a date derived from an
+   * instant (the PDF cover) cuts it here. The machine formats (JSON, Markdown front matter) keep ISO.
+   */
+  timeZone?: string;
   /** Who made the version. */
   author: ExportAuthor | null;
   /** The provider that transcribed it. */
@@ -186,6 +191,8 @@ export interface BuildExportDocumentInput {
   exportedAt: Date;
   /** When the recording was made (`transcripts.recorded_at`); absent or null when unknown. */
   recordedAt?: Date | null;
+  /** The requester's IANA time zone (absent: UTC); see {@link ExportDocument.timeZone}. */
+  timeZone?: string;
   /** Who made the version. */
   author: ExportAuthor | null;
   /** The provider that transcribed it. */
@@ -248,6 +255,7 @@ export function buildExportDocument(input: BuildExportDocumentInput): ExportDocu
     createdAt: input.createdAt,
     exportedAt: input.exportedAt,
     recordedAt: input.recordedAt ?? null,
+    ...(input.timeZone ? { timeZone: input.timeZone } : {}),
     author: input.author,
     provider: input.provider,
     speakers,

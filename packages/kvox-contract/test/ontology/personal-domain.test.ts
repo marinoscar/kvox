@@ -32,6 +32,9 @@ const PERSONAL_TYPES = ['Interest', 'Trip', 'Milestone'];
 const PERSONAL_RELATIONS = ['SPOUSE_OF', 'PARENT_OF', 'FRIEND_OF', 'INTERESTED_IN', 'TRAVELED_ON', 'HAS_MILESTONE'];
 
 // 1.3.0 (#663): the stakeholder and market relations added to the work domain.
+// 1.4.0 (#776): relations added to core and work (Opportunity, Document, meeting organizer).
+const ONTOLOGY_1_4_RELATIONS = ['ORGANIZED', 'WITH_CLIENT', 'PURSUED_BY', 'COMPETING_FOR', 'RECORDED_IN', 'PREPARED_FOR'];
+
 const STAKEHOLDER_RELATIONS = ['INVOLVED_IN', 'USES', 'OFFERED_BY', 'CUSTOMER_OF', 'PARTNER_OF', 'COMPETITOR_OF', 'CONCERNS', 'KNOWS_ABOUT'];
 
 const PAYLOAD_1_0_0 = JSON.parse(
@@ -145,12 +148,21 @@ describe('the personal domain (#383)', () => {
       // 1.3.0 (#662, #664) added Topic, Product, Risk and BROADER, widened endpoints
       // (DISCUSSED, PART_OF, ABOUT, MENTIONS, SUPPORTED_BY, item subjectTypes)
       // and reworded the DISCUSSED and PART_OF descriptions. Undo exactly that.
-      const NEW_TYPES = ['Topic', 'Product', 'Risk'];
+      // 1.4.0 (#776) added Opportunity and Document, the Meeting and Claim attributes,
+      // ATTENDED.attendance, ORGANIZED, the opportunity and document relations and
+      // Organization -> Organization under PART_OF. Undo those too.
+      const NEW_TYPES = ['Topic', 'Product', 'Risk', 'Opportunity', 'Document'];
       const strip = (keys: string[] | null | undefined) => keys?.filter((k) => !NEW_TYPES.includes(k));
       const entityTypes = now.entityTypes
         .filter((t) => !NEW_TYPES.includes(t.key))
         .map((t) => {
-          const base = t.key === 'Person' ? { ...t, attributes: person100.attributes } : t;
+          const old = PAYLOAD_1_0_0.entityTypes.find((x) => x.key === t.key)!;
+          const base =
+            t.key === 'Person'
+              ? { ...t, attributes: person100.attributes }
+              : t.key === 'Meeting' || t.key === 'Claim'
+                ? { ...t, attributes: old.attributes, disambiguation: old.disambiguation }
+                : t;
           return base.subjectTypes == null ? base : { ...base, subjectTypes: strip(base.subjectTypes) };
         });
 
@@ -161,7 +173,7 @@ describe('the personal domain (#383)', () => {
       expect(hasRoleNow.props[1]).toMatchObject({ key: 'businessUnit', required: false, extractable: true, sensitivity: 'business' });
       const worksFor100 = PAYLOAD_1_0_0.relationTypes.find((r) => r.key === 'WORKS_FOR')!;
       const relationTypes = now.relationTypes
-        .filter((r) => r.key !== 'BROADER' && !STAKEHOLDER_RELATIONS.includes(r.key))
+        .filter((r) => r.key !== 'BROADER' && !STAKEHOLDER_RELATIONS.includes(r.key) && !ONTOLOGY_1_4_RELATIONS.includes(r.key))
         .map((r) => {
           let out = { ...r, from: strip(r.from)!, to: strip(r.to)! };
           if (r.allowedPairs) out = { ...out, allowedPairs: r.allowedPairs.filter((pair) => !pair.some((k) => NEW_TYPES.includes(k))) };
@@ -170,7 +182,16 @@ describe('the personal domain (#383)', () => {
             out = { ...out, description: d100.description, to: out.to.filter((k) => k !== 'Organization') };
           }
           if (r.key === 'PART_OF') {
-            out = { ...out, description: PAYLOAD_1_0_0.relationTypes.find((x) => x.key === 'PART_OF')!.description };
+            out = {
+              ...out,
+              description: PAYLOAD_1_0_0.relationTypes.find((x) => x.key === 'PART_OF')!.description,
+              from: out.from.filter((k) => k !== 'Organization'),
+              allowedPairs: out.allowedPairs!.filter(([a, b]) => !(a === 'Organization' && b === 'Organization')),
+            };
+          }
+          if (r.key === 'ATTENDED') {
+            const a100 = PAYLOAD_1_0_0.relationTypes.find((x) => x.key === 'ATTENDED')!;
+            out = { ...out, description: a100.description, props: a100.props };
           }
           if (r.key === 'WORKS_FOR') return { ...out, description: worksFor100.description };
           if (r.key === 'HAS_ROLE') return { ...out, description: hasRole100.description, props: hasRole100.props };

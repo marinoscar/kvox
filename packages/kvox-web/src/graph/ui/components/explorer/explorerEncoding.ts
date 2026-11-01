@@ -38,7 +38,7 @@ export type ExplorerMode = 'light' | 'dark';
 
 /**
  * Categorical node colours, one list per theme variant, in assignment order.
- * Fourteen slots: the thirteen shipped-and-planned types, and one spare.
+ * Sixteen slots: fifteen types (Opportunity and Document arrived with ontology 1.4.0) and one spare.
  *
  * Found by a greedy farthest-point search over a pool that already satisfied the
  * contrast floor, scored on simulated deuteranopia (Machado 2009, severity 1)
@@ -48,11 +48,11 @@ export type ExplorerMode = 'light' | 'dark';
 export const CATEGORICAL_PALETTE: Readonly<Record<ExplorerMode, readonly string[]>> = {
   light: [
     '#0d66a5', '#509720', '#7a2949', '#2b2bca', '#2293a0', '#1b1b7e', '#871d1d',
-    '#339966', '#2b5bca', '#7e1b74', '#b83d7a', '#263673', '#209744', '#278db9',
+    '#339966', '#2b5bca', '#7e1b74', '#b83d7a', '#263673', '#209744', '#278db9', '#a06eeb', '#d26e00',
   ],
   dark: [
     '#4cacf0', '#6fd22d', '#d43575', '#81e4e4', '#81e495', '#4663d8', '#bf5940',
-    '#bf40a6', '#dae481', '#6ecfa8', '#4073bf', '#70bfe1', '#d175ac', '#62c757',
+    '#bf40a6', '#dae481', '#6ecfa8', '#4073bf', '#70bfe1', '#d175ac', '#62c757', '#878c00', '#ff4678',
   ],
 };
 
@@ -84,6 +84,8 @@ const KNOWN_TYPES: readonly { key: string; icon: PictogramName }[] = [
   { key: 'interest', icon: 'star' },
   { key: 'trip', icon: 'plane' },
   { key: 'milestone', icon: 'milestone' },
+  { key: 'opportunity', icon: 'target' },
+  { key: 'document', icon: 'file' },
 ];
 
 /** `Person`, `person` and `PERSON` are one type; `person_fact` and `PersonFact` too. */

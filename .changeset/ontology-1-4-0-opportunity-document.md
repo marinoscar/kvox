@@ -1,0 +1,8 @@
+---
+"@marinoscar/kvox-contract": minor
+"@marinoscar/kvox-api": minor
+"@marinoscar/kvox-web": minor
+"@marinoscar/kvox-eval": minor
+---
+
+Ontology 1.4.0 (#776). Contract package, ontology entry point: the `Opportunity` entity type (work) with `stage`, `valueText`, `confidence` and `timing`; the `Document` entity type (core, system-created, never extracted) with `title`, `preparedOn` and `classification`; new relations `ORGANIZED`, `WITH_CLIENT`, `PURSUED_BY`, `COMPETING_FOR` (work) and `RECORDED_IN`, `PREPARED_FOR` (core, system-written); `Meeting` gains `occurredOn` and `meetingKind`; `Claim` gains `claimKind`, `value` and `unit`; `ATTENDED` gains `attendance`; `USES` gains `scale`; `INVOLVED_IN` also reaches an Opportunity and its role gains `decision_maker`, `influencer`, `evaluator` and `account_lead`; `CONCERNS` gains Opportunity to Project, Product and Topic; `PART_OF` allows Organization to Organization. All additive, recorded in `shipped-keys.ts`, no migration. API package: the extraction prompt, output schema and RDF exports pick the additions up from the registry; `buildOfferedSchema` takes an optional `proposeTypes` so a host can opt in to proposing a `Meeting` (off by default, unchanged behaviour); the graph write service refuses an organization that is part of itself. Web package: the explorer palette and pictograms cover Opportunity and Document. Eval package: the parity request snapshots carry the longer extraction prompt. `STATED_BY` (Claim to Person) is deferred because a claim is a graph item row, which cannot be a relation endpoint without a new column and migration.

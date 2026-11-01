@@ -80,6 +80,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
+import { useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import ExpandIcon from '@mui/icons-material/OpenInFull';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
@@ -166,7 +167,7 @@ import {
 import { useTimeHiddenIds } from '../components/explorer/timebar/useTimeHiddenIds.js';
 import { countsWindowKey, useGraphFullView } from '../hooks/useGraphFullView.js';
 import type { ExplorerState } from '../components/explorer/explorerModel.js';
-import { formatDay, parseRangeParams, rangeForInstant, type TimeRange } from '../components/explorer/timebar/timeAxis.js';
+import { parseRangeParams, rangeForInstant, todayKey, type TimeRange } from '../components/explorer/timebar/timeAxis.js';
 import { peekExplorerHandoff, takeExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
 import {
   domainOptions,
@@ -229,9 +230,10 @@ function ownDefault(nodeCount: number): CanvasLayout {
   return nodeCount > 0 && nodeCount < CONCENTRIC_EGO_MAX_NODES ? 'concentric' : 'forceatlas';
 }
 
-function fiveYearsAgo(): string {
-  const now = new Date();
-  return `${now.getUTCFullYear() - 5}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+/** The 1st of the user's current month five years back (`YYYY-MM-01`), from their local calendar. */
+function fiveYearsAgo(now: Date = new Date(), timeZone?: string): string {
+  const today = todayKey(now, timeZone);
+  return `${String(Number(today.slice(0, 4)) - 5).padStart(4, '0')}-${today.slice(5, 7)}-01`;
 }
 
 /**
@@ -283,6 +285,8 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const theme = useTheme();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  // The user's calendar: "today" for the range-ends-in-the-past test and the as-of slider's months.
+  const displayTimeZone = useDisplayTimeZone();
 
   // --- URL state --------------------------------------------------------------
   const seedParam = searchParams.get('seed');
@@ -292,8 +296,9 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const fromParam = searchParams.get('from');
   const toParam = searchParams.get('to');
   const timeRange = useMemo(() => parseRangeParams(fromParam, toParam), [fromParam, toParam]);
+  // A range that ends on or before the user's local today is a look back: evaluate as of its end.
   const asOf = timeRange
-    ? timeRange.to <= formatDay(Date.now())
+    ? timeRange.to <= todayKey(Date.now(), displayTimeZone)
       ? timeRange.to
       : null
     : parseAsOfParam(searchParams.get('asOf'));
@@ -424,7 +429,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   }, [ontologyLoading, startParam, seedKey, handoff, load, loadHandoff]);
 
   // The as-of slider is not drawn on this page (the one Time control replaced it, #768); its floor stays a constant.
-  const asOfMin = useMemo(fiveYearsAgo, []);
+  const asOfMin = useMemo(() => fiveYearsAgo(new Date(), displayTimeZone), [displayTimeZone]);
 
   // --- The view on screen: the full graph or the focused explorer (#768) ----------------
   const state: ExplorerState = fullView ? full.state : focusedState;

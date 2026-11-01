@@ -64,6 +64,7 @@ import ToggleButton from '@mui/material/ToggleButton';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -506,6 +507,10 @@ export function NotesLibraryView({ slots }: NotesLibraryViewProps = {}) {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
+  // Grouped by the reader's calendar days, in their display zone; a saved
+  // profile re-groups the feed.
+  const zone = useDisplayTimeZone();
+
   /**
    * The feed cut into date groups — issue #190.
    *
@@ -513,7 +518,7 @@ export function NotesLibraryView({ slots }: NotesLibraryViewProps = {}) {
    * one clock reading per render, so every row in one paint is bucketed against
    * the same instant. `TranscriptsLibraryView` carries the long form.
    */
-  const dateGroups = useMemo(() => groupFeedByDate(notes, new Date()), [notes]);
+  const dateGroups = useMemo(() => groupFeedByDate(notes, new Date(), zone), [notes, zone]);
 
   return (
     <Box>

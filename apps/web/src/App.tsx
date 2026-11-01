@@ -244,6 +244,27 @@ const TelemetryExplorerPage = lazy(
 const TelemetryDashboardPage = lazy(
   () => import('@marinoscar/platform-web/telemetry/ui/dashboard-page'),
 );
+// Webhooks (#795): one packaged page, routed once per scope.
+const WebhooksPage = lazy(() =>
+  import('@marinoscar/platform-web/webhooks/ui').then((m) => ({ default: m.WebhooksPage })),
+);
+// Alerts (#795): the packaged page, and the firing banner the telemetry dashboard
+// shows in its `BeforeContent` slot (telemetry does not depend on alerts; the app joins them here).
+const AlertsPage = lazy(() =>
+  import('@marinoscar/platform-web/alerts/ui').then((m) => ({ default: m.AlertsPage })),
+);
+const FiringAlertsBanner = lazy(() =>
+  import('@marinoscar/platform-web/alerts/ui').then((m) => ({ default: m.FiringAlertsBanner })),
+);
+/** The telemetry dashboard's `BeforeContent` slot: the firing alerts, if any. */
+function DashboardAlertsBanner() {
+  return (
+    <Suspense fallback={null}>
+      <FiringAlertsBanner />
+    </Suspense>
+  );
+}
+const TELEMETRY_DASHBOARD_SLOTS = { BeforeContent: DashboardAlertsBanner };
 // Issue #325, epic #319; the platform's since #470 — the admin broadcast list
 // and its composer. Lazy for the same reason: a table, a composer dialog and a
 // detail dialog that nobody who never opens the Console will ever mount.
@@ -509,6 +530,51 @@ function AppRoutes() {
                       `@Auth()` and each source carries its own permission, `user_settings:read`
                       for the two the page offers every role. */}
                   <Route path="/settings/data-export" element={<DataExportPage />} />
+                  {/* #795. The `Webhooks` cards' routes, each gated on the exact
+                      `:read` string its card declares and its controller enforces
+                      (`WEBHOOK_PERMISSIONS`; written as literals because the registry tests read
+                      this file): `webhooks:read` (`/api/webhooks`, the caller's own) and
+                      `system_webhooks:read` (`/api/admin/webhooks`). Writes are gated inside the
+                      page. There is no organization route: this deployment runs single-org and
+                      spreads no `feature: 'orgs'` card (see `adminSections.tsx`). */}
+                  <Route
+                    path="/settings/webhooks"
+                    element={
+                      <RequirePermission
+                        permission="webhooks:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <WebhooksPage scope="user" />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/webhooks"
+                    element={
+                      <RequirePermission
+                        permission="system_webhooks:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <WebhooksPage scope="system" />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* #795. The `Alerts` card's route: `alerts:read`, the string
+                      every read route of `/api/admin/alerts` enforces (`ALERT_PERMISSIONS`; a
+                      literal because the registry tests read this file). Writes are gated inside
+                      the page. NOT behind `RequireTelemetryEnabled`: node rules work while
+                      telemetry is off. */}
+                  <Route
+                    path="/admin/settings/alerts"
+                    element={
+                      <RequirePermission
+                        permission="alerts:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <AlertsPage />
+                      </RequirePermission>
+                    }
+                  />
                   {/* Route-level AUTHORIZATION, not just authentication.
                       `RequireAuth` above only establishes that someone is
                       logged in — before this, a Viewer typing `/admin/settings`
@@ -1004,7 +1070,7 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <RequireTelemetryEnabled>
-                          <TelemetryDashboardPage />
+                          <TelemetryDashboardPage slots={TELEMETRY_DASHBOARD_SLOTS} />
                         </RequireTelemetryEnabled>
                       </RequirePermission>
                     }
