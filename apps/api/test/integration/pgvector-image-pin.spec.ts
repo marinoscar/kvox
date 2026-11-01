@@ -173,11 +173,9 @@ describe('pgvector Postgres image pin (issue #178, epic #165)', () => {
     // The deploy engine is `@marinoscar/platform-cli` since #482 (it used to be
     // apps/cli/src/deploy/checks/database.ts), so the constant is read from the
     // installed package's build.
-    // npm may hoist the package to the root or leave it beside the CLI that depends on it
-    // (`apps/cli/node_modules`), so the first copy that exists is read.
-    const relative = 'node_modules/@marinoscar/platform-cli/dist/engine/deploy/checks/database.js';
-    const location = ['', 'apps/cli/'].find((prefix) => fs.existsSync(path.join(REPO_ROOT, prefix + relative))) ?? '';
-    const source = readRepoFile(location + relative);
+    const source = readRepoFile(
+      'node_modules/@marinoscar/platform-cli/dist/engine/deploy/checks/database.js',
+    );
     const match = /const PSQL_IMAGE = '([^']+)';/.exec(source);
     expect(match).not.toBeNull();
     expect(match![1]).toBe(PLAIN_POSTGRES_IMAGE);
