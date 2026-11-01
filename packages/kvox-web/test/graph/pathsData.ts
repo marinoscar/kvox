@@ -3,11 +3,11 @@
  * the Product X rollout". Two paths, each hop with a quote:
  *
  *   Path 1 (strong):   Joe --INVOLVED_IN {stakeholder, skeptical}--> Product X rollout
- *   Path 2 (moderate): Joe --WORKS_FOR--> Acme Corp --USES {pilot}--> Product X rollout
+ *   Path 2 (moderate): Joe --WORKS_FOR--> Org Kappa --USES {pilot}--> Product X rollout
  */
 
 import type { EvidenceLink, GraphPathsResponse, GraphSlice } from '../../src/graph/headless/clients/graph.js';
-import { ACME_ID, JOE_ID, NOTE_ID, gid } from './graphData.js';
+import { KAPPA_ID, JOE_ID, NOTE_ID, gid } from './graphData.js';
 
 export const PRODUCT_X_ID = gid(40);
 export const EDGE_INVOLVED = gid(420);
@@ -48,8 +48,8 @@ function quote(id: string, subjectId: string, text: string, createdAt: string): 
 export const pathEvidence: EvidenceLink[] = [
   quote(gid(731), EDGE_INVOLVED, 'Joe is a stakeholder on the Product X rollout but is skeptical about the timeline.', '2026-09-20T10:00:00.000Z'),
   quote(gid(732), EDGE_INVOLVED, 'Joe pushed back on the pilot date again.', '2026-09-10T10:00:00.000Z'),
-  quote(gid(733), EDGE_WORKS_FOR, 'Joe works for Acme Corp.', '2026-08-01T10:00:00.000Z'),
-  quote(gid(734), EDGE_USES, 'Acme is piloting Product X with the platform team.', '2026-09-05T10:00:00.000Z'),
+  quote(gid(733), EDGE_WORKS_FOR, 'Joe works for Org Kappa.', '2026-08-01T10:00:00.000Z'),
+  quote(gid(734), EDGE_USES, 'Kappa is piloting Product X with the platform team.', '2026-09-05T10:00:00.000Z'),
 ];
 
 function node(id: string, type: string, label: string, depth: number) {
@@ -60,7 +60,7 @@ export function pathsSlice(): GraphSlice {
   return {
     seedIds: [JOE_ID, PRODUCT_X_ID],
     asOf: '2026-09-26T00:00:00.000Z',
-    nodes: [node(JOE_ID, 'Person', 'Joe Rivera', 0), node(ACME_ID, 'Organization', 'Acme Corp', 1), node(PRODUCT_X_ID, 'Project', 'Product X rollout', 0)],
+    nodes: [node(JOE_ID, 'Person', 'Joe Rivera', 0), node(KAPPA_ID, 'Organization', 'Org Kappa', 1), node(PRODUCT_X_ID, 'Project', 'Product X rollout', 0)],
     edges: [
       {
         id: EDGE_INVOLVED,
@@ -74,11 +74,11 @@ export function pathsSlice(): GraphSlice {
         evidenceCount: 5,
         lastEvidenceAt: '2026-09-20T10:00:00.000Z',
       },
-      { id: EDGE_WORKS_FOR, type: 'WORKS_FOR', source: JOE_ID, target: ACME_ID, valid: null, confidence: 0.94, virtual: false, props: {}, evidenceCount: 2, lastEvidenceAt: '2026-08-01T10:00:00.000Z' },
+      { id: EDGE_WORKS_FOR, type: 'WORKS_FOR', source: JOE_ID, target: KAPPA_ID, valid: null, confidence: 0.94, virtual: false, props: {}, evidenceCount: 2, lastEvidenceAt: '2026-08-01T10:00:00.000Z' },
       {
         id: EDGE_USES,
         type: 'USES',
-        source: ACME_ID,
+        source: KAPPA_ID,
         target: PRODUCT_X_ID,
         valid: null,
         confidence: 0.8,
@@ -100,7 +100,7 @@ export function pathsResponse(overrides: Partial<GraphPathsResponse> = {}): Grap
     asOf: null,
     paths: [
       { nodeIds: [JOE_ID, PRODUCT_X_ID], edgeIds: [EDGE_INVOLVED], hops: 1, score: 1.8 },
-      { nodeIds: [JOE_ID, ACME_ID, PRODUCT_X_ID], edgeIds: [EDGE_WORKS_FOR, EDGE_USES], hops: 2, score: 0.9 },
+      { nodeIds: [JOE_ID, KAPPA_ID, PRODUCT_X_ID], edgeIds: [EDGE_WORKS_FOR, EDGE_USES], hops: 2, score: 0.9 },
     ],
     slice: pathsSlice(),
     truncated: false,

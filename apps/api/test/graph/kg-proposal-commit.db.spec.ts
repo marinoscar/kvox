@@ -156,14 +156,14 @@ describeWithDb('graph proposal commit (real Postgres)', () => {
     expect(failed).toHaveLength(1);
     expect(failed[0].reason).toBeInstanceOf(ConflictException);
     expect(((failed[0].reason as ConflictException).getResponse() as { details: { reason: string } }).details.reason).toBe('proposal_not_draft');
-    expect(await prisma.kgEntity.count({ where: { ownerId: f.ownerId, type: 'Organization', label: 'Northwind Robotics' } })).toBe(1);
+    expect(await prisma.kgEntity.count({ where: { ownerId: f.ownerId, type: 'Organization', label: 'Org Lambda Robotics' } })).toBe(1);
   });
 
   it('add-from-span: validated spans become evidence, and the added row commits', async () => {
     const f = await seedFixture(prisma, PREFIX);
     const quote = 'The Pilot project starts soon.';
     const charStart = (await prisma.note.findUniqueOrThrow({ where: { id: f.note.id } })).body.indexOf(quote);
-    const segQuote = 'Northwind Robotics';
+    const segQuote = 'Org Lambda Robotics';
     const segStart = f.segment.text.indexOf(segQuote);
 
     const added = await services.proposals.addItem(f.caller, f.proposal.id, {

@@ -33,7 +33,7 @@ function setup(over: { resolve?: jest.Mock; generateStructured?: jest.Mock; enti
   const generateStructured =
     over.generateStructured ??
     jest.fn().mockResolvedValue({
-      value: { statements: [{ text: 'Acme chose blue', factRefs: ['F1'] }, { text: 'Uncited', factRefs: [] }] },
+      value: { statements: [{ text: 'Kappa chose blue', factRefs: ['F1'] }, { text: 'Uncited', factRefs: [] }] },
       usage: { inputTokens: 120, outputTokens: 30 },
     });
   // A plain mock rather than `FakeKvoxAi`: this spec asserts the request the handler builds.
@@ -47,7 +47,7 @@ function setup(over: { resolve?: jest.Mock; generateStructured?: jest.Mock; enti
     kgEntity: {
       findFirst: jest.fn().mockResolvedValue(
         over.entity === undefined
-          ? { id: ENTITY, type: 'Organization', label: 'Acme', reviewStatus: 'accepted', mergedIntoId: null }
+          ? { id: ENTITY, type: 'Organization', label: 'Kappa', reviewStatus: 'accepted', mergedIntoId: null }
           : over.entity,
       ),
     },
@@ -81,7 +81,7 @@ beforeEach(() => {
       id: ITEM,
       kind: 'decision',
       title: null,
-      statement: 'Acme chose the blue plan',
+      statement: 'Kappa chose the blue plan',
       status: 'active',
       occurredAt: new Date('2026-09-10T00:00:00Z'),
       dueAt: null,
@@ -125,7 +125,7 @@ describe('EntityDigestHandler', () => {
       maxOutputTokens: 1200,
       jsonSchema: expect.any(Object),
     });
-    expect(request.user).toContain('F1: [2026-09-10, decision] Acme chose the blue plan');
+    expect(request.user).toContain('F1: [2026-09-10, decision] Kappa chose the blue plan');
     expect(request.user).not.toMatch(UUID);
 
     const upsert = prisma.kgEntityDigest.upsert.mock.calls[0][0];
@@ -133,10 +133,10 @@ describe('EntityDigestHandler', () => {
     expect(upsert.create).toMatchObject({
       entityId: ENTITY,
       ownerId: OWNER,
-      summary: 'Acme chose blue',
+      summary: 'Kappa chose blue',
       model: 'model-x',
       coversUntil: new Date('2026-09-10T00:00:00Z'),
-      citations: { version: 1, statements: [{ text: 'Acme chose blue', evidenceIds: [EV] }], dropped: 1 },
+      citations: { version: 1, statements: [{ text: 'Kappa chose blue', evidenceIds: [EV] }], dropped: 1 },
     });
   });
 

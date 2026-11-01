@@ -156,11 +156,11 @@ describe('GraphRdfDatasetBuilder — entities', () => {
       entityRow({
         id: ORG,
         type: 'Organization',
-        label: 'Acme',
-        props: { website: 'https://acme.example', u_tier000001: 'gold', notAnAttribute: 'x' },
+        label: 'Kappa',
+        props: { website: 'https://kappa.example.test', u_tier000001: 'gold', notAnAttribute: 'x' },
       }),
     )!;
-    expect(objects(org, 'https://schema.org/url')).toEqual(['https://acme.example']);
+    expect(objects(org, 'https://schema.org/url')).toEqual(['https://kappa.example.test']);
     expect(org.triples.find((t) => t.predicate.value === 'https://schema.org/url')!.object).toMatchObject({
       datatype: `${XSD}anyURI`,
     });
@@ -171,7 +171,7 @@ describe('GraphRdfDatasetBuilder — entities', () => {
   it('drops values the shapes would reject rather than writing them', () => {
     const b = builder();
     const org = b.entity(
-      entityRow({ id: ORG, type: 'Organization', label: 'Acme', props: { website: 'ftp://acme', u_tier000001: 'bronze' } }),
+      entityRow({ id: ORG, type: 'Organization', label: 'Kappa', props: { website: 'ftp://kappa', u_tier000001: 'bronze' } }),
     )!;
     expect(objects(org, 'https://schema.org/url')).toEqual([]);
     expect(objects(org, `${NS}attr/${TIER.id}`)).toEqual([]);
@@ -385,7 +385,7 @@ describe('GraphRdfDatasetBuilder — evidence', () => {
       id: id(50),
       subjectKind: 'entity',
       subjectSensitivity: null,
-      quote: 'Sarah joined Acme in 2019',
+      quote: 'Sarah joined Kappa in 2019',
       segmentId: id(60),
       startMs: 102_000,
       endMs: 118_500,
@@ -402,7 +402,7 @@ describe('GraphRdfDatasetBuilder — evidence', () => {
     const s = `${NS}evidence/${id(50)}`;
     expect(objects(block, `${RDF}type`, s)).toEqual([`${OA}Annotation`]);
     const [body] = objects(block, `${OA}hasBody`, s);
-    expect(objects(block, `${RDF}value`, body)).toEqual(['Sarah joined Acme in 2019']);
+    expect(objects(block, `${RDF}value`, body)).toEqual(['Sarah joined Kappa in 2019']);
     const [target] = objects(block, `${OA}hasTarget`, s);
     expect(objects(block, `${OA}hasSource`, target)).toEqual([`${NS}segment/${id(60)}`]);
     const selectors = objects(block, `${OA}hasSelector`, target);
@@ -427,7 +427,7 @@ describe('GraphRdfDatasetBuilder — evidence', () => {
   it('keeps a citation whose source is gone as a quote with no target', () => {
     const block = builder().evidence(evidenceRow({ segmentId: null, noteId: null, startMs: null, endMs: null }))!;
     expect(objects(block, `${OA}hasTarget`)).toEqual([]);
-    expect(objects(block, `${RDF}value`)).toEqual(['Sarah joined Acme in 2019']);
+    expect(objects(block, `${RDF}value`)).toEqual(['Sarah joined Kappa in 2019']);
   });
 
   it('⚠ never exports the evidence of a sensitive fact — its quote is the fact', () => {

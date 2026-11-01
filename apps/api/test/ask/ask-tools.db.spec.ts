@@ -106,30 +106,30 @@ describeWithDb('Ask toolset (real Postgres)', () => {
   it('never returns another owner’s rows, even through a forged handle', async () => {
     const a = await owner('a');
     const b = await owner('b');
-    const aAcme = await a.g.entity('Organization', 'Acme Corp');
-    const bAcme = await b.g.entity('Organization', 'Acme Corp');
+    const aKappa = await a.g.entity('Organization', 'Org Kappa');
+    const bKappa = await b.g.entity('Organization', 'Org Kappa');
     const bSarah = await b.g.entity('Person', 'Sarah Secret');
-    await b.g.relation('WORKS_AT', bSarah, bAcme);
-    await b.g.item('commitment', { ownerPersonId: bSarah, counterpartyId: bAcme, statement: 'B private promise' });
-    await a.g.item('commitment', { counterpartyId: aAcme, statement: 'A own promise' });
+    await b.g.relation('WORKS_AT', bSarah, bKappa);
+    await b.g.item('commitment', { ownerPersonId: bSarah, counterpartyId: bKappa, statement: 'B private promise' });
+    await a.g.item('commitment', { counterpartyId: aKappa, statement: 'A own promise' });
 
-    // search: A sees only A's Acme.
-    const found = await call(a.ctx, 'search', { query: 'Acme Corp', scope: 'entities', limit: 10 });
+    // search: A sees only A's Kappa.
+    const found = await call(a.ctx, 'search', { query: 'Org Kappa', scope: 'entities', limit: 10 });
     expect(found.ok).toBe(true);
     const entities = (JSON.parse(found.json) as { entities: { ref: string }[] }).entities;
     expect(entities).toHaveLength(1);
-    expect(a.ctx.handles.resolve(entities[0].ref)?.id).toBe(aAcme);
+    expect(a.ctx.handles.resolve(entities[0].ref)?.id).toBe(aKappa);
 
     // Forge handles to B's ids — something no tool would ever issue to A.
-    const forgedAcme = a.ctx.handles.register({ kind: 'ent', id: bAcme, label: 'forged' });
+    const forgedKappa = a.ctx.handles.register({ kind: 'ent', id: bKappa, label: 'forged' });
     const forgedSarah = a.ctx.handles.register({ kind: 'ent', id: bSarah, label: 'forged' });
 
     for (const [name, args] of [
-      ['get_entity', { entity: forgedAcme }],
-      ['neighbors', { entity: forgedAcme }],
+      ['get_entity', { entity: forgedKappa }],
+      ['neighbors', { entity: forgedKappa }],
       ['timeline', { entity: forgedSarah }],
-      ['evidence', { subject: forgedAcme }],
-      ['entity_brief', { entity: forgedAcme }],
+      ['evidence', { subject: forgedKappa }],
+      ['entity_brief', { entity: forgedKappa }],
     ] as const) {
       const out = await call(a.ctx, name, args);
       expect({ name, ok: out.ok }).toEqual({ name, ok: false });
@@ -146,10 +146,10 @@ describeWithDb('Ask toolset (real Postgres)', () => {
 
   it('answers the tools for the caller’s own graph', async () => {
     const a = await owner('a');
-    const acme = await a.g.entity('Organization', 'Globex');
+    const kappa = await a.g.entity('Organization', 'Org Sigma');
     const sarah = await a.g.entity('Person', 'Sarah Chen');
-    await a.g.relation('WORKS_AT', sarah, acme, { valid: '[2019-03-01,)', precision: 'month' });
-    await a.g.item('decision', { subjectId: acme, statement: 'Renew Globex', occurredAt: new Date('2026-09-01T00:00:00Z') });
+    await a.g.relation('WORKS_AT', sarah, kappa, { valid: '[2019-03-01,)', precision: 'month' });
+    await a.g.item('decision', { subjectId: kappa, statement: 'Renew Org Sigma', occurredAt: new Date('2026-09-01T00:00:00Z') });
     await a.g.item('person_fact', { subjectId: sarah, statement: 'Private hobby', sensitivity: 'personal' });
     await a.g.item('person_fact', { subjectId: sarah, statement: 'Health detail', sensitivity: 'sensitive' });
 
@@ -171,13 +171,13 @@ describeWithDb('Ask toolset (real Postgres)', () => {
   it('list_commitments filters and orders by due date, then by when it was made', async () => {
     const a = await owner('a');
     const sarah = await a.g.entity('Person', 'Sarah');
-    const acme = await a.g.entity('Organization', 'Acme');
+    const kappa = await a.g.entity('Organization', 'Kappa');
     const mk = (statement: string, opts: Record<string, unknown>) => a.g.item('commitment', { statement, ...opts });
     await mk('due late', { ownerPersonId: sarah, dueAt: new Date('2026-12-01T00:00:00Z'), occurredAt: new Date('2026-01-01T00:00:00Z') });
     await mk('due soon', { ownerPersonId: sarah, dueAt: new Date('2026-10-01T00:00:00Z'), occurredAt: new Date('2026-01-01T00:00:00Z') });
     await mk('no due, newer', { ownerPersonId: sarah, occurredAt: new Date('2026-06-01T00:00:00Z') });
     await mk('no due, older', { ownerPersonId: sarah, occurredAt: new Date('2026-02-01T00:00:00Z') });
-    await mk('owed to sarah', { ownerPersonId: acme, counterpartyId: sarah, dueAt: new Date('2026-11-01T00:00:00Z') });
+    await mk('owed to sarah', { ownerPersonId: kappa, counterpartyId: sarah, dueAt: new Date('2026-11-01T00:00:00Z') });
     await mk('done already', { ownerPersonId: sarah, status: 'done' });
     await mk('draft', { ownerPersonId: sarah, reviewStatus: 'unreviewed' });
 
@@ -243,17 +243,17 @@ describeWithDb('Ask toolset (real Postgres)', () => {
   it('GraphEvidenceService.listForSubject: newest source first, owner-scoped', async () => {
     const a = await owner('a');
     const b = await owner('b');
-    const acme = await a.g.entity('Organization', 'Acme');
+    const kappa = await a.g.entity('Organization', 'Kappa');
     const oldT = await a.g.transcript({ recordedAt: new Date('2025-01-01T00:00:00Z'), title: 'Old call' });
     const newT = await a.g.transcript({ recordedAt: new Date('2026-06-01T00:00:00Z'), title: 'New call' });
-    await a.g.evidence('entity', acme, { transcriptId: oldT.transcript.id, segmentId: oldT.segment.id, quote: 'old' });
-    await a.g.evidence('entity', acme, { transcriptId: newT.transcript.id, segmentId: newT.segment.id, startMs: 1500, quote: 'new' });
+    await a.g.evidence('entity', kappa, { transcriptId: oldT.transcript.id, segmentId: oldT.segment.id, quote: 'old' });
+    await a.g.evidence('entity', kappa, { transcriptId: newT.transcript.id, segmentId: newT.segment.id, startMs: 1500, quote: 'new' });
 
-    const rows = await evidence.listForSubject(a.user.id, 'entity', acme, 10);
-    expect(rows.map((r) => r.link.quote)).toEqual(['new', 'old', 'Acme']);
+    const rows = await evidence.listForSubject(a.user.id, 'entity', kappa, 10);
+    expect(rows.map((r) => r.link.quote)).toEqual(['new', 'old', 'Kappa']);
     expect(rows[0].occurredAt?.toISOString()).toBe('2026-06-01T00:00:00.000Z');
     expect(rows[2].occurredAt).toBeNull();
-    expect(await evidence.listForSubject(b.user.id, 'entity', acme, 10)).toEqual([]);
-    expect(await evidence.listForSubject(a.user.id, 'entity', acme, 1)).toHaveLength(1);
+    expect(await evidence.listForSubject(b.user.id, 'entity', kappa, 10)).toEqual([]);
+    expect(await evidence.listForSubject(a.user.id, 'entity', kappa, 1)).toHaveLength(1);
   });
 });

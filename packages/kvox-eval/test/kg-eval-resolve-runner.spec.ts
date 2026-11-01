@@ -72,19 +72,19 @@ describe('kg:eval extract+resolve runner (#364)', () => {
     const withPrior = {
       ...m01,
       knownRelations: [
-        { id: 'k-works', type: 'WORKS_FOR', from: 'g-joe', to: 'g-acme', props: {}, validFrom: '2019-01-01', validTo: '2025-01-01', precision: 'year' as const },
-        { id: 'k-role', type: 'WORKS_FOR', from: 'g-ann', to: 'g-acme', props: {}, validFrom: '2019-01-01', validTo: null, precision: 'year' as const },
+        { id: 'k-works', type: 'WORKS_FOR', from: 'g-joe', to: 'g-kappa', props: {}, validFrom: '2019-01-01', validTo: '2025-01-01', precision: 'year' as const },
+        { id: 'k-role', type: 'WORKS_FOR', from: 'g-ann', to: 'g-kappa', props: {}, validFrom: '2019-01-01', validTo: null, precision: 'year' as const },
       ],
     };
 
     it('a fact inside a known edge is known; a new employer closes an open edge', () => {
-      const known = applyDedupStagesInMemory(withPrior, [linkedEntity('e1', 'Person', 'g-joe'), linkedEntity('e2', 'Organization', 'g-acme'), worksFor('2020-01-01')]);
+      const known = applyDedupStagesInMemory(withPrior, [linkedEntity('e1', 'Person', 'g-joe'), linkedEntity('e2', 'Organization', 'g-kappa'), worksFor('2020-01-01')]);
       expect(known.rows[2].flags).toEqual(['known']);
       expect(known.stats).toMatchObject({ known: 1, closings: 0 });
 
       const moved = applyDedupStagesInMemory(withPrior, [
         linkedEntity('e1', 'Person', 'g-ann'),
-        linkedEntity('e3', 'Organization', 'g-globex'),
+        linkedEntity('e3', 'Organization', 'g-sigma'),
         worksFor('2026-01-01', 'e3'),
       ]);
       expect(moved.stats).toMatchObject({ known: 0, closings: 1, overlaps: 0 });
@@ -107,7 +107,7 @@ describe('kg:eval extract+resolve runner (#364)', () => {
     });
 
     it('does nothing without prior edges (every golden fixture today)', () => {
-      const out = applyDedupStagesInMemory(m01, [linkedEntity('e1', 'Person', 'g-joe'), linkedEntity('e2', 'Organization', 'g-acme'), worksFor('2020-01-01')]);
+      const out = applyDedupStagesInMemory(m01, [linkedEntity('e1', 'Person', 'g-joe'), linkedEntity('e2', 'Organization', 'g-kappa'), worksFor('2020-01-01')]);
       expect(out.stats).toEqual({ known: 0, closings: 0, overlaps: 0, unordered: 0 });
       expect(out.rows[2].flags).toEqual([]);
     });

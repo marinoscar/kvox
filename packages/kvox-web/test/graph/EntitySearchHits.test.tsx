@@ -37,16 +37,16 @@ describe('EntitySearchHits', () => {
     const user = userEvent.setup();
     const { container } = render(
       <Routes>
-        <Route path="/" element={<EntitySearchHits query="acme" />} />
+        <Route path="/" element={<EntitySearchHits query="kappa" />} />
         <Route path="/graph/entities/:id" element={<p>Entity page</p>} />
       </Routes>,
       { wrapperOptions: { user: graphReader } },
     );
 
-    const chip = await screen.findByRole('button', { name: /Acme Corp/ });
+    const chip = await screen.findByRole('button', { name: /Org Kappa/ });
     expect(screen.getByRole('heading', { name: 'People & organizations' })).toBeInTheDocument();
     const asked = graphRequests[0].searchParams;
-    expect(asked.get('q')).toBe('acme');
+    expect(asked.get('q')).toBe('kappa');
     expect(asked.get('type')).toBe('Person,Organization,Project');
     expect(asked.get('limit')).toBe('5');
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
@@ -63,14 +63,14 @@ describe('EntitySearchHits', () => {
 
   it('renders nothing on a graph error', async () => {
     server.use(http.get('*/api/graph/entities', () => HttpResponse.json({ message: 'down' }, { status: 500 })));
-    const { container } = render(<EntitySearchHits query="acme" />, { wrapperOptions: { user: graphReader } });
+    const { container } = render(<EntitySearchHits query="kappa" />, { wrapperOptions: { user: graphReader } });
     await waitFor(() => expect(graphRequests).toHaveLength(1));
     await waitFor(() => expect(container).toBeEmptyDOMElement());
     expect(screen.queryByText('down')).not.toBeInTheDocument();
   });
 
   it('asks nothing without graph:read or with an empty box', async () => {
-    render(<EntitySearchHits query="acme" />, { wrapperOptions: { user: noGraphUser } });
+    render(<EntitySearchHits query="kappa" />, { wrapperOptions: { user: noGraphUser } });
     render(<EntitySearchHits query="   " />, { wrapperOptions: { user: graphReader } });
     await new Promise((resolve) => setTimeout(resolve, 350));
     expect(graphRequests).toHaveLength(0);
@@ -103,10 +103,10 @@ describe('EntitySearchHits inside library search', () => {
     respondWithSearch();
     render(<NotesWithGraphSlots />, { wrapperOptions: { user: graphWriter, route: '/notes' } });
 
-    await user.type(await screen.findByLabelText('Search notes'), 'acme');
+    await user.type(await screen.findByLabelText('Search notes'), 'kappa');
 
     const hits = await screen.findByRole('heading', { name: 'People & organizations' });
-    const noMatches = await screen.findByText('No matches for “acme”');
+    const noMatches = await screen.findByText('No matches for “kappa”');
     // Above: the hits come first in document order.
     expect(hits.compareDocumentPosition(noMatches) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -117,9 +117,9 @@ describe('EntitySearchHits inside library search', () => {
     server.use(http.get('*/api/graph/entities', () => HttpResponse.json({ message: 'down' }, { status: 500 })));
     render(<NotesWithGraphSlots />, { wrapperOptions: { user: graphWriter, route: '/notes' } });
 
-    await user.type(await screen.findByLabelText('Search notes'), 'acme');
+    await user.type(await screen.findByLabelText('Search notes'), 'kappa');
 
-    expect(await screen.findByText('No matches for “acme”')).toBeInTheDocument();
+    expect(await screen.findByText('No matches for “kappa”')).toBeInTheDocument();
     await waitFor(() => expect(graphRequests.length).toBeGreaterThan(0));
     expect(screen.queryByRole('heading', { name: 'People & organizations' })).not.toBeInTheDocument();
   });

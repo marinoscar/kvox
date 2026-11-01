@@ -82,7 +82,7 @@ describe('proposal view mapper', () => {
   });
 
   describe('display strings', () => {
-    const refs = new Map([['e2', 'Northwind Robotics']]);
+    const refs = new Map([['e2', 'Org Lambda Robotics']]);
 
     it('entity: label, type label and a meeting date', () => {
       expect(displayOf('entity', { type: 'Meeting', label: 'Kickoff', occurredAt: '2026-03-04' }, refs, lookups())).toEqual({
@@ -98,7 +98,7 @@ describe('proposal view mapper', () => {
         refs,
         lookups(),
       );
-      expect(d).toEqual({ title: 'Sarah Chen → works for → Northwind Robotics', subtitle: 'Works for · since 2019' });
+      expect(d).toEqual({ title: 'Sarah Chen → works for → Org Lambda Robotics', subtitle: 'Works for · since 2019' });
     });
 
     it('relation: a HAS_ROLE subtitle carries the role and, when stated, the business unit (#440)', () => {
@@ -135,7 +135,7 @@ describe('proposal view mapper', () => {
         {
           relationType: 'HAS_ROLE',
           fromLabel: 'Sarah Chen',
-          toLabel: 'Northwind Robotics',
+          toLabel: 'Org Lambda Robotics',
           roleTitle: 'Director',
           previousValid: { from: '2019-01-01', to: null, precision: 'year' },
           closeAt: '2026-03-01',
@@ -146,7 +146,7 @@ describe('proposal view mapper', () => {
         lookups(),
       );
       expect(d).toEqual({
-        title: 'Closes: Sarah Chen has role Northwind Robotics, as Director, 2019 → Mar 2026',
+        title: 'Closes: Sarah Chen has role Org Lambda Robotics, as Director, 2019 → Mar 2026',
         subtitle: 'Affects 1 open commitment',
       });
     });
@@ -226,7 +226,7 @@ describe('proposal view mapper', () => {
   describe('items, ordering and counts', () => {
     const rows = [
       row({ id: 'r1', kind: 'relation', decision: 'accept', payload: { type: 'WORKS_FOR', from: { ref: 'e1' }, to: { ref: 'e2' } } }),
-      row({ id: 'e2', decision: 'reject', payload: { ref: 'e2', type: 'Organization', label: 'Northwind' } }),
+      row({ id: 'e2', decision: 'reject', payload: { ref: 'e2', type: 'Organization', label: 'Lambda' } }),
       row({ id: 'e1', decision: 'edit', payload: { ref: 'e1', type: 'Person', label: 'Sara' }, editedPayload: { ref: 'e1', type: 'Person', label: 'Sarah' } }),
       row({ id: 'c1', kind: 'closing', payload: {} }),
       row({ id: 'k1', kind: 'item', decision: 'merge_into', flags: ['known'], payload: { kind: 'claim', title: 'Known' } }),
@@ -265,7 +265,7 @@ describe('proposal view mapper', () => {
 
     describe('a known relation that adds props (#444)', () => {
       const LIVE_ROLE = '0f000000-0000-4000-8000-000000000031';
-      const ACME = '0f000000-0000-4000-8000-000000000002';
+      const KAPPA = '0f000000-0000-4000-8000-000000000002';
       const knownRole = (props: Record<string, unknown>, verdict = 'known') =>
         row({
           kind: 'relation',
@@ -274,7 +274,7 @@ describe('proposal view mapper', () => {
             ref: 'r1',
             type: 'HAS_ROLE',
             from: { entityId: SARAH },
-            to: { entityId: ACME },
+            to: { entityId: KAPPA },
             props,
             validFrom: null,
             validTo: null,

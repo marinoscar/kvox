@@ -125,7 +125,7 @@ describe('AskToolset.definitions', () => {
       const args: Record<string, unknown> = {};
       for (const [key, schema] of Object.entries(props)) {
         const nullable = Array.isArray(schema.type) && schema.type.includes('null');
-        args[key] = nullable ? null : key === 'query' ? 'Acme' : 'ent1';
+        args[key] = nullable ? null : key === 'query' ? 'Kappa' : 'ent1';
       }
       const parsed = tool.input.safeParse(args);
       expect(parsed.success).toBe(true);

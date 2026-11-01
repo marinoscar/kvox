@@ -36,7 +36,7 @@ const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')
 
 export const JOE_ID = id(1);
 export const ANA_ID = id(2);
-export const ACME_ID = id(4);
+export const KAPPA_ID = id(4);
 /** The explorer's `REPORTS_TO` edge (Joe to Ana), which has `EDGE_EVIDENCE`. */
 export const REPORTS_TO_EDGE_ID = id(411);
 const Q3_ID = id(7);
@@ -106,11 +106,11 @@ const PAGES_ONTOLOGY = {
 
 const SUMMARIES = [
   { id: JOE_ID, type: 'Person', label: 'Joe Rivera', aliases: ['Joseph Rivera'], mentionCount: 14, lastSeenAt: FIXED_ISO },
-  { id: ACME_ID, type: 'Organization', label: 'Acme Corp', aliases: ['Acme'], mentionCount: 22, lastSeenAt: FIXED_ISO },
+  { id: KAPPA_ID, type: 'Organization', label: 'Org Kappa', aliases: ['Kappa'], mentionCount: 22, lastSeenAt: FIXED_ISO },
   { id: ANA_ID, type: 'Person', label: 'Ana Diaz', aliases: [], mentionCount: 9, lastSeenAt: FIXED_ISO },
-  { id: id(5), type: 'Organization', label: 'Globex', aliases: ['Globex Corporation'], mentionCount: 4, lastSeenAt: FIXED_ISO },
+  { id: id(5), type: 'Organization', label: 'Org Sigma', aliases: ['Org Sigma Corporation'], mentionCount: 4, lastSeenAt: FIXED_ISO },
   { id: id(3), type: 'Person', label: 'Ben Okafor', aliases: [], mentionCount: 6, lastSeenAt: FIXED_ISO },
-  { id: id(10), type: 'Organization', label: 'Initech', aliases: [], mentionCount: 2, lastSeenAt: null },
+  { id: id(10), type: 'Organization', label: 'Org Omega', aliases: [], mentionCount: 2, lastSeenAt: null },
   { id: id(9), type: 'Person', label: 'Carla Mendes', aliases: ['Carla'], mentionCount: 3, lastSeenAt: FIXED_ISO },
 ];
 
@@ -158,7 +158,7 @@ function detailFor(entityId: string) {
 
 const joe = { id: JOE_ID, label: 'Joe Rivera', type: 'Person' };
 const ana = { id: ANA_ID, label: 'Ana Diaz', type: 'Person' };
-const acme = { id: ACME_ID, label: 'Acme Corp', type: 'Organization' };
+const kappa = { id: KAPPA_ID, label: 'Org Kappa', type: 'Organization' };
 
 const commitment = {
   itemId: id(301),
@@ -260,7 +260,7 @@ const BRIEF = {
         at: '2024-02-01T00:00:00.000Z',
         precision: 'month',
         person: joe,
-        other: acme,
+        other: kappa,
         title: 'Director of Engineering',
         evidenceIds: [EV_NOTE],
       },
@@ -271,7 +271,7 @@ const BRIEF = {
         at: '2024-02-01T00:00:00.000Z',
         precision: 'month',
         person: joe,
-        other: acme,
+        other: kappa,
         title: 'VP Engineering',
         evidenceIds: [EV_NOTE],
       },
@@ -307,12 +307,12 @@ const NEIGHBORHOOD = {
   asOf: FIXED_ISO,
   nodes: [
     node(JOE_ID, 'Person', 'Joe Rivera', 0),
-    node(ACME_ID, 'Organization', 'Acme Corp', 1),
+    node(KAPPA_ID, 'Organization', 'Org Kappa', 1),
     node(ANA_ID, 'Person', 'Ana Diaz', 1),
     node(Q3_ID, 'Meeting', 'Q3 planning', 1),
   ],
   edges: [
-    { id: id(410), type: 'WORKS_FOR', source: JOE_ID, target: ACME_ID, valid: null, confidence: 0.9, virtual: false },
+    { id: id(410), type: 'WORKS_FOR', source: JOE_ID, target: KAPPA_ID, valid: null, confidence: 0.9, virtual: false },
     { id: id(411), type: 'REPORTS_TO', source: JOE_ID, target: ANA_ID, valid: null, confidence: 0.9, virtual: false },
     { id: id(412), type: 'ATTENDED', source: JOE_ID, target: Q3_ID, valid: null, confidence: null, virtual: false },
   ],
@@ -348,7 +348,7 @@ const TIMELINE = {
       eventKind: 'relation_started',
       at: '2024-02-01T00:00:00.000Z',
       precision: 'month',
-      relation: { id: id(402), type: 'HAS_ROLE', direction: 'out', other: acme, valid: null },
+      relation: { id: id(402), type: 'HAS_ROLE', direction: 'out', other: kappa, valid: null },
       evidenceIds: [EV_NOTE],
       evidenceCount: 1,
     },
@@ -515,8 +515,8 @@ const EDGE_EVIDENCE = [
 // -----------------------------------------------------------------------------
 // Explorer (#374) — a small fixed graph `POST /api/graph/explore/expand` walks
 // one hop over. Degrees are chosen so the keyboard order (degree, then label)
-// is Joe, Acme Corp, Ana Diaz, … — the explorer spec presses ArrowRight twice
-// to select Acme and Enter to expand it.
+// is Joe, Org Kappa, Ana Diaz, … — the explorer spec presses ArrowRight twice
+// to select Kappa and Enter to expand it.
 // -----------------------------------------------------------------------------
 
 type ExplorerNode = {
@@ -541,7 +541,7 @@ const xNode = (nodeId: string, type: string, label: string, degree: number): Exp
 
 const EXPLORER_NODES: ExplorerNode[] = [
   xNode(JOE_ID, 'Person', 'Joe Rivera', 6),
-  xNode(ACME_ID, 'Organization', 'Acme Corp', 5),
+  xNode(KAPPA_ID, 'Organization', 'Org Kappa', 5),
   xNode(ANA_ID, 'Person', 'Ana Diaz', 4),
   xNode(Q3_ID, 'Meeting', 'Q3 planning', 3),
   xNode(id(3), 'Person', 'Ben Okafor', 2),
@@ -570,20 +570,20 @@ const xEdge = (
 });
 
 const EXPLORER_EDGES = [
-  xEdge(410, 'WORKS_FOR', JOE_ID, ACME_ID),
+  xEdge(410, 'WORKS_FOR', JOE_ID, KAPPA_ID),
   xEdge(411, 'REPORTS_TO', JOE_ID, ANA_ID),
   xEdge(412, 'ATTENDED', JOE_ID, Q3_ID),
   xEdge(413, 'ATTENDED', JOE_ID, id(8)),
   xEdge(0, 'ASSIGNED_TO', id(301), JOE_ID, true),
-  xEdge(414, 'WORKS_FOR', ANA_ID, ACME_ID),
-  xEdge(415, 'WORKS_FOR', id(12), ACME_ID),
-  xEdge(416, 'PART_OF', id(6), ACME_ID),
-  xEdge(417, 'WORKS_FOR', id(3), ACME_ID),
+  xEdge(414, 'WORKS_FOR', ANA_ID, KAPPA_ID),
+  xEdge(415, 'WORKS_FOR', id(12), KAPPA_ID),
+  xEdge(416, 'PART_OF', id(6), KAPPA_ID),
+  xEdge(417, 'WORKS_FOR', id(3), KAPPA_ID),
   xEdge(418, 'ATTENDED', ANA_ID, Q3_ID),
   xEdge(419, 'ATTENDED', id(3), id(8)),
   // #667: a second relation between the same pair (drawn as two curves, not one on top of the other)…
-  xEdge(420, 'HAS_ROLE', JOE_ID, ACME_ID, false, { title: 'Managing Director' }),
-  // …and a stance accent (the champion's edge is green), visible once Acme is expanded and Atlas joins.
+  xEdge(420, 'HAS_ROLE', JOE_ID, KAPPA_ID, false, { title: 'Managing Director' }),
+  // …and a stance accent (the champion's edge is green), visible once Kappa is expanded and Atlas joins.
   xEdge(421, 'INVOLVED_IN', JOE_ID, id(6), false, { role: 'sponsor', stance: 'champion' }),
 ];
 
@@ -639,13 +639,13 @@ interface OverviewClusterSeed {
 
 const OVERVIEW_CLUSTER_SEEDS: OverviewClusterSeed[] = [
   {
-    id: 0, label: 'Acme Corp', labelEntityId: ACME_ID, cx: -420, cy: 160,
-    named: [['Acme Corp', 'Organization'], ['Joe Rivera', 'Person'], ['Project Atlas', 'Project'], ['Ana Diaz', 'Person'], ['Q3 planning', 'Meeting'], ['Ben Okafor', 'Person']],
+    id: 0, label: 'Org Kappa', labelEntityId: KAPPA_ID, cx: -420, cy: 160,
+    named: [['Org Kappa', 'Organization'], ['Joe Rivera', 'Person'], ['Project Atlas', 'Project'], ['Ana Diaz', 'Person'], ['Q3 planning', 'Meeting'], ['Ben Okafor', 'Person']],
     rest: [['Person', 12], ['Organization', 1], ['Project', 2], ['Meeting', 3]],
   },
   {
-    id: 1, label: 'Globex', labelEntityId: id(5), cx: 380, cy: -260,
-    named: [['Globex', 'Organization'], ['Carla Mendes', 'Person'], ['Weekly sync', 'Meeting']],
+    id: 1, label: 'Org Sigma', labelEntityId: id(5), cx: 380, cy: -260,
+    named: [['Org Sigma', 'Organization'], ['Carla Mendes', 'Person'], ['Weekly sync', 'Meeting']],
     rest: [['Person', 8], ['Organization', 1], ['Meeting', 2]],
   },
   {
@@ -654,8 +654,8 @@ const OVERVIEW_CLUSTER_SEEDS: OverviewClusterSeed[] = [
     rest: [['Person', 5], ['Project', 1], ['Meeting', 2]],
   },
   {
-    id: 3, label: 'Initech', labelEntityId: id(10), cx: -180, cy: -420,
-    named: [['Initech', 'Organization']],
+    id: 3, label: 'Org Omega', labelEntityId: id(10), cx: -180, cy: -420,
+    named: [['Org Omega', 'Organization']],
     rest: [['Person', 5]],
   },
   { id: 4, label: 'Cluster 5', labelEntityId: null, cx: -760, cy: -180, named: [], rest: [['Person', 3], ['Organization', 1]] },
@@ -767,7 +767,7 @@ const ACTIVITY = {
       { start: '2026-03-01', count: 4 },
     ],
     [ANA_ID]: [{ start: '2025-02-01', count: 1 }],
-    [ACME_ID]: [
+    [KAPPA_ID]: [
       { start: '2025-05-01', count: 2 },
       { start: '2026-03-01', count: 2 },
     ],
@@ -1117,7 +1117,7 @@ const REVIEW_ITEMS = [
     evidence: [evidence(2, { quote: 'Tom will check with legal.', startMs: 130_000, stale: true })],
   }),
   reviewRow(3, 'Person', 'Ben Okafor', entity('k1', 'Person', 'Ben Okafor'), { flags: ['known'] }),
-  reviewRow(4, 'Organization', 'Northwind Robotics', entity('e3', 'Organization', 'Northwind Robotics')),
+  reviewRow(4, 'Organization', 'Org Lambda Robotics', entity('e3', 'Organization', 'Org Lambda Robotics')),
   reviewRow(5, 'Project', 'Storage migration', entity('e4', 'Project', 'Storage migration')),
   reviewRow(6, 'Meeting', 'Weekly engineering standup', entity('meeting', 'Meeting', 'Weekly engineering standup'), {
     display: { title: 'Weekly engineering standup', subtitle: 'Meeting · 1 Mar 2024' },
@@ -1135,18 +1135,18 @@ const REVIEW_ITEMS = [
     prechecked: false,
     flags: ['sensitive'],
   }),
-  reviewRow(10, 'relations', 'Ana Ruiz → works for → Northwind Robotics', {
+  reviewRow(10, 'relations', 'Ana Ruiz → works for → Org Lambda Robotics', {
     ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { ref: 'e3' }, validFrom: null, validTo: null, precision: 'unknown', props: {},
   }, { kind: 'relation' }),
-  reviewRow(11, 'relations', 'Tom → works for → Northwind Robotics', {
+  reviewRow(11, 'relations', 'Tom → works for → Org Lambda Robotics', {
     ref: 'r2', type: 'WORKS_FOR', from: { ref: 'e2' }, to: { ref: 'e3' }, validFrom: null, validTo: null, precision: 'unknown', props: {},
   }, { kind: 'relation', decision: 'pending', prechecked: false }),
-  reviewRow(12, 'closings', 'Closes: Ana Ruiz → works for → Contoso', { relationId: 'b1000000-0000-4000-8000-000000000001' }, {
+  reviewRow(12, 'closings', 'Closes: Ana Ruiz → works for → Org Theta', { relationId: 'b1000000-0000-4000-8000-000000000001' }, {
     kind: 'closing',
     decision: 'pending',
     prechecked: false,
     flags: ['closing_affects_commitments'],
-    display: { title: 'Closes: Ana Ruiz → works for → Contoso', subtitle: 'ended Mar 2024' },
+    display: { title: 'Closes: Ana Ruiz → works for → Org Theta', subtitle: 'ended Mar 2024' },
   }),
 ];
 
@@ -1345,7 +1345,7 @@ function homeDrafts() {
       ...base,
       id: 'a0000000-0000-4000-8000-000000000002',
       noteId: 'n2',
-      noteTitle: 'Customer discovery — Northwind',
+      noteTitle: 'Customer discovery — Lambda',
       counts: { ...base.counts, pending: 7 },
     },
     {

@@ -59,8 +59,8 @@ describe('graph resolution routes (integration)', () => {
   function seed(ownerId: string) {
     const base = { ownerId, props: {}, reviewStatus: 'accepted', mergedIntoId: null, occurredAt: null, ontologyVersion: '1', createdAt: new Date(), updatedAt: new Date() };
     entities = [
-      { ...base, id: P, type: 'Person', label: 'Acme' },
-      { ...base, id: O, type: 'Organization', label: 'Acme' },
+      { ...base, id: P, type: 'Person', label: 'Kappa' },
+      { ...base, id: O, type: 'Organization', label: 'Kappa' },
     ];
   }
 

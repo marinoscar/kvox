@@ -14,7 +14,7 @@ import {
 } from '../../src/graph/ui/components/NeighborhoodWidget.js';
 import { buildNeighborhoodGraph } from '../../src/graph/ui/components/explorer/NeighborhoodCanvas.js';
 import { GraphEntityPage } from '../../src/graph/ui/pages/GraphEntityPage.js';
-import { ACME_ID, JOE_ID, neighborhoodFixture } from './graphData.js';
+import { KAPPA_ID, JOE_ID, neighborhoodFixture } from './graphData.js';
 import { server } from './msw-compat.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
 import { graphWriter } from './graphTestUsers.js';
@@ -81,7 +81,7 @@ describe('NeighborhoodWidget', () => {
     const { container } = renderWidget();
     expect(screen.getByRole('heading', { name: 'Neighbourhood' })).toBeInTheDocument();
     const canvas = await screen.findByTestId('fake-canvas');
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toBeInTheDocument();
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toBeInTheDocument();
 
     expect(neighbourhoodUrls[0].searchParams.get('hops')).toBe('1');
     expect(neighbourhoodUrls[0].searchParams.get('limit')).toBe(String(NEIGHBORHOOD_WIDGET_LIMIT));
@@ -99,15 +99,15 @@ describe('NeighborhoodWidget', () => {
     const user = userEvent.setup();
     renderWidget();
     const canvas = await screen.findByTestId('fake-canvas');
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
 
     const card = await screen.findByRole('status');
-    expect(within(card).getByText('Acme Corp')).toBeInTheDocument();
+    expect(within(card).getByText('Org Kappa')).toBeInTheDocument();
     expect(within(card).getByRole('link', { name: 'Open page' })).toHaveAttribute(
       'href',
-      `/graph/entities/${ACME_ID}`,
+      `/graph/entities/${KAPPA_ID}`,
     );
-    expect(mocks.lastProps?.selectedId).toBe(ACME_ID);
+    expect(mocks.lastProps?.selectedId).toBe(KAPPA_ID);
 
     // The entity itself and an item offer no link to "their" page.
     await user.click(within(canvas).getByRole('button', { name: 'Ship the Atlas beta' }));

@@ -10,7 +10,7 @@ import type { GraphCanvasProps } from '../../src/graph/ui/components/explorer/Gr
 import type { GraphConnectResponse } from '../../src/graph/headless/clients/graph.js';
 import { GraphExplorerPage } from '../../src/graph/ui/pages/GraphExplorerPage.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
-import { ACME_ID, ANA_ID, JOE_ID, expandFixture, gid, type ExpandFixtureRequest } from './graphData.js';
+import { KAPPA_ID, ANA_ID, JOE_ID, expandFixture, gid, type ExpandFixtureRequest } from './graphData.js';
 import { HttpResponse, http, server } from './msw-compat.js';
 import { mockTouchInput } from './shellMedia.js';
 import { graphReader } from './graphTestUsers.js';
@@ -77,11 +77,11 @@ function connectAnswer(over: Partial<GraphConnectResponse> = {}): GraphConnectRe
   const slice = expandFixture({ nodeIds: [JOE_ID], cap: 300 })!;
   return {
     inputs: [
-      { kind: 'entity', id: ANA_ID, title: 'Ana Diaz', entityIds: [ANA_ID, ACME_ID] },
-      { kind: 'entity', id: JOE_ID, title: 'Joe Rivera', entityIds: [JOE_ID, ACME_ID] },
+      { kind: 'entity', id: ANA_ID, title: 'Ana Diaz', entityIds: [ANA_ID, KAPPA_ID] },
+      { kind: 'entity', id: JOE_ID, title: 'Joe Rivera', entityIds: [JOE_ID, KAPPA_ID] },
     ],
-    shared: [{ entityId: ACME_ID, inputIds: [ANA_ID, JOE_ID], mentionCount: 3 }],
-    paths: [{ fromInput: ANA_ID, toInput: JOE_ID, nodeIds: [ANA_ID, ACME_ID, JOE_ID], edgeIds: ['e1', 'e2'], score: 0.8 }],
+    shared: [{ entityId: KAPPA_ID, inputIds: [ANA_ID, JOE_ID], mentionCount: 3 }],
+    paths: [{ fromInput: ANA_ID, toInput: JOE_ID, nodeIds: [ANA_ID, KAPPA_ID, JOE_ID], edgeIds: ['e1', 'e2'], score: 0.8 }],
     slice,
     truncated: false,
     ...over,
@@ -136,7 +136,7 @@ function renderExplorer(route = `/graph/explore?seed=${JOE_ID}`) {
 
 async function canvasReady() {
   const canvas = await screen.findByTestId('fake-canvas');
-  await within(canvas).findByRole('button', { name: 'Acme Corp' });
+  await within(canvas).findByRole('button', { name: 'Org Kappa' });
   return canvas;
 }
 
@@ -147,10 +147,10 @@ describe('multi-select', () => {
     const canvas = await canvasReady();
 
     await user.keyboard('{Shift>}');
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-marked', 'true');
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'true');
     // A plain click on a node would have opened it; a shift-click only marks.
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-selected', 'false');
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-selected', 'false');
     await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
     await user.keyboard('{/Shift}');
     expect(screen.getByText('2 selected')).toBeInTheDocument();
@@ -169,7 +169,7 @@ describe('multi-select', () => {
     renderExplorer();
     const canvas = await canvasReady();
     await user.click(within(canvas).getByRole('button', { name: 'lasso all but Joe' }));
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-marked', 'true');
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'true');
     expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toHaveAttribute('data-marked', 'true');
     expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toHaveAttribute('data-marked', 'false');
   });
@@ -191,7 +191,7 @@ describe('multi-select', () => {
     const canvas = await canvasReady();
     await user.click(screen.getByRole('button', { name: 'Select' }));
     expect(canvas).toHaveAttribute('data-select-tool', 'false');
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
     expect(screen.getByText('2 selected')).toBeInTheDocument();
   });
@@ -250,11 +250,11 @@ describe('Find connections', () => {
     expect((connectBodies[0] as { entityIds: string[] }).entityIds.sort()).toEqual([ANA_ID, JOE_ID].sort());
     expect(within(results).getByRole('heading', { name: '1 organization in common' })).toBeInTheDocument();
     const shared = within(results).getByRole('region', { name: 'Shared by these' });
-    expect(within(shared).getByRole('button', { name: /Acme Corp, .*in 2 of 2/ })).toBeInTheDocument();
+    expect(within(shared).getByRole('button', { name: /Org Kappa, .*in 2 of 2/ })).toBeInTheDocument();
     const bridges = within(results).getByRole('region', { name: 'Bridges between them' });
     expect(within(bridges).getByText('Ana Diaz and Joe Rivera')).toBeInTheDocument();
     // The shared entity is ringed on the canvas.
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-marked', 'true');
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'true');
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 
@@ -298,7 +298,7 @@ describe('Find connections', () => {
     await waitFor(() =>
       expect(screen.queryByRole('region', { name: 'What connects these' })).not.toBeInTheDocument(),
     );
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-marked', 'false');
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'false');
   });
 });
 
@@ -311,12 +311,12 @@ describe('?connectNotes=', () => {
 
     expect(connectBodies[0]).toEqual({ noteIds: [N1, N2] });
     // Shared first, then each input's strongest.
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe([ACME_ID, ANA_ID, JOE_ID].join(',')));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe([KAPPA_ID, ANA_ID, JOE_ID].join(',')));
     expect(currentUrl().searchParams.get('connectNotes')).toBe(NOTES);
-    expect(expandBodies[0].nodeIds).toEqual([ACME_ID, ANA_ID, JOE_ID]);
+    expect(expandBodies[0].nodeIds).toEqual([KAPPA_ID, ANA_ID, JOE_ID]);
     expect(await screen.findByRole('region', { name: 'What connects these' })).toBeInTheDocument();
     await waitFor(() =>
-      expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-marked', 'true'),
+      expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'true'),
     );
   });
 

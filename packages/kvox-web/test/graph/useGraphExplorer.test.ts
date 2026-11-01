@@ -11,7 +11,7 @@ import {
 } from '../../src/graph/ui/components/explorer/explorerModel.js';
 import { useGraphExplorer } from '../../src/graph/ui/hooks/useGraphExplorer.js';
 import {
-  ACME_ID,
+  KAPPA_ID,
   ANA_ID,
   BEN_ID,
   JOE_ID,
@@ -63,7 +63,7 @@ describe('useGraphExplorer — load', () => {
 
     expect(bodies).toEqual([{ nodeIds: [JOE_ID], cap: EXPLORER_NODE_CAP }]);
     expect(result.current.state.seedIds).toEqual([JOE_ID]);
-    expect(result.current.state.graph.hasNode(ACME_ID)).toBe(true);
+    expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(true);
     expect(result.current.state.expanded.has(JOE_ID)).toBe(true);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.version).toBeGreaterThan(0);
@@ -91,14 +91,14 @@ describe('useGraphExplorer — load', () => {
       http.post('*/api/graph/explore/expand', async ({ request }) => {
         signals.push(request.signal);
         const body = (await request.json()) as ExpandFixtureRequest;
-        if (body.nodeIds[0] === ACME_ID) await delay(200);
+        if (body.nodeIds[0] === KAPPA_ID) await delay(200);
         return HttpResponse.json({ data: expandFixture(body) });
       }),
     );
     const { result } = renderExplorer();
     let first!: Promise<void>;
     act(() => {
-      first = result.current.load([ACME_ID]);
+      first = result.current.load([KAPPA_ID]);
     });
     await act(() => result.current.load([JOE_ID]));
     await act(() => first);
@@ -113,10 +113,10 @@ describe('useGraphExplorer — expand', () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
     const count = result.current.state.graph.order;
-    await act(() => result.current.expand(ACME_ID));
+    await act(() => result.current.expand(KAPPA_ID));
 
-    expect(bodies[1]).toEqual({ nodeIds: [ACME_ID], cap: EXPLORER_NODE_CAP - count });
-    expect(result.current.state.expanded.has(ACME_ID)).toBe(true);
+    expect(bodies[1]).toEqual({ nodeIds: [KAPPA_ID], cap: EXPLORER_NODE_CAP - count });
+    expect(result.current.state.expanded.has(KAPPA_ID)).toBe(true);
     expect(result.current.state.graph.order).toBeGreaterThan(count);
   });
 
@@ -127,7 +127,7 @@ describe('useGraphExplorer — expand', () => {
       result.current.setHiddenTypes(['Meeting']);
       result.current.setHiddenRelationTypes(['PART_OF']);
     });
-    await act(() => result.current.expand(ACME_ID));
+    await act(() => result.current.expand(KAPPA_ID));
 
     expect(bodies[1].types).toEqual(NODE_TYPES.filter((t) => t !== 'Meeting'));
     expect(bodies[1].relationTypes).toEqual(RELATION_TYPES.filter((t) => t !== 'PART_OF'));
@@ -179,20 +179,20 @@ describe('useGraphExplorer — expand', () => {
   it('narrows an expand to one relation type, and adds only that relation\'s neighbours (GIC-11)', async () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
-    await act(() => result.current.expand(ACME_ID, { relationTypes: ['PART_OF'] }));
+    await act(() => result.current.expand(KAPPA_ID, { relationTypes: ['PART_OF'] }));
 
-    expect(bodies[1].nodeIds).toEqual([ACME_ID]);
+    expect(bodies[1].nodeIds).toEqual([KAPPA_ID]);
     expect(bodies[1].relationTypes).toEqual(['PART_OF']);
     expect(bodies[1].types).toBeUndefined();
     const graph = result.current.state.graph;
-    expect(graph.hasNode(gid(6))).toBe(true); // Project Atlas, PART_OF Acme
-    expect(graph.hasNode(gid(12))).toBe(false); // Dana Li WORKS_FOR Acme
+    expect(graph.hasNode(gid(6))).toBe(true); // Project Atlas, PART_OF Kappa
+    expect(graph.hasNode(gid(12))).toBe(false); // Dana Li WORKS_FOR Kappa
   });
 
   it('narrows an expand to one entity type', async () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
-    await act(() => result.current.expand(ACME_ID, { types: ['Person'] }));
+    await act(() => result.current.expand(KAPPA_ID, { types: ['Person'] }));
 
     expect(bodies[1].types).toEqual(['Person']);
     expect(bodies[1].relationTypes).toBeUndefined();
@@ -208,11 +208,11 @@ describe('useGraphExplorer — expand', () => {
       result.current.setHiddenTypes(['Person']);
     });
     const before = bodies.length;
-    await act(() => result.current.expand(ACME_ID, { relationTypes: ['PART_OF'] }));
-    await act(() => result.current.expand(ACME_ID, { types: ['Person'] }));
+    await act(() => result.current.expand(KAPPA_ID, { relationTypes: ['PART_OF'] }));
+    await act(() => result.current.expand(KAPPA_ID, { types: ['Person'] }));
     expect(bodies).toHaveLength(before);
 
-    await act(() => result.current.expand(ACME_ID, { relationTypes: ['PART_OF', 'WORKS_FOR'] }));
+    await act(() => result.current.expand(KAPPA_ID, { relationTypes: ['PART_OF', 'WORKS_FOR'] }));
     expect(bodies.at(-1)!.relationTypes).toEqual(['WORKS_FOR']);
   });
 
@@ -259,7 +259,7 @@ describe('useGraphExplorer — expand', () => {
         HttpResponse.json({ message: 'Graph query timed out', statusCode: 503 }, { status: 503 }),
       ),
     );
-    await act(() => result.current.expand(ACME_ID));
+    await act(() => result.current.expand(KAPPA_ID));
     expect(result.current.error).toBe('Graph query timed out');
     expect(result.current.notFound).toBe(false);
     expect(result.current.state.graph.hasNode(JOE_ID)).toBe(true);
@@ -350,7 +350,7 @@ describe('useGraphExplorer — as_of', () => {
   it('rebuilds from the seeds and every expanded node, at that date', async () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
-    await act(() => result.current.expand(ACME_ID));
+    await act(() => result.current.expand(KAPPA_ID));
     // Today: Joe reports to Ana.
     const reportsTo = () =>
       result.current.state.graph
@@ -360,7 +360,7 @@ describe('useGraphExplorer — as_of', () => {
 
     await act(() => result.current.setAsOf('2026-06-01'));
 
-    expect(bodies[2]).toEqual({ nodeIds: [JOE_ID, ACME_ID], as_of: '2026-06-01', cap: EXPLORER_NODE_CAP });
+    expect(bodies[2]).toEqual({ nodeIds: [JOE_ID, KAPPA_ID], as_of: '2026-06-01', cap: EXPLORER_NODE_CAP });
     expect(result.current.state.asOf).toBe('2026-06-01');
     // In June, Joe reported to Ben.
     expect(reportsTo()).toEqual([BEN_ID]);
@@ -390,9 +390,9 @@ describe('useGraphExplorer — as_of', () => {
   it('keeps positions of the nodes that survive', async () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
-    const before = result.current.state.graph.getNodeAttributes(ACME_ID);
+    const before = result.current.state.graph.getNodeAttributes(KAPPA_ID);
     await act(() => result.current.setAsOf('2026-06-01'));
-    const after = result.current.state.graph.getNodeAttributes(ACME_ID);
+    const after = result.current.state.graph.getNodeAttributes(KAPPA_ID);
     expect({ x: after.x, y: after.y }).toEqual({ x: before.x, y: before.y });
   });
 });
@@ -408,11 +408,11 @@ describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
     // The Person seed is filtered like any node, but stays the anchor; what came from it stays.
     expect(result.current.state.graph.hasNode(JOE_ID)).toBe(false);
     expect(result.current.state.seedIds).toEqual([JOE_ID]);
-    expect(result.current.state.graph.hasNode(ACME_ID)).toBe(true);
+    expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(true);
 
     // Hiding is local: no request. Re-enabling refetches what the filter removed (#667).
     expect(bodies).toHaveLength(1);
-    const before = result.current.state.graph.getNodeAttributes(ACME_ID);
+    const before = result.current.state.graph.getNodeAttributes(KAPPA_ID);
     await act(async () => result.current.setHiddenTypes([]));
     await waitFor(() => expect(result.current.state.graph.hasNode(Q3_MEETING_ID)).toBe(true));
     expect(result.current.state.graph.hasNode(ANA_ID)).toBe(true);
@@ -422,7 +422,7 @@ describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
     // The seeds and expanded nodes are asked again, with no type filter now that nothing is hidden.
     expect(bodies[1]).toEqual({ nodeIds: [JOE_ID], cap: expect.any(Number) });
     // Nothing that stayed moved.
-    const after = result.current.state.graph.getNodeAttributes(ACME_ID);
+    const after = result.current.state.graph.getNodeAttributes(KAPPA_ID);
     expect({ x: after.x, y: after.y }).toEqual({ x: before.x, y: before.y });
   });
 
@@ -448,7 +448,7 @@ describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
     await act(async () => result.current.setHiddenTypes(NODE_TYPES.filter((t) => t !== 'Organization')));
     await waitFor(() => expect(bodies).toHaveLength(1));
     expect(bodies[0]).toMatchObject({ nodeIds: [JOE_ID], types: ['Organization'] });
-    await waitFor(() => expect(result.current.state.graph.hasNode(ACME_ID)).toBe(true));
+    await waitFor(() => expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(true));
   });
 
   it('re-enabling a relation type refetches too; hiding more does not', async () => {
@@ -468,8 +468,8 @@ describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
     await act(() => result.current.load([JOE_ID]));
     act(() => result.current.hide(JOE_ID));
     expect(result.current.state.graph.hasNode(JOE_ID)).toBe(true);
-    act(() => result.current.makeSeed(ACME_ID));
-    expect(result.current.state.seedIds).toEqual([JOE_ID, ACME_ID]);
+    act(() => result.current.makeSeed(KAPPA_ID));
+    expect(result.current.state.seedIds).toEqual([JOE_ID, KAPPA_ID]);
     act(() => result.current.hide(ANA_ID));
     expect(result.current.state.graph.hasNode(ANA_ID)).toBe(false);
   });
@@ -501,7 +501,7 @@ describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
 
     await act(() => pending);
     expect(bodies).toEqual([{ nodeIds: [JOE_ID, BEN_ID], cap: EXPLORER_NODE_CAP }]);
-    expect(result.current.state.graph.hasNode(ACME_ID)).toBe(true);
+    expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(true);
     expect(result.current.state.graph.getNodeAttributes(JOE_ID)).toMatchObject({ x: 40, y: 40 });
   });
 

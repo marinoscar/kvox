@@ -20,7 +20,7 @@ function legacyValue(overrides: Record<string, unknown> = {}, openai: Record<str
         allowedModels: [
           'gpt-4o-mini',
           { id: 'gpt-5.4', label: 'GPT-5.4 (team)' },
-          { id: 'acme-private-1', label: 'Acme private', contextWindowTokens: 64_000, maxOutputTokens: 4_096 },
+          { id: 'kappa-private-1', label: 'Kappa private', contextWindowTokens: 64_000, maxOutputTokens: 4_096 },
         ],
         defaultModel: 'gpt-4o-mini',
         ...openai,
@@ -130,7 +130,7 @@ describe('planAiSettings', () => {
       const { models, allowed } = planAiSettings(legacyValue());
 
       expect(allowed).toBe(3);
-      expect(models.map((m) => m.modelId)).toEqual(['gpt-4o-mini', 'gpt-5.4', 'acme-private-1', EMBEDDING_MODEL_ID]);
+      expect(models.map((m) => m.modelId)).toEqual(['gpt-4o-mini', 'gpt-5.4', 'kappa-private-1', EMBEDDING_MODEL_ID]);
       for (const model of models) {
         expect(model).toMatchObject({ provider: 'openai', enabled: true, capabilitySource: 'admin_override' });
       }
@@ -144,9 +144,9 @@ describe('planAiSettings', () => {
     });
 
     it('lets an entry override the numbers', () => {
-      const acme = planAiSettings(legacyValue()).models[2];
-      expect(acme).toMatchObject({ displayName: 'Acme private', contextWindow: 64_000, maxOutputTokens: 4_096 });
-      expect(acme.capabilities).toMatchObject({ contextWindow: 64_000, maxOutputTokens: 4_096 });
+      const kappa = planAiSettings(legacyValue()).models[2];
+      expect(kappa).toMatchObject({ displayName: 'Kappa private', contextWindow: 64_000, maxOutputTokens: 4_096 });
+      expect(kappa.capabilities).toMatchObject({ contextWindow: 64_000, maxOutputTokens: 4_096 });
     });
 
     it('derives a dated snapshot from its family', () => {

@@ -55,7 +55,7 @@ Three caveats, all real:
    separate and are *not* derived from `APP_NAME`:
    - `CLI_NAME` (`cliName` in `identity.json`, `kvox`) — the executable name,
      which also seeds the config directory and the env-var prefix. `apps/cli/src/app.ts`
-     passes it to the platform CLI's `createCli`. A product called "Acme" may
+     passes it to the platform CLI's `createCli`. A product called "Kappa" may
      well still ship a binary called `kvox`.
    - The GitHub repository URLs in `apps/api/src/openapi/document.ts` and
      `description.ts` — those point at the actual repository, not the product.

@@ -89,25 +89,25 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     const { user, g } = await owner();
     const a = await g.entity('Person', 'Ana');
     const b = await g.entity('Person', 'Ben');
-    const acme = await g.entity('Organization', 'Acme');
-    await g.relation('WORKS_FOR', a, acme, { valid: '[2019-01-01,)', precision: 'year' });
-    await g.relation('WORKS_FOR', b, acme, { valid: '[2020-01-01,)', precision: 'year' });
+    const kappa = await g.entity('Organization', 'Kappa');
+    await g.relation('WORKS_FOR', a, kappa, { valid: '[2019-01-01,)', precision: 'year' });
+    await g.relation('WORKS_FOR', b, kappa, { valid: '[2020-01-01,)', precision: 'year' });
 
     const one = await nbhd(user.id, a, { hops: 1 });
-    expect(ids(one)).toEqual([a, acme].sort());
+    expect(ids(one)).toEqual([a, kappa].sort());
     expect(depthOf(one, a)).toBe(0);
-    expect(depthOf(one, acme)).toBe(1);
+    expect(depthOf(one, kappa)).toBe(1);
     expect(one.edges).toHaveLength(1);
-    expect(one.edges[0]).toMatchObject({ type: 'WORKS_FOR', source: a, target: acme, virtual: false });
+    expect(one.edges[0]).toMatchObject({ type: 'WORKS_FOR', source: a, target: kappa, virtual: false });
     expect(one.edges[0].valid).toEqual({ from: '2019-01-01T00:00:00.000Z', to: null, precision: 'year' });
     expect(one.truncated).toBe(false);
     expect(one.seedIds).toEqual([a]);
 
     const two = await nbhd(user.id, a, { hops: 2 });
-    expect(ids(two)).toEqual([a, acme, b].sort());
+    expect(ids(two)).toEqual([a, kappa, b].sort());
     expect(depthOf(two, b)).toBe(2);
     // Degree counts readable edges in the WHOLE graph.
-    expect(two.nodes.find((n) => n.id === acme)?.degree).toBe(2);
+    expect(two.nodes.find((n) => n.id === kappa)?.degree).toBe(2);
   });
 
   it("carries a relation's declared props on its edge, and {} on one without (#440)", async () => {
@@ -263,7 +263,7 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
   it('enriches nodes and edges with exact mention / evidence counts and times', async () => {
     const { user, g } = await owner('enrich');
     const a = await g.entity('Person', 'Ana');
-    const b = await g.entity('Organization', 'Acme');
+    const b = await g.entity('Organization', 'Kappa');
     // g.relation() already writes one evidence row (created now), so 1 + 2 = 3 below.
     const rel = await g.relation('DISCUSSED', a, b);
     const t = (d: string) => new Date(d);
@@ -324,13 +324,13 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
   it('filters by relation type and by node type; the seed obeys the type filter (#764)', async () => {
     const { user, g } = await owner();
     const a = await g.entity('Person', 'A');
-    const acme = await g.entity('Organization', 'Acme');
+    const kappa = await g.entity('Organization', 'Kappa');
     const jane = await g.entity('Person', 'Jane');
-    await g.relation('WORKS_FOR', a, acme, { valid: '[2019-01-01,)', precision: 'year' });
+    await g.relation('WORKS_FOR', a, kappa, { valid: '[2019-01-01,)', precision: 'year' });
     await g.relation('REPORTS_TO', a, jane, { valid: '[2019-01-01,)', precision: 'year' });
 
-    expect(ids(await nbhd(user.id, a, { relationTypes: 'WORKS_FOR' }))).toEqual([a, acme].sort());
-    expect(ids(await nbhd(user.id, a, { types: 'Organization' }))).toEqual([acme]);
+    expect(ids(await nbhd(user.id, a, { relationTypes: 'WORKS_FOR' }))).toEqual([a, kappa].sort());
+    expect(ids(await nbhd(user.id, a, { types: 'Organization' }))).toEqual([kappa]);
     expect(ids(await nbhd(user.id, a, { types: 'Person' }))).toEqual([a, jane].sort());
     expect(ids(await nbhd(user.id, a, { types: 'Product' }))).toEqual([]);
 
@@ -374,14 +374,14 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
   it('as_of reads the role held then (promotion)', async () => {
     const { user, g } = await owner();
     const joe = await g.entity('Person', 'Joe');
-    const acme = await g.entity('Organization', 'Acme');
-    const engineer = await g.relation('HAS_ROLE', joe, acme, {
+    const kappa = await g.entity('Organization', 'Kappa');
+    const engineer = await g.relation('HAS_ROLE', joe, kappa, {
       valid: '[2019-01-01,2026-03-01)',
       precision: 'year',
       reviewStatus: 'superseded',
     });
-    const staff = await g.relation('HAS_ROLE', joe, acme, { valid: '[2026-03-01,)', precision: 'month' });
-    const unknown = await g.relation('WORKS_FOR', joe, acme, { valid: null, precision: 'unknown' });
+    const staff = await g.relation('HAS_ROLE', joe, kappa, { valid: '[2026-03-01,)', precision: 'month' });
+    const unknown = await g.relation('WORKS_FOR', joe, kappa, { valid: null, precision: 'unknown' });
 
     const then = await nbhd(user.id, joe, { as_of: '2022-06-01' });
     expect(then.edges.map((e) => e.id).sort()).toEqual([engineer, unknown].sort());

@@ -116,7 +116,7 @@ function atPrecision(date: string | null, precision: 'day' | 'month' | 'year'): 
  * temporal type stated only by its start is a CONTINUING STATE (§5.4: "has
  * worked there since 2019" → `[2019, )`), so it is open-ended; with `point`
  * the same start is read as a POINT fact spanning its one unit — what the
- * out-of-order rule compares ("Joe works for Acme", said in a 2020 meeting, is
+ * out-of-order rule compares ("Joe works for Kappa", said in a 2020 meeting, is
  * evidence for an accepted `[2019, 2026)` edge). `unknown` or no dates → null.
  * A malformed date or inverted range also yields null: the extractor already
  * degrades those to `unknown` (#363), so this is belt and braces.
@@ -167,7 +167,7 @@ export type RelationKnownResult = { known: true; edgeId: string } | { known: fal
  * §8 "known, skipped" for a relation, via #353's planner: the same edge
  * restated, or a period inside an accepted one (§5.4 out-of-order rule). A
  * start-only statement is tried as a continuing state first, then as a point
- * fact — "Joe works for Acme" said in 2020 is inside `[2019, 2026)` even
+ * fact — "Joe works for Kappa" said in 2020 is inside `[2019, 2026)` even
  * though `[2020, )` is not.
  */
 export function relationKnown(

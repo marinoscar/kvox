@@ -22,11 +22,11 @@ import {
   parseSeeds,
 } from '../../src/graph/ui/pages/GraphExplorerPage.js';
 import {
-  ACME_ID,
+  KAPPA_ID,
   ANA_ID,
   BEN_ID,
-  GLOBEX_ID,
-  INITECH_ID,
+  SIGMA_ID,
+  OMEGA_ID,
   JOE_ID,
   expandFixture,
   gid,
@@ -181,7 +181,7 @@ function renderExplorer(route = `/graph/explore?seed=${JOE_ID}`) {
 
 async function canvasReady() {
   const canvas = await screen.findByTestId('fake-canvas');
-  await within(canvas).findByRole('button', { name: 'Acme Corp' });
+  await within(canvas).findByRole('button', { name: 'Org Kappa' });
   return canvas;
 }
 
@@ -243,7 +243,7 @@ describe('GraphExplorerPage — seeding', () => {
 
     expect(await screen.findByRole('heading', { name: 'Where do you want to start?' })).toBeInTheDocument();
     // Themes from the overview (the "Unconnected" pool is not a theme), Active, and an empty Recent.
-    expect(await screen.findByRole('button', { name: /Globex/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Org Sigma/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Unconnected/ })).not.toBeInTheDocument();
     expect(await screen.findByText("You haven't opened anything yet.")).toBeInTheDocument();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
@@ -273,8 +273,8 @@ describe('GraphExplorerPage — seeding', () => {
     const user = userEvent.setup();
     renderExplorer('/graph/explore?start=1');
     const recent = await screen.findByRole('region', { name: 'Last opened' });
-    await user.click(await within(recent).findByRole('button', { name: 'Acme Corp' }));
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(ACME_ID));
+    await user.click(await within(recent).findByRole('button', { name: 'Org Kappa' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(KAPPA_ID));
     expect(currentUrl().searchParams.get('start')).toBeNull();
   });
 
@@ -282,11 +282,11 @@ describe('GraphExplorerPage — seeding', () => {
     noRecents();
     const user = userEvent.setup();
     renderExplorer('/graph/explore?start=1');
-    await user.click(await screen.findByRole('button', { name: /Globex/ }));
+    await user.click(await screen.findByRole('button', { name: /Org Sigma/ }));
     await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBe('1'));
     await canvasReady().catch(() => screen.findByTestId('fake-canvas'));
     await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
-    expect(bodies[0].nodeIds).toContain(GLOBEX_ID);
+    expect(bodies[0].nodeIds).toContain(SIGMA_ID);
   });
 
   it('says it is building the map while no snapshot exists, and handles the stale and too-large notices', async () => {
@@ -299,7 +299,7 @@ describe('GraphExplorerPage — seeding', () => {
     server.use(http.get('*/api/graph/overview', () => HttpResponse.json({ data: overviewStates.stale() })));
     const second = renderExplorer('/graph/explore?start=1');
     expect(await screen.findByText(STALE_TEXT)).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /Globex/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Org Sigma/ })).toBeInTheDocument();
     second.unmount();
 
     server.use(http.get('*/api/graph/overview', () => HttpResponse.json({ data: overviewStates.tooLarge() })));
@@ -335,10 +335,10 @@ describe('GraphExplorerPage — seeding', () => {
 
     const canvas = await screen.findByTestId('fake-canvas');
     expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
-    expect(within(canvas).queryByRole('button', { name: 'Acme Corp' })).not.toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'Org Kappa' })).not.toBeInTheDocument();
     expect(screen.getByText('Engineering cluster')).toBeInTheDocument();
 
-    await within(canvas).findByRole('button', { name: 'Acme Corp' });
+    await within(canvas).findByRole('button', { name: 'Org Kappa' });
     expect(bodies).toEqual([{ nodeIds: [JOE_ID, BEN_ID], cap: 300 }]);
   });
 
@@ -421,7 +421,7 @@ describe('GraphExplorerPage — the full view (#768)', () => {
     await user.click(await waitFor(() => chip('Organizations (3)')));
     await waitFor(() => expect(currentUrl().searchParams.get('types')).toBe('Organization'));
     await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument());
-    expect(within(canvas).getByRole('button', { name: 'Globex' })).toBeInTheDocument();
+    expect(within(canvas).getByRole('button', { name: 'Org Sigma' })).toBeInTheDocument();
     expect(overviewRequests.at(-1)!.searchParams.get('types')).toBe('Organization');
     // Counts are not type-filtered.
     expect(chip('People (6)')).toBeInTheDocument();
@@ -443,7 +443,7 @@ describe('GraphExplorerPage — the full view (#768)', () => {
     expect(overviewRequests.at(-1)!.searchParams.get('to')).toBe(to);
     expect(overviewRequests.at(-1)!.searchParams.get('edges')).toBe('true');
     // Only what has evidence in the window stays: filtered, not dimmed.
-    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Globex' })).not.toBeInTheDocument());
+    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Org Sigma' })).not.toBeInTheDocument());
     expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
     expect(canvas.getAttribute('data-dimmed')).toBe('');
     // The counts follow the window.
@@ -455,12 +455,12 @@ describe('GraphExplorerPage — the full view (#768)', () => {
     const user = userEvent.setup();
     renderExplorer('/graph/explore');
     let canvas = await canvasReady();
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
-    const panel = await screen.findByRole('group', { name: 'Acme Corp' });
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
+    const panel = await screen.findByRole('group', { name: 'Org Kappa' });
     await user.click(within(panel).getByRole('button', { name: 'Focus' }));
 
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(ACME_ID));
-    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ACME_ID]));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(KAPPA_ID));
+    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([KAPPA_ID]));
     expect(await screen.findByLabelText(/of 300 nodes/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Full graph' }));
@@ -475,8 +475,8 @@ describe('GraphExplorerPage — the full view (#768)', () => {
     const user = userEvent.setup();
     renderExplorer('/graph/explore');
     const canvas = await canvasReady();
-    await user.dblClick(within(canvas).getByRole('button', { name: 'Globex' }));
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(GLOBEX_ID));
+    await user.dblClick(within(canvas).getByRole('button', { name: 'Org Sigma' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(SIGMA_ID));
   });
 
   it('keeps the filters when it goes back to the full graph', async () => {
@@ -548,20 +548,20 @@ describe('GraphExplorerPage — selection and the inspector', () => {
     renderExplorer();
     const canvas = await canvasReady();
 
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
-    const panel = await screen.findByRole('group', { name: 'Acme Corp' });
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
+    const panel = await screen.findByRole('group', { name: 'Org Kappa' });
     expect(within(panel).getByText('Organization')).toBeInTheDocument();
     expect(within(panel).getByRole('link', { name: 'Open page' })).toHaveAttribute(
       'href',
-      `/graph/entities/${ACME_ID}`,
+      `/graph/entities/${KAPPA_ID}`,
     );
 
     await user.click(within(panel).getByRole('button', { name: 'Expand' }));
-    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ACME_ID]));
+    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([KAPPA_ID]));
     expect(await within(canvas).findByRole('button', { name: 'Dana Li' })).toBeInTheDocument();
 
     await user.click(within(panel).getByRole('button', { name: 'Focus' }));
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(`${JOE_ID},${ACME_ID}`));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(`${JOE_ID},${KAPPA_ID}`));
     // Writing the new seed list to the URL does not reload the graph.
     expect(within(canvas).getByRole('button', { name: 'Dana Li' })).toBeInTheDocument();
     // A seed can no longer be hidden.
@@ -569,7 +569,7 @@ describe('GraphExplorerPage — selection and the inspector', () => {
 
     // Click the stage to deselect.
     await user.click(within(canvas).getByRole('button', { name: 'stage' }));
-    expect(screen.queryByRole('group', { name: 'Acme Corp' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Org Kappa' })).not.toBeInTheDocument();
   });
 
   it('hides a node', async () => {
@@ -639,11 +639,11 @@ describe('GraphExplorerPage — selection and the inspector', () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     // GIC-08: the inspector is the shell's bottom sheet below 600px, opened at peek.
     const sheet = await screen.findByRole('region', { name: 'Inspector' });
     expect(sheet).toHaveAttribute('data-snap', 'peek');
-    expect(within(sheet).getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
+    expect(within(sheet).getByRole('heading', { name: 'Org Kappa' })).toBeInTheDocument();
     act(() => setViewportWidth(1024));
   });
 });
@@ -702,12 +702,12 @@ describe('GraphExplorerPage — filters and time', () => {
     );
     expect(currentUrl().searchParams.get('types')).toBe('Organization');
     expect(typeChip('Organizations', true)).toBeInTheDocument();
-    // The Person seed is filtered like any node; ACME, fetched from it, stays.
+    // The Person seed is filtered like any node; KAPPA, fetched from it, stays.
     expect(within(canvas).queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument();
     expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument();
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toBeInTheDocument();
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toBeInTheDocument();
 
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     await user.click(await screen.findByRole('button', { name: 'Expand' }));
     await waitFor(() => expect(bodies).toHaveLength(2));
     expect(bodies[1].types).toEqual(['Organization']);
@@ -804,7 +804,7 @@ describe('GraphExplorerPage — filters and time', () => {
     await waitFor(() =>
       expect(within(canvas).queryByRole('button', { name: `edge ${gid(411)}` })).not.toBeInTheDocument(),
     );
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     await user.click(await screen.findByRole('button', { name: 'Expand' }));
     await waitFor(() => expect(bodies).toHaveLength(2));
     expect(bodies[1].relationTypes).not.toContain('REPORTS_TO');
@@ -848,8 +848,8 @@ describe('GraphExplorerPage — filters and time', () => {
       const canvas = await canvasReady().catch(() => screen.findByTestId('fake-canvas'));
       // The range end is the as_of of the expand request.
       expect(bodies[0].as_of).toBe('2026-04-01');
-      // Ana (January only) and Acme (no evidence) leave the canvas; Joe is active, and the seed anyway.
-      await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Acme Corp' })).not.toBeInTheDocument());
+      // Ana (January only) and Kappa (no evidence) leave the canvas; Joe is active, and the seed anyway.
+      await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Org Kappa' })).not.toBeInTheDocument());
       expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument();
       expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
       // Filtered, never dimmed.
@@ -974,9 +974,9 @@ describe('GraphExplorerPage — keyboard and the list view', () => {
     await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ANA_ID]));
     await user.click(within(list).getByRole('button', { name: 'Hide Q3 planning' }));
     expect(within(list).queryByText('Q3 planning')).not.toBeInTheDocument();
-    expect(within(list).getByRole('link', { name: "Open Acme Corp's page" })).toHaveAttribute(
+    expect(within(list).getByRole('link', { name: "Open Org Kappa's page" })).toHaveAttribute(
       'href',
-      `/graph/entities/${ACME_ID}`,
+      `/graph/entities/${KAPPA_ID}`,
     );
 
     await user.click(screen.getByRole('button', { name: 'List view' }));
@@ -987,7 +987,7 @@ describe('GraphExplorerPage — keyboard and the list view', () => {
   it('opens straight into ?view=list', async () => {
     renderExplorer(`/graph/explore?seed=${JOE_ID}&view=list`);
     const list = await screen.findByRole('region', { name: 'Graph as a list' });
-    expect(await within(list).findByText('Acme Corp')).toBeInTheDocument();
+    expect(await within(list).findByText('Org Kappa')).toBeInTheDocument();
   });
 
   it('uses the static layout for ?layout=static', async () => {
@@ -1061,7 +1061,7 @@ describe('GraphExplorerPage — no WebGL', () => {
     const { container } = renderExplorer();
     expect(await screen.findByText(NO_WEBGL_TEXT)).toBeInTheDocument();
     const list = await screen.findByRole('region', { name: 'Graph as a list' });
-    expect(await within(list).findByText('Acme Corp')).toBeInTheDocument();
+    expect(await within(list).findByText('Org Kappa')).toBeInTheDocument();
     expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'List view' })).toBeDisabled();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
@@ -1077,10 +1077,10 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     const canvas = await canvasReady();
     expect(canvas).toHaveAttribute('data-modality', 'touch');
 
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
-    expect(canvas).toHaveAttribute('data-preview', ACME_ID);
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
+    expect(canvas).toHaveAttribute('data-preview', KAPPA_ID);
     expect(screen.queryByRole('region', { name: 'Inspector' })).not.toBeInTheDocument();
-    expect(document.querySelector('[aria-live="polite"]')!.textContent).toMatch(/Acme Corp.*Tap again/);
+    expect(document.querySelector('[aria-live="polite"]')!.textContent).toMatch(/Org Kappa.*Tap again/);
 
     // A different node moves the preview and still opens nothing.
     await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
@@ -1100,8 +1100,8 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     await screen.findByRole('region', { name: 'Inspector' });
     await user.click(within(canvas).getByRole('button', { name: 'stage' }));
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Inspector' })).not.toBeInTheDocument());
@@ -1112,9 +1112,9 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     renderExplorer();
     const canvas = await canvasReady();
     expect(screen.getByRole('button', { name: 'Select', pressed: false })).toBeInTheDocument();
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     expect(canvas).toHaveAttribute('data-preview', '');
-    expect(await screen.findByRole('group', { name: 'Acme Corp' })).toBeInTheDocument();
+    expect(await screen.findByRole('group', { name: 'Org Kappa' })).toBeInTheDocument();
   });
 
   it('Select mode marks nodes by tapping instead of previewing or opening them, and 2+ marks show the Selection view', async () => {
@@ -1126,9 +1126,9 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Select' }));
     expect(screen.getByRole('button', { name: 'Select', pressed: true })).toBeInTheDocument();
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-marked', 'true');
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'true');
     expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toHaveAttribute('data-marked', 'true');
     expect(canvas).toHaveAttribute('data-preview', '');
     expect(screen.getByText('2 selected')).toBeInTheDocument();
@@ -1177,7 +1177,7 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     const user = userEvent.setup();
     const { container } = renderExplorer();
     const canvas = await canvasReady();
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     await screen.findByRole('region', { name: 'Inspector' });
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
@@ -1268,20 +1268,20 @@ describe('GraphExplorerPage — responsive budgets (GIC-08)', () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     await screen.findByRole('region', { name: 'Inspector' });
     expect(canvas).toHaveAttribute('data-reveal-right', '360');
 
     act(() => setViewportWidth(1180));
     // Still medium at 1180: the inspector stays an overlay and the SAME canvas element stays mounted.
     expect(screen.getByTestId('fake-canvas')).toBe(canvas);
-    expect(within(screen.getByRole('region', { name: 'Inspector' })).getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Inspector' })).getByRole('heading', { name: 'Org Kappa' })).toBeInTheDocument();
 
     act(() => setViewportWidth(1440));
     expect(screen.getByTestId('fake-canvas')).toBe(canvas);
-    expect(within(screen.getByRole('region', { name: 'Inspector' })).getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Inspector' })).getByRole('heading', { name: 'Org Kappa' })).toBeInTheDocument();
     expect(canvas).toHaveAttribute('data-reveal-right', '0');
-    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-selected', 'true');
+    expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-selected', 'true');
   });
 });
 
@@ -1357,19 +1357,19 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     renderExplorer();
     await canvasReady();
     await user.keyboard('/');
-    await user.type(await searchInput(), 'globex');
+    await user.type(await searchInput(), 'sigma');
     const group = await screen.findByRole('group', { name: 'In your graph' });
-    expect(within(group).getByRole('option', { name: /Globex/ })).toBeInTheDocument();
+    expect(within(group).getByRole('option', { name: /Org Sigma/ })).toBeInTheDocument();
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(`${JOE_ID},${GLOBEX_ID}`));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(`${JOE_ID},${SIGMA_ID}`));
     await waitFor(() => expect(screen.queryByRole('combobox', { name: PALETTE_LABEL })).not.toBeInTheDocument());
     await canvasReady();
 
     await user.keyboard('/');
-    await user.type(await searchInput(), 'initech');
+    await user.type(await searchInput(), 'omega');
     await screen.findByRole('group', { name: 'In your graph' });
     await user.keyboard('{Alt>}{Enter}{/Alt}');
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(INITECH_ID));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(OMEGA_ID));
   });
 
   it('refuses an eleventh seed with a message and stays open', async () => {
@@ -1379,8 +1379,8 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     // The fixture has no such entities: the explorer says so, but the palette still opens on "/".
     await screen.findByRole('heading', { name: NOT_IN_GRAPH_TITLE });
     await user.keyboard('/');
-    await user.type(await searchInput(), 'globex');
-    await screen.findByRole('option', { name: /Globex/ });
+    await user.type(await searchInput(), 'sigma');
+    await screen.findByRole('option', { name: /Org Sigma/ });
     await user.keyboard('{Enter}');
     expect(await screen.findByRole('alert')).toHaveTextContent(/up to 10/);
     expect(screen.getByRole('combobox', { name: PALETTE_LABEL })).toBeInTheDocument();
@@ -1394,11 +1394,11 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     await user.keyboard('/');
     await user.type(await searchInput(), 'type:Organization a');
     const canvasGroup = await screen.findByRole('group', { name: 'On canvas' });
-    expect(within(canvasGroup).getByRole('option', { name: /Acme Corp/ })).toBeInTheDocument();
+    expect(within(canvasGroup).getByRole('option', { name: /Org Kappa/ })).toBeInTheDocument();
     expect(within(canvasGroup).queryByRole('option', { name: /Ana Diaz/ })).not.toBeInTheDocument();
     const graphGroup = await screen.findByRole('group', { name: 'In your graph' });
     expect(within(graphGroup).queryByRole('option', { name: /Ana Diaz/ })).not.toBeInTheDocument();
-    expect(within(graphGroup).getByRole('option', { name: /Globex/ })).toBeInTheDocument();
+    expect(within(graphGroup).getByRole('option', { name: /Org Sigma/ })).toBeInTheDocument();
   });
 
   it('moves with the arrow keys and announces the result count', async () => {

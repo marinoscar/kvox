@@ -69,7 +69,7 @@ function noteRow(
 
 const LIST_ITEMS = [
   noteRow('n1', 'Weekly engineering standup — minutes'),
-  noteRow('n2', 'Customer discovery — Northwind', {
+  noteRow('n2', 'Customer discovery — Lambda', {
     status: 'generating',
     currentVersion: 0,
     excerpt: '',
@@ -222,7 +222,7 @@ function transcriptRow(id: string, title: string): Record<string, unknown> {
 
 const TRANSCRIPTS = [
   transcriptRow('t1', 'Weekly engineering standup'),
-  transcriptRow('t2', 'Customer discovery — Northwind'),
+  transcriptRow('t2', 'Customer discovery — Lambda'),
 ];
 
 function json(route: Route, data: unknown) {

@@ -201,9 +201,9 @@ describe('AddToGraphDialog — relationship', () => {
     expect(screen.getByRole('combobox', { name: 'Relationship' })).toHaveTextContent('Works for');
     await user.click(screen.getByRole('combobox', { name: 'From' }));
     const fromList = await screen.findByRole('listbox');
-    expect(within(fromList).queryByRole('option', { name: 'Northwind Robotics' })).not.toBeInTheDocument();
+    expect(within(fromList).queryByRole('option', { name: 'Org Lambda Robotics' })).not.toBeInTheDocument();
     await user.click(within(fromList).getByRole('option', { name: 'Sarah Chen' }));
-    await pick(user, 'To', 'Northwind Robotics');
+    await pick(user, 'To', 'Org Lambda Robotics');
     await user.click(screen.getByRole('button', { name: 'Add to draft' }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
     expect(lastAddBody()).toEqual({

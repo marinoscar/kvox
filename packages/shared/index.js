@@ -245,7 +245,7 @@ exports.REPO_URL = `https://github.com/${exports.REPO_SLUG}`;
  * unit.
  *
  * ▲ THIS IS A REBRAND POINT: `cliName` in `identity.json`. It is a SEPARATE
- * fact from `APP_NAME` (a product called "Acme" may keep shipping its original
+ * fact from `APP_NAME` (a product called "Kappa" may keep shipping its original
  * binary name), and it is the name `apps/cli/src/app.ts` hands to the
  * platform CLI's `createCli({ identity })` and `infra/` reads to derive its
  * own prefix. The `bin` key of `apps/cli/package.json` repeats it, because npm

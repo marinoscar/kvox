@@ -1232,7 +1232,7 @@ manifest:
 
 `@app/shared` exports it as `CLI_NAME`, `src/app.ts` hands it to the platform
 CLI's `createCli({ identity })`, and the engine derives the rest. The split is
-intentional: a product called "Acme" may perfectly well still ship a command
+intentional: a product called "Kappa" may perfectly well still ship a command
 called `kvox`, and renaming the binary moves a filesystem path and an
 environment-variable prefix, which renaming the product must not. `cliName`
 is lowercase ASCII letters, digits and hyphens only, since it becomes both a

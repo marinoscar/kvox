@@ -38,7 +38,7 @@ function tinyFixture(overrides: Partial<GoldenFixtureInput['labels']> = {}): Gol
     speakers: [{ id: 'spk-a', label: 'A', displayName: 'Alex Rivera' }],
     segments: [
       seg('m99-s001', 'JJ will send the draft plan to Sarah Chen by Friday.', 0),
-      seg('m99-s002', 'Sarah Chen joined Northwind Robotics in 2026.', 1100),
+      seg('m99-s002', 'Sarah Chen joined Org Lambda Robotics in 2026.', 1100),
       seg('m99-s003', 'Priya Raman runs the team.', 2200),
     ],
     note: { version: 1, body: '# Tiny meeting\n\nJJ owes Sarah the draft plan.' },
@@ -46,7 +46,7 @@ function tinyFixture(overrides: Partial<GoldenFixtureInput['labels']> = {}): Gol
       { id: 'g-jj', type: 'Person', label: 'Jonah Jiménez', aliases: ['JJ'], props: {}, attendedFixtureIds: [] },
       { id: 'g-sarah', type: 'Person', label: 'Sarah Chen', aliases: [], props: {}, attendedFixtureIds: [] },
       { id: 'g-priya', type: 'Person', label: 'Priya Raman', aliases: [], props: {}, attendedFixtureIds: [] },
-      { id: 'g-nwr', type: 'Organization', label: 'Northwind Robotics', aliases: ['NWR'], props: {}, attendedFixtureIds: [] },
+      { id: 'g-nwr', type: 'Organization', label: 'Org Lambda Robotics', aliases: ['NWR'], props: {}, attendedFixtureIds: [] },
     ],
     labels: {
       entities: [
@@ -75,10 +75,10 @@ function tinyFixture(overrides: Partial<GoldenFixtureInput['labels']> = {}): Gol
         {
           key: 'nwr',
           type: 'Organization',
-          label: 'Northwind Robotics',
+          label: 'Org Lambda Robotics',
           aliases: ['NWR'],
           existingId: 'g-nwr',
-          evidence: [{ source: 'segment', segmentId: 'm99-s002', quote: 'Northwind Robotics' }],
+          evidence: [{ source: 'segment', segmentId: 'm99-s002', quote: 'Org Lambda Robotics' }],
         },
       ],
       relations: [
@@ -89,7 +89,7 @@ function tinyFixture(overrides: Partial<GoldenFixtureInput['labels']> = {}): Gol
           validFrom: '2026-01-01',
           validTo: null,
           precision: 'year',
-          evidence: [{ source: 'segment', segmentId: 'm99-s002', quote: 'joined Northwind Robotics in 2026' }],
+          evidence: [{ source: 'segment', segmentId: 'm99-s002', quote: 'joined Org Lambda Robotics in 2026' }],
         },
       ],
       items: [
@@ -126,7 +126,7 @@ describe('normalizeName', () => {
     ['Tomás Aguilar', 'tomás aguilar'],
     ['Ｆｕｌｌｗｉｄｔｈ', 'fullwidth'],
     ['Dr. Haddad', 'dr haddad'],
-    ['Northwind Robotics (NWR)', 'northwind robotics nwr'],
+    ['Org Lambda Robotics (NWR)', 'org lambda robotics nwr'],
     ['Sarah’s', "sarah's"],
   ])('%j → %j', (input, expected) => {
     expect(normalizeName(input)).toBe(expected);

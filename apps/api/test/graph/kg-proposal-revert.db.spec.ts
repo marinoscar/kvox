@@ -71,10 +71,10 @@ describeWithDb('graph proposal revert (real Postgres)', () => {
   it('a row edited since is a 409 revert_conflict that writes nothing', async () => {
     const f = await seedFixture(prisma, PREFIX);
     await services.commits.commit(f.caller, f.proposal.id);
-    const northwind = await committedRef(f.proposal.id, f.itemIds.e2);
+    const lambda = await committedRef(f.proposal.id, f.itemIds.e2);
     await prisma.kgEntity.update({
-      where: { id: northwind },
-      data: { label: 'Northwind Robotics Inc.', reviewStatus: 'edited', updatedAt: new Date(Date.now() + 60_000) },
+      where: { id: lambda },
+      data: { label: 'Org Lambda Robotics Inc.', reviewStatus: 'edited', updatedAt: new Date(Date.now() + 60_000) },
     });
     const afterCommit = await snapshot(prisma, f.ownerId);
 
@@ -85,7 +85,7 @@ describeWithDb('graph proposal revert (real Postgres)', () => {
     };
     expect(body.details.reason).toBe('revert_conflict');
     expect(body.details.conflicts).toEqual([
-      { kind: 'entity', id: northwind, label: 'Northwind Robotics Inc.', why: 'edited_since' },
+      { kind: 'entity', id: lambda, label: 'Org Lambda Robotics Inc.', why: 'edited_since' },
     ]);
     expect(body.details.revertible).toBeGreaterThan(0);
     expect(await snapshot(prisma, f.ownerId)).toEqual(afterCommit);
@@ -95,16 +95,16 @@ describeWithDb('graph proposal revert (real Postgres)', () => {
   it('confirmPartial keeps the edited row and reverts the rest', async () => {
     const f = await seedFixture(prisma, PREFIX);
     await services.commits.commit(f.caller, f.proposal.id);
-    const northwind = await committedRef(f.proposal.id, f.itemIds.e2);
+    const lambda = await committedRef(f.proposal.id, f.itemIds.e2);
     const edge = await committedRef(f.proposal.id, f.itemIds.r1);
     const deck = await committedRef(f.proposal.id, f.itemIds.i1);
-    await prisma.kgEntity.update({ where: { id: northwind }, data: { updatedAt: new Date(Date.now() + 60_000) } });
+    await prisma.kgEntity.update({ where: { id: lambda }, data: { updatedAt: new Date(Date.now() + 60_000) } });
 
     const { proposal, result } = await services.reverts.revert(f.caller, f.proposal.id, true);
     expect(proposal.status).toBe('reverted');
-    expect(result.kept).toEqual([expect.objectContaining({ kind: 'entity', id: northwind, why: 'edited_since' })]);
+    expect(result.kept).toEqual([expect.objectContaining({ kind: 'entity', id: lambda, why: 'edited_since' })]);
 
-    expect(await prisma.kgEntity.count({ where: { id: northwind } })).toBe(1);
+    expect(await prisma.kgEntity.count({ where: { id: lambda } })).toBe(1);
     expect(await prisma.kgRelation.count({ where: { id: edge } })).toBe(0);
     expect(await prisma.kgItem.count({ where: { id: deck } })).toBe(0);
 

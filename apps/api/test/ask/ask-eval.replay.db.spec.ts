@@ -97,7 +97,7 @@ describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no mod
     const { message } = await ask('Who does Sarah Chen work for?', () => {
       provider.enqueue([toolCall('c1', 'search', JSON.stringify({ query: 'Sarah Chen', scope: 'entities', limit: null })), done('tool_calls')]);
       provider.enqueue([toolCall('c2', 'get_entity', JSON.stringify({ entity: 'ent1' })), done('tool_calls')]);
-      provider.enqueue([text('Sarah Chen works for Northwind Robotics.[^ent1]'), done('stop')]);
+      provider.enqueue([text('Sarah Chen works for Org Lambda Robotics.[^ent1]'), done('stop')]);
     });
     expect(message.status).toBe('complete');
     expect(scoreCitationValidity(message.citations)).toBe(1);

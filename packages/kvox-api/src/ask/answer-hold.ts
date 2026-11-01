@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // PURE. One instance per MODEL CALL. A tool-calling model often says something
-// before it calls a tool ("Let me look up Acme…"). That text is not the answer,
+// before it calls a tool ("Let me look up Kappa…"). That text is not the answer,
 // and `ask_messages.content` is APPEND-ONLY under a connected reader (the SSE
 // offset contract, #379) — once written it can never be taken back. So the
 // text of each call is HELD in memory until one of two things happens:

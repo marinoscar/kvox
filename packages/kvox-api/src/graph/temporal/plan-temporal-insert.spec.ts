@@ -232,68 +232,68 @@ describe('planTemporalInsert — case table', () => {
     [
       '1. no existing edges',
       [],
-      cand({ toId: 'acme', valid: r('2019-01-01', null) }),
+      cand({ toId: 'kappa', valid: r('2019-01-01', null) }),
       WORKS_FOR,
       created(),
     ],
     [
       '2. restated identical open edge',
-      [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })],
-      cand({ toId: 'acme', valid: r('2019-01-01', null) }),
+      [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })],
+      cand({ toId: 'kappa', valid: r('2019-01-01', null) }),
       WORKS_FOR,
-      { action: 'attach_evidence', edgeId: 'acme', reason: 'restated' },
+      { action: 'attach_evidence', edgeId: 'kappa', reason: 'restated' },
     ],
     [
       '3. restated inside a closed edge',
-      [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', '2026-01-01') })],
-      cand({ toId: 'acme', valid: r('2020-05-01', '2020-05-02'), precision: 'day' }),
+      [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', '2026-01-01') })],
+      cand({ toId: 'kappa', valid: r('2020-05-01', '2020-05-02'), precision: 'day' }),
       WORKS_FOR,
-      { action: 'attach_evidence', edgeId: 'acme', reason: 'inside_existing' },
+      { action: 'attach_evidence', edgeId: 'kappa', reason: 'inside_existing' },
     ],
     [
       '4. straddling the end of a closed identical edge → create, never merged',
-      [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', '2024-01-01') })],
-      cand({ toId: 'acme', valid: r('2023-01-01', '2025-01-01') }),
+      [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', '2024-01-01') })],
+      cand({ toId: 'kappa', valid: r('2023-01-01', '2025-01-01') }),
       WORKS_FOR,
-      created({ flags: ['overlaps'], overlapsWith: ['acme'] }),
+      created({ flags: ['overlaps'], overlapsWith: ['kappa'] }),
     ],
     [
       '5. closing a single open edge',
-      [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })],
+      [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })],
       cand({ toId: 'beta', valid: r('2026-03-01', null), precision: 'month' }),
       WORKS_FOR,
-      created({ closes: [close('acme', '2026-03-01')], supersedes: 'acme' }),
+      created({ closes: [close('kappa', '2026-03-01')], supersedes: 'kappa' }),
     ],
     [
       '6. two open different edges: both close, the later is superseded',
       [
-        edge({ id: 'z-acme', toId: 'acme', valid: r('2019-01-01', null) }),
+        edge({ id: 'z-kappa', toId: 'kappa', valid: r('2019-01-01', null) }),
         edge({ id: 'a-board', toId: 'board', valid: r('2021-06-01', null) }),
       ],
       cand({ toId: 'beta', valid: r('2026-03-01', null) }),
       WORKS_FOR,
       created({
-        closes: [close('a-board', '2026-03-01'), close('z-acme', '2026-03-01')],
+        closes: [close('a-board', '2026-03-01'), close('z-kappa', '2026-03-01')],
         supersedes: 'a-board',
       }),
     ],
     [
       '7. older open candidate gets candidateTo',
-      [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })],
+      [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })],
       cand({ toId: 'beta', valid: r('2015-01-01', null) }),
       WORKS_FOR,
       created({ candidateTo: d('2019-01-01') }),
     ],
     [
       '8. older bounded candidate that overlaps → overlaps',
-      [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })],
+      [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })],
       cand({ toId: 'beta', valid: r('2015-01-01', '2020-01-01') }),
       WORKS_FOR,
-      created({ flags: ['overlaps'], overlapsWith: ['acme'] }),
+      created({ flags: ['overlaps'], overlapsWith: ['kappa'] }),
     ],
     [
       '9. unknown-precision candidate against an open edge → unordered',
-      [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })],
+      [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })],
       cand({ toId: 'beta', valid: null, precision: 'unknown' }),
       WORKS_FOR,
       created({ flags: ['unordered'] }),
@@ -307,15 +307,15 @@ describe('planTemporalInsert — case table', () => {
     ],
     [
       '11a. a rejected existing edge is ignored',
-      [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null), status: 'rejected' })],
+      [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null), status: 'rejected' })],
       cand({ toId: 'beta', valid: r('2026-03-01', null) }),
       WORKS_FOR,
       created(),
     ],
     [
       '11b. a merged existing edge is ignored',
-      [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null), status: 'merged' })],
-      cand({ toId: 'acme', valid: r('2019-01-01', null) }),
+      [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null), status: 'merged' })],
+      cand({ toId: 'kappa', valid: r('2019-01-01', null) }),
       WORKS_FOR,
       created(),
     ],
@@ -325,14 +325,14 @@ describe('planTemporalInsert — case table', () => {
         edge({
           id: 'eng',
           type: 'HAS_ROLE',
-          toId: 'acme',
+          toId: 'kappa',
           props: { title: 'Staff Engineer' },
           valid: r('2026-03-01', null),
         }),
       ],
       cand({
         type: 'HAS_ROLE',
-        toId: 'acme',
+        toId: 'kappa',
         props: { title: '  staff ENGINEER ' },
         valid: r('2026-03-01', null),
       }),
@@ -341,7 +341,7 @@ describe('planTemporalInsert — case table', () => {
     ],
     [
       '13. touching ranges [a,b) then [b,c) never overlap',
-      [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', '2024-01-01') })],
+      [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', '2024-01-01') })],
       cand({ toId: 'beta', valid: r('2024-01-01', '2025-01-01') }),
       WORKS_FOR,
       created(),
@@ -378,7 +378,7 @@ describe('planTemporalInsert — acceptance examples', () => {
     const engineer = edge({
       id: 'engineer',
       type: 'HAS_ROLE',
-      toId: 'acme',
+      toId: 'kappa',
       props: { title: 'Engineer' },
       valid: r('2019-01-01', null),
     });
@@ -386,7 +386,7 @@ describe('planTemporalInsert — acceptance examples', () => {
       [engineer],
       cand({
         type: 'HAS_ROLE',
-        toId: 'acme',
+        toId: 'kappa',
         props: { title: 'Staff Engineer' },
         valid: r('2026-03-01', null),
       }),
@@ -425,46 +425,46 @@ describe('planTemporalInsert — acceptance examples', () => {
     expect(edgesAsOf([closedJane, will], d('2026-03-01')).map((e) => e.id)).toEqual(['will']);
   });
 
-  it('out-of-order: a 2020 day-precision Acme fact inside [2019, 2026) attaches, no split or reopen', () => {
-    const acme = edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', '2026-01-01') });
+  it('out-of-order: a 2020 day-precision Kappa fact inside [2019, 2026) attaches, no split or reopen', () => {
+    const kappa = edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', '2026-01-01') });
     const plan = planTemporalInsert(
-      [acme],
-      cand({ toId: 'acme', valid: r('2020-06-15', '2020-06-16'), precision: 'day' }),
+      [kappa],
+      cand({ toId: 'kappa', valid: r('2020-06-15', '2020-06-16'), precision: 'day' }),
       WORKS_FOR
     );
-    expect(plan).toEqual({ action: 'attach_evidence', edgeId: 'acme', reason: 'inside_existing' });
+    expect(plan).toEqual({ action: 'attach_evidence', edgeId: 'kappa', reason: 'inside_existing' });
   });
 
   it('older different fact: Beta from 2015 is proposed closed at 2019, nothing closed, no overlap', () => {
-    const acme = edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) });
+    const kappa = edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) });
     const plan = planTemporalInsert(
-      [acme],
+      [kappa],
       cand({ toId: 'beta', valid: r('2015-01-01', null) }),
       WORKS_FOR
     );
     expect(plan).toEqual(created({ candidateTo: d('2019-01-01') }));
   });
 
-  it('soft overlap: Beta [2023, 2025) against closed Acme [2019, 2024) flags, closes nothing', () => {
-    const acme = edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', '2024-01-01') });
+  it('soft overlap: Beta [2023, 2025) against closed Kappa [2019, 2024) flags, closes nothing', () => {
+    const kappa = edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', '2024-01-01') });
     const plan = planTemporalInsert(
-      [acme],
+      [kappa],
       cand({ toId: 'beta', valid: r('2023-01-01', '2025-01-01') }),
       WORKS_FOR
     );
-    expect(plan).toEqual(created({ flags: ['overlaps'], overlapsWith: ['acme'] }));
+    expect(plan).toEqual(created({ flags: ['overlaps'], overlapsWith: ['kappa'] }));
   });
 
-  it('HAS_ROLE scope from_to: a new role at Beta does not close a role at Acme', () => {
-    const acmeRole = edge({
-      id: 'acme-eng',
+  it('HAS_ROLE scope from_to: a new role at Beta does not close a role at Kappa', () => {
+    const kappaRole = edge({
+      id: 'kappa-eng',
       type: 'HAS_ROLE',
-      toId: 'acme',
+      toId: 'kappa',
       props: { title: 'Engineer' },
       valid: r('2019-01-01', null),
     });
     const plan = planTemporalInsert(
-      [acmeRole],
+      [kappaRole],
       cand({
         type: 'HAS_ROLE',
         toId: 'beta',
@@ -477,9 +477,9 @@ describe('planTemporalInsert — acceptance examples', () => {
   });
 
   it('unknown start: an unknown candidate range with an open different edge → unordered, no closes', () => {
-    const acme = edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) });
+    const kappa = edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) });
     const plan = planTemporalInsert(
-      [acme],
+      [kappa],
       cand({ toId: 'beta', valid: null, precision: 'unknown' }),
       WORKS_FOR
     );
@@ -551,44 +551,44 @@ describe('planTemporalInsert — rule 1 (non-temporal)', () => {
 describe('planTemporalInsert — rule 3 (same fact)', () => {
   it('an unknown-range restatement attaches to the open period of that fact', () => {
     const existing = [
-      edge({ id: 'acme-1', toId: 'acme', valid: r('2010-01-01', '2012-01-01') }),
-      edge({ id: 'acme-2', toId: 'acme', valid: r('2019-01-01', null) }),
+      edge({ id: 'kappa-1', toId: 'kappa', valid: r('2010-01-01', '2012-01-01') }),
+      edge({ id: 'kappa-2', toId: 'kappa', valid: r('2019-01-01', null) }),
     ];
-    expect(planTemporalInsert(existing, cand({ toId: 'acme', valid: null }), WORKS_FOR)).toEqual({
+    expect(planTemporalInsert(existing, cand({ toId: 'kappa', valid: null }), WORKS_FOR)).toEqual({
       action: 'attach_evidence',
-      edgeId: 'acme-2',
+      edgeId: 'kappa-2',
       reason: 'restated',
     });
   });
 
   it('an unknown-range restatement of a closed-only fact attaches to its latest period', () => {
     const existing = [
-      edge({ id: 'acme-1', toId: 'acme', valid: r('2010-01-01', '2012-01-01') }),
-      edge({ id: 'acme-2', toId: 'acme', valid: r('2015-01-01', '2018-01-01') }),
+      edge({ id: 'kappa-1', toId: 'kappa', valid: r('2010-01-01', '2012-01-01') }),
+      edge({ id: 'kappa-2', toId: 'kappa', valid: r('2015-01-01', '2018-01-01') }),
     ];
-    expect(planTemporalInsert(existing, cand({ toId: 'acme', valid: null }), WORKS_FOR)).toEqual({
+    expect(planTemporalInsert(existing, cand({ toId: 'kappa', valid: null }), WORKS_FOR)).toEqual({
       action: 'attach_evidence',
-      edgeId: 'acme-2',
+      edgeId: 'kappa-2',
       reason: 'restated',
     });
   });
 
   it('an unknown-range restatement attaches to an undated edge of the same fact', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: null })];
-    expect(planTemporalInsert(existing, cand({ toId: 'acme', valid: null }), WORKS_FOR)).toEqual({
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: null })];
+    expect(planTemporalInsert(existing, cand({ toId: 'kappa', valid: null }), WORKS_FOR)).toEqual({
       action: 'attach_evidence',
-      edgeId: 'acme',
+      edgeId: 'kappa',
       reason: 'restated',
     });
   });
 
   it('a candidate contained in an open period attaches inside_existing', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })];
     expect(
-      planTemporalInsert(existing, cand({ toId: 'acme', valid: r('2024-01-01', null) }), WORKS_FOR)
+      planTemporalInsert(existing, cand({ toId: 'kappa', valid: r('2024-01-01', null) }), WORKS_FOR)
     ).toEqual({
       action: 'attach_evidence',
-      edgeId: 'acme',
+      edgeId: 'kappa',
       reason: 'inside_existing',
     });
   });
@@ -598,7 +598,7 @@ describe('planTemporalInsert — rule 3 (same fact)', () => {
       edge({
         id: 'eng',
         type: 'HAS_ROLE',
-        toId: 'acme',
+        toId: 'kappa',
         props: { title: 'Engineer' },
         valid: r('2019-01-01', null),
       }),
@@ -607,7 +607,7 @@ describe('planTemporalInsert — rule 3 (same fact)', () => {
       existing,
       cand({
         type: 'HAS_ROLE',
-        toId: 'acme',
+        toId: 'kappa',
         props: { title: 'Engineering Manager' },
         valid: r('2024-01-01', null),
       }),
@@ -617,20 +617,20 @@ describe('planTemporalInsert — rule 3 (same fact)', () => {
   });
 
   it('an older period of the same fact, reaching outside it, is created and flagged against the known period', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })];
     const plan = planTemporalInsert(
       existing,
-      cand({ toId: 'acme', valid: r('2015-01-01', null) }),
+      cand({ toId: 'kappa', valid: r('2015-01-01', null) }),
       WORKS_FOR
     );
-    expect(plan).toEqual(created({ flags: ['overlaps'], overlapsWith: ['acme'] }));
+    expect(plan).toEqual(created({ flags: ['overlaps'], overlapsWith: ['kappa'] }));
   });
 
   it('a disjoint earlier period of the same fact is a quiet create', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })];
     const plan = planTemporalInsert(
       existing,
-      cand({ toId: 'acme', valid: r('2010-01-01', '2012-01-01') }),
+      cand({ toId: 'kappa', valid: r('2010-01-01', '2012-01-01') }),
       WORKS_FOR
     );
     expect(plan).toEqual(created());
@@ -642,7 +642,7 @@ describe('planTemporalInsert — rule 3 (same fact)', () => {
       edge({
         id: 'e',
         type: 'HAS_ROLE',
-        toId: 'acme',
+        toId: 'kappa',
         props: { title: 'Engineer', level: { band: 3, track: 'ic' } },
         valid: r('2019-01-01', null),
       }),
@@ -652,7 +652,7 @@ describe('planTemporalInsert — rule 3 (same fact)', () => {
         existing,
         cand({
           type: 'HAS_ROLE',
-          toId: 'acme',
+          toId: 'kappa',
           props: { title: 'engineer', level: { track: 'ic', band: 3 } },
           valid: r('2019-01-01', null),
         }),
@@ -661,12 +661,12 @@ describe('planTemporalInsert — rule 3 (same fact)', () => {
     ).toEqual({ action: 'attach_evidence', edgeId: 'e', reason: 'restated' });
 
     const nullTitle = [
-      edge({ id: 'n', type: 'HAS_ROLE', toId: 'acme', props: { title: null }, valid: null }),
+      edge({ id: 'n', type: 'HAS_ROLE', toId: 'kappa', props: { title: null }, valid: null }),
     ];
     expect(
       planTemporalInsert(
         nullTitle,
-        cand({ type: 'HAS_ROLE', toId: 'acme', props: {}, valid: null }),
+        cand({ type: 'HAS_ROLE', toId: 'kappa', props: {}, valid: null }),
         HAS_ROLE
       )
     ).toEqual({ action: 'attach_evidence', edgeId: 'n', reason: 'restated' });
@@ -675,17 +675,17 @@ describe('planTemporalInsert — rule 3 (same fact)', () => {
 
 describe('planTemporalInsert — rules 4–7', () => {
   it('an open edge with an unknown start is closed too', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: r(null, null) })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: r(null, null) })];
     expect(
       planTemporalInsert(existing, cand({ toId: 'beta', valid: r('2026-03-01', null) }), WORKS_FOR)
-    ).toEqual(created({ closes: [close('acme', '2026-03-01')], supersedes: 'acme' }));
+    ).toEqual(created({ closes: [close('kappa', '2026-03-01')], supersedes: 'kappa' }));
   });
 
   it('an open edge starting on the same day is not closed (it would be empty) and is flagged', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: r('2026-03-01', null) })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: r('2026-03-01', null) })];
     expect(
       planTemporalInsert(existing, cand({ toId: 'beta', valid: r('2026-03-01', null) }), WORKS_FOR)
-    ).toEqual(created({ flags: ['overlaps'], overlapsWith: ['acme'] }));
+    ).toEqual(created({ flags: ['overlaps'], overlapsWith: ['kappa'] }));
   });
 
   it('supersedes the latest by from with unknown starts first', () => {
@@ -702,14 +702,14 @@ describe('planTemporalInsert — rules 4–7', () => {
   });
 
   it('a bounded new fact still closes an older open edge at its start', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })];
     expect(
       planTemporalInsert(
         existing,
         cand({ toId: 'beta', valid: r('2023-01-01', '2025-01-01') }),
         WORKS_FOR
       )
-    ).toEqual(created({ closes: [close('acme', '2023-01-01')], supersedes: 'acme' }));
+    ).toEqual(created({ closes: [close('kappa', '2023-01-01')], supersedes: 'kappa' }));
   });
 
   it('candidateTo is the earliest later start, even of a closed edge', () => {
@@ -740,7 +740,7 @@ describe('planTemporalInsert — rules 4–7', () => {
   });
 
   it('a bounded candidate is never clipped', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })];
     expect(
       planTemporalInsert(
         existing,
@@ -751,28 +751,28 @@ describe('planTemporalInsert — rules 4–7', () => {
   });
 
   it('unknown start with only closed different edges is not unordered', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', '2020-01-01') })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', '2020-01-01') })];
     expect(planTemporalInsert(existing, cand({ toId: 'beta', valid: null }), WORKS_FOR)).toEqual(
       created()
     );
   });
 
   it('unknown start with an undated different edge is unordered', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: null })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: null })];
     expect(planTemporalInsert(existing, cand({ toId: 'beta', valid: null }), WORKS_FOR)).toEqual(
       created({ flags: ['unordered'] })
     );
   });
 
   it('a left-open candidate closes nothing, is unordered against an open edge, and flags the overlap', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })];
     expect(
       planTemporalInsert(existing, cand({ toId: 'beta', valid: r(null, '2025-01-01') }), WORKS_FOR)
-    ).toEqual(created({ flags: ['overlaps', 'unordered'], overlapsWith: ['acme'] }));
+    ).toEqual(created({ flags: ['overlaps', 'unordered'], overlapsWith: ['kappa'] }));
   });
 
   it('a dated candidate against an undated different edge closes nothing and is unordered', () => {
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: null })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: null })];
     expect(
       planTemporalInsert(existing, cand({ toId: 'beta', valid: r('2026-01-01', null) }), WORKS_FOR)
     ).toEqual(created({ flags: ['unordered'] }));
@@ -802,22 +802,22 @@ describe('planTemporalInsert — rules 4–7', () => {
   });
 
   it('a rejected close leaves a concurrent pair, which the next plan treats as overlap, not error', () => {
-    // A reviewer rejected closing Acme when Beta arrived: both stay open.
+    // A reviewer rejected closing Kappa when Beta arrived: both stay open.
     const existing = [
-      edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) }),
+      edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) }),
       edge({ id: 'beta', toId: 'beta', valid: r('2023-01-01', null) }),
     ];
     const plan = planTemporalInsert(
       existing,
-      cand({ toId: 'acme', valid: r('2024-01-01', '2024-01-02') }),
+      cand({ toId: 'kappa', valid: r('2024-01-01', '2024-01-02') }),
       WORKS_FOR
     );
-    expect(plan).toEqual({ action: 'attach_evidence', edgeId: 'acme', reason: 'inside_existing' });
+    expect(plan).toEqual({ action: 'attach_evidence', edgeId: 'kappa', reason: 'inside_existing' });
   });
 
   it('exclusive none with temporal ranges neither closes, clips nor flags', () => {
     const rule: TemporalRule = { ...WORKS_FOR, exclusive: 'none' };
-    const existing = [edge({ id: 'acme', toId: 'acme', valid: r('2019-01-01', null) })];
+    const existing = [edge({ id: 'kappa', toId: 'kappa', valid: r('2019-01-01', null) })];
     expect(
       planTemporalInsert(existing, cand({ toId: 'beta', valid: r('2015-01-01', null) }), rule)
     ).toEqual(created());

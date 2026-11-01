@@ -104,7 +104,7 @@ export const ASK_REPLAY_SCENARIOS: readonly AskReplayScenario[] = Object.freeze(
     steps: [
       { toolCalls: [call('c1', 'search', { query: 'Sarah Chen', scope: 'entities', limit: null })] },
       { toolCalls: [call('c2', 'get_entity', { entity: 'ent1' })] },
-      { answer: 'Sarah Chen works for Northwind Robotics.[^ent1]' },
+      { answer: 'Sarah Chen works for Org Lambda Robotics.[^ent1]' },
     ],
     expected: { allValid: true, invalidMarkers: [] },
   },

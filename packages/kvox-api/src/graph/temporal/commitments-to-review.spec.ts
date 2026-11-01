@@ -43,8 +43,8 @@ describe('commitmentsToReview', () => {
   });
 
   it('flags open commitments where the person whose WORKS_FOR closes is owner or counterparty', () => {
-    const works = edge('w-acme', 'WORKS_FOR', 'joe', 'acme');
-    expect(commitmentsToReview(create(['w-acme']), [works], commitments)).toEqual([
+    const works = edge('w-kappa', 'WORKS_FOR', 'joe', 'kappa');
+    expect(commitmentsToReview(create(['w-kappa']), [works], commitments)).toEqual([
       'c-both',
       'c-counterparty',
       'c-owner',
@@ -52,15 +52,15 @@ describe('commitmentsToReview', () => {
   });
 
   it.each(['HAS_ROLE', 'REPORTS_TO'])('flags nothing when a %s edge closes', (type) => {
-    const closed = edge('e1', type, 'joe', 'acme');
+    const closed = edge('e1', type, 'joe', 'kappa');
     expect(commitmentsToReview(create(['e1']), [closed], commitments)).toEqual([]);
   });
 
   it('flags nothing for attach_evidence or a create that closes nothing', () => {
-    const works = edge('w-acme', 'WORKS_FOR', 'joe', 'acme');
+    const works = edge('w-kappa', 'WORKS_FOR', 'joe', 'kappa');
     const attach: TemporalPlan = {
       action: 'attach_evidence',
-      edgeId: 'w-acme',
+      edgeId: 'w-kappa',
       reason: 'restated',
     };
     expect(commitmentsToReview(attach, [works], commitments)).toEqual([]);
@@ -68,9 +68,9 @@ describe('commitmentsToReview', () => {
   });
 
   it('ignores supplied edges the plan does not close', () => {
-    const works = edge('w-acme', 'WORKS_FOR', 'joe', 'acme');
+    const works = edge('w-kappa', 'WORKS_FOR', 'joe', 'kappa');
     const unrelated = edge('w-ann', 'WORKS_FOR', 'ann', 'beta');
-    expect(commitmentsToReview(create(['w-acme']), [works, unrelated], commitments)).toEqual([
+    expect(commitmentsToReview(create(['w-kappa']), [works, unrelated], commitments)).toEqual([
       'c-both',
       'c-counterparty',
       'c-owner',
@@ -78,8 +78,8 @@ describe('commitmentsToReview', () => {
   });
 
   it('covers several closing people, deduplicated and sorted', () => {
-    const joe = edge('w-joe', 'WORKS_FOR', 'joe', 'acme');
-    const ann = edge('w-ann', 'WORKS_FOR', 'ann', 'acme');
+    const joe = edge('w-joe', 'WORKS_FOR', 'joe', 'kappa');
+    const ann = edge('w-ann', 'WORKS_FOR', 'ann', 'kappa');
     const dup = [...commitments, { id: 'c-owner', ownerPersonId: 'joe', counterpartyId: null }];
     expect(commitmentsToReview(create(['w-joe', 'w-ann']), [joe, ann], dup)).toEqual([
       'c-both',
@@ -90,7 +90,7 @@ describe('commitmentsToReview', () => {
   });
 
   it('returns nothing when no commitment names the person', () => {
-    const works = edge('w-zed', 'WORKS_FOR', 'zed', 'acme');
+    const works = edge('w-zed', 'WORKS_FOR', 'zed', 'kappa');
     expect(commitmentsToReview(create(['w-zed']), [works], commitments)).toEqual([]);
   });
 });

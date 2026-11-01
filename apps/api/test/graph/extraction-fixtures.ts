@@ -14,7 +14,7 @@ export const IDS = {
   spkA: '0e000000-0000-4000-8000-00000000000a',
   spkB: '0e000000-0000-4000-8000-00000000000b',
   sarah: '0f000000-0000-4000-8000-000000000001',
-  northwind: '0f000000-0000-4000-8000-000000000002',
+  lambda: '0f000000-0000-4000-8000-000000000002',
   pilot: '0f000000-0000-4000-8000-000000000003',
   meeting: '0f000000-0000-4000-8000-000000000009',
 };
@@ -28,13 +28,13 @@ export function known(id: string, type: string, label: string, extra: Partial<Kn
 }
 
 export const SEGMENT_TEXT = {
-  s1: "Hi everyone, I'm Sarah Chen, VP of Operations at Northwind Robotics.",
+  s1: "Hi everyone, I'm Sarah Chen, VP of Operations at Org Lambda Robotics.",
   s2: "Thanks Sarah. We decided to go with Postgres for the pilot.",
   s3: "I'll send the updated proposal by Friday.",
 };
 
 export const NOTE_BODY =
-  '# Pilot kickoff\n\nSarah Chen (Northwind Robotics) sponsors the pick-path pilot.\n\n' +
+  '# Pilot kickoff\n\nSarah Chen (Org Lambda Robotics) sponsors the pick-path pilot.\n\n' +
   '- Decision: use Postgres.\n- Sarah will send the updated proposal by Friday.';
 
 export function makeInput(overrides: Partial<ExtractionInput> = {}): ExtractionInput {
@@ -44,7 +44,7 @@ export function makeInput(overrides: Partial<ExtractionInput> = {}): ExtractionI
       title: 'Pilot kickoff',
       bodyAtVersion: NOTE_BODY,
       version: 2,
-      contextText: 'Kickoff with Northwind about the pilot.',
+      contextText: 'Kickoff with Lambda about the pilot.',
       createdAt: new Date('2026-03-04T09:00:00.000Z'),
     },
     transcript: {
@@ -66,8 +66,8 @@ export function makeInput(overrides: Partial<ExtractionInput> = {}): ExtractionI
     guidance: null,
     knownEntityCandidates: {
       pinned: [],
-      speakerPersons: [known(IDS.sarah, 'Person', 'Sarah Chen', { aliases: ['Sarah', 'S. Chen'], orgLabel: 'Northwind Robotics' })],
-      organizations: [known(IDS.northwind, 'Organization', 'Northwind Robotics', { aliases: ['NWR'] })],
+      speakerPersons: [known(IDS.sarah, 'Person', 'Sarah Chen', { aliases: ['Sarah', 'S. Chen'], orgLabel: 'Org Lambda Robotics' })],
+      organizations: [known(IDS.lambda, 'Organization', 'Org Lambda Robotics', { aliases: ['NWR'] })],
       contextPool: [known(IDS.pilot, 'Project', 'Pick-path pilot', { aliases: ['pilot'] })],
       recentlyMentioned: [],
     },
@@ -119,7 +119,7 @@ export function goodAnswer(): RawAnswer {
         validFrom: null,
         validTo: null,
         precision: 'unknown',
-        evidence: [{ source: 's1', quote: 'Northwind Robotics' }],
+        evidence: [{ source: 's1', quote: 'Org Lambda Robotics' }],
       },
     ],
     items: [

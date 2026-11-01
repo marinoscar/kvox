@@ -8,8 +8,8 @@ import { TemporalClosingStage } from './temporal-closing.stage.js';
 
 const SCHEMA = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
 const JOE = 'aaaaaaaa-0000-4000-8000-000000000001';
-const ACME = 'aaaaaaaa-0000-4000-8000-000000000002';
-const GLOBEX = 'aaaaaaaa-0000-4000-8000-000000000003';
+const KAPPA = 'aaaaaaaa-0000-4000-8000-000000000002';
+const SIGMA = 'aaaaaaaa-0000-4000-8000-000000000003';
 const JANE = 'aaaaaaaa-0000-4000-8000-000000000004';
 const WILL = 'aaaaaaaa-0000-4000-8000-000000000005';
 const EDGE = 'cccccccc-0000-4000-8000-000000000001';
@@ -17,7 +17,7 @@ const EDGE2 = 'cccccccc-0000-4000-8000-000000000002';
 const COMMIT_1 = 'dddddddd-0000-4000-8000-000000000001';
 const COMMIT_2 = 'dddddddd-0000-4000-8000-000000000002';
 
-const LABELS: Record<string, string> = { [JOE]: 'Joe', [ACME]: 'Acme', [GLOBEX]: 'Globex', [JANE]: 'Jane', [WILL]: 'Will' };
+const LABELS: Record<string, string> = { [JOE]: 'Joe', [KAPPA]: 'Kappa', [SIGMA]: 'Org Sigma', [JANE]: 'Jane', [WILL]: 'Will' };
 
 function edge(over: Partial<TemporalEdge> & { from?: string; to?: string | null; prec?: 'year' | 'month' | 'day' }): TemporalEdge {
   const { from = '2019', to = null, prec = 'year', ...rest } = over;
@@ -25,7 +25,7 @@ function edge(over: Partial<TemporalEdge> & { from?: string; to?: string | null;
     id: EDGE,
     type: 'WORKS_FOR',
     fromId: JOE,
-    toId: ACME,
+    toId: KAPPA,
     props: {},
     valid: rangeFromPrecision(from, to, prec, { openEnded: to === null }).range,
     precision: prec,
@@ -39,7 +39,7 @@ function rel(over: Record<string, unknown> = {}): Record<string, unknown> {
     ref: 'r1',
     type: 'WORKS_FOR',
     from: { ref: 'e1' },
-    to: { entityId: GLOBEX },
+    to: { entityId: SIGMA },
     props: {},
     validFrom: '2026-03-01',
     validTo: null,
@@ -86,7 +86,7 @@ describe('temporal-closing stage', () => {
   it('a promotion yields exactly one closing row, never pre-checked, with the documented copy fields', async () => {
     const engineer = edge({ type: 'HAS_ROLE', props: { title: 'Engineer' } });
     const { db, stage } = build([engineer]);
-    const r = db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: ACME }, props: { title: 'Staff Engineer' } }));
+    const r = db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: KAPPA }, props: { title: 'Staff Engineer' } }));
     db.cite(r, 'Joe was promoted to Staff Engineer in March');
     const ctx = db.ctx();
     await stage.run(ctx);
@@ -98,7 +98,7 @@ describe('temporal-closing stage', () => {
       relationId: EDGE,
       relationType: 'HAS_ROLE',
       fromLabel: 'Joe',
-      toLabel: 'Acme',
+      toLabel: 'Kappa',
       roleTitle: 'Engineer',
       previousValid: { from: '2019-01-01', to: null, precision: 'year' },
       closeAt: '2026-03-01',
@@ -116,7 +116,7 @@ describe('temporal-closing stage', () => {
 
   it('a business-unit move under the same title closes the old role and names its unit (#440)', async () => {
     const { db, stage } = build([edge({ type: 'HAS_ROLE', props: { title: 'VP', businessUnit: 'Supply Chain' } })]);
-    db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: ACME }, props: { title: 'VP', businessUnit: 'Finance' } }));
+    db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: KAPPA }, props: { title: 'VP', businessUnit: 'Finance' } }));
     await stage.run(db.ctx());
     const closings = db.closings();
     expect(closings).toHaveLength(1);
@@ -129,7 +129,7 @@ describe('temporal-closing stage', () => {
       [{ title: 'VP' }, { title: 'VP', businessUnit: 'Supply Chain' }],
     ]) {
       const { db, stage } = build([edge({ type: 'HAS_ROLE', props: stored })]);
-      db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: ACME }, props: stated }));
+      db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: KAPPA }, props: stated }));
       await stage.run(db.ctx());
       expect(db.closings()).toHaveLength(0);
     }
@@ -166,7 +166,7 @@ describe('temporal-closing stage', () => {
 
   it('a HAS_ROLE closing never lists commitments', async () => {
     const { db, stage } = build([edge({ type: 'HAS_ROLE', props: { title: 'Engineer' } })], [commitment(COMMIT_1, { ownerPersonId: JOE })]);
-    db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: ACME }, props: { title: 'Lead' } }));
+    db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: KAPPA }, props: { title: 'Lead' } }));
     await stage.run(db.ctx());
     expect(db.closings()[0].payload.affectedCommitments).toEqual([]);
     expect(db.closings()[0].flags).toEqual([]);
@@ -174,7 +174,7 @@ describe('temporal-closing stage', () => {
 
   it('a relation work-item-dedup found known opens and closes nothing', async () => {
     const { db, stage, graph } = build([edge({ from: '2019', to: '2025' })]);
-    db.add('relation', rel({ to: { entityId: ACME }, validFrom: '2020-01-01', precision: 'year', dedup: { verdict: 'known', targetRelationId: EDGE, candidateTo: null } }));
+    db.add('relation', rel({ to: { entityId: KAPPA }, validFrom: '2020-01-01', precision: 'year', dedup: { verdict: 'known', targetRelationId: EDGE, candidateTo: null } }));
     await stage.run(db.ctx());
     expect(db.closings()).toEqual([]);
     expect(graph.liveEdges).not.toHaveBeenCalled();
@@ -182,7 +182,7 @@ describe('temporal-closing stage', () => {
 
   it('a new range overlapping an accepted closed edge is flagged overlaps and still proposed', async () => {
     const { db, stage } = build([edge({ from: '2019', to: '2024' })]);
-    db.add('relation', rel({ to: { entityId: GLOBEX }, validFrom: '2023-01-01', validTo: '2025-01-01', precision: 'year' }));
+    db.add('relation', rel({ to: { entityId: SIGMA }, validFrom: '2023-01-01', validTo: '2025-01-01', precision: 'year' }));
     await stage.run(db.ctx());
     expect(db.closings()).toEqual([]);
     expect(db.byRef('r1').flags).toEqual(['overlaps']);
@@ -201,18 +201,18 @@ describe('temporal-closing stage', () => {
 
   it('HAS_ROLE at a different organization closes nothing (exclusive within one organization)', async () => {
     const { db, stage } = build([edge({ type: 'HAS_ROLE', props: { title: 'Engineer' } })]);
-    db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: GLOBEX }, props: { title: 'Advisor' } }));
+    db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: SIGMA }, props: { title: 'Advisor' } }));
     await stage.run(db.ctx());
     expect(db.closings()).toEqual([]);
   });
 
   describe('USES stage changes (#663)', () => {
-    const PRODUCT = GLOBEX; // any uuid: the stage never checks the endpoint's type
+    const PRODUCT = SIGMA; // any uuid: the stage never checks the endpoint's type
     const OTHER_PRODUCT = JANE;
     const uses = (stage: string | null, over: Partial<TemporalEdge> = {}) =>
-      edge({ type: 'USES', fromId: ACME, toId: PRODUCT, props: stage ? { stage } : {}, ...over });
+      edge({ type: 'USES', fromId: KAPPA, toId: PRODUCT, props: stage ? { stage } : {}, ...over });
     const proposed = (db: FakeProposalDb, props: Record<string, unknown>, to = PRODUCT) => {
-      db.add('entity', entityPayload('e2', 'Organization', 'Acme'), { resolution: linked(ACME) });
+      db.add('entity', entityPayload('e2', 'Organization', 'Kappa'), { resolution: linked(KAPPA) });
       return db.add('relation', rel({ type: 'USES', from: { ref: 'e2' }, to: { entityId: to }, props }));
     };
 
@@ -245,7 +245,7 @@ describe('temporal-closing stage', () => {
 
   it('an older, open fact is committed already closed at the next edge’s start (candidateTo)', async () => {
     const { db, stage } = build([edge({ from: '2019' })]);
-    db.add('relation', rel({ to: { entityId: GLOBEX }, validFrom: '2015-01-01', precision: 'year' }));
+    db.add('relation', rel({ to: { entityId: SIGMA }, validFrom: '2015-01-01', precision: 'year' }));
     await stage.run(db.ctx());
     expect(db.closings()).toEqual([]);
     expect(db.byRef('r1').payload.dedup).toEqual({ verdict: 'new', targetRelationId: null, candidateTo: '2019-01-01' });
@@ -255,7 +255,7 @@ describe('temporal-closing stage', () => {
   it('a proposal-new person has nothing to close; a non-exclusive type is never planned', async () => {
     const { db, stage, graph } = build([edge({})]);
     db.add('relation', rel({ from: { ref: 'e9' } }));
-    db.add('relation', rel({ ref: 'r2', type: 'ATTENDED', to: { entityId: ACME }, validFrom: null, precision: 'unknown' }));
+    db.add('relation', rel({ ref: 'r2', type: 'ATTENDED', to: { entityId: KAPPA }, validFrom: null, precision: 'unknown' }));
     await stage.run(db.ctx());
     expect(db.closings()).toEqual([]);
     expect(graph.liveEdges).not.toHaveBeenCalled();
@@ -278,11 +278,11 @@ describe('temporal-closing stage', () => {
   it('is idempotent: a re-run replaces its own closing rows', async () => {
     const { db, stage } = build([edge({})]);
     const r = db.add('relation', rel());
-    db.cite(r, 'Joe moved to Globex');
+    db.cite(r, 'Joe moved to Org Sigma');
     await stage.run(db.ctx());
     await stage.run(db.ctx());
     expect(db.closings()).toHaveLength(1);
-    expect(db.evidence.filter((e) => e.quote === 'Joe moved to Globex')).toHaveLength(2); // the relation's + one copy
+    expect(db.evidence.filter((e) => e.quote === 'Joe moved to Org Sigma')).toHaveLength(2); // the relation's + one copy
   });
 
   it('two new facts closing the same edge propose it once', async () => {

@@ -110,7 +110,7 @@ one product statement — the north star this whole document optimises for:
 
 A transcript remembers what was *said*. A note remembers what was *written*
 about what was said. Neither remembers, across dozens of meetings over
-months, that Acme's CIO is leaving in March, that the Q2 pilot was already
+months, that Kappa's CIO is leaving in March, that the Q2 pilot was already
 pushed once, or that Sarah owns the vendor migration and it is three weeks
 overdue. That is the specific gap this document's graph closes — nothing more
 ambitious, and (per the research below) nothing less either.
@@ -127,7 +127,7 @@ A large systematic evaluation of RAG versus GraphRAG
 scores 64.8 F1 against graph-based methods' 60–63 — **plain vector/lexical
 retrieval wins the common case outright**, and graph-based methods only pull
 ahead by 1–6% on genuinely multi-hop questions ("who took over from the
-person Acme mentioned leaving in March?"). The same study's most load-bearing
+person Kappa mentioned leaving in March?"). The same study's most load-bearing
 number for this document's design is that only 65.8%/65.5% of the entities a
 correct answer actually needed were present in the graphs those systems had
 built — **extraction is the bottleneck, not retrieval**, which is why §6
@@ -177,7 +177,7 @@ structured than open scholarly text.
 The synthesis these four sources converge on, and the one sentence this whole
 document is an elaboration of: **a knowledge graph over meeting content is
 worth building because it wins on multi-hop and temporal questions
-specifically — "what's changed since I last checked on Acme," "who inherited
+specifically — "what's changed since I last checked on Kappa," "who inherited
 this when Sarah left" — and it is worth building *carefully* because its
 single biggest failure mode, in every source that measured it, is
 under-extraction, not bad ranking.** Hybrid retrieval that never depends on
@@ -381,7 +381,7 @@ prevent (§3.5) is precisely two people creating two entities for the same
 real-world thing because nothing told them which label to reach for.
 
 **Person** — a human being. Never a role ("the CIO"), never a team, never an
-organization acting collectively. *Positive:* "Sarah Chen," "the Acme CIO
+organization acting collectively. *Positive:* "Sarah Chen," "the Kappa CIO
 whose name was given as Marcus Webb." *Negative:* "the data team at OAC" (an
 `Organization`, or a `Person` if and only if one specific human is meant);
 "whoever's on call" (no specific human named — nothing to create). *Domain:*
@@ -497,7 +497,7 @@ so the kind arrived with a `@marinoscar/kvox-db` migration
 domain. Added in ontology 1.3.0.
 
 **Claim** — a dated statement of fact about an entity that is neither a
-decision nor a commitment: "Acme's CIO is leaving in March," "the budget was
+decision nor a commitment: "Kappa's CIO is leaving in March," "the budget was
 cut 20%," "the pilot moved to Q2." Properties: `subject` (the entity it is
 about), `statement`, `occurred_at`, `superseded_by`. This is the unit of
 "what's changed" — §9's entity brief is, structurally, mostly a query over
@@ -729,7 +729,7 @@ accepting a new fact with a `valid` start date closes that person's
 still-open edge of the same type at the new fact's start: the open edge's
 `valid` upper bound is set, and the new edge records `SUPERSEDES` against it
 (§3.4). The closing is never applied silently — it surfaces in the review
-panel as its own proposal row ("Closes: Joe works for Acme, 2019 → Feb
+panel as its own proposal row ("Closes: Joe works for Kappa, 2019 → Feb
 2026") and is accepted, edited, or rejected exactly like any other proposed
 item (§8); a reviewer who rejects the close leaves both edges open, which
 the overlap tolerance below then treats as a legitimate (if unusual)
@@ -737,7 +737,7 @@ concurrent pair rather than an error state.
 
 **Out-of-order rule.** Facts are inserted by **valid** time, never by
 arrival order. A note about a 2020 meeting, reviewed and committed in 2026,
-saying "Joe works for Acme" that lands inside an already-accepted
+saying "Joe works for Kappa" that lands inside an already-accepted
 `[2019, 2026)` edge is additional evidence for that edge — it is attached to
 it (the same "known, skipped" collapsing §8 already gives a restated fact)
 and never reopens or splits it. A fact whose valid period lands **outside**
@@ -746,8 +746,8 @@ proposed as such; it is flagged `overlaps` in the review panel specifically
 when its valid range overlaps an already-accepted edge of the same type, so
 a reviewer sees the conflict rather than two silently coexisting edges with
 no signal that anything needs a look. That includes a new period of the
-**same** fact that straddles a known one (Acme `[2023, 2025)` against an
-accepted Acme `[2019, 2024)`): it is not contained, so it is a new edge —
+**same** fact that straddles a known one (Kappa `[2023, 2025)` against an
+accepted Kappa `[2019, 2024)`): it is not contained, so it is a new edge —
 ranges are never merged automatically — and it is flagged against the period
 it overlaps. An accepted edge whose `valid` is `unknown` cannot be ordered
 against a dated fact at all, so it is never closed by one; the proposal is
@@ -766,7 +766,7 @@ accurate graph with a flagged overlap in it.
 
 **Worked examples.**
 
-- *A promotion.* Joe holds `HAS_ROLE { title: "Engineer" }` at Acme,
+- *A promotion.* Joe holds `HAS_ROLE { title: "Engineer" }` at Kappa,
   `valid = [2019-01-01, )`. A meeting in March 2026 says he was promoted to
   "Staff Engineer" that month. The closing rule ends the Engineer edge at
   `2026-03-01` and proposes a new `HAS_ROLE { title: "Staff Engineer" }`
@@ -777,7 +777,7 @@ accurate graph with a flagged overlap in it.
   and both stay in the graph; the entity page reads the second as current
   and the first as history, and an "as of January 2024" query (below) reads
   the first.
-- *A company change, with its two side effects.* Joe leaves Acme for a new
+- *A company change, with its two side effects.* Joe leaves Kappa for a new
   employer: the `WORKS_FOR` edge closes, a new one opens. Two things the
   closing rule alone does not handle, both worth stating because they are
   easy to miss: any **open `Commitment`** where Joe is owner or
@@ -1229,7 +1229,7 @@ precise at this stage:
 qualitatively (strong/medium/weak) rather than as a single opaque number,
 because the signals genuinely differ in kind: **same-meeting
 attendee/speaker match** (strong — the two "Sarah"s were in the same room),
-**organization co-mention** (strong — both "Sarah"s work at Acme; for a
+**organization co-mention** (strong — both "Sarah"s work at Kappa; for a
 `Product` the organization is its vendor, so `OFFERED_BY` counts like
 `WORKS_FOR` and `HAS_ROLE`, and a mention's stated `vendorName` counts as
 the vendor named in the proposal even with no Organization row — "PX",
@@ -1321,7 +1321,7 @@ two unrelated rows that silently disagree.
 **Closing a temporal edge is a proposal row, not a side effect.** When
 §5.4's closing rule fires — a new fact with a `valid` start closing an
 existing exclusive edge — the close is itself a `kg_proposal_items` row
-("Closes: Joe works for Acme, 2019 → Feb 2026") that goes through the same
+("Closes: Joe works for Kappa, 2019 → Feb 2026") that goes through the same
 `pending | accept | edit | reject | merge_into` decision as everything else
 in §8; nothing closes an edge outside a proposal a reviewer acts on. An
 overlap between two edges of the same normally-exclusive type is a warning
@@ -1409,7 +1409,7 @@ additional support for a fact the graph already has, not a second fact.
 
 **A `known` relation fills what it adds (#444).** A restatement can carry
 *more* than the stored row: the graph holds `Sarah —HAS_ROLE {title: VP}→
-Acme` and a later note says she is VP of Consulting there. #440's identity
+Kappa` and a later note says she is VP of Consulting there. #440's identity
 rule calls that `known` (an absent `businessUnit` matches anything), so
 before #444 the commit appended the citation and silently dropped the unit.
 Now the commit also **fills**, through `GraphWriteService.fillRelationProps`
@@ -2822,7 +2822,7 @@ vocabulary counterpart, and §18.2's generators read that field directly.
 | Entity type | `rdfs:Class`, aligned via `alignment` | `schema:Person`, `schema:Organization` |
 | Built-in attribute | `owl:DatatypeProperty`, with `rdfs:domain`/`rdfs:range` | Aligned where a standard property exists — `schema:jobTitle`, `schema:email` — and left as a `kv:`-namespaced property (§18.2) where none does |
 | Relation type | `owl:ObjectProperty`, also `owl:SymmetricProperty` when the type declares `symmetric` (#383 — `SPOUSE_OF`, `FRIEND_OF`) | `schema:worksFor` for `WORKS_FOR`, `schema:spouse` for `SPOUSE_OF`, `foaf:knows` for `FRIEND_OF`, and so on |
-| A temporal edge (§5.4) | A per-edge reified node carrying `prov:startedAtTime`/`prov:endedAtTime`, or RDF-star (`<< :joe :worksFor :acme >> :validFrom "2019"`) where the consumer supports it | The choice is the consumer's, not the exporter's — both forms are emitted from the identical `valid`/`valid_precision` pair (§5.4, §10), never two separately maintained representations |
+| A temporal edge (§5.4) | A per-edge reified node carrying `prov:startedAtTime`/`prov:endedAtTime`, or RDF-star (`<< :joe :worksFor :kappa >> :validFrom "2019"`) where the consumer supports it | The choice is the consumer's, not the exporter's — both forms are emitted from the identical `valid`/`valid_precision` pair (§5.4, §10), never two separately maintained representations |
 | Evidence (§5.3) | `prov:wasDerivedFrom` a segment or note-span IRI, plus an `oa:Annotation` carrying an `oa:TextPositionSelector` (the `char_start`/`char_end` range) and an `oa:FragmentSelector` (`t=102,118`, the `start_ms`/`end_ms` range) | The no-orphans invariant (§3.3) restated as two standard selector shapes rather than kvox-specific columns |
 | Review status, confidence, `ontology_version` | `kv:` annotation properties | No standard vocabulary states an opinion about review workflow or a source ontology's version, so these stay in kvox's own namespace rather than being force-fit onto a property that means something narrower |
 | User-defined attribute (§17.3) | `kv:attr/<def-id>`, `rdfs:label` set to the definition's own `label` | The definition id, not the label, is the stable part — identical to how `props` itself is keyed (§17.3) |
@@ -4364,8 +4364,8 @@ is the part that keeps this inside the job's profile. Measured at 20,000 nodes a
 nodes: 7.3 s and 0.4 s; `packages/kvox-api/test/graph/compute-layout.perf.ts`, `PERF_NODES`),
 against `maxRuntimeMs` of 15 minutes. The endpoint's `themes` are the snapshot's clusters
 (not `Unconnected`, at most 8) and `connectors` its top betweenness entities (at most 8)
-with the live label of each cluster they join and a sentence ("Joe connects the Acme
-group and the Globex group."); a raw score is in the response for ordering only and the
+with the live label of each cluster they join and a sentence ("Joe connects the Kappa
+group and the Org Sigma group."); a raw score is in the response for ordering only and the
 UI never shows it. Both carry `status`, `pending`, `stale`, `tooLarge` and `computedAt`
 exactly like the overview; the request never queues a layout.
 

@@ -6,7 +6,7 @@ import { CommitRowError, isSerializationFailure, ProposalCommitService } from '.
 const schema = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
 const OWNER = '0a000000-0000-4000-8000-000000000001';
 const P = '0b000000-0000-4000-8000-000000000001';
-const ACME = '0f000000-0000-4000-8000-000000000002';
+const KAPPA = '0f000000-0000-4000-8000-000000000002';
 const OLD = '0f000000-0000-4000-8000-000000000009';
 const X1 = '0f000000-0000-4000-8000-000000000011';
 const X2 = '0f000000-0000-4000-8000-000000000012';
@@ -21,10 +21,10 @@ function items(): Row[] {
   return [
     // Deliberately out of commit order: the commit must still go entities → relations → items → closings.
     { ...base, id: id(5), kind: 'closing', decision: 'accept', sortOrder: 0, payload: { relationId: OLD, relationType: 'WORKS_FOR', closeAt: '2026-03-01', precision: 'month', closedByRef: 'r1' } },
-    { ...base, id: id(4), kind: 'item', decision: 'accept', sortOrder: 1, payload: { ref: 'i1', kind: 'claim', title: 'Joined', statement: 'Sarah joined Acme.', subject: { ref: 'e1' }, owner: null, counterparty: null, meeting: null, status: null, occurredAt: null, dueAt: null, sensitivity: null, statementHash: 'x', props: {}, ...temporalNone } },
+    { ...base, id: id(4), kind: 'item', decision: 'accept', sortOrder: 1, payload: { ref: 'i1', kind: 'claim', title: 'Joined', statement: 'Sarah joined Kappa.', subject: { ref: 'e1' }, owner: null, counterparty: null, meeting: null, status: null, occurredAt: null, dueAt: null, sensitivity: null, statementHash: 'x', props: {}, ...temporalNone } },
     { ...base, id: id(3), kind: 'relation', decision: 'accept', sortOrder: 2, payload: { ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { ref: 'e2' }, props: {}, validFrom: '2026-03-01', validTo: null, precision: 'month' } },
     { ...base, id: id(1), kind: 'entity', decision: 'accept', sortOrder: 3, payload: { ref: 'e1', type: 'Person', label: 'Sarah Chen', aliases: ['Sarah'], props: {}, occurredAt: null } },
-    { ...base, id: id(2), kind: 'entity', decision: 'accept', sortOrder: 4, payload: { ref: 'e2', type: 'Organization', label: 'ACME Inc', aliases: [], props: {}, occurredAt: null }, resolution: { ref: ACME, score: 0.95, source: 'alias', candidates: [], adjudication: null } },
+    { ...base, id: id(2), kind: 'entity', decision: 'accept', sortOrder: 4, payload: { ref: 'e2', type: 'Organization', label: 'KAPPA Inc', aliases: [], props: {}, occurredAt: null }, resolution: { ref: KAPPA, score: 0.95, source: 'alias', candidates: [], adjudication: null } },
     { ...base, id: id(6), kind: 'entity', decision: 'pending', sortOrder: 5, payload: { ref: 'e3', type: 'Project', label: 'Pilot' } },
   ];
 }
@@ -32,7 +32,7 @@ function items(): Row[] {
 function setup(rows: Row[], opts: { kind?: string; liveEntities?: Row[] } = {}) {
   const calls: string[] = [];
   const cite = { noteId: 'n', noteVersion: 1, charStart: 0, charEnd: 2, quote: 'ab', transcriptId: null, segmentId: null, segmentRev: null, startMs: null, endMs: null, importObjectId: null, sourceIri: null };
-  const live = opts.liveEntities ?? [{ id: ACME, type: 'Organization' }];
+  const live = opts.liveEntities ?? [{ id: KAPPA, type: 'Organization' }];
   const tx: Row = {
     $queryRaw: jest.fn(async (strings: TemplateStringsArray) => {
       const sql = strings.join('?');
@@ -98,12 +98,12 @@ describe('ProposalCommitService', () => {
 
     expect(calls).toEqual([
       'entity:Sarah Chen',
-      `evidence:entity:${ACME}`,
+      `evidence:entity:${KAPPA}`,
       'relation:WORKS_FOR',
       'item:claim',
       `close:${OLD}`,
     ]);
-    expect(aliases.recordLink).toHaveBeenCalledWith(tx, ACME, 'ACME Inc', 'extraction');
+    expect(aliases.recordLink).toHaveBeenCalledWith(tx, KAPPA, 'KAPPA Inc', 'extraction');
     expect(outcome.result).toEqual(
       expect.objectContaining({
         created: { entities: 1, relations: 1, items: 1 },
@@ -158,7 +158,7 @@ describe('ProposalCommitService', () => {
     const base = { kind: 'entity', origin: 'ai', editedPayload: null, flags: [], distinctFrom: [], committedRefId: null };
     const rows = [
       { ...base, id: id(1), decision: 'merge_into', mergeIntoId: X2, sortOrder: 0, payload: { ref: 'x1', type: 'Person', label: 'A', existingEntityId: X1 }, resolution: { ref: X2 } },
-      { ...base, id: id(2), decision: 'accept', mergeIntoId: null, sortOrder: 1, payload: { ref: 'x2', type: 'Organization', label: 'B', existingEntityId: ACME }, resolution: { ref: OLD } },
+      { ...base, id: id(2), decision: 'accept', mergeIntoId: null, sortOrder: 1, payload: { ref: 'x2', type: 'Organization', label: 'B', existingEntityId: KAPPA }, resolution: { ref: OLD } },
       { ...base, id: id(3), decision: 'reject', mergeIntoId: null, sortOrder: 2, payload: { ref: 'x3', type: 'Person', label: 'C', existingEntityId: X1 }, resolution: { ref: null, candidates: [{ entityId: X2 }] } },
     ];
     const { service, tx, merges, distinct } = setup(rows, {
@@ -166,14 +166,14 @@ describe('ProposalCommitService', () => {
       liveEntities: [
         { id: X1, type: 'Person' },
         { id: X2, type: 'Person' },
-        { id: ACME, type: 'Organization' },
+        { id: KAPPA, type: 'Organization' },
         { id: OLD, type: 'Organization' },
       ],
     });
     const outcome = await service.commitIn(tx as never, OWNER, P, schema);
     expect(merges.merge.mock.calls.map((c) => [c[0].mergedId, c[0].survivorId, c[0].source])).toEqual([
       [X1, X2, 'resolution_proposal'],
-      [ACME, OLD, 'resolution_proposal'],
+      [KAPPA, OLD, 'resolution_proposal'],
     ]);
     expect(merges.merge.mock.calls[0][1]).toBe(tx);
     expect(distinct.record).toHaveBeenCalledWith(tx, OWNER, X1, X2);
@@ -197,7 +197,7 @@ describe('ProposalCommitService', () => {
             ref: 'r9',
             type: 'HAS_ROLE',
             from: { entityId: SARAH },
-            to: { entityId: ACME },
+            to: { entityId: KAPPA },
             props,
             ...temporalNone,
             dedup: { verdict: 'known', targetRelationId: LIVE_ROLE, candidateTo: null },
@@ -205,7 +205,7 @@ describe('ProposalCommitService', () => {
         },
       ];
     };
-    const liveEntities = [{ id: ACME, type: 'Organization' }, { id: SARAH, type: 'Person' }];
+    const liveEntities = [{ id: KAPPA, type: 'Organization' }, { id: SARAH, type: 'Person' }];
 
     it('fills a prop the stored edge lacks, and logs exactly that fill', async () => {
       const { service, tx, write, calls } = setup(known({ title: 'VP', businessUnit: 'Consulting' }), { liveEntities });

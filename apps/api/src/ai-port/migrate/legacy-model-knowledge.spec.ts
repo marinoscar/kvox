@@ -50,7 +50,7 @@ describe('legacy model knowledge', () => {
 
     it('matches on a hyphen boundary only, and returns null for an unknown id', () => {
       expect(deriveOpenAiModelDescriptor('gpt-4.10-turbo')).toBeNull();
-      expect(deriveOpenAiModelDescriptor('acme-private-1')).toBeNull();
+      expect(deriveOpenAiModelDescriptor('kappa-private-1')).toBeNull();
       expect(deriveOpenAiModelDescriptor('  ')).toBeNull();
     });
   });
@@ -62,7 +62,7 @@ describe('legacy model knowledge', () => {
     });
 
     it('falls back to the conservative floor for an unplaceable id, with no capability claimed', () => {
-      expect(resolveAllowedModel({ id: 'acme-private-1' }, KNOWLEDGE)).toMatchObject({
+      expect(resolveAllowedModel({ id: 'kappa-private-1' }, KNOWLEDGE)).toMatchObject({
         contextWindowTokens: 128_000,
         maxOutputTokens: 16_384,
         structuredOutput: false,
@@ -73,11 +73,11 @@ describe('legacy model knowledge', () => {
     });
 
     it('is null when nothing can answer', () => {
-      expect(resolveAllowedModel({ id: 'acme-private-1' }, { catalogue: [] })).toBeNull();
+      expect(resolveAllowedModel({ id: 'kappa-private-1' }, { catalogue: [] })).toBeNull();
     });
 
     it('reports the weakest source of the two numbers', () => {
-      expect(resolveAllowedModel({ id: 'acme', contextWindowTokens: 64_000 }, KNOWLEDGE)).toMatchObject({
+      expect(resolveAllowedModel({ id: 'kappa', contextWindowTokens: 64_000 }, KNOWLEDGE)).toMatchObject({
         contextWindowTokens: 64_000,
         maxOutputTokens: 16_384,
         source: 'default',
