@@ -122,7 +122,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
         startMs: 0,
         endMs: 1000,
         ordinal: 1000,
-        text: 'Sarah joined Acme in 2019',
+        text: 'Sarah joined Kappa in 2019',
         words: [],
       },
     });
@@ -133,7 +133,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
     ({ noteId, noteVersion, charStart: 0, charEnd: 4, quote: 'Body' }) as EvidenceInput;
 
   const segmentEvidence = (transcriptId: string, segmentId: string): EvidenceInput =>
-    ({ transcriptId, segmentId, quote: 'Sarah joined Acme' }) as EvidenceInput;
+    ({ transcriptId, segmentId, quote: 'Sarah joined Kappa' }) as EvidenceInput;
 
   async function rawEntity(ownerId: string, reviewStatus: string, label = 'Sarah Chen') {
     const id = randomUUID();
@@ -211,7 +211,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
       const org = await prisma.$transaction((tx) =>
         write.createEntity(
           tx,
-          { ownerId: owner.id, type: 'Organization', label: 'Acme', reviewStatus: 'accepted', labelSource: 'user', evidence: [noteEvidence(note.id)] },
+          { ownerId: owner.id, type: 'Organization', label: 'Kappa', reviewStatus: 'accepted', labelSource: 'user', evidence: [noteEvidence(note.id)] },
           schema,
         ),
       );
@@ -316,7 +316,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
       const org = await prisma.$transaction((tx) =>
         write.createEntity(
           tx,
-          { ownerId: owner.id, type: 'Organization', label: 'Acme', reviewStatus: 'accepted', labelSource: 'user', evidence: [noteEvidence(note.id)] },
+          { ownerId: owner.id, type: 'Organization', label: 'Kappa', reviewStatus: 'accepted', labelSource: 'user', evidence: [noteEvidence(note.id)] },
           schema,
         ),
       );

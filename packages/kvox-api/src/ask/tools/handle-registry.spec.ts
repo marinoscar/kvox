@@ -21,9 +21,9 @@ describe('HandleRegistry', () => {
 
   it('returns the same handle for the same (kind, id)', () => {
     const r = new HandleRegistry();
-    const first = r.register({ kind: 'ent', id: A, label: 'Acme' });
+    const first = r.register({ kind: 'ent', id: A, label: 'Kappa' });
     expect(r.register({ kind: 'ent', id: A, label: 'Other label' })).toBe(first);
-    expect(r.resolve(first)?.label).toBe('Acme');
+    expect(r.resolve(first)?.label).toBe('Kappa');
     expect(r.issued().size).toBe(1);
   });
 
@@ -55,27 +55,27 @@ describe('HandleRegistry', () => {
 
   it('returns copies, so callers cannot mutate the registry', () => {
     const r = new HandleRegistry();
-    r.register({ kind: 'ent', id: A, label: 'Acme' });
+    r.register({ kind: 'ent', id: A, label: 'Kappa' });
     r.resolve('ent1')!.label = 'Changed';
     (r.issued().get('ent1') as { label?: string }).label = 'Changed';
-    expect(r.resolve('ent1')?.label).toBe('Acme');
+    expect(r.resolve('ent1')?.label).toBe('Kappa');
   });
 
   it('serialises to a plain record and round-trips, continuing the counters', () => {
     const r = new HandleRegistry();
-    r.register({ kind: 'ent', id: A, label: 'Acme' });
+    r.register({ kind: 'ent', id: A, label: 'Kappa' });
     r.register({ kind: 'ent', id: B });
     r.register({ kind: 'doc', id: A, documentKind: 'note', startMs: null });
     const json = r.toJSON();
     expect(json).toEqual({
-      ent1: { kind: 'ent', id: A, label: 'Acme' },
+      ent1: { kind: 'ent', id: A, label: 'Kappa' },
       ent2: { kind: 'ent', id: B },
       doc1: { kind: 'doc', id: A, documentKind: 'note', startMs: null },
     });
     expect(JSON.parse(JSON.stringify(r))).toEqual(json);
 
     const back = HandleRegistry.fromJSON(json);
-    expect(back.resolve('ent1')?.label).toBe('Acme');
+    expect(back.resolve('ent1')?.label).toBe('Kappa');
     expect(back.register({ kind: 'ent', id: A })).toBe('ent1');
     expect(back.register({ kind: 'ent', id: '00000000-0000-4000-8000-000000000003' })).toBe('ent3');
   });

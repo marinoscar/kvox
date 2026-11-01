@@ -14,7 +14,7 @@ import {
 } from '../../src/graph/ui/components/explorer/fullGraphModel.js';
 import { createExplorerState, mergeSlice } from '../../src/graph/ui/components/explorer/explorerModel.js';
 import { FULL_VIEW_LABEL_THRESHOLD, DEFAULT_BUDGETS, COMPACT_BUDGETS, fullViewBudgets } from '../../src/graph/ui/components/explorer/shell/explorerBudgets.js';
-import { ACME_ID, ANA_ID, JOE_ID, LONE_ID, gid, overviewEdges, overviewNodes } from './graphData.js';
+import { KAPPA_ID, ANA_ID, JOE_ID, LONE_ID, gid, overviewEdges, overviewNodes } from './graphData.js';
 
 /** The full view's pure model (#768): no React, no sigma. */
 describe('buildFullGraphState', () => {
@@ -71,7 +71,7 @@ describe('buildFullGraphState', () => {
     const state = buildFullGraphState({ nodes: overviewNodes, edges: [] });
     const forced = state.graph.filterNodes((_id, attrs) => attrs.forceLabel === true);
     expect(forced.length).toBe(Math.min(FULL_VIEW_FORCED_LABELS, overviewNodes.length));
-    expect(topDegreeIds(overviewNodes, 2)).toEqual(new Set([ACME_ID, JOE_ID]));
+    expect(topDegreeIds(overviewNodes, 2)).toEqual(new Set([KAPPA_ID, JOE_ID]));
   });
 
   it('sizes by degree, clamped', () => {
@@ -85,7 +85,7 @@ describe('fullViewListRows', () => {
   it('lists the best connected first, at most the limit', () => {
     const state = buildFullGraphState({ nodes: overviewNodes, edges: [] });
     const rows = fullViewListRows(state, 3);
-    expect(rows.map((r) => r.id)).toEqual([ACME_ID, JOE_ID, rows[2].id]);
+    expect(rows.map((r) => r.id)).toEqual([JOE_ID, KAPPA_ID, rows[2].id]);
     expect(rows).toHaveLength(3);
     expect(fullViewListRows(state).at(-1)!.id).toBe(LONE_ID);
   });
@@ -109,15 +109,15 @@ describe('timeHiddenIds', () => {
       nodes: [
         { id: JOE_ID, nodeKind: 'entity', type: 'Person', label: 'Joe', depth: 0, degree: 2, status: null, occurredAt: null },
         { id: ANA_ID, nodeKind: 'entity', type: 'Person', label: 'Ana', depth: 1, degree: 1, status: null, occurredAt: null },
-        { id: ACME_ID, nodeKind: 'entity', type: 'Organization', label: 'Acme', depth: 1, degree: 1, status: null, occurredAt: null },
+        { id: KAPPA_ID, nodeKind: 'entity', type: 'Organization', label: 'Kappa', depth: 1, degree: 1, status: null, occurredAt: null },
       ],
       edges: [],
       truncated: false,
       cap: 300,
     });
-    const ids = [JOE_ID, ANA_ID, ACME_ID];
+    const ids = [JOE_ID, ANA_ID, KAPPA_ID];
     expect(timeHiddenIds(state, ids, null, new Set()).size).toBe(0);
-    expect(timeHiddenIds(state, ids, new Set([ANA_ID]), new Set([JOE_ID]))).toEqual(new Set([ACME_ID]));
+    expect(timeHiddenIds(state, ids, new Set([ANA_ID]), new Set([JOE_ID]))).toEqual(new Set([KAPPA_ID]));
   });
 });
 

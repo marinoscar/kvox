@@ -19,7 +19,7 @@ import {
   topTypes,
 } from '../../src/graph/ui/components/overview/overviewModel.js';
 import type { GraphOverview } from '../../src/graph/headless/clients/graph.js';
-import { ACME_ID, BEACON_ID, INITECH_ID, JOE_ID, gid, overviewFixture } from './graphData.js';
+import { KAPPA_ID, BEACON_ID, OMEGA_ID, JOE_ID, gid, overviewFixture } from './graphData.js';
 
 /**
  * The overview's pure model (#375). Everything the page draws is decided here,
@@ -59,14 +59,14 @@ describe('buildClusterGraph', () => {
     const o = overviewFixture();
     const graph = buildClusterGraph(o, light);
     expect(graph.order).toBe(o.clusters.length);
-    const acme = graph.getNodeAttributes(clusterNodeKey(0));
-    expect(acme).toMatchObject({ x: -385, y: 125, label: 'Acme Corp (6)', clusterId: 0, color: clusterColor(0, light) });
+    const kappa = graph.getNodeAttributes(clusterNodeKey(0));
+    expect(kappa).toMatchObject({ x: -385, y: 125, label: 'Org Kappa (6)', clusterId: 0, color: clusterColor(0, light) });
     // The largest radius gets the largest size; smaller ones scale down.
-    expect(acme.size).toBe(30);
-    expect(graph.getNodeAttribute(clusterNodeKey(-1), 'size')).toBeLessThan(acme.size);
+    expect(kappa.size).toBe(30);
+    expect(graph.getNodeAttribute(clusterNodeKey(-1), 'size')).toBeLessThan(kappa.size);
     expect(graph.getNodeAttribute(clusterNodeKey(-1), 'color')).toBe(light.palette.text.disabled);
     // No `type` attribute on a node: sigma would read it as a program name.
-    expect(acme).not.toHaveProperty('type');
+    expect(kappa).not.toHaveProperty('type');
   });
 
   it('adds one undirected line per cluster edge, width growing with log(weight)', () => {
@@ -131,10 +131,10 @@ describe('applyClusterFocus', () => {
 
 describe('clusterSeedIds + clusterHandoff', () => {
   it('orders members by degree, then label', () => {
-    // Acme and Joe both have degree 5: label breaks the tie.
+    // Joe and Kappa both have degree 5: label breaks the tie.
     expect(clusterSeedIds(overviewFixture(), 0)).toEqual([
-      ACME_ID,
       JOE_ID,
+      KAPPA_ID,
       gid(6), // Project Atlas (3)
       gid(3), // Ben Okafor (2)
       gid(7), // Q3 planning (2)
@@ -162,14 +162,14 @@ describe('clusterSeedIds + clusterHandoff', () => {
   it('falls back to the member sample when the truncated nodes position none of the cluster', () => {
     const o = overviewFixture();
     const trimmed: GraphOverview = { ...o, nodes: o.nodes.filter((n) => n.clusterId !== 2), nodesTruncated: true };
-    expect(clusterSeedIds(trimmed, 2)).toEqual([INITECH_ID, BEACON_ID]);
+    expect(clusterSeedIds(trimmed, 2)).toEqual([OMEGA_ID, BEACON_ID]);
   });
 
   it('hands over the seeds at their overview positions, with the cluster label as title', () => {
     const handoff = clusterHandoff(overviewFixture(), 1);
-    expect(handoff.title).toBe('Globex');
+    expect(handoff.title).toBe('Org Sigma');
     expect(handoff.seedIds).toHaveLength(4);
-    expect(handoff.nodes).toContainEqual({ id: gid(5), label: 'Globex', type: 'Organization', x: 380, y: -150, degree: 3 });
+    expect(handoff.nodes).toContainEqual({ id: gid(5), label: 'Org Sigma', type: 'Organization', x: 380, y: -150, degree: 3 });
     expect(handoff.nodes.map((n) => n.id)).toEqual(handoff.seedIds);
   });
 
@@ -199,16 +199,16 @@ describe('toClusterList + keyboard order', () => {
       ],
     });
     const list = toClusterList(o);
-    expect(list.map((row) => row.label)).toEqual(['Big', 'Acme Corp', 'Globex', 'Tie', 'Cluster 3', 'Unconnected']);
+    expect(list.map((row) => row.label)).toEqual(['Big', 'Org Kappa', 'Org Sigma', 'Tie', 'Cluster 3', 'Unconnected']);
     expect(clusterKeyboardOrder(o)).toEqual([3, 0, 1, 4, 2, -1]);
   });
 
   it('carries top types, sample labels and member links', () => {
-    const [acme] = toClusterList(overviewFixture());
-    expect(acme.topTypes).toEqual(['Person', 'Meeting', 'Organization']);
-    expect(acme.sample[0]).toBe('Acme Corp');
-    expect(acme.members[1]).toEqual({ id: JOE_ID, label: 'Joe Rivera', type: 'Person' });
-    expect(acme.labelEntityId).toBe(ACME_ID);
+    const [kappa] = toClusterList(overviewFixture());
+    expect(kappa.topTypes).toEqual(['Person', 'Meeting', 'Organization']);
+    expect(kappa.sample[0]).toBe('Joe Rivera');
+    expect(kappa.members[0]).toEqual({ id: JOE_ID, label: 'Joe Rivera', type: 'Person' });
+    expect(kappa.labelEntityId).toBe(KAPPA_ID);
   });
 
   it('topTypes drops empty counts', () => {
@@ -218,7 +218,7 @@ describe('toClusterList + keyboard order', () => {
 
 describe('small helpers', () => {
   it('announces and counts', () => {
-    expect(clusterAnnouncement({ label: 'Acme', size: 42 })).toBe('Cluster Acme, 42 entities');
+    expect(clusterAnnouncement({ label: 'Kappa', size: 42 })).toBe('Cluster Kappa, 42 entities');
     expect(entityCount(1)).toBe('1 entity');
     expect(entityCount(6200)).toBe('6,200 entities');
   });

@@ -21,7 +21,7 @@
 // re-derived here — `KvoxStreamCursor`, `toDeltaFrame` and `parseLastEventId`
 // are IMPORTED, so the two streams cannot drift apart.
 //
-// `step` is new: one frame per recorded `tool_calls` entry ("Looked up Acme…").
+// `step` is new: one frame per recorded `tool_calls` entry ("Looked up Kappa…").
 // It is ADDITIVE in the strict sense — a client that ignores unknown events
 // loses no answer text — and its `id:` is the CURRENT offset, which it never
 // advances. Advancing it would break "id = content offset" and make a resume

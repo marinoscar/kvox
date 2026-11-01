@@ -181,8 +181,8 @@ describe('the session of a request that carries tools', () => {
   it('sends a lone user message as it is, with no transcript framing', async () => {
     const h = setup();
     h.mock.queue({ kind: 'answer', text: 'ok' });
-    await step(h.adapter, [user('Who is Acme?')]);
-    expect(h.mock.sessions()[0].prompts[0].prompt).toBe('Who is Acme?');
+    await step(h.adapter, [user('Who is Kappa?')]);
+    expect(h.mock.sessions()[0].prompts[0].prompt).toBe('Who is Kappa?');
   });
 
   it('refuses a hosted tool and structured output together with tools, before a session', async () => {
@@ -207,16 +207,16 @@ describe('the session of a request that carries tools', () => {
 describe('one tool call, its output, then the answer', () => {
   it('ends the first step with the call, holds the session, and finishes the answer on the same session', async () => {
     const h = setup();
-    h.mock.queue({ kind: 'toolCalls', calls: [{ name: 'lookup', arguments: { query: 'acme' }, toolCallId: 'call-1' }], usage: { inputTokens: 30, outputTokens: 5 } });
-    h.mock.queue({ kind: 'answer', text: 'Acme is a client.', usage: { inputTokens: 50, outputTokens: 7 } });
+    h.mock.queue({ kind: 'toolCalls', calls: [{ name: 'lookup', arguments: { query: 'kappa' }, toolCallId: 'call-1' }], usage: { inputTokens: 30, outputTokens: 5 } });
+    h.mock.queue({ kind: 'answer', text: 'Kappa is a client.', usage: { inputTokens: 50, outputTokens: 7 } });
 
     // Step 1: the model calls the tool.
-    const first = await step(h.adapter, [user('Who is Acme?')]);
+    const first = await step(h.adapter, [user('Who is Kappa?')]);
 
     expect(first.map((event) => event.type)).toEqual(['response.created', 'output_item.done', 'response.completed']);
     expect(first[1]).toEqual({
       type: 'output_item.done',
-      item: { type: 'function_call', callId: 'call-1', name: 'lookup', arguments: '{"query":"acme"}' },
+      item: { type: 'function_call', callId: 'call-1', name: 'lookup', arguments: '{"query":"kappa"}' },
     });
     const response1 = completedOf(first);
     expect(response1).toMatchObject({
@@ -233,16 +233,16 @@ describe('one tool call, its output, then the answer', () => {
 
     // Step 2: the loop's history plus the tool output.
     const second = await step(h.adapter, [
-      user('Who is Acme?'),
-      call('call-1', 'lookup', { query: 'acme' }),
-      output('call-1', '{"hits":["Acme Corp"]}'),
+      user('Who is Kappa?'),
+      call('call-1', 'lookup', { query: 'kappa' }),
+      output('call-1', '{"hits":["Org Kappa"]}'),
     ]);
 
-    expect(textOf(second)).toBe('Acme is a client.');
+    expect(textOf(second)).toBe('Kappa is a client.');
     expect(completedOf(second)).toMatchObject({
       finishReason: 'stop',
-      outputText: 'Acme is a client.',
-      output: [{ type: 'message', text: 'Acme is a client.' }],
+      outputText: 'Kappa is a client.',
+      output: [{ type: 'message', text: 'Kappa is a client.' }],
       usage: { inputTokens: 50, outputTokens: 7 },
     });
     // The very same session served both steps; its handler got the loop's output; it is gone.
@@ -250,7 +250,7 @@ describe('one tool call, its output, then the answer', () => {
     expect(sessions).toHaveLength(1);
     expect(sessions[0].prompts).toHaveLength(1);
     expect(sessions[0].toolRuns).toEqual([
-      { toolCallId: 'call-1', name: 'lookup', arguments: { query: 'acme' }, output: '{"hits":["Acme Corp"]}' },
+      { toolCallId: 'call-1', name: 'lookup', arguments: { query: 'kappa' }, output: '{"hits":["Org Kappa"]}' },
     ]);
     expect(sessions[0].continuations).toBe(1);
     expectNoLeak(h);
@@ -315,7 +315,7 @@ describe('one tool call, its output, then the answer', () => {
 
 describe('parallel tool calls', () => {
   const parallel = [
-    { name: 'lookup', arguments: { query: 'acme' }, toolCallId: 'p1' },
+    { name: 'lookup', arguments: { query: 'kappa' }, toolCallId: 'p1' },
     { name: 'count', arguments: { of: 'deals' }, toolCallId: 'p2' },
   ];
 
@@ -329,7 +329,7 @@ describe('parallel tool calls', () => {
       const first = await step(h.adapter, [user('Q')]);
       const calls = completedOf(first).output.filter((item) => item.type === 'function_call');
       expect(calls).toEqual([
-        { type: 'function_call', callId: 'p1', name: 'lookup', arguments: '{"query":"acme"}' },
+        { type: 'function_call', callId: 'p1', name: 'lookup', arguments: '{"query":"kappa"}' },
         { type: 'function_call', callId: 'p2', name: 'count', arguments: '{"of":"deals"}' },
       ]);
       expect(first.filter((event) => event.type === 'output_item.done')).toHaveLength(2);
@@ -338,7 +338,7 @@ describe('parallel tool calls', () => {
 
       const second = await step(h.adapter, [
         user('Q'),
-        call('p1', 'lookup', { query: 'acme' }),
+        call('p1', 'lookup', { query: 'kappa' }),
         call('p2', 'count', { of: 'deals' }),
         output('p1', 'one'),
         output('p2', 'two'),
@@ -357,7 +357,7 @@ describe('parallel tool calls', () => {
     h.mock.queue({ kind: 'answer', text: 'From the transcript.' });
 
     await step(h.adapter, [user('Q')]);
-    const second = await step(h.adapter, [user('Q'), call('p1', 'lookup', { query: 'acme' }), call('p2', 'count', { of: 'deals' }), output('p1', 'one')]);
+    const second = await step(h.adapter, [user('Q'), call('p1', 'lookup', { query: 'kappa' }), call('p2', 'count', { of: 'deals' }), output('p1', 'one')]);
 
     expect(textOf(second)).toBe('From the transcript.');
     const sessions = h.mock.sessions();
@@ -371,14 +371,14 @@ describe('parallel tool calls', () => {
 describe('several tool steps in one turn', () => {
   it('keeps one session across tool, tool, answer, and deletes it only at the end', async () => {
     const h = setup();
-    h.mock.queue({ kind: 'toolCalls', calls: [{ name: 'lookup', arguments: { query: 'acme' }, toolCallId: 's1' }], usage: { inputTokens: 10, outputTokens: 1 } });
+    h.mock.queue({ kind: 'toolCalls', calls: [{ name: 'lookup', arguments: { query: 'kappa' }, toolCallId: 's1' }], usage: { inputTokens: 10, outputTokens: 1 } });
     h.mock.queue({ kind: 'toolCalls', text: 'Now the count. ', calls: [{ name: 'count', arguments: { of: 'deals' }, toolCallId: 's2' }], usage: { inputTokens: 20, outputTokens: 2 } });
-    h.mock.queue({ kind: 'answer', text: 'Acme has 3 deals.', usage: { inputTokens: 30, outputTokens: 4 } });
+    h.mock.queue({ kind: 'answer', text: 'Kappa has 3 deals.', usage: { inputTokens: 30, outputTokens: 4 } });
 
     const one = await step(h.adapter, [user('How many deals?')]);
     expect(completedOf(one)).toMatchObject({ finishReason: 'tool_calls', usage: { inputTokens: 10, outputTokens: 1 } });
 
-    const afterOne: AiInputItem[] = [user('How many deals?'), call('s1', 'lookup', { query: 'acme' }), output('s1', 'acme-id')];
+    const afterOne: AiInputItem[] = [user('How many deals?'), call('s1', 'lookup', { query: 'kappa' }), output('s1', 'kappa-id')];
     const two = await step(h.adapter, afterOne);
     expect(textOf(two)).toBe('Now the count. ');
     expect(completedOf(two)).toMatchObject({
@@ -397,12 +397,12 @@ describe('several tool steps in one turn', () => {
       call('s2', 'count', { of: 'deals' }),
       output('s2', '3'),
     ]);
-    expect(textOf(three)).toBe('Acme has 3 deals.');
+    expect(textOf(three)).toBe('Kappa has 3 deals.');
     expect(completedOf(three)).toMatchObject({ finishReason: 'stop', usage: { inputTokens: 30, outputTokens: 4 } });
 
     expect(h.mock.sessions()).toHaveLength(1);
     expect(h.mock.sessions()[0].toolRuns.map((run) => [run.toolCallId, run.output])).toEqual([
-      ['s1', 'acme-id'],
+      ['s1', 'kappa-id'],
       ['s2', '3'],
     ]);
     expect(h.mock.sessions()[0].continuations).toBe(2);
@@ -412,21 +412,21 @@ describe('several tool steps in one turn', () => {
 
 describe('the lost-session fallback: a step never fails for lack of state', () => {
   const history: AiInputItem[] = [
-    user('Who is Acme?'),
+    user('Who is Kappa?'),
     assistant('Let me check. '),
-    call('call-9', 'lookup', { query: 'acme' }),
-    output('call-9', '{"hits":["Acme Corp"]}'),
+    call('call-9', 'lookup', { query: 'kappa' }),
+    output('call-9', '{"hits":["Org Kappa"]}'),
   ];
 
   it('starts a fresh session with the transcript rendered as text and the same tools (a restarted process)', async () => {
     const mock = createCopilotMockTransport();
-    mock.queue({ kind: 'answer', text: 'Acme Corp is a client.' });
+    mock.queue({ kind: 'answer', text: 'Org Kappa is a client.' });
     // An adapter that has never seen call-9: nothing is held.
     const { adapter } = setup({}, mock);
 
     const events = await step(adapter, history);
 
-    expect(textOf(events)).toBe('Acme Corp is a client.');
+    expect(textOf(events)).toBe('Org Kappa is a client.');
     const [session] = mock.sessions();
     expect(session.config.tools?.map((tool) => tool.name)).toEqual(['lookup', 'count']);
     expect(session.config.availableTools).toEqual(['custom:lookup', 'custom:count']);
@@ -434,10 +434,10 @@ describe('the lost-session fallback: a step never fails for lack of state', () =
     expect(session.prompts[0].prompt).toBe(
       [
         'Conversation so far:',
-        '[user]\nWho is Acme?',
+        '[user]\nWho is Kappa?',
         '[assistant]\nLet me check. ',
-        '[assistant called the tool lookup (call call-9)]\n{"query":"acme"}',
-        '[result of the tool lookup (call call-9)]\n{"hits":["Acme Corp"]}',
+        '[assistant called the tool lookup (call call-9)]\n{"query":"kappa"}',
+        '[result of the tool lookup (call call-9)]\n{"hits":["Org Kappa"]}',
         'Continue as the assistant: answer, or call a tool if you need more information.',
       ].join('\n\n'),
     );

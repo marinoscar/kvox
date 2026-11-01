@@ -95,9 +95,9 @@ export class AskMessageStreamController {
           type: 'string',
           example:
             ': connected\n\n' +
-            'event: step\nid: 0\ndata: {"index":0,"name":"search","summary":"Searched for Acme",' +
+            'event: step\nid: 0\ndata: {"index":0,"name":"search","summary":"Searched for Kappa",' +
             '"resultCount":3,"error":null,"offset":0}\n\n' +
-            'event: delta\nid: 24\ndata: {"delta":"Acme renewed in March.","offset":24}\n\n' +
+            'event: delta\nid: 24\ndata: {"delta":"Kappa renewed in March.","offset":24}\n\n' +
             'event: done\nid: 24\ndata: {"status":"succeeded","offset":24,"citations":[],' +
             '"finishReason":"stop","promptTokens":812,"completionTokens":40}\n\n',
         },

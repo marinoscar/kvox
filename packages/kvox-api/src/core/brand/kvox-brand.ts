@@ -22,9 +22,9 @@ export const KVOX_BRAND = Symbol.for('@marinoscar/kvox/KVOX_BRAND');
  * @stability experimental
  */
 export interface KvoxBrand {
-  /** The product's display name (`Acme Notes`). */
+  /** The product's display name (`Kappa Notes`). */
   appName: string;
-  /** The product's file-name and identifier slug (`acme-notes`). */
+  /** The product's file-name and identifier slug (`kappa-notes`). */
   appSlug: string;
 }
 

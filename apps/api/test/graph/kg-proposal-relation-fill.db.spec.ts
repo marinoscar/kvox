@@ -81,7 +81,7 @@ describeWithDb('graph proposal commit: known relation fills (real Postgres)', ()
       },
     });
     await prisma.kgEvidence.create({
-      data: { ownerId: f.ownerId, subjectKind: 'proposal_item', subjectId: item.id, ...noteCite(f.note.id, 'Sarah Chen joined Northwind Robotics in March 2026.') },
+      data: { ownerId: f.ownerId, subjectKind: 'proposal_item', subjectId: item.id, ...noteCite(f.note.id, 'Sarah Chen joined Org Lambda Robotics in March 2026.') },
     });
     return { f, role, proposal, item };
   }

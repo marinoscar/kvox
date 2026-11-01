@@ -146,7 +146,7 @@ const EVIDENCE = [
 
 const ENTITIES = [
   { id: JOE_ID, type: 'Person', label: 'Joe Rivera', aliases: [], mentionCount: 14, lastSeenAt: FIXED_ISO },
-  { id: id(4), type: 'Organization', label: 'Acme Corp', aliases: [], mentionCount: 22, lastSeenAt: FIXED_ISO },
+  { id: id(4), type: 'Organization', label: 'Org Kappa', aliases: [], mentionCount: 22, lastSeenAt: FIXED_ISO },
   { id: id(6), type: 'Project', label: 'Project Atlas', aliases: [], mentionCount: 11, lastSeenAt: FIXED_ISO },
 ];
 

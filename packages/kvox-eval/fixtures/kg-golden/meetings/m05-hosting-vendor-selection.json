@@ -7,7 +7,7 @@
     "resolution-trap"
   ],
   "recordedAt": "2026-02-05T16:00:00Z",
-  "contextText": "Choosing where the Northwind pilot services will be hosted.",
+  "contextText": "Choosing where the Lambda pilot services will be hosted.",
   "hasTranscript": true,
   "speakers": [
     {
@@ -38,7 +38,7 @@
       "startMs": 0,
       "endMs": 9340,
       "rev": 1,
-      "text": "Thanks for joining, Theo. For context, we need somewhere to host the services for the Northwind pick-path pilot, and we're deciding this week."
+      "text": "Thanks for joining, Theo. For context, we need somewhere to host the services for the Lambda pick-path pilot, and we're deciding this week."
     },
     {
       "id": "m05-s002",
@@ -94,7 +94,7 @@
       "startMs": 56870,
       "endMs": 62790,
       "rev": 1,
-      "text": "What about data residency? Northwind is strict about keeping floor data in the EU."
+      "text": "What about data residency? Lambda is strict about keeping floor data in the EU."
     },
     {
       "id": "m05-s009",
@@ -227,7 +227,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Hosting vendor selection for the pilot\n\n**Date:** February 5\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)\n\n## Summary\n\nThe team chose where to host the services for the Northwind pick-path pilot. The shortlist was Estuary Cloud's managed Kubernetes versus a self-run cluster. Theo Lindqvist, account manager at Estuary Cloud, joined to answer questions.\n\n## Discussion\n\n- JJ argued against running a cluster ourselves for a pilot: a week of plumbing we don't need. Setting up pipelines on Estuary's managed Kubernetes takes a couple of days, and the team has done it before for another client.\n- Estuary offers a dedicated namespace with support included for the pilot's duration.\n- Northwind requires floor data to stay in the EU; Estuary's Frankfurt region covers that.\n- Frankfurt had two short outages last year, both under an hour, and none this year. Priya judged that acceptable for a pilot.\n\n## Decisions\n\n- The pilot will be **hosted on Estuary Cloud managed Kubernetes in the Frankfurt region**.\n\n## Action items\n\n- **Theo Lindqvist** — send committed-use pricing by Friday February 13, to Alex with Priya copied.\n- **JJ** — start on the deployment pipelines on Monday.\n- Namespace and credentials follow about a day after contract signature.\n\n## Notes\n\n- Theo is much easier to reach by email than on calls; he travels a lot.\n- The critical path is now the pricing and Larkspur's own sign-off.\n"
+    "body": "# Hosting vendor selection for the pilot\n\n**Date:** February 5\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)\n\n## Summary\n\nThe team chose where to host the services for the Lambda pick-path pilot. The shortlist was Estuary Cloud's managed Kubernetes versus a self-run cluster. Theo Lindqvist, account manager at Estuary Cloud, joined to answer questions.\n\n## Discussion\n\n- JJ argued against running a cluster ourselves for a pilot: a week of plumbing we don't need. Setting up pipelines on Estuary's managed Kubernetes takes a couple of days, and the team has done it before for another client.\n- Estuary offers a dedicated namespace with support included for the pilot's duration.\n- Lambda requires floor data to stay in the EU; Estuary's Frankfurt region covers that.\n- Frankfurt had two short outages last year, both under an hour, and none this year. Priya judged that acceptable for a pilot.\n\n## Decisions\n\n- The pilot will be **hosted on Estuary Cloud managed Kubernetes in the Frankfurt region**.\n\n## Action items\n\n- **Theo Lindqvist** — send committed-use pricing by Friday February 13, to Alex with Priya copied.\n- **JJ** — start on the deployment pipelines on Monday.\n- Namespace and credentials follow about a day after contract signature.\n\n## Notes\n\n- Theo is much easier to reach by email than on calls; he travels a lot.\n- The critical path is now the pricing and Larkspur's own sign-off.\n"
   },
   "knownEntities": [
     {
@@ -241,12 +241,12 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-org-northwind-robotics",
+      "id": "g-org-lambda-robotics",
       "type": "Organization",
-      "label": "Northwind Robotics",
+      "label": "Org Lambda Robotics",
       "aliases": [
         "NWR",
-        "Northwind"
+        "Lambda"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -407,7 +407,7 @@
           {
             "source": "segment",
             "segmentId": "m05-s001",
-            "quote": "the Northwind pick-path pilot"
+            "quote": "the Lambda pick-path pilot"
           }
         ]
       }
@@ -519,7 +519,7 @@
           {
             "source": "segment",
             "segmentId": "m05-s001",
-            "quote": "the Northwind pick-path pilot"
+            "quote": "the Lambda pick-path pilot"
           }
         ]
       }

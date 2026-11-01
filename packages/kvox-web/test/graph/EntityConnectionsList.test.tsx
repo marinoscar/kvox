@@ -7,7 +7,7 @@ import 'vitest-axe/extend-expect';
 import { EntityConnectionsList, groupConnections } from '../../src/graph/ui/components/EntityConnectionsList.js';
 import type { GraphSlice } from '../../src/graph/headless/clients/graph.js';
 import { server } from './msw-compat.js';
-import { ACME_ID, JOE_ID, graphOntologyFixture, neighborhoodFixture } from './graphData.js';
+import { KAPPA_ID, JOE_ID, graphOntologyFixture, neighborhoodFixture } from './graphData.js';
 import { render } from './helpers.js';
 
 /** #442: an edge's own props (HAS_ROLE's role and business unit) on its connection row. */
@@ -24,7 +24,7 @@ function withRole(props: Record<string, unknown>): GraphSlice {
         id: '00000000-0000-4000-8000-000000000499',
         type: 'HAS_ROLE',
         source: JOE_ID,
-        target: ACME_ID,
+        target: KAPPA_ID,
         valid: null,
         confidence: 0.9,
         virtual: false,
@@ -54,8 +54,8 @@ describe('EntityConnectionsList — relation props', () => {
     const group = await roleGroup();
     const row = within(group).getByRole('listitem');
 
-    expect(within(row).getByRole('link', { name: 'Acme Corp' })).toBeInTheDocument();
-    expect(row).toHaveTextContent('Acme Corp — Managing Director · Consulting');
+    expect(within(row).getByRole('link', { name: 'Org Kappa' })).toBeInTheDocument();
+    expect(row).toHaveTextContent('Org Kappa — Managing Director · Consulting');
     expect(within(row).getByText(', Role: Managing Director, Business unit: Consulting')).toBeInTheDocument();
     expect(within(row).getByTestId('connection-props')).toHaveAttribute(
       'title',
@@ -68,7 +68,7 @@ describe('EntityConnectionsList — relation props', () => {
     useSlice(withRole({}));
     renderList();
     const row = within(await roleGroup()).getByRole('listitem');
-    expect(row).toHaveTextContent(/^Acme Corp$/);
+    expect(row).toHaveTextContent(/^Org Kappa$/);
     expect(within(row).queryByTestId('connection-props')).not.toBeInTheDocument();
   });
 
@@ -77,7 +77,7 @@ describe('EntityConnectionsList — relation props', () => {
     renderList();
     const heading = await screen.findByRole('heading', { level: 3, name: 'Works for' });
     const row = within(heading.parentElement as HTMLElement).getByRole('listitem');
-    expect(row).toHaveTextContent(/^Acme Corp$/);
+    expect(row).toHaveTextContent(/^Org Kappa$/);
   });
 
   it('keeps two roles at one organization as two rows', () => {

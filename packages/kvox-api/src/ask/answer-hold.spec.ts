@@ -32,7 +32,7 @@ describe('AnswerHold (#378)', () => {
 
   it('flags a tool call that arrives after the answer started, without un-writing anything', () => {
     const hold = new AnswerHold(4);
-    expect(hold.delta('Acme is a client.')).toBe('Acme is a client.');
+    expect(hold.delta('Kappa is a client.')).toBe('Kappa is a client.');
     expect(hold.toolCall()).toBe('');
     expect(hold.lateToolCall).toBe(true);
     expect(hold.end()).toBe('');

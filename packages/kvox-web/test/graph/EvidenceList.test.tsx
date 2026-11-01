@@ -55,7 +55,7 @@ describe('EvidenceList', () => {
     const { container } = render(
       <EvidenceList evidence={[segmentEvidence({ segmentId: 'seg-4', startMs: 65_000 }), noteEvidence()]} />,
     );
-    expect(screen.getByText('“Sarah from Northwind will lead the Atlas migration.”')).toBeInTheDocument();
+    expect(screen.getByText('“Sarah from Lambda will lead the Atlas migration.”')).toBeInTheDocument();
     expect(screen.getByText('Oscar · 1:05')).toBeInTheDocument();
     expect(screen.getByText('From the note')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open in transcript' })).toHaveAttribute(
@@ -180,7 +180,7 @@ describe('Evidence inside the sheet', () => {
 
     // Already playing: another ▶ only moves the same player.
     audio.status = 'playing';
-    const secondUser = await openEvidence('Northwind Robotics');
+    const secondUser = await openEvidence('Org Lambda Robotics');
     const plays = await screen.findAllByRole('button', { name: 'Play from 1:05' });
     await secondUser.click(plays[plays.length - 1]);
     expect(audio.seek).toHaveBeenCalledTimes(2);
@@ -213,9 +213,9 @@ describe('Evidence inside the sheet', () => {
       <ProposalReviewSheet open onClose={vi.fn()} source={{ noteId: 'n1' }} noteBodyRef={noteBodyRef} />,
       { wrapperOptions: { user: graphUser } },
     );
-    const user = await openEvidence('Contoso');
+    const user = await openEvidence('Org Theta');
     await user.click(await screen.findByRole('button', { name: 'Show in note' }));
-    expect(highlight).toHaveBeenCalledWith(body, 'Contoso');
+    expect(highlight).toHaveBeenCalledWith(body, 'Org Theta');
   });
 
   it('on a phone the sheet steps aside, and "Back to review" brings it back', async () => {
@@ -224,7 +224,7 @@ describe('Evidence inside the sheet', () => {
       <ProposalReviewSheet open onClose={vi.fn()} source={{ noteId: 'n1' }} noteBodyRef={{ current: document.body }} />,
       { wrapperOptions: { user: graphUser } },
     );
-    const user = await openEvidence('Contoso');
+    const user = await openEvidence('Org Theta');
     await user.click(await screen.findByRole('button', { name: 'Show in note' }));
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: 'Graph proposal' })).not.toBeInTheDocument(),
@@ -239,7 +239,7 @@ describe('Evidence inside the sheet', () => {
       <ProposalReviewSheet open onClose={vi.fn()} source={{ noteId: 'n1' }} noteBodyRef={{ current: document.body }} />,
       { wrapperOptions: { user: graphUser } },
     );
-    const user = await openEvidence('Contoso');
+    const user = await openEvidence('Org Theta');
     await user.click(await screen.findByRole('button', { name: 'Show in note' }));
     expect(await screen.findByText('That passage is no longer in the note')).toBeInTheDocument();
   });

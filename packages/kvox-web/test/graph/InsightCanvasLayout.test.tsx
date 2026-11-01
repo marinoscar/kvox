@@ -50,7 +50,7 @@ function Harness(props: { initialOpen?: boolean; withTimeBar?: boolean; onOpenCh
         topBar={<h1>Explore</h1>}
         facets={<button type="button">Person</button>}
         canvas={<Canvas />}
-        inspector={<h2>Acme Corp</h2>}
+        inspector={<h2>Org Kappa</h2>}
         timeBar={props.withTimeBar ? <div>histogram</div> : undefined}
         inspectorOpen={open}
         onInspectorOpenChange={(next) => {
@@ -80,7 +80,7 @@ describe('InsightCanvasLayout — expanded (>= 1200)', () => {
     renderLayout(1440, { initialOpen: true });
     expect(screen.getByRole('region', { name: 'Filters' })).toBeInTheDocument();
     expect(screen.getByRole('application', { name: 'Graph canvas' })).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Inspector' })).getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Inspector' })).getByRole('heading', { name: 'Org Kappa' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
     expect(lastContext?.windowClass).toBe('expanded');
   });
@@ -200,7 +200,7 @@ describe('InsightCanvasLayout — medium (600-1199)', () => {
     const user = userEvent.setup();
     renderLayout(820, { initialOpen: true, onOpenChange });
     const overlay = screen.getByRole('region', { name: 'Inspector' });
-    expect(within(overlay).getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
+    expect(within(overlay).getByRole('heading', { name: 'Org Kappa' })).toBeInTheDocument();
     expect(lastContext?.canvasInsets).toEqual({ top: 0, right: 360, bottom: 0, left: 0 });
 
     await user.click(within(overlay).getByRole('button', { name: 'Close inspector' }));
@@ -240,7 +240,7 @@ describe('InsightCanvasLayout — compact (< 600)', () => {
     const sheet = await screen.findByRole('region', { name: 'Inspector' });
     expect(sheet).toHaveAttribute('data-snap', 'peek');
     expect(sheet).toHaveFocus();
-    expect(within(sheet).getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
+    expect(within(sheet).getByRole('heading', { name: 'Org Kappa' })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
     expect(onOpenChange).toHaveBeenCalledWith(false);

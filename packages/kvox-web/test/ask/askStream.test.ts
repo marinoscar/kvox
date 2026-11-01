@@ -98,8 +98,8 @@ describe('askStream — parsing', () => {
 
   it('parses a step, requiring index and offset', () => {
     expect(
-      parseAskStep('{"index":0,"name":"search","summary":"Searched “Acme”","resultCount":3,"error":null,"offset":0}'),
-    ).toEqual({ index: 0, name: 'search', summary: 'Searched “Acme”', resultCount: 3, error: null, offset: 0 });
+      parseAskStep('{"index":0,"name":"search","summary":"Searched “Kappa”","resultCount":3,"error":null,"offset":0}'),
+    ).toEqual({ index: 0, name: 'search', summary: 'Searched “Kappa”', resultCount: 3, error: null, offset: 0 });
     expect(parseAskStep('{"name":"search","offset":0}')).toBeNull();
     expect(parseAskStep('{"index":1}')).toBeNull();
     expect(parseAskStep('[1,2]')).toBeNull();

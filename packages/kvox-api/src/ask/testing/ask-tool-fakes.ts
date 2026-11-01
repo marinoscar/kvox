@@ -69,7 +69,7 @@ export function makeCtx(over: Partial<AskToolContext> = {}): AskToolContext {
  * @returns the handle.
  * @stability experimental
  */
-export function seedEntity(ctx: AskToolContext, id: string, label = 'Acme'): string {
+export function seedEntity(ctx: AskToolContext, id: string, label = 'Kappa'): string {
   return ctx.handles.register({ kind: 'ent', id, label });
 }
 

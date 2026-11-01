@@ -1,6 +1,6 @@
 {
   "id": "m06",
-  "title": "Northwind pilot weekly: floor data review",
+  "title": "Lambda pilot weekly: floor data review",
   "tags": [
     "client",
     "resolution-trap",
@@ -243,16 +243,16 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Northwind pilot weekly: floor data review\n\n**Date:** February 12\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Northwind Robotics, first half), Tomás Aguilar (Northwind Robotics)\n\n## Summary\n\nWeekly check-in on the Northwind pick-path pilot, focused on the January floor data for Building 3 and the picking strategy for the pilot aisles.\n\n## Findings\n\n- Pick rates in Building 3 dropped about 8 percent in January compared with December.\n- Sara Chen said this matches what her supervisors report: January always brings a new-hire wave.\n- January was also the month the fast movers were re-slotted, so part of the drop is pickers learning new locations.\n- JJ considers January a noisy baseline and proposed comparing against a blend of November and December. Sara agreed as long as the report says so explicitly.\n\n## Decisions\n\n- The pilot aisles will use **zone-based picking** instead of the current batch picking. Path optimisation works much better within a zone, and the retraining cost is about two shifts because supervisors already know the zone layout from peak season.\n- The pilot baseline will be a blend of November and December rather than January.\n\n## Action items\n\n- **Tomás Aguilar** — rerun the slotting simulation with January data included, by Friday the 20th.\n- **JJ** — send Tomás the input schema this afternoon.\n- **Alex Rivera** — note the zone-picking decision in Friday's written update.\n\n## Notes\n\n- Tomás leaves at three most days for school pickup, so afternoon sessions should be scheduled before three.\n"
+    "body": "# Lambda pilot weekly: floor data review\n\n**Date:** February 12\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Org Lambda Robotics, first half), Tomás Aguilar (Org Lambda Robotics)\n\n## Summary\n\nWeekly check-in on the Lambda pick-path pilot, focused on the January floor data for Building 3 and the picking strategy for the pilot aisles.\n\n## Findings\n\n- Pick rates in Building 3 dropped about 8 percent in January compared with December.\n- Sara Chen said this matches what her supervisors report: January always brings a new-hire wave.\n- January was also the month the fast movers were re-slotted, so part of the drop is pickers learning new locations.\n- JJ considers January a noisy baseline and proposed comparing against a blend of November and December. Sara agreed as long as the report says so explicitly.\n\n## Decisions\n\n- The pilot aisles will use **zone-based picking** instead of the current batch picking. Path optimisation works much better within a zone, and the retraining cost is about two shifts because supervisors already know the zone layout from peak season.\n- The pilot baseline will be a blend of November and December rather than January.\n\n## Action items\n\n- **Tomás Aguilar** — rerun the slotting simulation with January data included, by Friday the 20th.\n- **JJ** — send Tomás the input schema this afternoon.\n- **Alex Rivera** — note the zone-picking decision in Friday's written update.\n\n## Notes\n\n- Tomás leaves at three most days for school pickup, so afternoon sessions should be scheduled before three.\n"
   },
   "knownEntities": [
     {
-      "id": "g-org-northwind-robotics",
+      "id": "g-org-lambda-robotics",
       "type": "Organization",
-      "label": "Northwind Robotics",
+      "label": "Org Lambda Robotics",
       "aliases": [
         "NWR",
-        "Northwind"
+        "Lambda"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -340,14 +340,14 @@
       {
         "key": "meeting",
         "type": "Meeting",
-        "label": "Northwind pilot weekly: floor data review",
+        "label": "Lambda pilot weekly: floor data review",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Northwind pilot weekly: floor data review"
+            "quote": "Lambda pilot weekly: floor data review"
           }
         ]
       },
@@ -393,7 +393,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Sara Chen (Northwind Robotics, first half)"
+            "quote": "Sara Chen (Org Lambda Robotics, first half)"
           }
         ]
       },
@@ -407,21 +407,21 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Tomás Aguilar (Northwind Robotics)"
+            "quote": "Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
       {
         "key": "nwr",
         "type": "Organization",
-        "label": "Northwind Robotics",
+        "label": "Org Lambda Robotics",
         "aliases": [],
-        "existingId": "g-org-northwind-robotics",
+        "existingId": "g-org-lambda-robotics",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Weekly check-in on the Northwind pick-path pilot"
+            "quote": "Weekly check-in on the Lambda pick-path pilot"
           }
         ]
       },
@@ -435,7 +435,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Weekly check-in on the Northwind pick-path pilot"
+            "quote": "Weekly check-in on the Lambda pick-path pilot"
           }
         ]
       }
@@ -452,7 +452,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Northwind Robotics, first half), Tomás Aguilar (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Org Lambda Robotics, first half), Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
@@ -467,7 +467,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Northwind Robotics, first half), Tomás Aguilar (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Org Lambda Robotics, first half), Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
@@ -482,7 +482,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Northwind Robotics, first half), Tomás Aguilar (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Org Lambda Robotics, first half), Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
@@ -497,7 +497,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Northwind Robotics, first half), Tomás Aguilar (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Org Lambda Robotics, first half), Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
@@ -512,7 +512,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Weekly check-in on the Northwind pick-path pilot"
+            "quote": "Weekly check-in on the Lambda pick-path pilot"
           }
         ]
       }

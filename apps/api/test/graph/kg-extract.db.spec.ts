@@ -36,11 +36,11 @@ const ANSWER = {
   meeting: { topics: ['throughput'] },
   entities: [
     { ref: 'e1', type: 'Person', label: 'Sarah Chen', aliases: [], props: {}, evidence: [{ source: 's1', quote: "I'm Sarah Chen" }] },
-    { ref: 'e2', type: 'Organization', label: 'Northwind Robotics', aliases: ['NWR'], props: { website: null }, evidence: [{ source: 's1', quote: 'Northwind Robotics' }] },
+    { ref: 'e2', type: 'Organization', label: 'Org Lambda Robotics', aliases: ['NWR'], props: { website: null }, evidence: [{ source: 's1', quote: 'Org Lambda Robotics' }] },
     { ref: 'e3', type: 'Project', label: 'Invented', aliases: [], props: {}, evidence: [{ source: 's42', quote: 'never handed out' }] },
   ],
   relations: [
-    { type: 'WORKS_FOR', from: 'e1', to: 'e2', props: {}, validFrom: null, validTo: null, precision: 'unknown', evidence: [{ source: 's1', quote: 'at Northwind Robotics' }] },
+    { type: 'WORKS_FOR', from: 'e1', to: 'e2', props: {}, validFrom: null, validTo: null, precision: 'unknown', evidence: [{ source: 's1', quote: 'at Org Lambda Robotics' }] },
   ],
   items: [
     {
@@ -174,7 +174,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
       data: { transcriptId: transcript.id, label: 'B', displayName: 'Speaker B', colorIndex: 1 },
     });
     const s1 = await prisma.transcriptSegment.create({
-      data: { transcriptId: transcript.id, speakerId: speakerA.id, startMs: 0, endMs: 4000, ordinal: 1000, text: "Hi, I'm Sarah Chen, VP of Operations at Northwind Robotics.", words: [] },
+      data: { transcriptId: transcript.id, speakerId: speakerA.id, startMs: 0, endMs: 4000, ordinal: 1000, text: "Hi, I'm Sarah Chen, VP of Operations at Org Lambda Robotics.", words: [] },
     });
     const s2 = await prisma.transcriptSegment.create({
       data: { transcriptId: transcript.id, speakerId: speakerB.id, startMs: 4000, endMs: 8000, ordinal: 2000, text: 'Great. Sarah, can you send the proposal?', words: [] },

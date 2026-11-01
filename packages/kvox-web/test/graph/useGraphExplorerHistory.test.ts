@@ -18,7 +18,7 @@ import {
 } from '../../src/graph/ui/components/explorer/history/snapshot.js';
 import { createExplorerState, realNodeCount } from '../../src/graph/ui/components/explorer/explorerModel.js';
 import { useGraphExplorer } from '../../src/graph/ui/hooks/useGraphExplorer.js';
-import { ACME_ID, ANA_ID, JOE_ID, expandFixture, type ExpandFixtureRequest } from './graphData.js';
+import { KAPPA_ID, ANA_ID, JOE_ID, expandFixture, type ExpandFixtureRequest } from './graphData.js';
 import { server } from './msw-compat.js';
 import { renderHook as renderHookWithProviders } from './helpers.js';
 
@@ -121,23 +121,23 @@ describe('useGraphExplorer — undo and redo', () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
     const before = realNodeCount(result.current.state);
-    expect(result.current.state.graph.hasNode(ACME_ID)).toBe(true);
+    expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(true);
 
-    act(() => result.current.hide(ACME_ID));
-    expect(result.current.state.graph.hasNode(ACME_ID)).toBe(false);
+    act(() => result.current.hide(KAPPA_ID));
+    expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(false);
     expect(result.current.canUndo).toBe(true);
 
     act(() => {
       result.current.undo();
     });
-    expect(result.current.state.graph.hasNode(ACME_ID)).toBe(true);
+    expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(true);
     expect(realNodeCount(result.current.state)).toBe(before);
     expect(result.current.canRedo).toBe(true);
 
     act(() => {
       result.current.redo();
     });
-    expect(result.current.state.graph.hasNode(ACME_ID)).toBe(false);
+    expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(false);
     expect(result.current.canRedo).toBe(false);
   });
 
@@ -147,23 +147,23 @@ describe('useGraphExplorer — undo and redo', () => {
     const before = realNodeCount(result.current.state);
     const edgesBefore = result.current.state.graph.size;
 
-    await act(() => result.current.expand(ACME_ID));
+    await act(() => result.current.expand(KAPPA_ID));
     expect(realNodeCount(result.current.state)).toBeGreaterThan(before);
-    expect(result.current.state.expanded.has(ACME_ID)).toBe(true);
+    expect(result.current.state.expanded.has(KAPPA_ID)).toBe(true);
 
     act(() => {
       result.current.undo();
     });
     expect(realNodeCount(result.current.state)).toBe(before);
     expect(result.current.state.graph.size).toBe(edgesBefore);
-    expect(result.current.state.expanded.has(ACME_ID)).toBe(false);
+    expect(result.current.state.expanded.has(KAPPA_ID)).toBe(false);
   });
 
   it('a slice added from outside (a connect result) is a step, and Undo takes it back', async () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
     const before = realNodeCount(result.current.state);
-    const slice = expandFixture({ nodeIds: [ACME_ID] } as ExpandFixtureRequest)!;
+    const slice = expandFixture({ nodeIds: [KAPPA_ID] } as ExpandFixtureRequest)!;
 
     act(() => result.current.addSlice(slice));
     expect(realNodeCount(result.current.state)).toBeGreaterThan(before);
@@ -179,7 +179,7 @@ describe('useGraphExplorer — undo and redo', () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
     failExpand = true;
-    await act(() => result.current.expand(ACME_ID));
+    await act(() => result.current.expand(KAPPA_ID));
     expect(result.current.error).not.toBeNull();
     expect(result.current.canUndo).toBe(false);
     expect(result.current.undoDepth()).toBe(0);
@@ -188,7 +188,7 @@ describe('useGraphExplorer — undo and redo', () => {
   it('a new step after Undo clears Redo', async () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
-    act(() => result.current.hide(ACME_ID));
+    act(() => result.current.hide(KAPPA_ID));
     act(() => {
       result.current.undo();
     });
@@ -241,8 +241,8 @@ describe('useGraphExplorer — undo and redo', () => {
   it('a snapshot taken before a seed change is restored with the old seeds', async () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
-    await act(() => result.current.load([ACME_ID]));
-    expect(result.current.state.seedIds).toEqual([ACME_ID]);
+    await act(() => result.current.load([KAPPA_ID]));
+    expect(result.current.state.seedIds).toEqual([KAPPA_ID]);
     let view: ReturnType<typeof result.current.undo> = null;
     act(() => {
       view = result.current.undo();

@@ -286,7 +286,7 @@ describe('validateExtraction (#363)', () => {
       expect(sarah.flags).toContain('model_claimed_match');
       expect(sarah.resolution).toEqual({ ref: IDS.sarah, score: null, source: 'model', candidates: [], adjudication: null });
       const rel = result.rows.find((r) => r.kind === 'relation')!;
-      expect(rel.payload).toEqual(expect.objectContaining({ from: { entityId: IDS.sarah }, to: { entityId: IDS.northwind } }));
+      expect(rel.payload).toEqual(expect.objectContaining({ from: { entityId: IDS.sarah }, to: { entityId: IDS.lambda } }));
     });
 
     it('items carry the #355 statement hash, and commitments/decisions the meeting', () => {

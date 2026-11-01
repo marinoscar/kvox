@@ -15,7 +15,7 @@ function build(options: { embedderOk?: boolean; entities?: any[]; items?: any[] 
   const prisma = {
     kgEntity: {
       findMany: jest.fn(async ({ where }: any) =>
-        where.reviewStatus ? (options.entities ?? []) : [{ id: 'org', label: 'Northwind' }, { id: E1, label: 'Sarah Chen' }],
+        where.reviewStatus ? (options.entities ?? []) : [{ id: 'org', label: 'Lambda' }, { id: E1, label: 'Sarah Chen' }],
       ),
     },
     kgEntityAlias: { findMany: jest.fn(async () => [{ entityId: E1, alias: 'S. Chen' }]) },
@@ -65,7 +65,7 @@ describe('kg.embed', () => {
   });
 
   it('embeds only rows whose content hash changed', async () => {
-    const text = 'Person: Sarah Chen\nAlso known as: S. Chen\nOrganization: Northwind\nRole: CTO';
+    const text = 'Person: Sarah Chen\nAlso known as: S. Chen\nOrganization: Lambda\nRole: CTO';
     const unchanged = profileHash('text-embedding-3-small', text);
     const t = build({
       entities: [

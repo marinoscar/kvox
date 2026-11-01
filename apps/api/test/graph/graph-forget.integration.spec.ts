@@ -72,7 +72,7 @@ describe('POST /api/graph/entities/:id/forget (integration)', () => {
     const base = { ownerId, props: {}, occurredAt: null, ontologyVersion: '1.0.0', createdAt: now, updatedAt: now };
     entities = [
       { ...base, id: PERSON_ID, type: 'Person', label: 'Sarah Chen', reviewStatus: 'accepted', mergedIntoId: null },
-      { ...base, id: ORG_ID, type: 'Organization', label: 'Acme', reviewStatus: 'accepted', mergedIntoId: null },
+      { ...base, id: ORG_ID, type: 'Organization', label: 'Kappa', reviewStatus: 'accepted', mergedIntoId: null },
       { ...base, id: MERGED_ID, type: 'Person', label: 'S. Chen', reviewStatus: 'merged', mergedIntoId: PERSON_ID },
     ];
   }

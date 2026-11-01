@@ -24,7 +24,7 @@ const SCHEMA = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAt
 const rule = (type: string) => ruleForEffectiveRelation(SCHEMA.relationType(type)!);
 
 const JOE = 'aaaaaaaa-0000-4000-8000-000000000001';
-const ACME = 'aaaaaaaa-0000-4000-8000-000000000002';
+const KAPPA = 'aaaaaaaa-0000-4000-8000-000000000002';
 const ITEM_A = 'bbbbbbbb-0000-4000-8000-00000000000a';
 const ITEM_B = 'bbbbbbbb-0000-4000-8000-00000000000b';
 
@@ -33,7 +33,7 @@ function rel(over: Partial<RelationPayload> = {}): RelationPayload {
     ref: 'r1',
     type: 'WORKS_FOR',
     from: { entityId: JOE },
-    to: { entityId: ACME },
+    to: { entityId: KAPPA },
     props: {},
     validFrom: null,
     validTo: null,
@@ -47,7 +47,7 @@ function edge(id: string, from: string, to: string | null, precision: 'year' | '
     id,
     type,
     fromId: JOE,
-    toId: ACME,
+    toId: KAPPA,
     props,
     valid: rangeFromPrecision(from, to, precision, { openEnded: to === null }).range,
     precision,
@@ -126,30 +126,30 @@ describe('relationKnown (§8 known, §5.4 out-of-order)', () => {
   it('a 2020 fact inside an accepted [2019, 2026) edge is known, never a new edge', () => {
     const existing = [edge('e1', '2019', '2025')];
     const p = rel({ validFrom: '2020-01-01', precision: 'year' });
-    expect(relationKnown(existing, p, JOE, ACME, rule('WORKS_FOR'))).toEqual({ known: true, edgeId: 'e1' });
+    expect(relationKnown(existing, p, JOE, KAPPA, rule('WORKS_FOR'))).toEqual({ known: true, edgeId: 'e1' });
   });
 
   it('the same open edge restated is known; a period outside every known one is not', () => {
     const open = [edge('e1', '2019', null)];
-    expect(relationKnown(open, rel({ validFrom: '2019-01-01', precision: 'year' }), JOE, ACME, rule('WORKS_FOR')).known).toBe(true);
+    expect(relationKnown(open, rel({ validFrom: '2019-01-01', precision: 'year' }), JOE, KAPPA, rule('WORKS_FOR')).known).toBe(true);
     const closed = [edge('e1', '2019', '2020')];
-    expect(relationKnown(closed, rel({ validFrom: '2023-01-01', precision: 'year' }), JOE, ACME, rule('WORKS_FOR')).known).toBe(false);
+    expect(relationKnown(closed, rel({ validFrom: '2023-01-01', precision: 'year' }), JOE, KAPPA, rule('WORKS_FOR')).known).toBe(false);
   });
 
   it('an undated restatement of a known fact is known', () => {
-    expect(relationKnown([edge('e1', '2019', null)], rel(), JOE, ACME, rule('WORKS_FOR'))).toEqual({ known: true, edgeId: 'e1' });
+    expect(relationKnown([edge('e1', '2019', null)], rel(), JOE, KAPPA, rule('WORKS_FOR'))).toEqual({ known: true, edgeId: 'e1' });
   });
 
   it('a non-temporal relation with the same endpoints is known', () => {
     const attended: TemporalEdge = { ...edge('a1', '2019', null), type: 'ATTENDED', valid: null, precision: null };
-    expect(relationKnown([attended], rel({ type: 'ATTENDED' }), JOE, ACME, rule('ATTENDED'))).toEqual({ known: true, edgeId: 'a1' });
-    expect(relationKnown([], rel({ type: 'ATTENDED' }), JOE, ACME, rule('ATTENDED')).known).toBe(false);
+    expect(relationKnown([attended], rel({ type: 'ATTENDED' }), JOE, KAPPA, rule('ATTENDED'))).toEqual({ known: true, edgeId: 'a1' });
+    expect(relationKnown([], rel({ type: 'ATTENDED' }), JOE, KAPPA, rule('ATTENDED')).known).toBe(false);
   });
 
   it('a different role title is a different fact', () => {
     const engineer = edge('h1', '2019', null, 'year', 'HAS_ROLE', { title: 'Engineer' });
     const p = rel({ type: 'HAS_ROLE', props: { title: 'Staff Engineer' }, validFrom: '2026-03-01', precision: 'month' });
-    expect(relationKnown([engineer], p, JOE, ACME, rule('HAS_ROLE')).known).toBe(false);
+    expect(relationKnown([engineer], p, JOE, KAPPA, rule('HAS_ROLE')).known).toBe(false);
   });
 
   describe('HAS_ROLE business unit (#440)', () => {
@@ -159,19 +159,19 @@ describe('relationKnown (§8 known, §5.4 out-of-order)', () => {
     const restated = (props: Record<string, unknown>) => rel({ type: 'HAS_ROLE', props });
 
     it('a move to another unit under the same title is a different fact', () => {
-      expect(relationKnown([role({ title: 'VP', businessUnit: 'Supply Chain' })], later({ title: 'VP', businessUnit: 'Finance' }), JOE, ACME, rule('HAS_ROLE')).known).toBe(false);
+      expect(relationKnown([role({ title: 'VP', businessUnit: 'Supply Chain' })], later({ title: 'VP', businessUnit: 'Finance' }), JOE, KAPPA, rule('HAS_ROLE')).known).toBe(false);
     });
 
     it('a statement adding a unit the stored role lacks is known (evidence attaches)', () => {
-      expect(relationKnown([role({ title: 'VP' })], restated({ title: 'VP', businessUnit: 'Supply Chain' }), JOE, ACME, rule('HAS_ROLE'))).toEqual({ known: true, edgeId: 'h1' });
+      expect(relationKnown([role({ title: 'VP' })], restated({ title: 'VP', businessUnit: 'Supply Chain' }), JOE, KAPPA, rule('HAS_ROLE'))).toEqual({ known: true, edgeId: 'h1' });
     });
 
     it('a statement omitting the stored unit is known', () => {
-      expect(relationKnown([role({ title: 'VP', businessUnit: 'Supply Chain' })], restated({ title: 'VP' }), JOE, ACME, rule('HAS_ROLE'))).toEqual({ known: true, edgeId: 'h1' });
+      expect(relationKnown([role({ title: 'VP', businessUnit: 'Supply Chain' })], restated({ title: 'VP' }), JOE, KAPPA, rule('HAS_ROLE'))).toEqual({ known: true, edgeId: 'h1' });
     });
 
     it('a title change under the same unit is still a different fact', () => {
-      expect(relationKnown([role({ title: 'VP', businessUnit: 'Supply Chain' })], later({ title: 'SVP', businessUnit: 'Supply Chain' }), JOE, ACME, rule('HAS_ROLE')).known).toBe(false);
+      expect(relationKnown([role({ title: 'VP', businessUnit: 'Supply Chain' })], later({ title: 'SVP', businessUnit: 'Supply Chain' }), JOE, KAPPA, rule('HAS_ROLE')).known).toBe(false);
     });
   });
 });

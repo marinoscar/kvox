@@ -227,7 +227,7 @@ describe('createKvoxAi.chat', () => {
       const { port, runtime } = build();
       runtime.stream.mockReturnValue(
         events(
-          { type: 'output_item.done', item: { type: 'function_call', callId: 'c1', name: 'lookup', arguments: '{"q":"acme"}' } },
+          { type: 'output_item.done', item: { type: 'function_call', callId: 'c1', name: 'lookup', arguments: '{"q":"kappa"}' } },
           { type: 'output_text.delta', delta: 'ignored' },
           { type: 'output_item.done', item: { type: 'function_call', callId: 'c2', name: 'lookup', arguments: 'not json' } },
           completed({ finishReason: 'tool_calls', usage: { inputTokens: 3, outputTokens: 4 } }),
@@ -237,7 +237,7 @@ describe('createKvoxAi.chat', () => {
       const out = await collect(port.chat(CTX, request()));
 
       expect(out).toEqual([
-        { type: 'tool_call', id: 'c1', name: 'lookup', arguments: { q: 'acme' } },
+        { type: 'tool_call', id: 'c1', name: 'lookup', arguments: { q: 'kappa' } },
         { type: 'tool_call', id: 'c2', name: 'lookup', arguments: 'not json' },
         { type: 'step_end' },
         { type: 'done', usage: { inputTokens: 3, outputTokens: 4 }, finishReason: 'stop' },

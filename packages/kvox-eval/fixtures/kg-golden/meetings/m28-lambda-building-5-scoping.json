@@ -1,6 +1,6 @@
 {
   "id": "m28",
-  "title": "Northwind Building 5 expansion scoping",
+  "title": "Lambda Building 5 expansion scoping",
   "tags": [
     "client",
     "resolution-trap",
@@ -224,16 +224,16 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Northwind Building 5 expansion scoping\n\n**Date:** July 16\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)\n\n## Summary\n\nScoping for the Building 5 expansion, which extends the pick-path approach from Building 3. NWR's board has approved the budget in principle; Sarah needs to confirm the final number.\n\n## Differences from Building 3\n\n- Building 5 is bigger and has older shelving, so location data will be messier.\n- Building 5 pickers have never used zones; Building 3 pickers had peak-season experience.\n- The platform cluster has room for Building 5.\n\n## Decisions\n\n- **Building 5 uses the same zone picking layout as Building 3**, so the team changes only one thing at a time.\n- No weekend cutovers.\n\n## Timeline\n\nBuilding 5 opens for the new flow in Q4; there is no firmer date yet.\n\n## Action items\n\n- **Tomás Aguilar** — finish the sensor survey of Building 5 by August 7.\n- **Sarah Chen** — confirm the budget by the end of July.\n- **Chloé Dubois** — run the Building 3 picker training in Building 5, in French and English.\n\n## Notes\n\n- Floor supervisors, including Chloé, have reported directly to Sarah since the spring.\n- Tomás coaches his daughter's football team on Saturdays.\n"
+    "body": "# Lambda Building 5 expansion scoping\n\n**Date:** July 16\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)\n\n## Summary\n\nScoping for the Building 5 expansion, which extends the pick-path approach from Building 3. NWR's board has approved the budget in principle; Sarah needs to confirm the final number.\n\n## Differences from Building 3\n\n- Building 5 is bigger and has older shelving, so location data will be messier.\n- Building 5 pickers have never used zones; Building 3 pickers had peak-season experience.\n- The platform cluster has room for Building 5.\n\n## Decisions\n\n- **Building 5 uses the same zone picking layout as Building 3**, so the team changes only one thing at a time.\n- No weekend cutovers.\n\n## Timeline\n\nBuilding 5 opens for the new flow in Q4; there is no firmer date yet.\n\n## Action items\n\n- **Tomás Aguilar** — finish the sensor survey of Building 5 by August 7.\n- **Sarah Chen** — confirm the budget by the end of July.\n- **Chloé Dubois** — run the Building 3 picker training in Building 5, in French and English.\n\n## Notes\n\n- Floor supervisors, including Chloé, have reported directly to Sarah since the spring.\n- Tomás coaches his daughter's football team on Saturdays.\n"
   },
   "knownEntities": [
     {
-      "id": "g-org-northwind-robotics",
+      "id": "g-org-lambda-robotics",
       "type": "Organization",
-      "label": "Northwind Robotics",
+      "label": "Org Lambda Robotics",
       "aliases": [
         "NWR",
-        "Northwind"
+        "Lambda"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -350,14 +350,14 @@
       {
         "key": "meeting",
         "type": "Meeting",
-        "label": "Northwind Building 5 expansion scoping",
+        "label": "Lambda Building 5 expansion scoping",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Northwind Building 5 expansion scoping"
+            "quote": "Lambda Building 5 expansion scoping"
           }
         ]
       },
@@ -385,7 +385,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Sarah Chen (Northwind Robotics)"
+            "quote": "Sarah Chen (Org Lambda Robotics)"
           }
         ]
       },
@@ -399,7 +399,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Owen Barker (Northwind Robotics)"
+            "quote": "Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -413,7 +413,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Tomás Aguilar (Northwind Robotics)"
+            "quote": "Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
@@ -427,18 +427,18 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Chloé Dubois (Northwind Robotics)"
+            "quote": "Chloé Dubois (Org Lambda Robotics)"
           }
         ]
       },
       {
         "key": "nwr",
         "type": "Organization",
-        "label": "Northwind Robotics",
+        "label": "Org Lambda Robotics",
         "aliases": [
           "NWR"
         ],
-        "existingId": "g-org-northwind-robotics",
+        "existingId": "g-org-lambda-robotics",
         "props": {},
         "evidence": [
           {
@@ -476,7 +476,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)"
           }
         ]
       },
@@ -491,7 +491,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)"
           }
         ]
       },
@@ -506,7 +506,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)"
           }
         ]
       },
@@ -521,7 +521,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)"
           }
         ]
       },
@@ -536,7 +536,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)"
           }
         ]
       },

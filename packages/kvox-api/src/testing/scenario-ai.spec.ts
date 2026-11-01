@@ -114,10 +114,10 @@ describe('scenarioStructuredAnswer', () => {
       ],
     });
     expect(scenarioStructuredAnswer('kg_item_adjudication', '', [])).toEqual({ verdicts: [] });
-    expect(scenarioStructuredAnswer('entity_digest', 'Entity\nFacts:\nF1: [2026-10-17, relation] Reports to Mark\nF2: Works for Acme', [])).toEqual({
+    expect(scenarioStructuredAnswer('entity_digest', 'Entity\nFacts:\nF1: [2026-10-17, relation] Reports to Mark\nF2: Works for Kappa', [])).toEqual({
       statements: [
         { text: 'Reports to Mark', factRefs: ['F1'] },
-        { text: 'Works for Acme', factRefs: ['F2'] },
+        { text: 'Works for Kappa', factRefs: ['F2'] },
       ],
     });
     expect(scenarioStructuredAnswer('note_generation', '', [])).toBeUndefined();

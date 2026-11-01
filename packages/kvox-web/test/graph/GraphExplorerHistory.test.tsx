@@ -12,7 +12,7 @@ import { GraphExplorerPage, type GraphExplorerPageSlots } from '../../src/graph/
 import { setViewportWidth } from '../../src/core/testing/index.js';
 import type { GraphSlice } from '../../src/graph/headless/clients/graph.js';
 import {
-  ACME_ID,
+  KAPPA_ID,
   ANA_ID,
   EV_EDGE_NOTE,
   JOE_ID,
@@ -155,7 +155,7 @@ function renderExplorer(route = `/graph/explore?seed=${JOE_ID}`, slots?: GraphEx
 
 async function canvasReady() {
   const canvas = await screen.findByTestId('fake-canvas');
-  await within(canvas).findByRole('button', { name: 'Acme Corp' });
+  await within(canvas).findByRole('button', { name: 'Org Kappa' });
   return canvas;
 }
 
@@ -167,7 +167,7 @@ function stanceSlice(body: ExpandFixtureRequest): GraphSlice {
   const nodes = [
     { id: JOE_ID, nodeKind: 'entity' as const, type: 'Person', label: 'Joe Rivera', status: null, occurredAt: null, depth: 0, degree: 2 },
     { id: productx, nodeKind: 'entity' as const, type: 'Project', label: 'Product X rollout', status: null, occurredAt: null, depth: 1, degree: 1 },
-    { id: ACME_ID, nodeKind: 'entity' as const, type: 'Organization', label: 'Acme Corp', status: null, occurredAt: null, depth: 1, degree: 1 },
+    { id: KAPPA_ID, nodeKind: 'entity' as const, type: 'Organization', label: 'Org Kappa', status: null, occurredAt: null, depth: 1, degree: 1 },
   ];
   const edges = [
     {
@@ -180,7 +180,7 @@ function stanceSlice(body: ExpandFixtureRequest): GraphSlice {
       virtual: false,
       props: { role: 'sponsor', stance: 'supportive' },
     },
-    { id: gid(711), type: 'WORKS_FOR', source: JOE_ID, target: ACME_ID, valid: null, confidence: 0.9, virtual: false },
+    { id: gid(711), type: 'WORKS_FOR', source: JOE_ID, target: KAPPA_ID, valid: null, confidence: 0.9, virtual: false },
   ].filter((edge) => !body.relationTypes || body.relationTypes.includes(edge.type));
   const kept = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
   return {
@@ -197,7 +197,7 @@ describe('URL state — relation types (GIC-17)', () => {
   it('a hidden relation type survives a reload: ?relTypes= is sent with the first request', async () => {
     renderExplorer(`/graph/explore?seed=${JOE_ID}&relTypes=WORKS_FOR`);
     const canvas = await screen.findByTestId('fake-canvas');
-    await within(canvas).findByRole('button', { name: 'Acme Corp' });
+    await within(canvas).findByRole('button', { name: 'Org Kappa' });
     expect(bodies[0].relationTypes).toEqual(['WORKS_FOR']);
     expect(within(canvas).queryByRole('button', { name: REPORTS_TO_EDGE_NAME })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Relations \(\d+ hidden\)/ })).toBeInTheDocument();
@@ -276,14 +276,14 @@ describe('lenses (GIC-17)', () => {
     const panel = await openLensMenu(user);
     await user.click(await within(panel).findByRole('button', { name: /Save current view as a lens/ }));
     const dialog = await screen.findByRole('dialog', { name: 'Save as a lens' });
-    await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), 'Joe at Acme');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), 'Joe at Kappa');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(settingsPatches).toHaveLength(1));
     const [saved] = (settingsPatches[0] as { graph: { explorer: { lenses: Array<Record<string, unknown>> } } }).graph.explorer.lenses;
-    expect(saved).toMatchObject({ name: 'Joe at Acme', seeds: [JOE_ID], relTypes: ['WORKS_FOR'], layout: 'concentric', types: null });
+    expect(saved).toMatchObject({ name: 'Joe at Kappa', seeds: [JOE_ID], relTypes: ['WORKS_FOR'], layout: 'concentric', types: null });
     await waitFor(() => expect(currentUrl().searchParams.get('lens')).toBe(saved.id));
-    expect(await screen.findByRole('button', { name: 'Joe at Acme' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Joe at Kappa' })).toBeInTheDocument();
   });
 
   it('applies a saved lens: its seeds, filters and layout go to the URL, its pins to the layout key', async () => {
@@ -321,7 +321,7 @@ describe('lenses (GIC-17)', () => {
       `/graph/explore?seed=${JOE_ID}&types=Person,Organization&relTypes=${relTypes}&layout=concentric&lens=builtin:people-network&asOf=2026-06-01`,
     );
     const canvas = await screen.findByTestId('fake-canvas');
-    await within(canvas).findByRole('button', { name: 'Acme Corp' });
+    await within(canvas).findByRole('button', { name: 'Org Kappa' });
     expect(canvas).toHaveAttribute('data-layout', 'concentric');
     expect(bodies[0]).toMatchObject({ nodeIds: [JOE_ID], as_of: '2026-06-01' });
     expect(bodies[0].types).toEqual(['Person', 'Organization']);
@@ -359,13 +359,13 @@ describe('history (GIC-17)', () => {
 
   it('Ctrl+Z undoes a Hide and Shift+Ctrl+Z redoes it', async () => {
     renderExplorer();
-    const canvas = await hideNode('Acme Corp');
+    const canvas = await hideNode('Org Kappa');
 
     ctrlZ();
-    await within(canvas).findByRole('button', { name: 'Acme Corp' });
+    await within(canvas).findByRole('button', { name: 'Org Kappa' });
 
     ctrlZ(true);
-    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Acme Corp' })).not.toBeInTheDocument());
+    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Org Kappa' })).not.toBeInTheDocument());
   });
 
   it('Undo of a filter change puts the URL back too', async () => {
@@ -385,13 +385,13 @@ describe('history (GIC-17)', () => {
   it('does not steal Ctrl+Z from a text field', async () => {
     const user = userEvent.setup();
     renderExplorer();
-    const canvas = await hideNode('Acme Corp');
+    const canvas = await hideNode('Org Kappa');
     await user.click(await screen.findByRole('button', { name: 'Lens' }));
     await screen.findByRole('dialog', { name: 'Lenses' });
     await user.click(await screen.findByRole('button', { name: /Save current view as a lens/ }));
     const name = await screen.findByRole('textbox', { name: 'Name' });
     fireEvent.keyDown(name, { key: 'z', ctrlKey: true });
-    expect(within(canvas).queryByRole('button', { name: 'Acme Corp' })).not.toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'Org Kappa' })).not.toBeInTheDocument();
   });
 
   it('on a phone, Hide is followed by a snackbar with Undo', async () => {
@@ -399,12 +399,12 @@ describe('history (GIC-17)', () => {
     act(() => setViewportWidth(390));
     const user = userEvent.setup();
     renderExplorer();
-    const canvas = await hideNode('Acme Corp');
+    const canvas = await hideNode('Org Kappa');
 
     const snackbar = await screen.findByText('Node hidden');
     expect(snackbar).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Undo' }));
-    await within(canvas).findByRole('button', { name: 'Acme Corp' });
+    await within(canvas).findByRole('button', { name: 'Org Kappa' });
   });
 
   it('focus changes add a history entry; [ and ] walk the focus trail and the breadcrumbs follow', async () => {
@@ -496,14 +496,14 @@ describe('Ask about this selection (GIC-17)', () => {
     renderExplorer(undefined, SLOTS);
     const canvas = await canvasReady();
     await user.click(screen.getByRole('button', { name: 'Select' }));
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
     await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
     const group = await screen.findByRole('group', { name: 'Selection' });
 
     await user.click(within(group).getByRole('button', { name: 'Ask about this selection' }));
     await screen.findByTestId('ask-stub');
     const open = askProps.filter((p) => p.open).pop()!;
-    expect([...open.scope!.entityIds].sort()).toEqual([ACME_ID, ANA_ID].sort());
+    expect([...open.scope!.entityIds].sort()).toEqual([KAPPA_ID, ANA_ID].sort());
     expect(open.entityLabel).toMatch(/and 1 more$/);
   });
 

@@ -2,7 +2,7 @@
 // EntityBriefService (#372, epic #347; docs/specs/ontology.md §9.1, §9.2, §9.4)
 // =============================================================================
 //
-// "What's the latest on Acme?" — answered from STORED ROWS ONLY:
+// "What's the latest on Kappa?" — answered from STORED ROWS ONLY:
 //
 //   - five deterministic, cited sections (`brief-sections.ts`) over the
 //     entity's readable items and exclusive relations, windowed by `since`

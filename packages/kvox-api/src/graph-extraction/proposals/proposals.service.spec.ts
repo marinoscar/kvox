@@ -7,7 +7,7 @@ const schema = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAt
 const OWNER = '0a000000-0000-4000-8000-000000000001';
 const P = '0b000000-0000-4000-8000-000000000001';
 const SARAH = '0f000000-0000-4000-8000-000000000001';
-const ACME = '0f000000-0000-4000-8000-000000000002';
+const KAPPA = '0f000000-0000-4000-8000-000000000002';
 const JOE = '0f000000-0000-4000-8000-000000000003';
 
 const user = { id: OWNER, email: 'o@example.test', roles: [], permissions: ['graph:read', 'graph:write'], isActive: true };
@@ -54,11 +54,11 @@ function baseItems(): Row[] {
         adjudication: null,
       },
     }),
-    item(E2, { decision: 'reject', payload: { ref: 'e2', type: 'Organization', label: 'Acme', aliases: [], props: {}, occurredAt: null } }),
+    item(E2, { decision: 'reject', payload: { ref: 'e2', type: 'Organization', label: 'Kappa', aliases: [], props: {}, occurredAt: null } }),
     item(R1, {
       kind: 'relation',
       decision: 'accept',
-      payload: { ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { entityId: ACME }, props: {}, validFrom: null, validTo: null, precision: 'unknown' },
+      payload: { ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { entityId: KAPPA }, props: {}, validFrom: null, validTo: null, precision: 'unknown' },
     }),
     item(PF, {
       kind: 'item',
@@ -68,7 +68,7 @@ function baseItems(): Row[] {
         props: {}, validFrom: null, validTo: null, precision: 'unknown',
       },
     }),
-    item(C1, { kind: 'closing', payload: { relationId: ACME } }),
+    item(C1, { kind: 'closing', payload: { relationId: KAPPA } }),
   ];
 }
 
@@ -76,7 +76,7 @@ function setup(opts: { status?: string; items?: Row[]; evidence?: string[]; enti
   const items = opts.items ?? baseItems();
   const entities = opts.entities ?? [
     { id: SARAH, type: 'Person', ownerId: OWNER },
-    { id: ACME, type: 'Organization', ownerId: OWNER },
+    { id: KAPPA, type: 'Organization', ownerId: OWNER },
     { id: JOE, type: 'Person', ownerId: OWNER },
   ];
   const tx: Row = {
@@ -178,7 +178,7 @@ describe('ProposalsService — decisions', () => {
 
   it('merge_into: the target must be a live entity of the same type', async () => {
     const { service, updateData } = setup();
-    const wrong = await service.decide(user, P, E1, { decision: 'merge_into', mergeIntoId: ACME }).catch((e: unknown) => e);
+    const wrong = await service.decide(user, P, E1, { decision: 'merge_into', mergeIntoId: KAPPA }).catch((e: unknown) => e);
     expect(wrong).toBeInstanceOf(BadRequestException);
     await expect(
       service.decide(user, P, E1, { decision: 'merge_into', mergeIntoId: 'e0000000-0000-4000-8000-000000000077' }),
@@ -196,14 +196,14 @@ describe('ProposalsService — decisions', () => {
     it('re-points an endpoint into editedPayload', async () => {
       const { service, updateData } = setup();
       await service.decide(user, P, R1, { decision: 'accept', relinkTo: { field: 'from', target: { entityId: SARAH } } });
-      expect(updateData().editedPayload).toEqual(expect.objectContaining({ from: { entityId: SARAH }, to: { entityId: ACME } }));
+      expect(updateData().editedPayload).toEqual(expect.objectContaining({ from: { entityId: SARAH }, to: { entityId: KAPPA } }));
     });
 
     it('refuses a rejected proposal ref', async () => {
       const { service } = setup({
         items: [
           ...baseItems().slice(0, 2),
-          item(R1, { kind: 'relation', payload: { ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { entityId: ACME }, props: {}, validFrom: null, validTo: null, precision: 'unknown' } }),
+          item(R1, { kind: 'relation', payload: { ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { entityId: KAPPA }, props: {}, validFrom: null, validTo: null, precision: 'unknown' } }),
         ],
       });
       const err = await service.decide(user, P, R1, { decision: 'accept', relinkTo: { field: 'to', target: { ref: 'e2' } } }).catch((e: unknown) => e);
@@ -295,7 +295,7 @@ describe('ProposalsService — add from span', () => {
     const { service, tx } = setup();
     await service.addItem(user, P, {
       kind: 'relation',
-      payload: { ref: 'mine', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { entityId: ACME }, validFrom: null, validTo: null, precision: 'unknown' },
+      payload: { ref: 'mine', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { entityId: KAPPA }, validFrom: null, validTo: null, precision: 'unknown' },
       evidence: [{ source: 'note', noteVersion: 1, charStart: 0, charEnd: 2, quote: 'ab' }],
     });
     const data = tx.kgProposalItem.create.mock.calls[0][0].data;
@@ -314,10 +314,10 @@ describe('ProposalsService — add from span', () => {
     });
     expect(tx.kgProposalItem.create.mock.calls[0][0].data).toEqual(expect.objectContaining({ decision: 'merge_into', mergeIntoId: SARAH }));
     await expect(
-      service.addItem(user, P, { kind: 'entity', payload: { type: 'Person', label: 'X' }, existingEntityId: ACME, evidence: [{ source: 'note', noteVersion: 1, charStart: 0, charEnd: 2, quote: 'ab' }] }),
+      service.addItem(user, P, { kind: 'entity', payload: { type: 'Person', label: 'X' }, existingEntityId: KAPPA, evidence: [{ source: 'note', noteVersion: 1, charStart: 0, charEnd: 2, quote: 'ab' }] }),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
-      service.addItem(user, P, { kind: 'relation', payload: {}, existingEntityId: ACME, evidence: [{ source: 'note', noteVersion: 1, charStart: 0, charEnd: 2, quote: 'ab' }] }),
+      service.addItem(user, P, { kind: 'relation', payload: {}, existingEntityId: KAPPA, evidence: [{ source: 'note', noteVersion: 1, charStart: 0, charEnd: 2, quote: 'ab' }] }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -326,7 +326,7 @@ describe('ProposalsService — add from span', () => {
     await service.addItem(user, P, {
       kind: 'item',
       payload: {
-        kind: 'claim', title: 'Budget', statement: 'The budget was cut.', subject: { entityId: ACME }, owner: null, counterparty: null,
+        kind: 'claim', title: 'Budget', statement: 'The budget was cut.', subject: { entityId: KAPPA }, owner: null, counterparty: null,
         meeting: null, status: null, occurredAt: null, dueAt: null, sensitivity: null, statementHash: 'forged', props: {},
         validFrom: null, validTo: null, precision: 'unknown',
       },

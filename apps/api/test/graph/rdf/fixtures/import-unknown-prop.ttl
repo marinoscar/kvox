@@ -15,10 +15,10 @@ crm:nickname rdfs:label "Nickname" .
 src:joe a kv:Person ;
     rdfs:label "Joe Smith" ;
     crm:nickname "Joey" ;
-    kv:WORKS_FOR src:acme ;
+    kv:WORKS_FOR src:kappa ;
     prov:wasDerivedFrom src:crm-1 .
 
-src:acme a kv:Organization ;
-    rdfs:label "Acme Robotics" ;
+src:kappa a kv:Organization ;
+    rdfs:label "Kappa Robotics" ;
     crm:employees "42"^^xsd:integer ;
     prov:wasDerivedFrom src:crm-2 .

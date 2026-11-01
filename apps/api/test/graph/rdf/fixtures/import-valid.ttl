@@ -23,7 +23,7 @@ src:joe a kv:Person ;
     rdfs:label "Joe Smith" ;
     skos:altLabel "Joseph Smith" ;
     schema:jobTitle "Head of Sales" ;
-    kv:WORKS_FOR src:acme ;
+    kv:WORKS_FOR src:kappa ;
     prov:wasDerivedFrom src:note-1 .
 
 src:ana a kv:Person ;
@@ -31,15 +31,15 @@ src:ana a kv:Person ;
     kv:REPORTS_TO src:joe ;
     prov:wasDerivedFrom src:crm-2 .
 
-src:acme a kv:Organization ;
-    rdfs:label "Acme Robotics" ;
-    schema:url "https://acme.example"^^xsd:anyURI ;
+src:kappa a kv:Organization ;
+    rdfs:label "Kappa Robotics" ;
+    schema:url "https://kappa.example.test"^^xsd:anyURI ;
     prov:wasDerivedFrom src:crm-3 .
 
-src:joe-at-acme a kv:Assertion ;
+src:joe-at-kappa a kv:Assertion ;
     rdf:subject src:joe ;
     rdf:predicate kv:WORKS_FOR ;
-    rdf:object src:acme ;
+    rdf:object src:kappa ;
     prov:startedAtTime "2019-03-01T00:00:00.000Z"^^xsd:dateTime ;
     prov:endedAtTime "2024-07-01T00:00:00.000Z"^^xsd:dateTime ;
     kv:validPrecision "month" ;
@@ -48,12 +48,12 @@ src:joe-at-acme a kv:Assertion ;
 
 src:deck a kv:Commitment ;
     rdfs:label "Send the deck" ;
-    kv:Commitment.statement "Joe will send the deck to Acme by Friday." ;
+    kv:Commitment.statement "Joe will send the deck to Kappa by Friday." ;
     kv:ASSIGNED_TO src:joe ;
-    kv:OWED_TO src:acme ;
+    kv:OWED_TO src:kappa ;
     kv:status "open" ;
     kv:dueAt "2026-04-10T00:00:00.000Z"^^xsd:dateTime ;
     prov:wasDerivedFrom src:note-1 .
 
 src:note-1 a oa:Annotation ;
-    oa:hasBody [ rdf:value "Joe joined Acme in March 2019 and owes them the deck." ] .
+    oa:hasBody [ rdf:value "Joe joined Kappa in March 2019 and owes them the deck." ] .

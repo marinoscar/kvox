@@ -13,10 +13,10 @@ describe('entityAskSuggestions', () => {
   });
 
   it('asks an Organization about the latest, decisions and contacts', () => {
-    expect(entityAskSuggestions({ label: 'Acme Corp', type: 'Organization' })).toEqual([
-      "What's the latest on Acme Corp?",
-      'Which decisions involved Acme Corp?',
-      'Who do we work with at Acme Corp?',
+    expect(entityAskSuggestions({ label: 'Org Kappa', type: 'Organization' })).toEqual([
+      "What's the latest on Org Kappa?",
+      'Which decisions involved Org Kappa?',
+      'Who do we work with at Org Kappa?',
     ]);
   });
 

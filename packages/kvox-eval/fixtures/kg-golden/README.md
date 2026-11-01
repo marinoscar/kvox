@@ -13,7 +13,7 @@ Every meeting here is **invented**. No real recording, transcript, note, name,
 company, email address or phone number belongs in this directory, anonymised or
 not: speech re-identifies people (voices, employers, events), and a private
 conversation is exactly what this product never exposes to anyone else. Names
-and organisations are made up (Larkspur Labs, Northwind Robotics, Halden
+and organisations are made up (Larkspur Labs, Org Lambda Robotics, Halden
 Freight, …); an email address, if one is ever needed, uses `@example.com`; the
 product's own name never appears. The fixture test enforces the email, phone
 and product-name rules with regexes.
@@ -97,7 +97,7 @@ never enables `personal` is offered none of it.
 - Resolution traps: two different Sarahs at different organisations
   (`two-sarahs`), a misspelling ("Sara Chen", `misspelling`), a nickname
   matching a known alias ("JJ", `nickname`), an abbreviation ("NWR" /
-  "Northwind Robotics", `abbreviation`).
+  "Org Lambda Robotics", `abbreviation`).
 - Supersedes chains: a decision reversed in a later fixture, and "the pilot
   moved to Q2" after "the pilot is scheduled for Q1".
 - ≥ 2 note-only meetings (`note-only`).

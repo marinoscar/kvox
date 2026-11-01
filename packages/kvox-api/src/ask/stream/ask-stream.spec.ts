@@ -33,7 +33,7 @@ import {
 const call = (index: number, overrides: Partial<AskToolCall> = {}): AskToolCall => ({
   index,
   name: 'search',
-  arguments: { query: 'Acme' },
+  arguments: { query: 'Kappa' },
   summary: `Step ${index}`,
   resultCount: 2,
   durationMs: 40,

@@ -102,10 +102,10 @@ describe('PdfNoteExporter', () => {
   });
 
   it('names the host\'s brand in the footer and the document info when one is bound', async () => {
-    const branded = new PdfNoteExporter(new NoteExporterRegistry(), { appName: 'Acme Notes', appSlug: 'acme-notes' });
+    const branded = new PdfNoteExporter(new NoteExporterRegistry(), { appName: 'Kappa Notes', appSlug: 'kappa-notes' });
     const text = await extractPdfText(await collect(branded, noteDocument()));
 
-    expect(text).toContain('Version 3 · Exported from Acme Notes');
+    expect(text).toContain('Version 3 · Exported from Kappa Notes');
     expect(text).not.toContain(`Exported from ${APP_NAME}`);
   });
 

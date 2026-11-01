@@ -43,7 +43,7 @@ function question(over: Partial<AskEvalQuestion> = {}): AskEvalQuestion {
 
 function message(over: Partial<Pick<AskMessageResponse, 'content' | 'citations' | 'promptTokens' | 'completionTokens' | 'toolCalls'>> = {}) {
   return {
-    content: 'Sarah Chen works for Northwind Robotics.[^ev1]',
+    content: 'Sarah Chen works for Org Lambda Robotics.[^ev1]',
     citations: [citation()],
     promptTokens: 100,
     completionTokens: 20,
@@ -124,12 +124,12 @@ describe('scoreEntityRecall', () => {
     expect(scoreEntityRecall([], [])).toBe(1);
   });
   it('is the fraction of expected labels cited, case-insensitively', () => {
-    const citations = [citation({ kind: 'entity', label: 'northwind robotics' })];
-    expect(scoreEntityRecall(['Northwind Robotics', 'Sarah Chen'], citations)).toBe(0.5);
+    const citations = [citation({ kind: 'entity', label: 'org lambda robotics' })];
+    expect(scoreEntityRecall(['Org Lambda Robotics', 'Sarah Chen'], citations)).toBe(0.5);
   });
   it('an invalid citation does not count toward recall', () => {
-    const citations = [citation({ kind: 'entity', label: 'Northwind Robotics', valid: false })];
-    expect(scoreEntityRecall(['Northwind Robotics'], citations)).toBe(0);
+    const citations = [citation({ kind: 'entity', label: 'Org Lambda Robotics', valid: false })];
+    expect(scoreEntityRecall(['Org Lambda Robotics'], citations)).toBe(0);
   });
 });
 
@@ -162,7 +162,7 @@ describe('scoreAnswerMatch', () => {
   });
 
   it('passes when every answerAll group matches and nothing forbidden appears', () => {
-    const { matched, reasons } = scoreAnswerMatch(expected({ answerAll: [['Northwind Robotics']] }), 'She works for Northwind Robotics.', []);
+    const { matched, reasons } = scoreAnswerMatch(expected({ answerAll: [['Org Lambda Robotics']] }), 'She works for Org Lambda Robotics.', []);
     expect(matched).toBe(true);
     expect(reasons).toEqual([]);
   });
@@ -173,7 +173,7 @@ describe('scoreAnswerMatch', () => {
   });
 
   it('fails when a required group has no match (missing group)', () => {
-    const { matched, reasons } = scoreAnswerMatch(expected({ answerAll: [['Northwind Robotics']] }), 'She works somewhere.', []);
+    const { matched, reasons } = scoreAnswerMatch(expected({ answerAll: [['Org Lambda Robotics']] }), 'She works somewhere.', []);
     expect(matched).toBe(false);
     expect(reasons[0]).toMatch(/missing required phrase/);
   });
@@ -204,8 +204,8 @@ describe('scoreAnswerMatch', () => {
 
 describe('scoreAnswer (the full score)', () => {
   it('assembles every field, using capturedPrompts.length for steps', () => {
-    const q = question({ expected: { entities: ['Northwind Robotics'], answerAll: [['Northwind Robotics']], answerNone: [], citeFrom: ['m01-s002'], notFound: false } });
-    const msg = message({ citations: [citation({ kind: 'entity', label: 'Northwind Robotics' }), citation({ id: 'ev-id-1' })] });
+    const q = question({ expected: { entities: ['Org Lambda Robotics'], answerAll: [['Org Lambda Robotics']], answerNone: [], citeFrom: ['m01-s002'], notFound: false } });
+    const msg = message({ citations: [citation({ kind: 'entity', label: 'Org Lambda Robotics' }), citation({ id: 'ev-id-1' })] });
     const score = scoreAnswer(q, msg, ['req-1', 'req-2'], evSource, { ms: 1234 });
 
     expect(score.questionId).toBe('q01');
@@ -223,7 +223,7 @@ describe('scoreAnswer (the full score)', () => {
   });
 
   it('answerMatch is false when citeFrom is required but nothing resolves, even if answerAll matched', () => {
-    const q = question({ expected: { entities: [], answerAll: [['Northwind Robotics']], answerNone: [], citeFrom: ['m01-s002'], notFound: false } });
+    const q = question({ expected: { entities: [], answerAll: [['Org Lambda Robotics']], answerNone: [], citeFrom: ['m01-s002'], notFound: false } });
     const msg = message({ citations: [] });
     const score = scoreAnswer(q, msg, [], evSource);
     expect(score.answerMatch).toBe(false);

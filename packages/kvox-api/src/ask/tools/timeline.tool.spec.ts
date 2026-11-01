@@ -7,7 +7,7 @@ import { TimelineTool } from './timeline.tool.js';
 // =============================================================================
 
 const SARAH = uid(1);
-const ACME = uid(2);
+const KAPPA = uid(2);
 const DECISION = uid(3);
 const FACT = uid(4);
 const REL = uid(5);
@@ -25,8 +25,8 @@ const events = [
     item: {
       id: DECISION,
       kind: 'decision',
-      title: 'Go with Acme',
-      statement: 'We will sign with Acme for the pilot.',
+      title: 'Go with Kappa',
+      statement: 'We will sign with Kappa for the pilot.',
       status: 'active',
       dueAt: null,
       ownerPerson: null,
@@ -52,7 +52,7 @@ const events = [
     eventKind: 'relation_started',
     at: '2019-03-01T00:00:00.000Z',
     precision: 'month',
-    relation: { id: REL, type: 'WORKS_AT', direction: 'out', other: ref(ACME, 'Acme', 'Organization'), valid: null },
+    relation: { id: REL, type: 'WORKS_AT', direction: 'out', other: ref(KAPPA, 'Kappa', 'Organization'), valid: null },
     evidenceIds: [],
     evidenceCount: 0,
   },
@@ -144,7 +144,7 @@ describe('TimelineTool', () => {
     expect(data[0]).toMatchObject({
       ref: 'itm1',
       event: 'decision',
-      text: 'Go with Acme: We will sign with Acme for the pilot.',
+      text: 'Go with Kappa: We will sign with Kappa for the pilot.',
       status: 'active',
       superseded: true,
       at: '2026-08-01',
@@ -156,8 +156,8 @@ describe('TimelineTool', () => {
     expect(data[1]).toMatchObject({
       ref: 'rel1',
       event: 'relation_started',
-      text: 'WORKS_AT → Acme (Organization) started',
-      other: { ref: 'ent2', label: 'Acme' },
+      text: 'WORKS_AT → Kappa (Organization) started',
+      other: { ref: 'ent2', label: 'Kappa' },
       at: '2019-03-01',
       precision: 'month',
     });

@@ -202,8 +202,8 @@ describeWithDb('entity resolution (real Postgres)', () => {
   it('resolves "Sarah Chen" in a second meeting — exact alias, same organization — above 0.90', async () => {
     const user = await createUser();
     const sarah = await entity(user.id, 'Person', 'Sarah Chen');
-    const northwind = await entity(user.id, 'Organization', 'Northwind Robotics');
-    await relation(user.id, 'WORKS_FOR', sarah, northwind);
+    const lambda = await entity(user.id, 'Organization', 'Org Lambda Robotics');
+    await relation(user.id, 'WORKS_FOR', sarah, lambda);
 
     const outcomes = await resolution.rankMentions(
       user.id,
@@ -213,7 +213,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
           type: 'Person',
           label: 'Sarah Chen',
           aliases: [],
-          context: { ...emptyContext(), orgNames: new Set(['northwind robotics']) },
+          context: { ...emptyContext(), orgNames: new Set(['org lambda robotics']) },
         },
       ],
       GRAPH_PREFERENCE_DEFAULTS.resolution,
@@ -248,7 +248,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
     const note = await prisma.note.create({ data: { ownerId: user.id, title: 'M', body: 'b', status: 'ready', sourceType: 'document' } });
     const s = await entity(user.id, 'Person', 'Sarah Chen', ['Sarah']);
     const m = await entity(user.id, 'Person', 'S. Chen', ['Sarah']); // 'sarah' collides and stays behind
-    const org = await entity(user.id, 'Organization', 'Northwind');
+    const org = await entity(user.id, 'Organization', 'Lambda');
     const x = await entity(user.id, 'Person', 'Tom Hale');
     const meeting = await entity(user.id, 'Meeting', 'Weekly');
     const ids = {
@@ -383,8 +383,8 @@ describeWithDb('entity resolution (real Postgres)', () => {
 
   it('refuses a merge across types with 400 type_mismatch', async () => {
     const user = await createUser();
-    const p = await entity(user.id, 'Person', 'Acme');
-    const o = await entity(user.id, 'Organization', 'Acme');
+    const p = await entity(user.id, 'Person', 'Kappa');
+    const o = await entity(user.id, 'Organization', 'Kappa');
     await expect(merges.merge({ ownerId: user.id, mergedId: p, survivorId: o, actorId: user.id, source: 'manual' })).rejects.toMatchObject({
       status: 400,
       response: { details: { reason: 'type_mismatch' } },

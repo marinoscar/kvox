@@ -8,7 +8,7 @@ import 'vitest-axe/extend-expect';
 
 import { EntityConnectionsList } from '../../src/graph/ui/components/EntityConnectionsList.js';
 import { server } from './msw-compat.js';
-import { ACME_ID, DANA_ID, JOE_ID, gid, graphOntologyFixture } from './graphData.js';
+import { KAPPA_ID, DANA_ID, JOE_ID, gid, graphOntologyFixture } from './graphData.js';
 import { render } from './helpers.js';
 import { graphWriter } from './graphTestUsers.js';
 
@@ -133,11 +133,11 @@ describe('EntityConnectionsList — manual relation edits (#586)', () => {
     await user.type(within(dialog).getByRole('combobox', { name: 'Employer' }), 'a');
     const options = await screen.findAllByRole('option');
     expect(options.every((o) => /· Organization$/.test(o.textContent ?? ''))).toBe(true);
-    await user.click(screen.getByRole('option', { name: /Acme Corp/ }));
+    await user.click(screen.getByRole('option', { name: /Org Kappa/ }));
     await user.type(within(dialog).getByLabelText('Since'), '2026-03-01');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0].body).toEqual({ type: 'WORKS_FOR', toId: ACME_ID, validFrom: '2026-03-01' });
+    expect(posted[0].body).toEqual({ type: 'WORKS_FOR', toId: KAPPA_ID, validFrom: '2026-03-01' });
   });
 
   it('adds a role: the title is required, the business unit optional', async () => {
@@ -145,13 +145,13 @@ describe('EntityConnectionsList — manual relation edits (#586)', () => {
     renderList();
     await user.click(await screen.findByRole('button', { name: 'Add role' }));
     const dialog = await screen.findByRole('dialog', { name: 'Add role' });
-    await pick(user, 'Organization', 'Acme', /Acme Corp/);
+    await pick(user, 'Organization', 'Kappa', /Org Kappa/);
     expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled();
     await user.type(within(dialog).getByRole('textbox', { name: /^Title/ }), 'VP');
     await user.type(within(dialog).getByRole('textbox', { name: 'Business unit' }), 'Finance');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0].body).toEqual({ type: 'HAS_ROLE', toId: ACME_ID, props: { title: 'VP', businessUnit: 'Finance' } });
+    expect(posted[0].body).toEqual({ type: 'HAS_ROLE', toId: KAPPA_ID, props: { title: 'VP', businessUnit: 'Finance' } });
   });
 
   it('shows the API error in the dialog and keeps it open', async () => {

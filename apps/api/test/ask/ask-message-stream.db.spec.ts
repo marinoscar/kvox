@@ -27,7 +27,7 @@ const EMAIL_PREFIX = 'ask-stream-test';
 const step = (index: number) => ({
   index,
   name: 'search',
-  arguments: { q: 'Acme' },
+  arguments: { q: 'Kappa' },
   summary: `Searched ${index}`,
   resultCount: 2,
   durationMs: 7,
@@ -67,9 +67,9 @@ describeWithDb('Ask message stream (real Postgres)', () => {
 
   async function turn(suffix: string) {
     const owner = await createUser(prisma, EMAIL_PREFIX, suffix);
-    const conversation = await prisma.askConversation.create({ data: { ownerId: owner.id, title: 'Acme' } });
+    const conversation = await prisma.askConversation.create({ data: { ownerId: owner.id, title: 'Kappa' } });
     await prisma.askMessage.create({
-      data: { conversationId: conversation.id, role: 'user', status: 'complete', content: 'What about Acme?' },
+      data: { conversationId: conversation.id, role: 'user', status: 'complete', content: 'What about Kappa?' },
     });
     const assistant = await prisma.askMessage.create({
       data: { conversationId: conversation.id, role: 'assistant', status: 'pending' },
@@ -79,7 +79,7 @@ describeWithDb('Ask message stream (real Postgres)', () => {
 
   it('tails a live turn written the way ask.respond writes it, ending in done', async () => {
     const { owner, assistant } = await turn('live');
-    const answer = 'Acme renewed in March [^ev1]. Two-year term.';
+    const answer = 'Kappa renewed in March [^ev1]. Two-year term.';
 
     // Authorised exactly as the controller does it.
     await expect(access.requireMessage(owner.id, assistant.id)).resolves.toMatchObject({ role: 'assistant' });
