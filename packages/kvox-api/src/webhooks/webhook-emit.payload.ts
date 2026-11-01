@@ -9,7 +9,9 @@ import { z } from 'zod';
  */
 export const webhookEmitPayloadSchema = z
   .object({
+    /** The catalog event key to emit. */
     eventKey: z.string().min(1),
+    /** The user whose event it is. */
     userId: z.string().min(1),
     /** Identifiers and counts the event already carried. */
     refs: z.record(z.string(), z.union([z.string(), z.number(), z.null()])),

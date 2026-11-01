@@ -52,9 +52,13 @@ export const KVOX_WEBHOOK_TRANSCRIPTS_SPEAKERS_IDENTIFIED = 'kvox.transcripts.sp
  */
 export const graphProposalDraftedWebhookSchema = z
   .object({
+    /** The drafted proposal. */
     proposalId: id,
+    /** The note the draft was extracted from. */
     noteId: id,
+    /** The version of that note. */
     noteVersion: z.number().int().min(0),
+    /** How many items the draft holds. */
     itemCount: count.describe('How many items the draft holds.'),
   })
   .strict();
@@ -66,9 +70,13 @@ export const graphProposalDraftedWebhookSchema = z
  */
 export const graphCommittedWebhookSchema = z
   .object({
+    /** The committed proposal. */
     proposalId: id,
+    /** Entities the commit created. */
     entitiesCreated: count,
+    /** Relations the commit created. */
     relationsCreated: count,
+    /** Entities the commit linked to existing ones. */
     entitiesLinked: count,
   })
   .strict();
@@ -80,14 +88,22 @@ export const graphCommittedWebhookSchema = z
  */
 export const notesImportBatchSettledWebhookSchema = z
   .object({
+    /** The settled batch. */
     batchId: id,
+    /** The library the batch imported into, or null. */
     libraryId: id.nullable(),
+    /** Item counts by outcome. */
     counts: z
       .object({
+        /** Items imported. */
         imported: count,
+        /** Items that failed. */
         failed: count,
+        /** Items whose source was missing. */
         missing: count,
+        /** Items skipped. */
         skipped: count,
+        /** Other items. */
         other: count.describe('Items still queued or importing (zero for a settled batch).'),
       })
       .strict(),
@@ -101,7 +117,9 @@ export const notesImportBatchSettledWebhookSchema = z
  */
 export const transcriptsSpeakersIdentifiedWebhookSchema = z
   .object({
+    /** The transcript whose speakers were identified. */
     transcriptId: id,
+    /** How many speakers changed. */
     speakerCount: count,
   })
   .strict();
@@ -185,6 +203,7 @@ export const KVOX_WEBHOOK_EVENTS: readonly KvoxWebhookEventDef[] = Object.freeze
  * The catalog entry for a key, or `undefined`.
  *
  * @param key - an event key.
+ * @stability experimental
  */
 export function findKvoxWebhookEvent(key: string): KvoxWebhookEventDef | undefined {
   return KVOX_WEBHOOK_EVENTS.find((def) => def.key === key);
