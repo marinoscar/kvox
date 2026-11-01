@@ -108,7 +108,7 @@ npm run docs:kvox-packages          # TypeDoc for the six packages
 npm run check:kvox-package-docs     # docs, then the standard above
 ```
 
-`check-package-docs.mjs` reads `docs-api/api.json` for the `@stability` and `@extensionPoint` rules and compares `typedoc.json` `entryPoints` with the `exports` map in both directions. CI uploads the HTML as the `kvox-api-reference` artifact.
+`check-package-docs.mjs` reads `docs-api/api.json` for the `@stability` and `@extensionPoint` rules and compares `typedoc.json` `entryPoints` with the `exports` map in both directions. CI uploads the HTML as the `kvox-api-reference` artifact on pushes to `main` (kept 7 days; pull requests skip the upload).
 
 ## Adding a slice
 
