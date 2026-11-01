@@ -165,8 +165,8 @@ export function codeLanguageLabel(language: string | null): string | null {
 }
 
 /** `Exported Sep 12, 2026`. */
-export function exportedLabel(doc: Pick<NoteExportDocument, 'exportedAt'>): string {
-  return `Exported ${formatDate(doc.exportedAt)}`;
+export function exportedLabel(doc: Pick<NoteExportDocument, 'exportedAt' | 'timeZone'>): string {
+  return `Exported ${formatDate(doc.exportedAt, doc.timeZone)}`;
 }
 
 /** The small uppercase line above the title: the template name, else `NOTE`. */

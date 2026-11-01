@@ -67,7 +67,10 @@
 // `alreadyDone` below.
 // =============================================================================
 
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+
+import { isValidTimeZone, KvoxTimeZoneService } from '../../core/index.js';
+
 
 import {
   KVOX_JOBS,
@@ -103,6 +106,7 @@ export class NoteExportHandler implements KvoxJobHandler, OnModuleInit {
     @Inject(KVOX_PRISMA) private readonly prisma: KvoxNotesDb,
     private readonly exports: NoteExportService,
     private readonly objects: NoteObjectsService,
+    @Optional() private readonly zones?: KvoxTimeZoneService,
   ) {}
 
   /** Registers the handler with the job port when the module starts. */
@@ -140,7 +144,7 @@ export class NoteExportHandler implements KvoxJobHandler, OnModuleInit {
     }
 
     try {
-      await this.render(row);
+      await this.render(row, readString(job.payload, 'timeZone'));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -163,7 +167,7 @@ export class NoteExportHandler implements KvoxJobHandler, OnModuleInit {
   }
 
   /** Build, render, upload, record. */
-  private async render(row: NoteExportRow): Promise<void> {
+  private async render(row: NoteExportRow, zoneFromPayload: string | null): Promise<void> {
     const exporter = this.exports.exporterFor(row.format);
 
     if (!exporter) {
@@ -176,7 +180,11 @@ export class NoteExportHandler implements KvoxJobHandler, OnModuleInit {
       );
     }
 
-    const doc = await this.exports.buildDocument(row);
+    // The zone the request was made in (the job payload); a job queued without one reads the requester's.
+    const timeZone = isValidTimeZone(zoneFromPayload)
+      ? zoneFromPayload
+      : ((await this.zones?.forUser(row.requestedById)) ?? 'UTC');
+    const doc = await this.exports.buildDocument(row, timeZone);
     const options = this.exports.optionsOf(row, exporter);
     const filename = this.exports.filenameFor(row, doc.title);
 

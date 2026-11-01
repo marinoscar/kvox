@@ -1,5 +1,25 @@
 # @marinoscar/kvox-web
 
+## 0.1.0-next.22
+
+### Patch Changes
+
+- 085243e: Dependency and peer ranges on the platform packages move from 0.1.0-next.17 to 0.1.0-next.20, the release that adds the webhooks and alerts slices, node host and power telemetry, and platform migrations 0038 to 0040. No code in these packages changes.
+
+## 0.1.0-next.21
+
+### Minor Changes
+
+- 44d1864: Opening the knowledge graph now lands on the whole-graph overview. The graph route table serves `GraphOverviewPage` at `/graph` (clusters layer by default; `?layer=`, `?cluster=` and `?view=list` unchanged), moves the entity index (`GraphIndexPage`, URL state `q` and `type`) to `/graph/entities`, and turns `/graph/overview` into a redirect to `/graph` that keeps the query string (`GraphOverviewRedirect`). Both pages share the new `KnowledgeHeader` (links to the other view, Explore, Review and Possible duplicates; Synonyms, Export graph and, with `graph:write`, Import graph in the overflow menu). The overview gains empty and sparse states with Browse entities and Explore actions, and its caption reads "Updated <relative time>". New exports: `KnowledgeHeader`, `GraphOverviewRedirect`, `GRAPH_OVERVIEW_PATH`, `GRAPH_ENTITIES_PATH`. The entity page's back links and Home's "All people & organizations" now go to `/graph/entities`. Hosts that replace a route's `Component` by path keep working: `/graph/entities/:id` and `/graph/explore` are unchanged.
+- cbdb60c: Times render in the user's display time zone. Every date and time the slices show (the transcript's "Recorded …" line, note provenance, entity first and last seen, mentions, merges, briefs, graph exports and imports, review drafts, the Home import card, the transcription key's last change, the note context's capture time) goes through the formatters of `@marinoscar/platform-web/timezone/headless`, and the library feeds' Today / Yesterday / month groups and the transcript history's editing sessions are cut at the midnight of that zone. The zone is the one in the user's profile when the host mounts the platform's `UserTimeZoneSync`, else the device's, so a host without it (KVox Desktop) keeps today's behaviour. The "Edit recording date" field shows and saves the wall clock of the same zone. `groupFeedByDate`, `feedDateBucket` and `formatShortDate` take an optional `timeZone` argument. `@marinoscar/platform-web` is now a required peer (it was optional).
+- f33c475: The explorer and the review queue follow the user's calendar. The TimeBar, its presets and the as-of slider work in calendar days of the display time zone (the zone the API now cuts graph activity in): today is the local day, weeks start on the local Monday, day arithmetic runs on date keys (DST-safe), "Last 30/90 days" and "Last year" end at the local tomorrow, and an instant shown in the TimeBar lands in the bucket of its local day. `GraphActivityResponse` gains the required `timeZone` the API echoes. Start here's `since` is the local day 30 days back; a relation saved with an empty "Since" still sends no `validFrom` (the server uses the requester's today). An import group's heading formats the key's `createdAt` in the display zone when present. `formatRelativeTime` counts days on the local calendar ("yesterday" is the previous local day) and takes an optional zone. New `timeAxis` helpers: `dayKeyOf`, `todayDay`, `todayKey`, `addDaysToKey`; `presetRange`, `presetOf`, `timeControlLabel`, `rangeForInstant`, `monthSteps`, `sinceDate` and `reviewGroupLabel` take an optional IANA zone (default the display zone). `parseAsOfParam` rejects an impossible date such as `2026-02-31`.
+
+### Patch Changes
+
+- 41c6751: Dependency and peer ranges on the platform packages move from 0.1.0-next.17 to 0.1.0-next.18, the release that adds the user's time zone (`profile.timezone`, the world-map picker on the profile page) and renders every packaged date in it. kvox-web formats its own dates through the same display-zone store.
+- d41c7c7: Ontology descriptions, the graph extraction prompt, evaluation fixtures and code examples now use invented placeholders (Org Alpha, Product X, Avery Example) instead of real people, companies and products. No keys, schemas or behaviour change; the extraction prompt text and its recorded requests differ only in the example names.
+- 06665e8: Dependency and peer ranges on the platform packages move from 0.1.0-next.18 to 0.1.0-next.19, the release whose date operations and emails follow the user's time zone (`@marinoscar/platform-contract/timezone`, `X-Time-Zone`, `SettingsResolver.resolveUserTimeZone`).
+
 ## 0.1.0-next.20
 
 ### Minor Changes

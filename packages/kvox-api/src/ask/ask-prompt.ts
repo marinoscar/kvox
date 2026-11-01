@@ -13,6 +13,9 @@
 // that ignores rule 2 produces `valid: false` citations, never a fabricated one.
 // =============================================================================
 
+
+import { localDateKey, localTimeOfDay, pickTimeZone, weekdayOfDayKey } from '../core/index.js';
+
 export interface AskPromptScope {
   /** Always `ent1` — pre-registered by the handler before the first call. */
   handle: string;
@@ -30,6 +33,12 @@ export interface AskPromptSelectionItem {
 
 export interface AskPromptInput {
   now: Date;
+  /**
+   * The asker's IANA time zone: the prompt states the local date, time and zone, so "today",
+   * "yesterday" and "last Friday" mean what the user means. Absent: UTC. The caller captures it
+   * once (the request's zone), so the same inputs always build the same prompt.
+   */
+  timeZone?: string;
   scope: AskPromptScope | null;
   /** What the user selected on the graph canvas, as starting handles. Absent or empty: no line is added. */
   selection?: readonly AskPromptSelectionItem[];
@@ -47,8 +56,21 @@ function inline(text: string): string {
   return text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
+/**
+ * `2026-10-26 (Monday), 21:42 in America/Chicago`: the asker's local date, weekday, time and zone.
+ *
+ * @param now - the instant.
+ * @param timeZone - the asker's zone (an invalid one is read as UTC).
+ * @returns the phrase the prompt embeds after "Today is".
+ */
+export function askLocalNowPhrase(now: Date, timeZone: string | undefined): string {
+  const zone = pickTimeZone(timeZone);
+  const day = localDateKey(now, zone);
+  return `${day} (${weekdayOfDayKey(day)}), ${localTimeOfDay(now, zone)} in ${zone}`;
+}
+
 export function buildAskSystemPrompt(input: AskPromptInput): string {
-  const today = input.now.toISOString().slice(0, 10);
+  const today = askLocalNowPhrase(input.now, input.timeZone);
   const lines = [
     `You answer questions about the account holder's own knowledge graph, built from their reviewed meeting notes and transcripts. Today is ${today}.`,
     'Rules:',

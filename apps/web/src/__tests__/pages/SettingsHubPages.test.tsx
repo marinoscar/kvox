@@ -272,7 +272,7 @@ describe('UserSettingsHubPage — the real user registry', () => {
 
     expect(screen.getByRole('heading', { level: 6, name: 'Profile' })).toBeInTheDocument();
     expect(
-      screen.getByText(/your display name and profile image/i),
+      screen.getByText(/your display name, profile image and time zone/i),
     ).toBeInTheDocument();
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
   });
@@ -284,7 +284,7 @@ describe('UserSettingsHubPage — the real user registry', () => {
 
     expect(screen.getByText('Profile')).toBeInTheDocument();
     expect(
-      screen.queryByText(/your display name and profile image/i),
+      screen.queryByText(/your display name, profile image and time zone/i),
     ).not.toBeInTheDocument();
     // No card headings at this width — titles are plain row text, not `h6`s.
     expect(screen.queryByRole('heading', { level: 6 })).not.toBeInTheDocument();

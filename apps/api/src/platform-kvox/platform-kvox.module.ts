@@ -20,6 +20,8 @@ import { PlatformKvoxNotifyAdapter } from './notify/platform-kvox-notify.adapter
 import { PlatformKvoxObjectStoreAdapter } from './object-store/platform-kvox-object-store.adapter';
 import { PlatformKvoxSecretsAdapter } from './secrets/platform-kvox-secrets.adapter';
 import { PlatformKvoxSettingsAdapter } from './settings/platform-kvox-settings.adapter';
+import { PlatformKvoxWebhooksAdapter } from './webhooks/platform-kvox-webhooks.adapter';
+import { webhooksModule } from '../platform/webhooks/webhooks.config';
 
 // =============================================================================
 // PlatformKvoxModule (issue #490, epic #486)
@@ -43,6 +45,7 @@ import { PlatformKvoxSettingsAdapter } from './settings/platform-kvox-settings.a
 //   KVOX_SETTINGS      -> settings/  the platform settings registries and services
 //   KVOX_SECRETS       -> secrets/   the platform encrypted `CredentialsService`
 //   KVOX_AUDIT         -> audit/     the platform `AUDIT_SINK`
+//   KVOX_WEBHOOKS      -> webhooks/  `WebhooksService.emit` (optional port; #795)
 //
 // GLOBAL, because `KvoxPortsModule` is: a domain module imports nothing to inject a
 // port. Imported in `app.module.ts` before every domain module. A missing binding is a
@@ -55,9 +58,9 @@ import { PlatformKvoxSettingsAdapter } from './settings/platform-kvox-settings.a
  * modules whose providers the adapters inject.
  */
 @Module({
-  imports: [KvoxObjectsModule, CredentialsModule, ObjectProcessingModule],
+  imports: [KvoxObjectsModule, CredentialsModule, ObjectProcessingModule, webhooksModule],
   providers: [JwtAuthGuard],
-  exports: [JwtAuthGuard, KvoxObjectsModule, CredentialsModule, ObjectProcessingModule],
+  exports: [JwtAuthGuard, KvoxObjectsModule, CredentialsModule, ObjectProcessingModule, webhooksModule],
 })
 export class PlatformKvoxDepsModule {}
 
@@ -83,6 +86,7 @@ export const platformKvoxPorts: KvoxPortBindings = {
   secrets: { useClass: PlatformKvoxSecretsAdapter },
   events: { useClass: PlatformKvoxEventsAdapter },
   audit: { useClass: PlatformKvoxAuditAdapter },
+  webhooks: { useClass: PlatformKvoxWebhooksAdapter },
   imports: [PlatformKvoxDepsModule],
 };
 

@@ -1,0 +1,5 @@
+---
+'@marinoscar/kvox-web': minor
+---
+
+Times render in the user's display time zone. Every date and time the slices show (the transcript's "Recorded …" line, note provenance, entity first and last seen, mentions, merges, briefs, graph exports and imports, review drafts, the Home import card, the transcription key's last change, the note context's capture time) goes through the formatters of `@marinoscar/platform-web/timezone/headless`, and the library feeds' Today / Yesterday / month groups and the transcript history's editing sessions are cut at the midnight of that zone. The zone is the one in the user's profile when the host mounts the platform's `UserTimeZoneSync`, else the device's, so a host without it (KVox Desktop) keeps today's behaviour. The "Edit recording date" field shows and saves the wall clock of the same zone. `groupFeedByDate`, `feedDateBucket` and `formatShortDate` take an optional `timeZone` argument. `@marinoscar/platform-web` is now a required peer (it was optional).

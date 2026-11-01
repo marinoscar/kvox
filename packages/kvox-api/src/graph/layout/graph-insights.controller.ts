@@ -10,7 +10,7 @@ import {
   type GraphInsightsResponse,
 } from './dto/graph-insights.dto.js';
 import { GraphInsightsService } from './graph-insights.service.js';
-import { KvoxAuth } from '../../core/index.js';
+import { KvoxAuth, KvoxTimeZoneService, TimeZoneHeader } from '../../core/index.js';
 import { GRAPH_READ_PERMISSION } from '../graph.permissions.js';
 import { CurrentGraphActor } from '../graph-actor.js';
 import type { GraphActor } from '../graph-actor.js';
@@ -27,7 +27,10 @@ import { ApiDataResponse } from '../api-data-response.js';
 @ApiTags('Graph')
 @Controller('graph/insights')
 export class GraphInsightsController {
-  constructor(private readonly insights: GraphInsightsService) {}
+  constructor(
+    private readonly insights: GraphInsightsService,
+    private readonly zones: KvoxTimeZoneService,
+  ) {}
 
   @Get()
   @KvoxAuth(GRAPH_READ_PERMISSION)
@@ -53,7 +56,10 @@ export class GraphInsightsController {
   async get(
     @CurrentGraphActor() user: GraphActor,
     @Query(new ZodValidationPipe(graphInsightsQuerySchema)) query: GraphInsightsQuery,
+    @TimeZoneHeader() timeZoneHeader?: string,
   ): Promise<GraphInsightsResponse> {
-    return this.insights.insights(user.id, query.window);
+    // The sentences name days ("since Oct 26, 2026"): cut them in the requester's zone.
+    const timeZone = await this.zones.forRequest(user.id, timeZoneHeader);
+    return this.insights.insights(user.id, query.window, { timeZone });
   }
 }

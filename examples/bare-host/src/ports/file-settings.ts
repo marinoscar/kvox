@@ -139,4 +139,9 @@ export class FileSettings implements KvoxSettingsPort {
     this.save(document);
     return next;
   }
+
+  /** The host's own zone: this reference host has no profile, so the process zone is the user's. */
+  async readUserTimeZone(_userId: string): Promise<string | null> {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  }
 }

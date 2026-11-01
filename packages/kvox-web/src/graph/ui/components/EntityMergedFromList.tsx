@@ -15,6 +15,7 @@ import ListItemText from '@mui/material/ListItemText';
 import Typography from '@mui/material/Typography';
 
 import type { EntityMergeRow } from '../../headless/clients/graph.js';
+import { formatDate, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 export interface EntityMergedFromListProps {
   merges: readonly EntityMergeRow[];
@@ -25,13 +26,13 @@ export interface EntityMergedFromListProps {
   onUndo: (row: EntityMergeRow) => void;
 }
 
-function formatDay(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+/** The merge's day in the reader's display zone, or `''` when it does not parse. */
+function formatDay(iso: string, timeZone: string): string {
+  return formatDate(iso, { dateStyle: 'medium', timeZone, fallback: '' });
 }
 
 export function EntityMergedFromList({ merges, canUndo, busy, onUndo }: EntityMergedFromListProps) {
+  const zone = useDisplayTimeZone();
   const standing = merges.filter((row) => row.reversedAt === null);
   if (standing.length === 0) return null;
 
@@ -42,7 +43,7 @@ export function EntityMergedFromList({ merges, canUndo, busy, onUndo }: EntityMe
       </Typography>
       <List dense disablePadding aria-label="Merged from">
         {standing.map((row) => {
-          const day = formatDay(row.createdAt);
+          const day = formatDay(row.createdAt, zone);
           return (
             <ListItem
               key={row.mergeId}

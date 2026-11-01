@@ -24,19 +24,26 @@
 // `sensitive` person fact contributes nothing. Every id must be a readable node
 // of the caller or the whole request is the shared 404 (never 403).
 //
+// WHICH DAY. Buckets are cut in the REQUESTER'S time zone (`options.timeZone`, resolved by the
+// controller: profile zone, then `X-Time-Zone`, then UTC): `date_trunc(unit, at AT TIME ZONE tz)`
+// runs on local wall-clock time, so a week starts on Monday LOCAL, a month on the 1st LOCAL, and a
+// DST change moves nothing. The zone is a bound parameter, validated against Postgres first
+// (`pg_timezone_names`, cached per zone; an unknown one falls back to UTC). `from`/`to` given as a
+// bare day are local midnights in the same zone (`instantBoundOr400`); the response echoes `timeZone`.
+//
 // Bounded: one aggregate statement inside `withGraphStatementTimeout` (3 s,
 // 503 `graph_query_timeout`), driven by the `(subject_kind, subject_id)` index.
 // =============================================================================
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
-import { Prisma } from '../../core/index.js';
+import { pickTimeZone, Prisma } from '../../core/index.js';
 import { KVOX_PRISMA } from '../../ports/index.js';
 import type { KvoxGraphDb } from '../data/graph-db.js';
 import type { GraphActivityQuery, GraphActivityResponse } from './dto/graph-read.dto.js';
 import { GraphNeighborhoodService } from './graph-neighborhood.service.js';
 import { withGraphStatementTimeout } from './graph-query-timeout.js';
-import { asOfOr400 } from './read-params.js';
+import { instantBoundOr400 } from './read-params.js';
 import { notSensitiveSql, readableEntitySql, readableItemSql, readableRelationSql, uuidArray } from './read-sql.js';
 
 interface ActivityRow {
@@ -50,6 +57,8 @@ interface ActivityRow {
 export interface GraphActivityOptions {
   /** Overrides the 3 s statement budget. */
   timeoutMs?: number;
+  /** The requester's IANA zone the buckets are cut in (default UTC). */
+  timeZone?: string;
 }
 
 /**
@@ -61,6 +70,9 @@ export interface GraphActivityOptions {
 @Injectable()
 export class GraphActivityService {
   private readonly logger = new Logger(GraphActivityService.name);
+
+  /** Per-zone answers of `pg_timezone_names`, kept for the life of the process. */
+  private readonly knownZones = new Map<string, boolean>();
 
   constructor(
     @Inject(KVOX_PRISMA) private readonly prisma: KvoxGraphDb,
@@ -76,8 +88,9 @@ export class GraphActivityService {
     const ownerId = user.id;
     const ids = [...new Set(query.ids)];
     await this.neighborhood.assertReadableNodes(ownerId, ids);
-    const from = query.from ? asOfOr400(query.from) : null;
-    const to = query.to ? asOfOr400(query.to) : null;
+    const timeZone = await this.databaseKnowsZone(options.timeZone);
+    const from = query.from ? instantBoundOr400(query.from, timeZone) : null;
+    const to = query.to ? instantBoundOr400(query.to, timeZone) : null;
     // The unit is a SQL literal chosen from a closed enum, never request text.
     const unit = Prisma.raw(query.bucket === 'week' ? `'week'` : `'month'`);
     const owner = Prisma.sql`${ownerId}::uuid`;
@@ -122,7 +135,7 @@ export class GraphActivityService {
             LEFT JOIN notes n ON n.id = ev.note_id
            WHERE ev.owner_id = ${owner} AND ev.subject_kind = 'relation'::kg_evidence_subject_kind
         )
-        SELECT to_char(date_trunc(${unit}, u.at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS start,
+        SELECT to_char(date_trunc(${unit}, u.at AT TIME ZONE ${timeZone}::text), 'YYYY-MM-DD') AS start,
                u.entity_id::text AS entity_id, u.etype, count(*)::int AS n
           FROM units u
          WHERE (${from}::timestamptz IS NULL OR u.at >= ${from}::timestamptz)
@@ -132,12 +145,35 @@ export class GraphActivityService {
       options.timeoutMs,
     );
 
-    return shapeActivity(query.bucket, rows);
+    return shapeActivity(query.bucket, rows, timeZone);
+  }
+
+  /**
+   * The zone to bucket in: `requested` when Postgres knows it (checked once per zone against
+   * `pg_timezone_names`, then cached), else UTC. UTC is never queried.
+   */
+  private async databaseKnowsZone(requested: string | undefined): Promise<string> {
+    const zone = pickTimeZone(requested);
+    if (zone === 'UTC') return 'UTC';
+    let known = this.knownZones.get(zone);
+    if (known === undefined) {
+      const rows = await this.prisma.$queryRaw<unknown[]>(
+        Prisma.sql`SELECT 1 FROM pg_timezone_names WHERE name = ${zone} LIMIT 1`,
+      );
+      known = Array.isArray(rows) && rows.length > 0;
+      this.knownZones.set(zone, known);
+      if (!known) this.logger.warn(`Postgres does not know the time zone "${zone}"; the activity buckets fall back to UTC`);
+    }
+    return known ? zone : 'UTC';
   }
 }
 
 /** Folds `(bucket, entity, type, n)` rows into the wire shape; pure. */
-export function shapeActivity(bucket: GraphActivityResponse['bucket'], rows: readonly ActivityRow[]): GraphActivityResponse {
+export function shapeActivity(
+  bucket: GraphActivityResponse['bucket'],
+  rows: readonly ActivityRow[],
+  timeZone = 'UTC',
+): GraphActivityResponse {
   const series = new Map<string, { start: string; total: number; byType: Record<string, number> }>();
   const byEntity: GraphActivityResponse['byEntity'] = {};
   for (const r of rows) {
@@ -149,6 +185,7 @@ export function shapeActivity(bucket: GraphActivityResponse['bucket'], rows: rea
   }
   return {
     bucket,
+    timeZone,
     series: [...series.values()].sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0)),
     byEntity,
   };

@@ -1,5 +1,19 @@
 # @marinoscar/kvox-eval
 
+## 0.1.0-next.22
+
+### Patch Changes
+
+- 085243e: Dependency and peer ranges on the platform packages move from 0.1.0-next.17 to 0.1.0-next.20, the release that adds the webhooks and alerts slices, node host and power telemetry, and platform migrations 0038 to 0040. No code in these packages changes.
+
+## 0.1.0-next.21
+
+### Patch Changes
+
+- 41c6751: Dependency and peer ranges on the platform packages move from 0.1.0-next.17 to 0.1.0-next.18, the release that adds the user's time zone (`profile.timezone`, the world-map picker on the profile page) and renders every packaged date in it. kvox-web formats its own dates through the same display-zone store.
+- d41c7c7: Ontology descriptions, the graph extraction prompt, evaluation fixtures and code examples now use invented placeholders (Org Alpha, Product X, Avery Example) instead of real people, companies and products. No keys, schemas or behaviour change; the extraction prompt text and its recorded requests differ only in the example names.
+- 06665e8: Dependency and peer ranges on the platform packages move from 0.1.0-next.18 to 0.1.0-next.19, the release whose date operations and emails follow the user's time zone (`@marinoscar/platform-contract/timezone`, `X-Time-Zone`, `SettingsResolver.resolveUserTimeZone`).
+
 ## 0.1.0-next.20
 
 ### Patch Changes

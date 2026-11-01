@@ -107,6 +107,23 @@ describe('scanKvoxWebSources finds a violation', () => {
     }
   });
 
+  it('lets every slice import the display time zone entry, and only that platform entry', () => {
+    const zone = `@marinoscar/${'platform'}-web/timezone/headless`;
+    const zoneUi = `@marinoscar/${'platform'}-web/timezone/ui`;
+    const dir = sandbox({
+      'core/headless/day.ts': `import { zonedDateKey } from '${zone}';\nexport { zonedDateKey };\n`,
+      'graph/ui/when.ts': `import { formatDate } from '${zone}';\nexport { formatDate };\n`,
+      'notes/ui/picker.ts': `import { TimeZoneField } from '${zoneUi}';\nexport { TimeZoneField };\n`,
+    });
+    try {
+      const problems = scanKvoxWebSources(dir);
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toMatch(/notes\/ui\/picker\.ts imports .*timezone\/ui/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('in any file that imports a platform package, but not in a comment', () => {
     const platform = `@marinoscar/${'platform'}-web/core`;
     const dir = sandbox({

@@ -297,9 +297,15 @@ describe('kg golden set (issue #362)', () => {
     const items = fixtures.flatMap((f) => f.labels.items.map((i) => ({ f, i })));
     const tagged = (tag: string) => fixtures.filter((f) => f.tags.includes(tag));
 
+    // Ontology 1.4.0 (#776) added these without gold labels: Document is system-created and never
+    // extracted, and the Opportunity types and ORGANIZED are only labelled once the extractor
+    // proposes them (#780). This list is exact, so it can only shrink as labels land.
+    const UNLABELLED_1_4_ENTITIES = ['Document', 'Opportunity'];
+    const UNLABELLED_1_4_RELATIONS = ['COMPETING_FOR', 'ORGANIZED', 'PURSUED_BY', 'WITH_CLIENT'];
+
     it('has ≥ 10 gold instances of every core + work entity-storage type', () => {
-      expect(ENTITY_STORAGE_TYPES.sort()).toEqual(['Meeting', 'Organization', 'Person', 'Product', 'Project', 'Topic']);
-      for (const t of ENTITY_STORAGE_TYPES) {
+      expect(ENTITY_STORAGE_TYPES.sort()).toEqual(['Document', 'Meeting', 'Opportunity', 'Organization', 'Person', 'Product', 'Project', 'Topic']);
+      for (const t of ENTITY_STORAGE_TYPES.filter((k) => !UNLABELLED_1_4_ENTITIES.includes(k))) {
         expect({ t, n: entities.filter(({ e }) => e.type === t).length >= 10 }).toEqual({ t, n: true });
       }
     });
@@ -329,7 +335,8 @@ describe('kg golden set (issue #362)', () => {
     it('has ≥ 3 of every extractable relation type, and ≥ 3 of each item-column relation', () => {
       // Every relation except IDENTIFIED_AS, MENTIONS and SUPPORTED_BY: the six
       // edge relations as labels, the item-column ones as item fields.
-      for (const t of LABELLED_RELATION_TYPES) {
+      expect(LABELLED_RELATION_TYPES).toEqual(expect.arrayContaining(UNLABELLED_1_4_RELATIONS));
+      for (const t of LABELLED_RELATION_TYPES.filter((k) => !UNLABELLED_1_4_RELATIONS.includes(k))) {
         expect({ t, n: relations.filter(({ r }) => r.type === t).length >= 3 }).toEqual({ t, n: true });
       }
       const columnRelations = {

@@ -269,6 +269,26 @@ describe('GraphWriteService', () => {
       });
     });
 
+    it('refuses PART_OF from an organization to itself, and accepts it between two different ones (#776)', async () => {
+      const OTHER_ORG = '88888888-8888-4888-8888-888888888888';
+      const { service, asTx } = setup();
+      const err = await caught(
+        service.createRelation(asTx, { ...baseRelation, type: 'PART_OF', fromId: ORG, toId: ORG, validPrecision: undefined }, schema),
+      );
+      expect(err).toBeInstanceOf(GraphValidationError);
+      expect((err as GraphValidationError).details).toEqual({
+        issues: [expect.objectContaining({ path: 'toId' })],
+      });
+      LIVE_ENTITIES[OTHER_ORG] = 'Organization';
+      try {
+        await expect(
+          service.createRelation(asTx, { ...baseRelation, type: 'PART_OF', fromId: OTHER_ORG, toId: ORG, validPrecision: undefined }, schema),
+        ).resolves.toBeDefined();
+      } finally {
+        delete LIVE_ENTITIES[OTHER_ORG];
+      }
+    });
+
     it('refuses an endpoint that is not a live entity of the owner', async () => {
       const { service, asTx } = setup();
       await expect(

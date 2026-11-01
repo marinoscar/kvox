@@ -14,7 +14,18 @@
  * Falls back to the ISO string on an unparseable input rather than rendering
  * `NaN minutes ago` — a timestamp this code cannot read is still information,
  * and `Invalid Date` in a notification list looks like data loss.
+ *
+ * Minutes and hours are an interval and do not depend on a time zone. DAYS are
+ * calendar days of the reader's display zone: "yesterday" is the previous LOCAL
+ * day, not "24 to 48 hours ago" (an event at 23:00 read at 08:00 the next morning
+ * is yesterday, nine hours ago or not). `formatShortDate` below reads the same zone.
  */
+
+import {
+  formatDate,
+  getDisplayTimeZone,
+  zonedDateKey,
+} from '@marinoscar/platform-web/timezone/headless';
 
 /**
  * Thresholds, largest unit first. The first entry whose `limit` the elapsed
@@ -37,15 +48,35 @@ const UNITS: { limit: number; ms: number; unit: Intl.RelativeTimeFormatUnit }[] 
 /** Under this, say "just now" rather than counting seconds. */
 const JUST_NOW_MS = 45_000;
 
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+/** Calendar days are counted up to this many; from a week on, the interval table speaks in weeks. */
+const CALENDAR_DAYS_MAX = 7;
+
+/** Whole calendar days from the date key `a` to `b` (both `YYYY-MM-DD`). */
+function daysBetweenKeys(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY_MS);
+}
+
 /**
+ * The wording, by age:
+ * - under 45 seconds: "Just now"; under a minute: seconds;
+ * - under an hour: minutes ("15 minutes ago"), even across local midnight;
+ * - under a day AND on the same local day: hours ("3 hours ago");
+ * - otherwise, up to a week: calendar days of `timeZone` ("yesterday",
+ *   "3 days ago"), counted between the two local dates;
+ * - then weeks, months, years.
+ *
  * @param iso - an ISO-8601 timestamp, as every API date field in this app is.
  * @param now - injectable so this is testable without freezing the clock, and so
  *        a list rendered in one pass dates every row against the same instant
  *        rather than against seven slightly different ones.
+ * @param timeZone - the IANA zone whose calendar the days are counted in;
+ *        default the display zone (a component re-renders with `useDisplayTimeZone()`).
  *
  * @stability experimental
  */
-export function formatRelativeTime(iso: string, now: Date = new Date()): string {
+export function formatRelativeTime(iso: string, now: Date = new Date(), timeZone?: string): string {
   const then = new Date(iso);
   const time = then.getTime();
   if (Number.isNaN(time)) return iso;
@@ -60,6 +91,22 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
   if (elapsed < JUST_NOW_MS) return 'Just now';
 
   const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+
+  if (elapsed >= HOUR_MS && elapsed < CALENDAR_DAYS_MAX * DAY_MS) {
+    const zone = timeZone ?? getDisplayTimeZone();
+    const thenKey = zonedDateKey(then, zone);
+    const nowKey = zonedDateKey(now, zone);
+    if (thenKey && nowKey) {
+      const days = daysBetweenKeys(thenKey, nowKey);
+      if (days <= 0) {
+        // The same local day: hours.
+        return formatter.format(-Math.floor(elapsed / HOUR_MS), 'hour');
+      }
+      if (days < CALENDAR_DAYS_MAX) return formatter.format(-days, 'day');
+      // Seven calendar days back (just under a week of elapsed time): already a week.
+      return formatter.format(-1, 'week');
+    }
+  }
 
   for (const { limit, ms, unit } of UNITS) {
     if (elapsed < limit) {
@@ -90,21 +137,34 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
  * three-year-old note is a sentence that quietly lies about when the meeting
  * happened.
  *
- * `Intl.DateTimeFormat` with no locale, like `formatRelativeTime` above: the
- * browser's own ordering ("12 March" or "March 12") is the one its user expects,
- * and hardcoding either is how this becomes untranslatable.
+ * No locale, like `formatRelativeTime` above: the browser's own ordering
+ * ("12 March" or "March 12") is the one its user expects, and hardcoding either
+ * is how this becomes untranslatable.
+ *
+ * THE DAY IS THE READER'S, in their display time zone (the platform's
+ * display-zone store: the zone chosen in their profile, else the device's), so a
+ * meeting at 11pm in Costa Rica is not dated the next day for a reader there.
+ * A component that renders it calls `useDisplayTimeZone()` so a saved profile
+ * re-renders it.
+ *
+ * @param iso - An ISO-8601 timestamp.
+ * @param now - The instant "this year" is judged against.
+ * @param timeZone - The IANA zone the date is read in; default the display zone.
+ * @returns The date, or `iso` itself when it does not parse.
  *
  * @stability experimental
  */
-export function formatShortDate(iso: string, now: Date = new Date()): string {
-  const then = new Date(iso);
-  if (Number.isNaN(then.getTime())) return iso;
+export function formatShortDate(iso: string, now: Date = new Date(), timeZone?: string): string {
+  const zone = timeZone ?? getDisplayTimeZone();
+  const thenKey = zonedDateKey(iso, zone);
+  if (thenKey === null) return iso;
 
-  const sameYear = then.getFullYear() === now.getFullYear();
+  const sameYear = thenKey.slice(0, 4) === zonedDateKey(now, zone)?.slice(0, 4);
 
-  return new Intl.DateTimeFormat(undefined, {
+  return formatDate(iso, {
+    timeZone: zone,
     day: 'numeric',
     month: 'long',
     ...(sameYear ? {} : { year: 'numeric' }),
-  }).format(then);
+  });
 }

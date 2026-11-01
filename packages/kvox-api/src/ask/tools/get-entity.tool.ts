@@ -18,6 +18,7 @@ import type { KvoxAskDb } from '../data/ask-db.js';
 import {
   AskToolError,
   isoDate,
+  localInstantDate,
   jsonString,
   objectParameters,
   resolveHandleOrThrow,
@@ -119,8 +120,8 @@ export class GetEntityTool implements AskTool<GetEntityToolInput> {
       aliases: [...new Set(detail.aliases.map((a) => a.alias).filter((a) => a !== detail.label))],
       attributes,
       counts,
-      firstSeen: isoDate(detail.firstSeenAt),
-      lastSeen: isoDate(detail.lastSeenAt),
+      firstSeen: localInstantDate(detail.firstSeenAt, ctx.timeZone),
+      lastSeen: localInstantDate(detail.lastSeenAt, ctx.timeZone),
     };
     if (detail.occurredAt) data.occurredOn = isoDate(detail.occurredAt);
 

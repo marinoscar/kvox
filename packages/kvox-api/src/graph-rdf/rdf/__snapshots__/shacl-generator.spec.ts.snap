@@ -29,6 +29,12 @@ kv:AssertionShape
         sh:path prov:startedAtTime
     ], [
         sh:datatype xsd:string ;
+        sh:in ( "attended" "invited" "copied" ) ;
+        sh:maxCount 1 ;
+        sh:name "Attendance" ;
+        sh:path kv:ATTENDED.attendance
+    ], [
+        sh:datatype xsd:string ;
         sh:in ( "aware" "practitioner" "expert" ) ;
         sh:maxCount 1 ;
         sh:name "Level" ;
@@ -52,7 +58,7 @@ kv:AssertionShape
         sh:path kv:USES.stage
     ], [
         sh:datatype xsd:string ;
-        sh:in ( "sponsor" "owner" "lead" "contributor" "stakeholder" "approver" "end_user" "advisor" ) ;
+        sh:in ( "sponsor" "owner" "lead" "contributor" "stakeholder" "approver" "end_user" "advisor" "decision_maker" "influencer" "evaluator" "account_lead" ) ;
         sh:maxCount 1 ;
         sh:name "Role" ;
         sh:path kv:INVOLVED_IN.role
@@ -67,7 +73,12 @@ kv:AssertionShape
         sh:name "Role" ;
         sh:path kv:HAS_ROLE.title
     ], [
-        sh:in ( kv:ATTENDED kv:BROADER kv:COMPETITOR_OF kv:CONCERNS kv:CUSTOMER_OF kv:DISCUSSED kv:FRIEND_OF kv:HAS_MILESTONE kv:HAS_ROLE kv:INTERESTED_IN kv:INVOLVED_IN kv:KNOWS_ABOUT kv:OFFERED_BY kv:PARENT_OF kv:PARTNER_OF kv:PART_OF kv:REPORTS_TO kv:SPOUSE_OF kv:TRAVELED_ON kv:USES kv:WORKS_FOR ) ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Scale" ;
+        sh:path kv:USES.scale
+    ], [
+        sh:in ( kv:ATTENDED kv:BROADER kv:COMPETING_FOR kv:COMPETITOR_OF kv:CONCERNS kv:CUSTOMER_OF kv:DISCUSSED kv:FRIEND_OF kv:HAS_MILESTONE kv:HAS_ROLE kv:INTERESTED_IN kv:INVOLVED_IN kv:KNOWS_ABOUT kv:OFFERED_BY kv:ORGANIZED kv:PARENT_OF kv:PARTNER_OF kv:PART_OF kv:PREPARED_FOR kv:PURSUED_BY kv:RECORDED_IN kv:REPORTS_TO kv:SPOUSE_OF kv:TRAVELED_ON kv:USES kv:WITH_CLIENT kv:WORKS_FOR ) ;
         sh:maxCount 1 ;
         sh:minCount 1 ;
         sh:path rdf:predicate
@@ -130,16 +141,32 @@ kv:ClaimShape
         sh:path kv:validPrecision
     ], [
         sh:datatype xsd:string ;
+        sh:in ( "fact" "metric" "buying_signal" "warning_sign" "pain_point" "priority" ) ;
+        sh:maxCount 1 ;
+        sh:name "Kind" ;
+        sh:path kv:Claim.claimKind
+    ], [
+        sh:datatype xsd:string ;
         sh:maxCount 1 ;
         sh:minCount 1 ;
         sh:name "Statement" ;
         sh:path kv:Claim.statement
     ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Unit" ;
+        sh:path kv:Claim.unit
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Value" ;
+        sh:path kv:Claim.value
+    ], [
         sh:maxCount 1 ;
         sh:minCount 1 ;
         sh:name "About" ;
         sh:nodeKind sh:IRI ;
-        sh:or ( [ sh:class kv:Interest ] [ sh:class kv:Meeting ] [ sh:class kv:Milestone ] [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Product ] [ sh:class kv:Project ] [ sh:class kv:Topic ] [ sh:class kv:Trip ] ) ;
+        sh:or ( [ sh:class kv:Interest ] [ sh:class kv:Meeting ] [ sh:class kv:Milestone ] [ sh:class kv:Opportunity ] [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Product ] [ sh:class kv:Project ] [ sh:class kv:Topic ] [ sh:class kv:Trip ] ) ;
         sh:path kv:ABOUT
     ], [
         sh:minCount 1 ;
@@ -295,6 +322,46 @@ kv:DecisionShape
     ] ;
     sh:targetClass kv:Decision .
 
+kv:DocumentShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
+    sh:property [
+        sh:class kv:Person ;
+        sh:name "Prepared for" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:PREPARED_FOR
+    ], [
+        sh:datatype xsd:date ;
+        sh:maxCount 1 ;
+        sh:name "Prepared on" ;
+        sh:path kv:Document.preparedOn
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Classification" ;
+        sh:path kv:Document.classification
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Title" ;
+        sh:path kv:Document.title
+    ], [
+        sh:datatype xsd:string ;
+        sh:name "Alias" ;
+        sh:path skos:altLabel
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Document .
+
 kv:InterestShape
     a sh:NodeShape ;
     sh:closed true ;
@@ -326,15 +393,31 @@ kv:MeetingShape
     sh:closed true ;
     sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
     sh:property [
+        sh:class kv:Document ;
+        sh:name "Recorded in" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:RECORDED_IN
+    ], [
         sh:class kv:Project ;
         sh:name "Part of" ;
         sh:nodeKind sh:IRI ;
         sh:path kv:PART_OF
     ], [
+        sh:datatype xsd:date ;
+        sh:maxCount 1 ;
+        sh:name "Occurred on" ;
+        sh:path kv:Meeting.occurredOn
+    ], [
         sh:datatype xsd:dateTime ;
         sh:maxCount 1 ;
         sh:name "Occurred at" ;
         sh:path kv:occurredAt
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "client" "internal" "partner" "other" ) ;
+        sh:maxCount 1 ;
+        sh:name "Kind" ;
+        sh:path kv:Meeting.meetingKind
     ], [
         sh:datatype xsd:string ;
         sh:in ( "stated" "note_created_at" ) ;
@@ -402,11 +485,73 @@ kv:MilestoneShape
     ] ;
     sh:targetClass kv:Milestone .
 
+kv:OpportunityShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
+    sh:property [
+        sh:class kv:Organization ;
+        sh:name "Pursued by" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:PURSUED_BY
+    ], [
+        sh:class kv:Organization ;
+        sh:name "With client" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:WITH_CLIENT
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "identified" "shaping" "proposed" "won" "lost" "dormant" ) ;
+        sh:maxCount 1 ;
+        sh:name "Stage" ;
+        sh:path kv:Opportunity.stage
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "low" "med" "high" ) ;
+        sh:maxCount 1 ;
+        sh:name "Confidence" ;
+        sh:path kv:Opportunity.confidence
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Timing" ;
+        sh:path kv:Opportunity.timing
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Value" ;
+        sh:path kv:Opportunity.valueText
+    ], [
+        sh:datatype xsd:string ;
+        sh:name "Alias" ;
+        sh:path skos:altLabel
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ], [
+        sh:name "Concerns" ;
+        sh:nodeKind sh:IRI ;
+        sh:or ( [ sh:class kv:Product ] [ sh:class kv:Project ] [ sh:class kv:Topic ] ) ;
+        sh:path kv:CONCERNS
+    ] ;
+    sh:targetClass kv:Opportunity .
+
 kv:OrganizationShape
     a sh:NodeShape ;
     sh:closed true ;
     sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
     sh:property [
+        sh:class kv:Opportunity ;
+        sh:name "Competing for" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:COMPETING_FOR
+    ], [
         sh:class kv:Organization ;
         sh:name "Competitor of" ;
         sh:nodeKind sh:IRI ;
@@ -416,6 +561,11 @@ kv:OrganizationShape
         sh:name "Customer of" ;
         sh:nodeKind sh:IRI ;
         sh:path kv:CUSTOMER_OF
+    ], [
+        sh:class kv:Organization ;
+        sh:name "Part of" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:PART_OF
     ], [
         sh:class kv:Organization ;
         sh:name "Partner of" ;
@@ -512,7 +662,7 @@ kv:PersonFactShape
 kv:PersonShape
     a sh:NodeShape ;
     sh:closed true ;
-    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom foaf:knows foaf:topic_interest schema:attendee schema:children schema:hasOccupation schema:knowsAbout schema:spouse schema:worksFor ) ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom foaf:knows foaf:topic_interest schema:attendee schema:children schema:hasOccupation schema:knowsAbout schema:organizer schema:spouse schema:worksFor ) ;
     sh:property [
         sh:class kv:Interest ;
         sh:name "Interested in" ;
@@ -523,6 +673,11 @@ kv:PersonShape
         sh:name "Attended" ;
         sh:nodeKind sh:IRI ;
         sh:path kv:ATTENDED
+    ], [
+        sh:class kv:Meeting ;
+        sh:name "Organized" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:ORGANIZED
     ], [
         sh:class kv:Milestone ;
         sh:name "Has milestone" ;
@@ -559,11 +714,6 @@ kv:PersonShape
         sh:nodeKind sh:IRI ;
         sh:path kv:SPOUSE_OF
     ], [
-        sh:class kv:Project ;
-        sh:name "Involved in" ;
-        sh:nodeKind sh:IRI ;
-        sh:path kv:INVOLVED_IN
-    ], [
         sh:class kv:Trip ;
         sh:name "Traveled on" ;
         sh:nodeKind sh:IRI ;
@@ -586,6 +736,11 @@ kv:PersonShape
         sh:minCount 1 ;
         sh:nodeKind sh:IRI ;
         sh:path prov:wasDerivedFrom
+    ], [
+        sh:name "Involved in" ;
+        sh:nodeKind sh:IRI ;
+        sh:or ( [ sh:class kv:Opportunity ] [ sh:class kv:Project ] ) ;
+        sh:path kv:INVOLVED_IN
     ], [
         sh:name "Knows about" ;
         sh:nodeKind sh:IRI ;

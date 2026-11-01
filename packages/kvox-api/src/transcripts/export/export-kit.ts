@@ -126,6 +126,12 @@ export function hashExportRequest(input: {
   version: number;
   options: ExportOptions;
   contentFingerprint?: string | null;
+  /**
+   * The requester's IANA zone, for a format that prints zone-dependent dates
+   * (`Exporter.localizesDates`). Omit it for one that does not, so its hash, and its reuse,
+   * do not depend on the zone.
+   */
+  timeZone?: string | null;
 }): string {
   return createHash('sha256')
     .update(
@@ -134,6 +140,7 @@ export function hashExportRequest(input: {
         version: input.version,
         options: input.options,
         ...(input.contentFingerprint ? { contentFingerprint: input.contentFingerprint } : {}),
+        ...(input.timeZone ? { timeZone: input.timeZone } : {}),
       }),
     )
     .digest('hex');
@@ -240,6 +247,14 @@ export interface Exporter<TDoc> {
   readonly options: readonly ExportOptionField[];
   /** Parses its options (derived from `options` with {@link optionsSchemaFor}). */
   readonly optionsSchema: ExportOptionsSchema;
+  /**
+   * True when the file prints a date or time derived from an instant (a cover date, a
+   * "saved" line), which the renderer cuts in the requester's time zone. The zone is then
+   * part of the content address (`hashExportRequest`'s `timeZone`), so the same export
+   * requested from another zone is rendered again instead of reusing a file that shows the
+   * wrong day. Absent means false: the format prints no zone-dependent text.
+   */
+  readonly localizesDates?: boolean;
   /**
    * Writes the whole document to `out` and ENDS it. The promise settles once `out`
    * has finished; a failure rejects AND destroys `out`.

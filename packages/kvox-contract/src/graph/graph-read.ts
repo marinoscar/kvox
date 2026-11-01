@@ -65,7 +65,7 @@ export const listEntitiesQuerySchema = z.object({
     .union([z.iso.date(), z.iso.datetime({ offset: true })])
     .optional()
     .describe(
-      'With `sort=mentions` only: count the mentions recorded on or after this instant (`YYYY-MM-DD`, 00:00:00Z that day, or an ISO 8601 datetime with an offset) and leave out entities with none. Ignored for the other sorts.',
+      'With `sort=mentions` only: count the mentions recorded on or after this instant (`YYYY-MM-DD`, local midnight that day in the requester time zone, or an ISO 8601 datetime with an offset) and leave out entities with none. Ignored for the other sorts.',
     ),
   cursor: z.string().max(500).optional().describe('`nextCursor` from the previous page.'),
   limit: z.coerce.number().int().min(1).max(50).default(25),
@@ -576,15 +576,15 @@ export const graphActivityQuerySchema = z.object({
     .transform((raw) => [...new Set(raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0))])
     .pipe(z.array(z.uuid()).min(1).max(GRAPH_ACTIVITY_MAX_IDS))
     .describe(`Comma-separated entity (or item) ids, at most ${GRAPH_ACTIVITY_MAX_IDS}.`),
-  bucket: z.enum(GRAPH_ACTIVITY_BUCKETS).default('month').describe('The bucket width: `week` (starting Monday, UTC) or `month`.'),
+  bucket: z.enum(GRAPH_ACTIVITY_BUCKETS).default('month').describe("The bucket width: `week` (starting Monday) or `month`, both in the requester's time zone (see `timeZone` of the response)."),
   from: z
     .union([z.iso.date(), z.iso.datetime({ offset: true })])
     .optional()
-    .describe('Only evidence dated at or after this instant (`YYYY-MM-DD` is 00:00:00Z that day).'),
+    .describe("Only evidence dated at or after this instant (`YYYY-MM-DD` is local midnight that day in the requester's time zone)."),
   to: z
     .union([z.iso.date(), z.iso.datetime({ offset: true })])
     .optional()
-    .describe('Only evidence dated before this instant (`YYYY-MM-DD` is 00:00:00Z that day).'),
+    .describe("Only evidence dated before this instant (`YYYY-MM-DD` is local midnight that day in the requester's time zone)."),
 });
 /**
  * The parsed shape of {@link graphActivityQuerySchema}.
@@ -599,7 +599,7 @@ export type GraphActivityQuery = z.infer<typeof graphActivityQuerySchema>;
  * @stability experimental
  */
 export const graphActivityBucketSchema = z.object({
-  start: z.string().describe('The first day of the bucket, `YYYY-MM-DD` (UTC).'),
+  start: z.string().describe("The first day of the bucket, `YYYY-MM-DD` in the response's `timeZone`."),
   total: z.number().int().min(0).describe('The sum of `byType`.'),
   byType: z.record(z.string(), z.number().int().min(0)).describe('Evidence attributions per entity type (or item kind).'),
 });
@@ -616,7 +616,7 @@ export type GraphActivityBucketRow = z.infer<typeof graphActivityBucketSchema>;
  * @stability experimental
  */
 export const graphActivityPointSchema = z.object({
-  start: z.string().describe('The first day of the bucket, `YYYY-MM-DD` (UTC).'),
+  start: z.string().describe("The first day of the bucket, `YYYY-MM-DD` in the response's `timeZone`."),
   count: z.number().int().min(1).describe('Evidence attributions of this entity in the bucket.'),
 });
 /**
@@ -633,6 +633,11 @@ export type GraphActivityPoint = z.infer<typeof graphActivityPointSchema>;
  */
 export const graphActivityResponseSchema = z.object({
   bucket: z.enum(GRAPH_ACTIVITY_BUCKETS),
+  timeZone: z
+    .string()
+    .describe(
+      "The IANA time zone the buckets were cut in: the requester's profile zone, else the `X-Time-Zone` header, else `UTC`. Each `start` is a day of this zone, and a `week` starts on Monday there.",
+    ),
   series: z.array(graphActivityBucketSchema).describe('Only buckets with evidence, oldest first.'),
   byEntity: z
     .record(z.string(), z.array(graphActivityPointSchema))

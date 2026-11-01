@@ -21,8 +21,9 @@ import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useState } from 'react';
+import { useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
-import { DAY_MS, formatDay, parseDay, type TimeRange } from './timeAxis.js';
+import { DAY_MS, formatDay, parseDay, todayDay, type TimeRange } from './timeAxis.js';
 import {
   TIME_PRESET_LABELS,
   customRange,
@@ -58,10 +59,12 @@ const MENU_ORDER: TimePresetKey[] = ['all', '30d', '90d', '1y', 'custom'];
  */
 export function ExplorerTimeControl({ range, onChange, touch, disabled, now }: ExplorerTimeControlProps) {
   const clock = now ?? Date.now();
+  // The presets are calendar days of the display zone; a zone change re-renders.
+  const timeZone = useDisplayTimeZone();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
-  const current = presetOf(range, clock);
-  const label = timeControlLabel(range, clock);
+  const current = presetOf(range, clock, timeZone);
+  const label = timeControlLabel(range, clock, timeZone);
 
   const choose = (key: TimePresetKey) => {
     setAnchor(null);
@@ -69,7 +72,7 @@ export function ExplorerTimeControl({ range, onChange, touch, disabled, now }: E
       setCustomOpen(true);
       return;
     }
-    onChange(presetRange(key, clock));
+    onChange(presetRange(key, clock, timeZone));
   };
 
   return (
@@ -106,7 +109,7 @@ export function ExplorerTimeControl({ range, onChange, touch, disabled, now }: E
       {customOpen && (
         <CustomRangeDialog
           range={range}
-          now={clock}
+          today={todayDay(clock, timeZone)}
           onClose={() => setCustomOpen(false)}
           onApply={(next) => {
             setCustomOpen(false);
@@ -120,18 +123,19 @@ export function ExplorerTimeControl({ range, onChange, touch, disabled, now }: E
 
 function CustomRangeDialog({
   range,
-  now,
+  today,
   onClose,
   onApply,
 }: {
   range: TimeRange | null;
-  now: number;
+  /** The user's local today, as a day number. */
+  today: number;
   onClose: () => void;
   onApply: (range: TimeRange) => void;
 }) {
   const initialTo = range ? parseDay(range.to) : null;
-  const [from, setFrom] = useState(range?.from ?? formatDay(now - 30 * DAY_MS));
-  const [to, setTo] = useState(initialTo !== null ? formatDay(initialTo - DAY_MS) : formatDay(now));
+  const [from, setFrom] = useState(range?.from ?? formatDay(today - 30 * DAY_MS));
+  const [to, setTo] = useState(initialTo !== null ? formatDay(initialTo - DAY_MS) : formatDay(today));
   const next = customRange(from, to);
   return (
     <Dialog open onClose={onClose} aria-labelledby="explorer-time-custom-title" maxWidth="xs" fullWidth>

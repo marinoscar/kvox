@@ -76,13 +76,24 @@ import type {
   TranscriptionProviderId,
   UpdateTranscriptionSettingsInput,
 } from '../headless/index.js';
+import { formatDateTime, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 /** What to say about a stored key. Mirrors `privateKeyProvenance` in `PushConfigPage`. */
-function keyProvenance(status: ProviderKeyStatus | undefined): string {
+function keyProvenance(status: ProviderKeyStatus | undefined, timeZone: string): string {
   if (!status?.configured) return 'No API key is stored for this provider.';
   const which = status.hint ? ` (${status.hint})` : '';
+  // The runtime's default numeric date and time (what `toLocaleString()` gave),
+  // in the user's display zone.
   const when = status.updatedAt
-    ? ` on ${new Date(status.updatedAt).toLocaleString()}`
+    ? ` on ${formatDateTime(status.updatedAt, {
+        timeZone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+      })}`
     : '';
   const who = status.updatedByUserId ? ` by user ${status.updatedByUserId}` : '';
   return `API key last set${which}${when}${who}.`;
@@ -161,6 +172,7 @@ function SecretFieldSlot({
  */
 export function TranscriptionSettingsPage({ renderSecretField }: TranscriptionSettingsPageProps = {}) {
   const hasPermission = useKvoxPermissionCheck();
+  const zone = useDisplayTimeZone();
   const {
     data,
     isLoading,
@@ -418,7 +430,7 @@ export function TranscriptionSettingsPage({ renderSecretField }: TranscriptionSe
               API key
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {keyProvenance(keyStatus)} The key itself is held encrypted and is never shown
+              {keyProvenance(keyStatus, zone)} The key itself is held encrypted and is never shown
               again — replacing it is the only way to change it.
             </Typography>
 

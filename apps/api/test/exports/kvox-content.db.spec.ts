@@ -90,6 +90,7 @@ describeWithDb('the kvox-content export source (real Postgres)', () => {
       datamodel: Prisma.dmmf.datamodel,
       pageSize: 1, // forces several pages: the owner filter must survive the cursor
       now: new Date(),
+      timeZone: 'UTC',
     };
     const out: Record<string, Array<Record<string, unknown>>> = {};
 

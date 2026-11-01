@@ -20,7 +20,7 @@ import { defineDomain, defineEntityType, defineRelationType } from '../define.js
  * The effective schema prunes each list to the caller's enabled domains, so a
  * `personal` type here is invisible to a user who never turned `personal` on.
  */
-const ENTITY_STORAGE_TYPES = ['Person', 'Organization', 'Meeting', 'Project', 'Interest', 'Trip', 'Milestone', 'Topic', 'Product'];
+const ENTITY_STORAGE_TYPES = ['Person', 'Organization', 'Meeting', 'Project', 'Interest', 'Trip', 'Milestone', 'Topic', 'Product', 'Opportunity'];
 
 /** Every declared type, across all domains, for SUPPORTED_BY. */
 const ALL_TYPES = [
@@ -38,6 +38,8 @@ const ALL_TYPES = [
   'Milestone',
   'Topic',
   'Product',
+  'Opportunity',
+  'Document',
 ];
 
 /**
@@ -135,8 +137,9 @@ export const Meeting = defineEntityType({
   description:
     'The event anchor: a dated meeting or conversation, its attendees, and the transcript and/or note it was drawn from.',
   disambiguation: [
-    'One Meeting per transcript, or per note with no source audio; created by the system, never proposed by extraction.',
+    'One Meeting per transcript, or per note with no source audio, is created by the system and already exists; propose a Meeting only for a further, separately dated meeting that a document records.',
     'A recurring conversation subject is not a Meeting; it is a topic of the meetings it came up in.',
+    'Set occurredOn only to a date the source states for that meeting; set meetingKind only to the kind the source makes clear (client: with a customer, internal: within one organization, partner: with a partner or vendor).',
   ],
   attributes: {
     transcriptId: {
@@ -166,9 +169,70 @@ export const Meeting = defineEntityType({
       label: 'Topics',
       description: 'Free-text subjects discussed in the meeting that are not Projects of their own.',
     },
+    occurredOn: {
+      kind: 'date',
+      label: 'Occurred on',
+      description: 'The date the meeting took place, only if the source states it.',
+      extractable: true,
+    },
+    meetingKind: {
+      kind: 'select',
+      label: 'Kind',
+      description: 'What kind of meeting it was, only if the source makes it clear.',
+      extractable: true,
+      options: {
+        choices: [
+          { value: 'client', label: 'Client' },
+          { value: 'internal', label: 'Internal' },
+          { value: 'partner', label: 'Partner' },
+          { value: 'other', label: 'Other' },
+        ],
+      },
+    },
   },
   sensitivityDefault: 'business',
   alignment: 'schema:Event',
+  // Created by the system per transcript or single note, so it is not offered by
+  // default. A host that extracts documents recording several meetings opts in with
+  // `buildOfferedSchema(..., { proposeTypes: ['Meeting'] })` (#780).
+  extractable: false,
+});
+
+/**
+ * Wire constant: document.
+ *
+ * @stability experimental
+ */
+export const Document = defineEntityType({
+  key: 'Document',
+  domain: 'core',
+  label: 'Document',
+  pluralLabel: 'Documents',
+  description:
+    'A document that was shown, shared or recorded in a meeting, e.g. a slide deck or a proposal; created by the system from the source, never proposed by extraction.',
+  disambiguation: [
+    'Created by the system, never proposed by extraction: a document merely mentioned in conversation is not a Document row.',
+    'The note or transcript the graph was drawn from is evidence, not a Document.',
+  ],
+  attributes: {
+    title: {
+      kind: 'text',
+      label: 'Title',
+      description: "The document's title, set by the system.",
+    },
+    preparedOn: {
+      kind: 'date',
+      label: 'Prepared on',
+      description: 'The date the document was prepared, set by the system.',
+    },
+    classification: {
+      kind: 'text',
+      label: 'Classification',
+      description: 'The handling label the document carries, e.g. "internal" or "confidential", set by the system.',
+    },
+  },
+  sensitivityDefault: 'business',
+  alignment: 'schema:DigitalDocument',
   extractable: false,
 });
 
@@ -188,8 +252,38 @@ export const Claim = defineEntityType({
     'A choice that was made is a Decision, not a Claim.',
     'A task with an owner is a Commitment, not a Claim.',
     'A fact about a Person as an individual rather than about their work is a PersonFact.',
+    'Set claimKind only when the statement clearly is one: metric (a figure such as a budget, headcount or deadline), buying_signal (interest in buying or expanding), warning_sign (a hint that something may go wrong), pain_point (a problem the speaker suffers from), priority (what the speaker says matters most); otherwise fact.',
   ],
-  attributes: {},
+  attributes: {
+    claimKind: {
+      kind: 'select',
+      label: 'Kind',
+      description: 'What kind of statement it is, only if the source makes it clear; a plain statement of fact is fact.',
+      extractable: true,
+      options: {
+        choices: [
+          { value: 'fact', label: 'Fact' },
+          { value: 'metric', label: 'Metric' },
+          { value: 'buying_signal', label: 'Buying signal' },
+          { value: 'warning_sign', label: 'Warning sign' },
+          { value: 'pain_point', label: 'Pain point' },
+          { value: 'priority', label: 'Priority' },
+        ],
+      },
+    },
+    value: {
+      kind: 'text',
+      label: 'Value',
+      description: 'The figure the claim states, copied as written ("20%", "3 to 4 weeks", "120"), only for a metric.',
+      extractable: true,
+    },
+    unit: {
+      kind: 'text',
+      label: 'Unit',
+      description: 'The unit of the value ("percent", "weeks", "seats"), only if the source states it.',
+      extractable: true,
+    },
+  },
   sensitivityDefault: 'business',
   itemKind: 'claim',
   statuses: ['active', 'superseded'],
@@ -231,7 +325,7 @@ export const coreDomain = defineDomain({
   label: 'Core',
   alwaysOn: true,
   defaultEnabled: true,
-  entityTypes: [Person, Organization, Meeting, Claim, PersonFact, Topic],
+  entityTypes: [Person, Organization, Meeting, Claim, PersonFact, Topic, Document],
   relationTypes: [
     defineRelationType({
       key: 'ABOUT',
@@ -317,6 +411,32 @@ export const coreDomain = defineDomain({
       representation: { kind: 'edge' },
       extractable: true,
       alignment: 'skos:broader',
+    }),
+    defineRelationType({
+      key: 'RECORDED_IN',
+      domain: 'core',
+      label: 'Recorded in',
+      description: 'The document in which a meeting was recorded (minutes, a deck, a briefing), written by the system.',
+      from: ['Meeting'],
+      to: ['Document'],
+      temporal: false,
+      exclusive: 'none',
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: false,
+    }),
+    defineRelationType({
+      key: 'PREPARED_FOR',
+      domain: 'core',
+      label: 'Prepared for',
+      description: 'The person a document was prepared for, written by the system.',
+      from: ['Document'],
+      to: ['Person'],
+      temporal: false,
+      exclusive: 'none',
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: false,
     }),
   ],
   mixins: [],

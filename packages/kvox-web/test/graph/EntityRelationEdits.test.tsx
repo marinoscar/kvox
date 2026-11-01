@@ -1,3 +1,4 @@
+import { setPreferredTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
@@ -105,6 +106,8 @@ describe('EntityConnectionsList — manual relation edits (#586)', () => {
   });
 
   it('sets a manager: pick a Person, Save, and the list reloads', async () => {
+    // An empty "Since" sends no date, whatever the zone: the server stores the requester's local today.
+    setPreferredTimeZone('Pacific/Kiritimati');
     const user = userEvent.setup();
     renderList();
     await user.click(await screen.findByRole('button', { name: 'Set manager' }));

@@ -43,6 +43,8 @@ import { emailModule } from './platform/email/email.config';
 import { BroadcastsModule, notificationsModule } from './platform/notifications/notifications.config';
 import { dbBackupModule } from './platform/db-backup/db-backup.config';
 import { telemetryModule } from './platform/telemetry/telemetry.config';
+import { alertsModule } from './platform/alerts/alerts.config';
+import { webhooksModule } from './platform/webhooks/webhooks.config';
 import { LoggerModule } from './common/logger/logger.module';
 import { KvoxModule } from './kvox/kvox.module';
 import { AiPortModule } from './ai-port/ai-port.module';
@@ -209,6 +211,18 @@ import configuration from './config/configuration';
     // `GET /api/telemetry/config` (`telemetry:read|write|query`). Replaces the
     // previous observability stack. The SDK that emits traces and metrics is `instrumentation.ts`.
     telemetryModule,
+
+    // Alerts (#795): rules over telemetry metrics, worker-node events and fleet
+    // health, incidents and their notifications (`/api/admin/alerts`), from
+    // `@marinoscar/platform-api/alerts`. Binding: `platform/alerts/alerts.config.ts`.
+    alertsModule,
+
+    // Outbound webhooks (#795): signed deliveries of platform and this app's events to
+    // endpoints a member, an organization or the deployment registers (`/api/webhooks`,
+    // `/api/org/webhooks`, `/api/admin/webhooks`), from `@marinoscar/platform-api/webhooks`.
+    // Binding: `platform/webhooks/webhooks.config.ts`; the `KVOX_WEBHOOKS` port is bound in
+    // `platform-kvox/`.
+    webhooksModule,
 
     // About (#124, epic #118; the platform's since #464): `GET /api/admin/about`,
     // the deployment record the CLI wrote plus live runtime and database facts,

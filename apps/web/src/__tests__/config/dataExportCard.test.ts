@@ -50,13 +50,14 @@ describe('USER_SETTINGS_SECTIONS — Download your data card (issue #532)', () =
     expect(card.permission).toBeUndefined();
   });
 
-  it('sits in its own "Your data" group directly above the Danger Zone, which stays alone and last', () => {
+  it('sits in its own "Your data" group, followed only by the appended Integrations group (#795), then the Danger Zone, which stays alone and last', () => {
     const index = USER_SETTINGS_SECTIONS.findIndex((section) => section.cards.some((card) => card.path === PATH));
     const section = USER_SETTINGS_SECTIONS[index];
 
     expect(section.label).toBe('Your data');
     expect(section.cards).toHaveLength(1);
-    expect(USER_SETTINGS_SECTIONS[index + 1]?.label).toBe('Danger Zone');
+    expect(USER_SETTINGS_SECTIONS[index + 1]?.label).toBe('Integrations');
+    expect(USER_SETTINGS_SECTIONS[index + 2]?.label).toBe('Danger Zone');
     expect(dangerZoneLastViolations(USER_SETTINGS_SECTIONS, '/settings/danger-zone')).toEqual([]);
   });
 

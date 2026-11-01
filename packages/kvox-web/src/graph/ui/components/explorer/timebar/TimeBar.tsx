@@ -19,6 +19,10 @@
  *     Shift+arrows a quarter. "Set range" opens two date fields: the accessible
  *     alternative on every window class.
  *
+ * CALENDAR: the axis is in calendar days of the zone the API cut the buckets in
+ * (the response's `timeZone`, else the display zone): "today" is the user's
+ * local day, a week starts on their Monday (see `timeAxis.ts`).
+ *
  * Sizes: a compact window shows a 28px sparkline strip that expands on tap to
  * 120px (44px handles); medium is 96px; expanded 112px. The shell owns the
  * height; this component fills it.
@@ -43,6 +47,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 import type { GraphActivityBucket, GraphActivityResponse } from '../../../../headless/clients/graph.js';
 import { encodingFor } from '../explorerEncoding.js';
@@ -63,6 +68,7 @@ import {
   rangeLabel,
   snapRange,
   tickLabel,
+  todayDay,
   zoomDomain,
   type TimeRange,
 } from './timeAxis.js';
@@ -103,7 +109,7 @@ export interface TimeBarProps {
   onRangeChange: (range: TimeRange | null) => void;
   /** The ids of the selected nodes; their summed activity is drawn as a line over the bars. */
   selectedIds?: readonly string[];
-  /** Called with the bucket under the pointer (`[start, end)` in ms), or `null` when none. */
+  /** Called with the bucket under the pointer (`[start, end)` as day numbers, see `timeAxis.ts`), or `null` when none. */
   onHoverBucket?: (bucket: { start: number; end: number } | null) => void;
   /** Label of a type key in the legend and the tooltip. Default: the key. */
   typeLabel?: (key: string) => string;
@@ -183,7 +189,10 @@ export function TimeBar(props: TimeBarProps) {
   const plotHeight = Math.max(20, plotSize.height);
 
   // --- The axis ---------------------------------------------------------------
-  const nowMs = useMemo(() => (props.now ?? new Date()).getTime(), [props.now]);
+  // "Now" on the axis is the user's local today, in the zone the buckets were cut in.
+  const displayZone = useDisplayTimeZone();
+  const axisZone = activity?.timeZone ?? displayZone;
+  const nowMs = useMemo(() => todayDay(props.now ?? new Date(), axisZone), [props.now, axisZone]);
   const drawBucket = activity?.bucket ?? bucket;
   const rangeFrom = range ? parseDay(range.from) : null;
   const rangeTo = range ? parseDay(range.to) : null;

@@ -47,6 +47,24 @@ export interface GraphChangedEvent {
    * The reason.
    */
   reason: GraphChangedReason;
+  /** The committed proposal, when `reason` is `commit`. Ids and counts only (webhooks, #795). */
+  proposalId?: string;
+  /** What the commit created and linked, when `reason` is `commit`. */
+  counts?: GraphChangedCounts;
+}
+
+/**
+ * How much a proposal commit changed. Counts only, never a label or a fact.
+ *
+ * @stability experimental
+ */
+export interface GraphChangedCounts {
+  /** Entities the commit created. */
+  entitiesCreated: number;
+  /** Relations the commit created. */
+  relationsCreated: number;
+  /** Rows linked to an existing entity. */
+  entitiesLinked: number;
 }
 
 /**

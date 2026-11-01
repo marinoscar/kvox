@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { SYSTEM_SETTINGS_STORE, type SystemSettingsStore } from '@marinoscar/platform-api/core';
 import { Trace } from '@marinoscar/platform-api/otel-core';
 import {
+  SettingsResolver,
   UserSettingsService,
   systemSettingsNamespaceRegistry,
   userSettingsNamespaceRegistry,
@@ -43,6 +44,7 @@ export class PlatformKvoxSettingsAdapter implements KvoxSettingsPort {
   constructor(
     @Inject(SYSTEM_SETTINGS_STORE) private readonly system: SystemSettingsStore,
     private readonly users: UserSettingsService,
+    private readonly resolver: SettingsResolver,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -91,6 +93,16 @@ export class PlatformKvoxSettingsAdapter implements KvoxSettingsPort {
     const updated = (await this.users.patchSettings(userId, { [name]: patch } as never)) as unknown as Record<string, unknown>;
 
     return updated[name] as T;
+  }
+
+  /**
+   * The stored `profile.timezone` of the user, `null` when there is none (the request's
+   * `X-Time-Zone` header, then UTC, apply upstream). The platform's own read: the same
+   * answer every platform date operation uses.
+   */
+  @Trace()
+  async readUserTimeZone(userId: string): Promise<string | null> {
+    return this.resolver.resolveUserTimeZone(userId);
   }
 
   /**

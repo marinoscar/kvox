@@ -65,6 +65,17 @@ export const CHANGELOG: readonly OntologyChangelogEntry[] = Object.freeze([
       'work: Risk item type (itemKind risk; open, mitigated, closed, superseded) with severity, riskKind and mitigation; SUPERSEDES allows Risk -> Risk (#664)',
     ]) as string[],
   }),
+  Object.freeze({
+    version: '1.4.0',
+    date: '2026-10-27',
+    changes: Object.freeze([
+      'core: Meeting gains occurredOn and meetingKind; extraction can be opted in to propose a Meeting for a document that records several meetings (system-created meeting per source unchanged) (#776)',
+      'core: Document entity type (schema:DigitalDocument; system-created, never extracted) with title, preparedOn and classification; RECORDED_IN (Meeting -> Document) and PREPARED_FOR (Document -> Person), both system-written (#776)',
+      'core: Claim gains claimKind, value and unit (#776)',
+      'work: Opportunity entity type with stage, valueText, confidence and timing; WITH_CLIENT, PURSUED_BY (Opportunity -> Organization) and COMPETING_FOR (Organization -> Opportunity); CONCERNS gains Opportunity -> Project | Product | Topic (#776)',
+      'work: ORGANIZED (Person -> Meeting); ATTENDED gains attendance (attended, invited, copied); INVOLVED_IN also targets an Opportunity and role gains decision_maker, influencer, evaluator, account_lead; USES gains scale; PART_OF allows Organization -> Organization, never to itself (#776)',
+    ]) as string[],
+  }),
 ]);
 
 /**
@@ -72,4 +83,4 @@ export const CHANGELOG: readonly OntologyChangelogEntry[] = Object.freeze([
  *
  * @stability experimental
  */
-export const ONTOLOGY_VERSION: string = '1.3.0';
+export const ONTOLOGY_VERSION: string = '1.4.0';
