@@ -113,7 +113,7 @@ describe('assembleExtractionPrompt (#363)', () => {
 
   it('renders known entities, speakers and transcript lines in the documented shapes', () => {
     const { userContent } = assembleExtractionPrompt(makeContext());
-    expect(userContent).toContain('k1 | Person | Sarah Chen | aka: Sarah, S. Chen | Northwind Robotics');
+    expect(userContent).toContain('k1 | Person | Sarah Chen | aka: Sarah, S. Chen | Org Lambda Robotics');
     expect(userContent).toContain('A = Sarah Chen (k1)');
     expect(userContent).toContain('B = unidentified');
     expect(userContent).toContain('# Note (version 2)');

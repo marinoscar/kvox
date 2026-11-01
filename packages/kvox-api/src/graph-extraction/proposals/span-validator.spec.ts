@@ -8,7 +8,7 @@ const NOTE = '0b000000-0000-4000-8000-000000000001';
 const TRANSCRIPT = '0c000000-0000-4000-8000-000000000001';
 const OTHER_TRANSCRIPT = '0c000000-0000-4000-8000-000000000002';
 const SEG = '0d000000-0000-4000-8000-000000000001';
-const BODY = '# Kickoff\n\nSarah   Chen\njoined Northwind.';
+const BODY = '# Kickoff\n\nSarah   Chen\njoined Lambda.';
 const SEG_TEXT = "Hi, I'm Sarah Chen.";
 
 function setup(opts: { originId?: string | null; segmentTranscript?: string; segmentRev?: number } = {}) {

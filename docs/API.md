@@ -6307,7 +6307,7 @@ connected knowledge is on, you hold `graph:write` and your
     "pinnedEntityIds": ["0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11"],
     "entityTypes": ["Person", "Organization", "Commitment"],
     "relationTypes": ["WORKS_FOR"],
-    "instructions": "Only the commitments Northwind made."
+    "instructions": "Only the commitments Lambda made."
   }
 }
 ```
@@ -6671,7 +6671,7 @@ is set only on a `known` relation row whose props would add to the stored
 relation it matched — e.g. `{ "businessUnit": "Consulting" }`, also spelled
 into `display.subtitle` as `adds Business unit: Consulting` — and is `null`
 otherwise. `display` is rendered by the
-server — `"Sarah Chen → works for → Northwind Robotics"`, `"Commitment · Sarah
+server — `"Sarah Chen → works for → Org Lambda Robotics"`, `"Commitment · Sarah
 Chen · due Mar 10, 2026"`, `"Closes: Sarah Chen works for OldCo, 2019 → Mar
 2026"` — so a client never re-derives it. Each `evidence` entry is `{ id,
 source: segment|note|import, transcriptId, segmentId, segmentRev, startMs, endMs,
@@ -7218,7 +7218,7 @@ documents your own graph cites for this entity.
 ```json
 {
   "data": {
-    "entity": { "id": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11", "label": "Acme Corp", "type": "Organization" },
+    "entity": { "id": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11", "label": "Org Kappa", "type": "Organization" },
     "window": {
       "since": "2026-08-27T00:00:00.000Z",
       "sinceSource": "last_viewed",
@@ -7254,7 +7254,7 @@ documents your own graph cites for this entity.
           "relationId": "3c1f…", "type": "HAS_ROLE", "change": "started",
           "at": "2026-09-01T00:00:00.000Z", "precision": "day",
           "person": { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person" },
-          "other": { "id": "…", "label": "Acme Corp", "type": "Organization" },
+          "other": { "id": "…", "label": "Org Kappa", "type": "Organization" },
           "title": "CTO", "evidenceIds": ["e1a2b3c4-…"]
         }
       ]
@@ -7811,13 +7811,13 @@ never contribute, and no quote text is returned.
     "status": "ready", "pending": false, "computedAt": "2026-10-20T08:00:00.000Z",
     "stale": false, "tooLarge": false, "connectorsReady": true,
     "themes": [
-      { "clusterId": 0, "label": "Acme Corp", "labelEntityId": "0b6f…", "size": 12,
+      { "clusterId": 0, "label": "Org Kappa", "labelEntityId": "0b6f…", "size": 12,
         "typeCounts": { "Person": 7 }, "memberSample": [{ "id": "0b6f…", "label": "Joe Rivera", "type": "Person", "degree": 5 }] }
     ],
     "connectors": [
       { "entity": { "id": "0b6f…", "label": "Joe Rivera", "type": "Person" }, "score": 0.42,
-        "clusters": [{ "id": 0, "label": "Acme Corp" }, { "id": 1, "label": "Globex" }],
-        "reason": "Joe Rivera connects the Acme Corp group and the Globex group." }
+        "clusters": [{ "id": 0, "label": "Org Kappa" }, { "id": 1, "label": "Org Sigma" }],
+        "reason": "Joe Rivera connects the Org Kappa group and the Org Sigma group." }
     ],
     "rising": [
       { "entity": { "id": "1c2d…", "label": "Ana Diaz", "type": "Person" }, "count": 5, "previous": 1,
@@ -8123,7 +8123,7 @@ plus one additive `step` event a client may ignore without losing text:
 | `event:` | `data` | `id:` |
 |---|---|---|
 | `delta` | `{ "delta": "…", "offset": n }` | `offset` |
-| `step` | `{ "index": n, "name": "search", "summary": "Searched for Acme", "resultCount": 3, "error": null, "offset": n }` | the current offset — **never advances it** |
+| `step` | `{ "index": n, "name": "search", "summary": "Searched for Kappa", "resultCount": 3, "error": null, "offset": n }` | the current offset — **never advances it** |
 | `done` | `{ "status": "succeeded", "offset": n, "citations": AskCitation[], "finishReason": "stop" \| "step_cap" \| "token_cap" \| "time_cap", "promptTokens": n \| null, "completionTokens": n \| null }` | `offset` |
 | `error` | `{ "status": "failed", "offset": n, "errorClass": "auth" \| "refusal" \| "rate_limit" \| "budget" \| "timeout" \| "other" \| "gone", "reason": string \| null }` | `offset` |
 
@@ -8146,11 +8146,11 @@ Plus a `: connected` comment on open and `: heartbeat` comments about every
 
 event: step
 id: 0
-data: {"index":0,"name":"search","summary":"Searched for Acme","resultCount":3,"error":null,"offset":0}
+data: {"index":0,"name":"search","summary":"Searched for Kappa","resultCount":3,"error":null,"offset":0}
 
 event: delta
 id: 24
-data: {"delta":"Acme renewed in March.","offset":24}
+data: {"delta":"Kappa renewed in March.","offset":24}
 
 event: done
 id: 24

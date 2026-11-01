@@ -376,7 +376,7 @@ describe('install.sh bundles infra/compose/.env.example into $APP_DIR/template (
     // bundled template useless to `bundledTemplateMatches` on every future
     // run, since the temp directory is deleted before install.sh exits.
     const tmpDir = makeRepo();
-    git(tmpDir, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+    git(tmpDir, 'remote', 'add', 'origin', 'https://github.com/kappa/widgets.git');
     git(tmpDir, 'checkout', '--quiet', '-b', 'feature-x');
     writeEnvExample(tmpDir);
     const appDir = mkdtempSync(join(tmpdir(), 'install-sh-appdir-'));
@@ -394,7 +394,7 @@ describe('install.sh bundles infra/compose/.env.example into $APP_DIR/template (
     });
 
     expect(readSourceJson(appDir)).toEqual({
-      repoUrl: 'https://github.com/acme/widgets.git',
+      repoUrl: 'https://github.com/kappa/widgets.git',
       ref: 'feature-x',
     });
   });
@@ -426,7 +426,7 @@ describe('install.sh bundles infra/compose/.env.example into $APP_DIR/template (
 
   it('records an empty ref for a KVOX_SRC checkout in detached HEAD, never the literal "HEAD"', () => {
     const tmpDir = makeRepo();
-    git(tmpDir, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+    git(tmpDir, 'remote', 'add', 'origin', 'https://github.com/kappa/widgets.git');
     const sha = git(tmpDir, 'rev-parse', 'HEAD');
     git(tmpDir, 'checkout', '--quiet', '--detach', sha);
     writeEnvExample(tmpDir);
@@ -436,7 +436,7 @@ describe('install.sh bundles infra/compose/.env.example into $APP_DIR/template (
     runTemplateBlock({
       tmpDir,
       appDir,
-      kvoxRepo: 'https://github.com/acme/widgets.git',
+      kvoxRepo: 'https://github.com/kappa/widgets.git',
       kvoxRef: 'main',
       kvoxSrc: '/some/local/checkout',
     });

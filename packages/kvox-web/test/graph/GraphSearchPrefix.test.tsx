@@ -15,7 +15,7 @@ import { graphSearchRequests } from './searchRequests.js';
 describe('GraphSearchPrefix', () => {
   it('shows the entity hits for a viewer with graph:read on a deployment with connected knowledge', async () => {
     const requests = graphSearchRequests();
-    render(<GraphSearchPrefix query="acme" />, { wrapperOptions: { user: graphReader } });
+    render(<GraphSearchPrefix query="kappa" />, { wrapperOptions: { user: graphReader } });
 
     expect(await screen.findByRole('heading', { name: 'People & organizations' })).toBeInTheDocument();
     expect(requests()).toHaveLength(1);
@@ -23,7 +23,7 @@ describe('GraphSearchPrefix', () => {
 
   it('renders nothing and asks nothing while connected knowledge is off', async () => {
     const requests = graphSearchRequests();
-    const { container } = render(<GraphSearchPrefix query="acme" />, {
+    const { container } = render(<GraphSearchPrefix query="kappa" />, {
       wrapperOptions: { user: graphReader },
       hostOptions: { features: { graphEnabled: false } },
     });
@@ -34,7 +34,7 @@ describe('GraphSearchPrefix', () => {
 
   it('renders nothing and asks nothing while the host has not said whether it is on', async () => {
     const requests = graphSearchRequests();
-    const { container } = render(<GraphSearchPrefix query="acme" />, {
+    const { container } = render(<GraphSearchPrefix query="kappa" />, {
       wrapperOptions: { user: graphReader },
       hostOptions: { features: { graphEnabled: undefined } },
     });
@@ -45,7 +45,7 @@ describe('GraphSearchPrefix', () => {
 
   it('renders nothing and asks nothing without graph:read', async () => {
     const requests = graphSearchRequests();
-    const { container } = render(<GraphSearchPrefix query="acme" />, {
+    const { container } = render(<GraphSearchPrefix query="kappa" />, {
       wrapperOptions: { user: noGraphUser },
     });
 

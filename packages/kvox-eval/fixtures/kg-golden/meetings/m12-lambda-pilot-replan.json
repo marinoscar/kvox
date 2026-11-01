@@ -1,6 +1,6 @@
 {
   "id": "m12",
-  "title": "Northwind pilot re-plan",
+  "title": "Lambda pilot re-plan",
   "tags": [
     "client",
     "supersedes",
@@ -245,16 +245,16 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Northwind pilot re-plan\n\n**Date:** March 26\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)\n\n## Summary\n\nThe aisle sensor supplier slipped delivery by five weeks, and the pick-path pilot cannot run without sensor location data. The group re-planned the timeline.\n\n## Timeline\n\n- The pilot moved to Q2. Sarah has already told NWR's board, who care that it works rather than that it lands in Q1.\n- Sensors are expected mid April; installation takes about a week, followed by a week of calibration.\n\n## Decisions\n\n- **Go live in Building 3 on May 4.**\n- Use the extra time for load testing at peak-season order volumes, using a replay of last November's orders — Northwind's worst month.\n\n## Action items\n\n- **Tomás Aguilar** — finalize the aisle sensor install plan by next Tuesday and share it with Owen, since it affects the network work.\n- **Tomás Aguilar** — forward the supplier's weekly status updates.\n- **JJ** — build a replay of last November's orders for load testing.\n- **Alex Rivera** — continue the Friday updates and copy Owen.\n\n## Notes\n\n- Sarah is running the Berlin marathon in September for the first time; her mornings are mostly training.\n"
+    "body": "# Lambda pilot re-plan\n\n**Date:** March 26\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)\n\n## Summary\n\nThe aisle sensor supplier slipped delivery by five weeks, and the pick-path pilot cannot run without sensor location data. The group re-planned the timeline.\n\n## Timeline\n\n- The pilot moved to Q2. Sarah has already told NWR's board, who care that it works rather than that it lands in Q1.\n- Sensors are expected mid April; installation takes about a week, followed by a week of calibration.\n\n## Decisions\n\n- **Go live in Building 3 on May 4.**\n- Use the extra time for load testing at peak-season order volumes, using a replay of last November's orders — Lambda's worst month.\n\n## Action items\n\n- **Tomás Aguilar** — finalize the aisle sensor install plan by next Tuesday and share it with Owen, since it affects the network work.\n- **Tomás Aguilar** — forward the supplier's weekly status updates.\n- **JJ** — build a replay of last November's orders for load testing.\n- **Alex Rivera** — continue the Friday updates and copy Owen.\n\n## Notes\n\n- Sarah is running the Berlin marathon in September for the first time; her mornings are mostly training.\n"
   },
   "knownEntities": [
     {
-      "id": "g-org-northwind-robotics",
+      "id": "g-org-lambda-robotics",
       "type": "Organization",
-      "label": "Northwind Robotics",
+      "label": "Org Lambda Robotics",
       "aliases": [
         "NWR",
-        "Northwind"
+        "Lambda"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -353,14 +353,14 @@
       {
         "key": "meeting",
         "type": "Meeting",
-        "label": "Northwind pilot re-plan",
+        "label": "Lambda pilot re-plan",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Northwind pilot re-plan"
+            "quote": "Lambda pilot re-plan"
           }
         ]
       },
@@ -388,7 +388,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Sarah Chen (Northwind Robotics)"
+            "quote": "Sarah Chen (Org Lambda Robotics)"
           }
         ]
       },
@@ -402,7 +402,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Tomás Aguilar (Northwind Robotics)"
+            "quote": "Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
@@ -416,18 +416,18 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Owen Barker (Northwind Robotics)"
+            "quote": "Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
       {
         "key": "nwr",
         "type": "Organization",
-        "label": "Northwind Robotics",
+        "label": "Org Lambda Robotics",
         "aliases": [
           "NWR"
         ],
-        "existingId": "g-org-northwind-robotics",
+        "existingId": "g-org-lambda-robotics",
         "props": {},
         "evidence": [
           {
@@ -464,7 +464,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -479,7 +479,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -494,7 +494,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },
@@ -509,7 +509,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
           }
         ]
       },

@@ -75,7 +75,7 @@ const accessRow = (ownerId: string, overrides: Record<string, unknown> = {}) => 
   finishReason: null,
   jobId: null,
   createdAt: new Date('2026-09-20T10:00:00.000Z'),
-  conversation: { id: CONVERSATION_ID, ownerId, title: 'Acme', scopeEntityId: null },
+  conversation: { id: CONVERSATION_ID, ownerId, title: 'Kappa', scopeEntityId: null },
   ...overrides,
 });
 
@@ -95,7 +95,7 @@ const pollRow = (overrides: Record<string, unknown> = {}) => ({
 const step = (index: number) => ({
   index,
   name: 'search',
-  arguments: { q: 'Acme' },
+  arguments: { q: 'Kappa' },
   summary: `Searched ${index}`,
   resultCount: 1,
   durationMs: 5,
@@ -197,7 +197,7 @@ describe('Ask message stream (#379)', () => {
 
     // One of the caller's own messages — but a question, not an answer.
     prismaMock.askMessage.findFirst.mockResolvedValueOnce(
-      accessRow(user.id, { role: 'user', status: 'complete', content: 'What about Acme?' }) as never,
+      accessRow(user.id, { role: 'user', status: 'complete', content: 'What about Kappa?' }) as never,
     );
     const userRole = await http().get(url()).set(authHeader(user.accessToken)).expect(404);
 
@@ -223,7 +223,7 @@ describe('Ask message stream (#379)', () => {
 
   it('streams steps, then text whose concatenation is the answer, then done', async () => {
     const user = await createMockTestUser(context, { roleName: 'viewer' });
-    const answer = 'Acme renewed in March [^ev1].';
+    const answer = 'Kappa renewed in March [^ev1].';
     prismaMock.askMessage.findFirst.mockResolvedValue(accessRow(user.id) as never);
     scriptPolls([
       pollRow({ status: 'pending' }),

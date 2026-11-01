@@ -1,6 +1,6 @@
 {
   "id": "m01",
-  "title": "Northwind pick-path pilot kickoff",
+  "title": "Lambda pick-path pilot kickoff",
   "tags": [
     "kickoff",
     "client",
@@ -8,7 +8,7 @@
     "negative-role"
   ],
   "recordedAt": "2026-01-08T15:00:00Z",
-  "contextText": "Kickoff for the pick-path optimisation pilot with Northwind Robotics. Sarah is our exec sponsor.",
+  "contextText": "Kickoff for the pick-path optimisation pilot with Org Lambda Robotics. Sarah is our exec sponsor.",
   "hasTranscript": true,
   "speakers": [
     {
@@ -47,7 +47,7 @@
       "startMs": 11870,
       "endMs": 19690,
       "rev": 1,
-      "text": "Great. For the record, I'm Sarah Chen, VP of Operations at Northwind Robotics. I'm sponsoring this on our side."
+      "text": "Great. For the record, I'm Sarah Chen, VP of Operations at Org Lambda Robotics. I'm sponsoring this on our side."
     },
     {
       "id": "m01-s003",
@@ -252,7 +252,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Northwind pick-path pilot kickoff\n\n**Date:** January 8\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics)\n\n## Summary\n\nKickoff for the pick-path pilot with Northwind Robotics. The goal is to show that re-ordering pick paths based on the live order mix reduces picker walking distance. Sarah Chen, VP of Operations, is the executive sponsor; Tomás Aguilar, an engineer on the warehouse systems team, is the day-to-day technical contact.\n\n## Decisions\n\n- The pilot will run in **Building 3 only**, Northwind's most predictable site with the newest shelving and cleaner location data.\n- The team will work from data exports for the first month rather than connecting to the warehouse management system directly.\n\n## Timeline\n\nSarah confirmed that the pilot is scheduled for Q1; this is what appears in Northwind's operating plan and what their board has seen. Priya considers Q1 tight but achievable if floor data arrives early.\n\n## Action items\n\n- **Sarah Chen** — send the Building 3 floor plans and shelf location export by next Tuesday.\n- **Priya Raman** — staff two engineers on the pilot from the start of February (JJ plus one more, to be confirmed this week).\n- **Alex Rivera** — send a short written update every Friday, copying Tomás.\n\n## Notes\n\n- Any direct integration with the warehouse management system will eventually need sign-off from Northwind's CIO, which takes weeks, so the plan avoids it for now.\n- Sarah prefers a short written update every Friday over another recurring call.\n- Tomás will route security questions to the right people at Northwind.\n"
+    "body": "# Lambda pick-path pilot kickoff\n\n**Date:** January 8\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics)\n\n## Summary\n\nKickoff for the pick-path pilot with Org Lambda Robotics. The goal is to show that re-ordering pick paths based on the live order mix reduces picker walking distance. Sarah Chen, VP of Operations, is the executive sponsor; Tomás Aguilar, an engineer on the warehouse systems team, is the day-to-day technical contact.\n\n## Decisions\n\n- The pilot will run in **Building 3 only**, Lambda's most predictable site with the newest shelving and cleaner location data.\n- The team will work from data exports for the first month rather than connecting to the warehouse management system directly.\n\n## Timeline\n\nSarah confirmed that the pilot is scheduled for Q1; this is what appears in Lambda's operating plan and what their board has seen. Priya considers Q1 tight but achievable if floor data arrives early.\n\n## Action items\n\n- **Sarah Chen** — send the Building 3 floor plans and shelf location export by next Tuesday.\n- **Priya Raman** — staff two engineers on the pilot from the start of February (JJ plus one more, to be confirmed this week).\n- **Alex Rivera** — send a short written update every Friday, copying Tomás.\n\n## Notes\n\n- Any direct integration with the warehouse management system will eventually need sign-off from Lambda's CIO, which takes weeks, so the plan avoids it for now.\n- Sarah prefers a short written update every Friday over another recurring call.\n- Tomás will route security questions to the right people at Lambda.\n"
   },
   "knownEntities": [
     {
@@ -266,12 +266,12 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-org-northwind-robotics",
+      "id": "g-org-lambda-robotics",
       "type": "Organization",
-      "label": "Northwind Robotics",
+      "label": "Org Lambda Robotics",
       "aliases": [
         "NWR",
-        "Northwind"
+        "Lambda"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -325,14 +325,14 @@
       {
         "key": "meeting",
         "type": "Meeting",
-        "label": "Northwind pick-path pilot kickoff",
+        "label": "Lambda pick-path pilot kickoff",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Northwind pick-path pilot kickoff"
+            "quote": "Lambda pick-path pilot kickoff"
           }
         ]
       },
@@ -361,7 +361,7 @@
           {
             "source": "segment",
             "segmentId": "m01-s002",
-            "quote": "I'm Sarah Chen, VP of Operations at Northwind Robotics"
+            "quote": "I'm Sarah Chen, VP of Operations at Org Lambda Robotics"
           }
         ]
       },
@@ -398,15 +398,15 @@
       {
         "key": "nwr",
         "type": "Organization",
-        "label": "Northwind Robotics",
+        "label": "Org Lambda Robotics",
         "aliases": [],
-        "existingId": "g-org-northwind-robotics",
+        "existingId": "g-org-lambda-robotics",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m01-s002",
-            "quote": "VP of Operations at Northwind Robotics"
+            "quote": "VP of Operations at Org Lambda Robotics"
           }
         ]
       },
@@ -454,7 +454,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
@@ -469,7 +469,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
@@ -484,7 +484,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
@@ -499,7 +499,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics)"
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
@@ -515,7 +515,7 @@
           {
             "source": "segment",
             "segmentId": "m01-s002",
-            "quote": "I'm Sarah Chen, VP of Operations at Northwind Robotics"
+            "quote": "I'm Sarah Chen, VP of Operations at Org Lambda Robotics"
           }
         ]
       },
@@ -533,7 +533,7 @@
           {
             "source": "segment",
             "segmentId": "m01-s002",
-            "quote": "I'm Sarah Chen, VP of Operations at Northwind Robotics"
+            "quote": "I'm Sarah Chen, VP of Operations at Org Lambda Robotics"
           }
         ]
       },
@@ -548,7 +548,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Tomás Aguilar (Northwind Robotics)"
+            "quote": "Tomás Aguilar (Org Lambda Robotics)"
           }
         ]
       },
@@ -615,7 +615,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Kickoff for the pick-path pilot with Northwind Robotics."
+            "quote": "Kickoff for the pick-path pilot with Org Lambda Robotics."
           }
         ]
       },

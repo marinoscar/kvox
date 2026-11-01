@@ -18,7 +18,7 @@ import {
   decodeSelection,
   encodeSelection,
 } from '../../src/graph/ui/components/explorer/inspector/useInspectorUrlState.js';
-import { ACME_ID, ANA_ID, ATLAS_COMMITMENT_ID, JOE_ID, Q3_MEETING_ID, expandFixture, gid } from './graphData.js';
+import { KAPPA_ID, ANA_ID, ATLAS_COMMITMENT_ID, JOE_ID, Q3_MEETING_ID, expandFixture, gid } from './graphData.js';
 
 /** The inspector's pure model (GIC-11, #672): no React, no canvas. */
 
@@ -132,7 +132,7 @@ describe('buildSelection', () => {
     const state = joeState();
     const joe = nodeOf(state, JOE_ID);
     expect(joe).toMatchObject({ label: 'Joe Rivera', entityType: 'Person', isSeed: true, expanded: false, pinned: false });
-    expect(nodeOf(state, ACME_ID).isSeed).toBe(false);
+    expect(nodeOf(state, KAPPA_ID).isSeed).toBe(false);
   });
 
   it('is null for a node or an edge that left the canvas, and for the line to a stub', () => {
@@ -222,10 +222,10 @@ describe('expandMenuModel', () => {
 describe('summariseSelection', () => {
   it('counts by type and names the neighbours two or more of the nodes share', () => {
     const state = joeState();
-    // Ana and Acme meet at Joe (Joe -> Ana, Joe -> Acme) and at the Q3 meeting is only Joe's.
+    // Ana and Kappa meet at Joe (Joe -> Ana, Joe -> Kappa) and at the Q3 meeting is only Joe's.
     mergeSlice(state, expandFixture({ nodeIds: [ANA_ID], cap: 300 })!);
-    const summary = summariseSelection(state, new Set([ANA_ID, ACME_ID]));
-    expect(summary.ids.sort()).toEqual([ACME_ID, ANA_ID].sort());
+    const summary = summariseSelection(state, new Set([ANA_ID, KAPPA_ID]));
+    expect(summary.ids.sort()).toEqual([KAPPA_ID, ANA_ID].sort());
     expect(summary.byType).toEqual([
       { type: 'Organization', count: 1 },
       { type: 'Person', count: 1 },

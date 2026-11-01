@@ -86,7 +86,7 @@
       "startMs": 33220,
       "endMs": 39520,
       "rev": 1,
-      "text": "Great. Accounts then. Northwind is fine, the pilot kicked off well and Sarah seems happy."
+      "text": "Great. Accounts then. Lambda is fine, the pilot kicked off well and Sarah seems happy."
     },
     {
       "id": "m03-s008",
@@ -235,7 +235,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Larkspur weekly delivery sync\n\n**Date:** January 22\n**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks\n\n## Summary\n\nInternal weekly sync covering the meeting slot, account health across Northwind, Halden and Corvid, staffing, and a recurring tooling topic.\n\n## Decisions\n\n- The weekly delivery sync moves to **Wednesday mornings**, starting next week, because Mondays collide with client steering calls.\n\n## Accounts\n\n- **Northwind Robotics** — the pick-path pilot kicked off well and Sarah seems happy.\n- **Halden Freight** — JJ is on the migration; the license deadline is keeping everyone focused.\n- **Corvid Health** — the intake discovery workshop is next week.\n\n## Staffing\n\nLarkspur is under a hiring freeze until March, with no new reqs until then. Hana flagged that this could hurt if the Corvid work grows.\n\n## Action items\n\n- **Nadia Brooks** — share the first intake wireframes with Alex before the Corvid workshop, by Tuesday.\n- **Hana Sato** — ask Elif at Corvid for their brand guidelines today.\n\n## Other topics\n\n- AI code review came up again in the engineering channel; it resurfaces every few weeks. Nobody took it on — \"we should probably look into that at some point\", but not this month.\n- Hana will be slower on email on Friday mornings while she trains for the Lisbon half marathon.\n"
+    "body": "# Larkspur weekly delivery sync\n\n**Date:** January 22\n**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks\n\n## Summary\n\nInternal weekly sync covering the meeting slot, account health across Lambda, Halden and Corvid, staffing, and a recurring tooling topic.\n\n## Decisions\n\n- The weekly delivery sync moves to **Wednesday mornings**, starting next week, because Mondays collide with client steering calls.\n\n## Accounts\n\n- **Org Lambda Robotics** — the pick-path pilot kicked off well and Sarah seems happy.\n- **Halden Freight** — JJ is on the migration; the license deadline is keeping everyone focused.\n- **Corvid Health** — the intake discovery workshop is next week.\n\n## Staffing\n\nLarkspur is under a hiring freeze until March, with no new reqs until then. Hana flagged that this could hurt if the Corvid work grows.\n\n## Action items\n\n- **Nadia Brooks** — share the first intake wireframes with Alex before the Corvid workshop, by Tuesday.\n- **Hana Sato** — ask Elif at Corvid for their brand guidelines today.\n\n## Other topics\n\n- AI code review came up again in the engineering channel; it resurfaces every few weeks. Nobody took it on — \"we should probably look into that at some point\", but not this month.\n- Hana will be slower on email on Friday mornings while she trains for the Lisbon half marathon.\n"
   },
   "knownEntities": [
     {

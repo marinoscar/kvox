@@ -3,7 +3,7 @@ import { FakeProposalDb, NOTE, OWNER, entityPayload, linked } from '../__fixture
 import { RejectionMemoryStage } from './rejection-memory.stage.js';
 
 const JOE = 'aaaaaaaa-0000-4000-8000-000000000001';
-const ACME = 'aaaaaaaa-0000-4000-8000-000000000002';
+const KAPPA = 'aaaaaaaa-0000-4000-8000-000000000002';
 const OLD = 'eeeeeeee-0000-4000-8000-000000000001';
 
 function fact(ref: string, hash: string, over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -74,14 +74,14 @@ describe('rejection-memory stage', () => {
 
   it('flags a row rejected before in a committed proposal for the same note, and defaults it to reject', async () => {
     const { db, stage } = build();
-    db.add('relation', { ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { entityId: ACME }, props: {}, validFrom: null, validTo: null, precision: 'unknown' });
+    db.add('relation', { ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { entityId: KAPPA }, props: {}, validFrom: null, validTo: null, precision: 'unknown' });
     db.add('item', { ...fact('c1', 'h-claim'), kind: 'claim' });
     db.add('item', { ...fact('c2', 'h-other'), kind: 'claim' });
     // The earlier proposal's own entity row became JOE (committed), and it
     // rejected the WORKS_FOR and the claim.
     db.pastRows = [
       { proposalId: OLD, kind: 'entity', payload: entityPayload('x7', 'Person', 'Joseph'), resolution: linked(null), committedRefId: JOE, mergeIntoId: null },
-      { proposalId: OLD, kind: 'relation', payload: { ref: 'r9', type: 'WORKS_FOR', from: { ref: 'x7' }, to: { entityId: ACME }, props: {} }, resolution: null, committedRefId: null, mergeIntoId: null },
+      { proposalId: OLD, kind: 'relation', payload: { ref: 'r9', type: 'WORKS_FOR', from: { ref: 'x7' }, to: { entityId: KAPPA }, props: {} }, resolution: null, committedRefId: null, mergeIntoId: null },
       { proposalId: OLD, kind: 'item', payload: { kind: 'claim', subject: { entityId: JOE }, statementHash: 'h-claim' }, resolution: null, committedRefId: null, mergeIntoId: null },
     ];
     const ctx = db.ctx();

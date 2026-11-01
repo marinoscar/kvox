@@ -80,7 +80,7 @@ function listItem(
  */
 const RECENT = [
   listItem('t1', 'Weekly engineering standup'),
-  listItem('t2', 'Customer discovery — Northwind', { durationMs: 2_760_000, speakerCount: 2 }),
+  listItem('t2', 'Customer discovery — Lambda', { durationMs: 2_760_000, speakerCount: 2 }),
   listItem('t3', 'Board update rehearsal', { durationMs: 900_000, speakerCount: 1 }),
   listItem('t4', 'Design critique', { durationMs: 3_300_000, speakerCount: 4 }),
   listItem('t5', 'Support escalation review', {
@@ -141,7 +141,7 @@ function noteItem(
 
 const RECENT_NOTES = [
   noteItem('n1', 'Weekly standup — minutes'),
-  noteItem('n2', 'Northwind discovery brief', { templateName: 'Discovery brief' }),
+  noteItem('n2', 'Lambda discovery brief', { templateName: 'Discovery brief' }),
 ];
 
 const GENERATING_NOTES = [

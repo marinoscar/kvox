@@ -37,16 +37,16 @@ function map(quads: ImportQuad[], extra: { defs?: UserAttributeDef[]; sensitivit
 }
 
 const JOE = 'https://s.example/joe';
-const ACME = 'https://s.example/acme';
+const KAPPA = 'https://s.example/kappa';
 const people = (): ImportQuad[] => [
   q(JOE, `${RDF}type`, iri(`${NS}Person`)),
   q(JOE, `${RDFS}label`, lit('Joe Smith')),
   q(JOE, `${SKOS}altLabel`, lit('Joseph')),
   q(JOE, `${SKOS}altLabel`, lit('Joe Smith')),
   q(JOE, 'https://schema.org/jobTitle', lit('CTO')),
-  q(ACME, `${RDF}type`, iri(`${NS}Organization`)),
-  q(ACME, `${RDFS}label`, lit('Acme')),
-  q(ACME, 'https://schema.org/url', lit('https://acme.example', `${XSD}anyURI`)),
+  q(KAPPA, `${RDF}type`, iri(`${NS}Organization`)),
+  q(KAPPA, `${RDFS}label`, lit('Kappa')),
+  q(KAPPA, 'https://schema.org/url', lit('https://kappa.example.test', `${XSD}anyURI`)),
 ];
 
 describe('temporal helpers', () => {
@@ -76,8 +76,8 @@ describe('mapImportToProposal', () => {
       props: { title: 'CTO' },
       occurredAt: null,
     });
-    const acme = rows.find((r) => r.kind === 'entity' && r.payload.label === 'Acme')!;
-    expect(acme.payload).toMatchObject({ props: { website: 'https://acme.example' } });
+    const kappa = rows.find((r) => r.kind === 'entity' && r.payload.label === 'Kappa')!;
+    expect(kappa.payload).toMatchObject({ props: { website: 'https://kappa.example.test' } });
     expect(counts).toEqual({ entities: 2, relations: 0, items: 0, skippedSensitive: 0 });
   });
 
@@ -91,17 +91,17 @@ describe('mapImportToProposal', () => {
     ];
     const { rows } = map(quads);
     expect(rows.find((r) => r.node === `N:${JOE}`)?.evidence).toEqual({ sourceIri: JOE, quote: 'Joe runs engineering.' });
-    expect(rows.find((r) => r.node === `N:${ACME}`)?.evidence).toEqual({ sourceIri: ACME, quote: 'Imported from contacts.ttl' });
+    expect(rows.find((r) => r.node === `N:${KAPPA}`)?.evidence).toEqual({ sourceIri: KAPPA, quote: 'Imported from contacts.ttl' });
   });
 
   it('lets a reified assertion win over the direct triple it restates', () => {
     const quads = [
       ...people(),
-      q(JOE, `${NS}WORKS_FOR`, iri(ACME)),
+      q(JOE, `${NS}WORKS_FOR`, iri(KAPPA)),
       q('https://s.example/r1', `${RDF}type`, iri(`${NS}Assertion`)),
       q('https://s.example/r1', `${RDF}subject`, iri(JOE)),
       q('https://s.example/r1', `${RDF}predicate`, iri(`${NS}WORKS_FOR`)),
-      q('https://s.example/r1', `${RDF}object`, iri(ACME)),
+      q('https://s.example/r1', `${RDF}object`, iri(KAPPA)),
       q('https://s.example/r1', `${PROV}startedAtTime`, dt('2019-03-01T00:00:00.000Z')),
       q('https://s.example/r1', `${PROV}endedAtTime`, dt('2024-07-01T00:00:00.000Z')),
       q('https://s.example/r1', `${NS}validPrecision`, lit('month')),
@@ -115,7 +115,7 @@ describe('mapImportToProposal', () => {
     expect(payload).toMatchObject({
       type: 'WORKS_FOR',
       from: { ref: refFor('e', `N:${JOE}`) },
-      to: { ref: refFor('e', `N:${ACME}`) },
+      to: { ref: refFor('e', `N:${KAPPA}`) },
       validFrom: '2019-03-01',
       validTo: '2024-06-01',
       precision: 'month',
@@ -125,21 +125,21 @@ describe('mapImportToProposal', () => {
   });
 
   it('maps a bare direct triple to a relation with no range, and drops a disallowed pair', () => {
-    const quads = [...people(), q(JOE, `${NS}WORKS_FOR`, iri(ACME)), q(ACME, `${NS}WORKS_FOR`, iri(JOE))];
+    const quads = [...people(), q(JOE, `${NS}WORKS_FOR`, iri(KAPPA)), q(KAPPA, `${NS}WORKS_FOR`, iri(JOE))];
     const relations = map(quads).rows.filter((r) => r.kind === 'relation');
     expect(relations).toHaveLength(1);
     expect(relations[0].payload).toMatchObject({ validFrom: null, validTo: null, precision: 'unknown', props: {} });
   });
 
   it('keeps HAS_ROLE only with its required title', () => {
-    const base = [...people(), q(JOE, `${NS}HAS_ROLE`, iri(ACME))];
+    const base = [...people(), q(JOE, `${NS}HAS_ROLE`, iri(KAPPA))];
     expect(map(base).rows.filter((r) => r.kind === 'relation')).toHaveLength(0);
     const titled = [
       ...base,
       q('_:r', `${RDF}type`, iri(`${NS}Assertion`)),
       q('_:r', `${RDF}subject`, iri(JOE)),
       q('_:r', `${RDF}predicate`, iri(`${NS}HAS_ROLE`)),
-      q('_:r', `${RDF}object`, iri(ACME)),
+      q('_:r', `${RDF}object`, iri(KAPPA)),
       q('_:r', relationPropIri(NS, 'HAS_ROLE', 'title', ONTOLOGY.relationType('HAS_ROLE')?.props.title?.alignment), lit('CTO')),
     ];
     const hasTitle = map(titled).rows.filter((r) => r.kind === 'relation');
@@ -156,7 +156,7 @@ describe('mapImportToProposal', () => {
       q(deck, `${RDFS}label`, lit('Send the deck')),
       q(deck, `${NS}Commitment.statement`, lit('Joe will send the deck.')),
       q(deck, `${NS}ASSIGNED_TO`, iri(JOE)),
-      q(deck, `${NS}OWED_TO`, iri(ACME)),
+      q(deck, `${NS}OWED_TO`, iri(KAPPA)),
       q(deck, `${NS}status`, lit('open')),
       q(deck, `${NS}dueAt`, dt('2026-04-10T00:00:00.000Z')),
     ];
@@ -167,7 +167,7 @@ describe('mapImportToProposal', () => {
       title: 'Send the deck',
       statement: 'Joe will send the deck.',
       owner: { ref: refFor('e', `N:${JOE}`) },
-      counterparty: { ref: refFor('e', `N:${ACME}`) },
+      counterparty: { ref: refFor('e', `N:${KAPPA}`) },
       subject: null,
       status: 'open',
       dueAt: '2026-04-10',
@@ -202,9 +202,9 @@ describe('mapImportToProposal', () => {
   it('keeps the caller’s own attribute values by key, and skips a sensitive definition', () => {
     const tier = { id: '11111111-1111-4111-8111-111111111111', entityType: 'Organization', key: 'u_tier000001', label: 'Tier', kind: 'text', options: null, sensitivity: null } as unknown as UserAttributeDef;
     const secret = { id: '33333333-3333-4333-8333-333333333333', entityType: 'Person', key: 'u_secret0001', label: 'Secret', kind: 'text', options: null, sensitivity: 'sensitive' } as unknown as UserAttributeDef;
-    const quads = [...people(), q(ACME, `${NS}attr/${tier.id}`, lit('gold')), q(JOE, `${NS}attr/${secret.id}`, lit('hidden'))];
+    const quads = [...people(), q(KAPPA, `${NS}attr/${tier.id}`, lit('gold')), q(JOE, `${NS}attr/${secret.id}`, lit('hidden'))];
     const { rows, counts } = map(quads, { defs: [tier, secret] });
-    expect(rows.find((r) => r.node === `N:${ACME}`)?.payload).toMatchObject({ props: { website: 'https://acme.example', u_tier000001: 'gold' } });
+    expect(rows.find((r) => r.node === `N:${KAPPA}`)?.payload).toMatchObject({ props: { website: 'https://kappa.example.test', u_tier000001: 'gold' } });
     expect(rows.find((r) => r.node === `N:${JOE}`)?.payload).toMatchObject({ props: { title: 'CTO' } });
     expect(counts.skippedSensitive).toBe(1);
   });

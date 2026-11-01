@@ -85,7 +85,7 @@ function legacyAiValue() {
         allowedModels: [
           'gpt-4o-mini',
           { id: 'gpt-5.4', label: 'GPT-5.4 (team)' },
-          { id: 'acme-private-1', label: 'Acme private', contextWindowTokens: 64_000, maxOutputTokens: 4_096 },
+          { id: 'kappa-private-1', label: 'Kappa private', contextWindowTokens: 64_000, maxOutputTokens: 4_096 },
         ],
         defaultModel: 'gpt-4o-mini',
       },
@@ -301,11 +301,11 @@ describeWithDb('legacy AI migration (real Postgres)', () => {
       await runAiLegacyMigration(deps(), { apply: true, snapshotPath: snapshotFile() });
 
       const rows = await prisma.aiModel.findMany({ where: { provider: 'openai' }, orderBy: { modelId: 'asc' } });
-      expect(rows.map((r) => r.modelId)).toEqual(['acme-private-1', 'gpt-4o-mini', 'gpt-5.4', 'text-embedding-3-small']);
+      expect(rows.map((r) => r.modelId)).toEqual(['gpt-4o-mini', 'gpt-5.4', 'kappa-private-1', 'text-embedding-3-small']);
       for (const row of rows) expect(row).toMatchObject({ enabled: true, capabilitySource: 'admin_override' });
 
-      const acme = rows.find((r) => r.modelId === 'acme-private-1')!;
-      expect(acme).toMatchObject({ displayName: 'Acme private', contextWindow: 64_000, maxOutputTokens: 4_096 });
+      const kappa = rows.find((r) => r.modelId === 'kappa-private-1')!;
+      expect(kappa).toMatchObject({ displayName: 'Kappa private', contextWindow: 64_000, maxOutputTokens: 4_096 });
       const five = rows.find((r) => r.modelId === 'gpt-5.4')!;
       expect(five).toMatchObject({ displayName: 'GPT-5.4 (team)', contextWindow: 1_050_000, maxOutputTokens: 128_000 });
       expect((five.capabilities as { capabilities: string[] }).capabilities).toEqual(

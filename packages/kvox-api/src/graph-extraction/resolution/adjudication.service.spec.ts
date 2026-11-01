@@ -22,7 +22,7 @@ function pair(n: number, type = 'Person'): AdjudicationPair {
       aliases: ['Sarah Chen', 'Sally'],
       props: {},
       quotes: ['x'.repeat(400)],
-      neighbourhood: ['WORKS_FOR → Northwind Robotics (2019–)'],
+      neighbourhood: ['WORKS_FOR → Org Lambda Robotics (2019–)'],
     },
   };
 }
@@ -168,7 +168,7 @@ describe('the adjudication prompt', () => {
     expect(content).toContain(`${h.mention} Sarah 1`);
     expect(content).toContain(`${h.candidate} aaaaaaa1: Sarah Chen`);
     expect(content).toContain(h.neighbourhood);
-    expect(content).toContain('WORKS_FOR → Northwind Robotics (2019–)');
+    expect(content).toContain('WORKS_FOR → Org Lambda Robotics (2019–)');
     const longQuote = content.split('\n').find((l) => l.startsWith('  - "x'))!;
     expect(longQuote.length).toBeLessThanOrEqual(200 + 6);
   });

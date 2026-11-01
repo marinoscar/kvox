@@ -148,8 +148,8 @@ describe('createKvoxAi over the Copilot adapter: the model catalog decides', () 
 
   it('runs an Ask step through the port: a tool call out, the tool message in, the answer from the same session', async () => {
     const { ai, transport, recording } = build('gpt-5-mini');
-    transport.queue({ kind: 'toolCalls', text: 'Let me look. ', calls: [{ name: 'lookup', arguments: { query: 'acme' }, toolCallId: 'call-1' }] });
-    transport.queue({ kind: 'answer', text: 'Acme is a client.' });
+    transport.queue({ kind: 'toolCalls', text: 'Let me look. ', calls: [{ name: 'lookup', arguments: { query: 'kappa' }, toolCallId: 'call-1' }] });
+    transport.queue({ kind: 'answer', text: 'Kappa is a client.' });
     const target = await ai.resolveTask(ctx, 'notes.generate');
     const tools = [
       {
@@ -158,20 +158,20 @@ describe('createKvoxAi over the Copilot adapter: the model catalog decides', () 
         parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'], additionalProperties: false },
       },
     ];
-    const question = { role: 'user' as const, content: 'Who is Acme?' };
+    const question = { role: 'user' as const, content: 'Who is Kappa?' };
 
     const first: KvoxChatEvent[] = [];
     for await (const event of ai.chat(ctx, { target, messages: [question], tools, toolChoice: 'auto' })) first.push(event);
     // The text before the call is the step's preamble (the Ask loop holds it back); the call ends the step.
     expect(first.map((e) => e.type)).toEqual(['delta', 'delta', 'tool_call', 'step_end', 'done']);
-    expect(first.find((e) => e.type === 'tool_call')).toMatchObject({ id: 'call-1', name: 'lookup', arguments: { query: 'acme' } });
+    expect(first.find((e) => e.type === 'tool_call')).toMatchObject({ id: 'call-1', name: 'lookup', arguments: { query: 'kappa' } });
 
     const second: KvoxChatEvent[] = [];
     for await (const event of ai.chat(ctx, {
       target,
       messages: [
         question,
-        { role: 'assistant', content: 'Let me look. ', toolCalls: [{ id: 'call-1', name: 'lookup', arguments: { query: 'acme' } }] },
+        { role: 'assistant', content: 'Let me look. ', toolCalls: [{ id: 'call-1', name: 'lookup', arguments: { query: 'kappa' } }] },
         { role: 'tool', toolCallId: 'call-1', content: '{"hits":1}' },
       ],
       tools,
@@ -181,7 +181,7 @@ describe('createKvoxAi over the Copilot adapter: the model catalog decides', () 
     }
     expect(second.at(-2)).toMatchObject({ type: 'step_end' });
     expect(second.at(-1)).toMatchObject({ type: 'done', finishReason: 'stop' });
-    expect(second.flatMap((e) => (e.type === 'delta' ? [e.text] : [])).join('')).toBe('Acme is a client.');
+    expect(second.flatMap((e) => (e.type === 'delta' ? [e.text] : [])).join('')).toBe('Kappa is a client.');
 
     // One session served both steps, and it was deleted at the end.
     expect(transport.sessions()).toHaveLength(1);

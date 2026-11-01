@@ -807,13 +807,13 @@ makes the handler exist:
 ```ts
 onModuleInit() {
   this.registry.register(this);
-  this.throttle.registerProviderKey(this.type, 'acme-vision');
+  this.throttle.registerProviderKey(this.type, 'kappa-vision');
 }
 ```
 
 **Several job types should share one key when they share one quota** — that is
 the entire reason the key is not just the job type. Three handlers hitting one
-vendor account are one bucket, and mapping all three to `'acme-vision'` is
+vendor account are one bucket, and mapping all three to `'kappa-vision'` is
 what makes a 429 on any of them back off the other two; two handlers hitting
 two vendors must *not* share a key, or one vendor's outage stalls work that had
 nothing to do with it.

@@ -58,17 +58,17 @@ describeWithDb('GET /api/graph/duplicates (real Postgres)', () => {
     await g.entity('Person', 'Avery Example');
     await g.entity('Organization', 'OAC');
     await g.entity('Organization', 'Org Alpha Consulting');
-    await g.entity('Organization', 'Acme Corporation');
-    await g.entity('Organization', 'Acme Corporatio');
+    await g.entity('Organization', 'Org Kappa Holdings');
+    await g.entity('Organization', 'Org Kappa Holding');
     await g.entity('Person', 'Al');
     await g.entity('Person', 'Alan');
     await g.entity('Topic', 'Avery Example');
 
     const out = await service.list(actor(user.id), { limit: 50 });
-    expect(labels(out)).toEqual(['Acme Corporatio | Acme Corporation', 'Avery | Avery Example', 'OAC | Org Alpha Consulting']);
-    const acme = out.pairs.find((p) => p.a.label.startsWith('Acme'))!;
-    expect(acme.reasons).toContain('similar_name');
-    expect(acme.source).toBe('name_pass');
+    expect(labels(out)).toEqual(['Avery | Avery Example', 'OAC | Org Alpha Consulting', 'Org Kappa Holding | Org Kappa Holdings']);
+    const kappa = out.pairs.find((p) => p.a.label.startsWith('Org Kappa'))!;
+    expect(kappa.reasons).toContain('similar_name');
+    expect(kappa.source).toBe('name_pass');
   });
 
   it('leaves out merged, unreviewed and other owners, and honours distinct pairs', async () => {
@@ -90,8 +90,8 @@ describeWithDb('GET /api/graph/duplicates (real Postgres)', () => {
     const { user, g } = await owner('proposal');
     const a = await g.entity('Person', 'Dana Whitfield');
     const b = await g.entity('Person', 'Ms Whitfield');
-    await g.entity('Organization', 'Initech');
-    await g.entity('Organization', 'Initech Inc');
+    await g.entity('Organization', 'Org Omega');
+    await g.entity('Organization', 'Org Omega Inc');
     const proposal = await prisma.kgProposal.create({ data: { ownerId: user.id, kind: 'resolution', status: 'draft' } });
     const item = await prisma.kgProposalItem.create({
       data: {

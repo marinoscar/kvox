@@ -30,7 +30,7 @@ import {
 } from '../../src/graph/ui/components/explorer/explorerReducers.js';
 import { STANCE_COLORS } from '../../src/graph/ui/components/explorer/explorerEncoding.js';
 import type { GraphEdge, GraphSlice } from '../../src/graph/headless/clients/graph.js';
-import { ACME_ID, ANA_ID, JOE_ID, Q3_MEETING_ID, expandFixture, gid, hubFixture } from './graphData.js';
+import { KAPPA_ID, ANA_ID, JOE_ID, Q3_MEETING_ID, expandFixture, gid, hubFixture } from './graphData.js';
 
 /**
  * The explorer's visual language, model half (#667): degree of interest, the
@@ -276,15 +276,15 @@ describe('seed flags and rings', () => {
   it('marks the seeds of a merge, and a promoted node', () => {
     const state = loaded();
     expect(state.graph.getNodeAttribute(JOE_ID, 'isSeed')).toBe(true);
-    expect(state.graph.getNodeAttribute(ACME_ID, 'isSeed')).toBe(false);
-    makeSeed(state, ACME_ID);
-    expect(state.graph.getNodeAttribute(ACME_ID, 'isSeed')).toBe(true);
+    expect(state.graph.getNodeAttribute(KAPPA_ID, 'isSeed')).toBe(false);
+    makeSeed(state, KAPPA_ID);
+    expect(state.graph.getNodeAttribute(KAPPA_ID, 'isSeed')).toBe(true);
   });
 
   it('an expand does not turn the expanded node into a seed', () => {
     const state = loaded();
-    mergeSlice(state, expandFixture({ nodeIds: [ACME_ID], cap: 300 })!, { parentId: ACME_ID });
-    expect(state.graph.getNodeAttribute(ACME_ID, 'isSeed')).toBe(false);
+    mergeSlice(state, expandFixture({ nodeIds: [KAPPA_ID], cap: 300 })!, { parentId: KAPPA_ID });
+    expect(state.graph.getNodeAttribute(KAPPA_ID, 'isSeed')).toBe(false);
     expect(state.graph.getNodeAttribute(JOE_ID, 'isSeed')).toBe(true);
   });
 });
@@ -370,7 +370,7 @@ describe('highlightSet', () => {
     const state = loaded();
     const set = highlightSet(state.graph, JOE_ID)!;
     expect(set.nodes.has(JOE_ID)).toBe(true);
-    expect(set.nodes.has(ACME_ID)).toBe(true);
+    expect(set.nodes.has(KAPPA_ID)).toBe(true);
     expect(set.nodes.has(Q3_MEETING_ID)).toBe(true);
     expect(set.edges.size).toBe(state.graph.degree(JOE_ID));
     expect(highlightSet(state.graph, null)).toBeNull();
@@ -428,7 +428,7 @@ describe('reducers', () => {
   it('hover: lights the node and its neighbours, forces their labels, and dims the rest to 15% — hidden: nothing', () => {
     const state = loaded();
     // A node with no edge to Joe: not his neighbour.
-    state.graph.addNode(gid(990), { ...state.graph.getNodeAttributes(ACME_ID), label: 'Stranger' });
+    state.graph.addNode(gid(990), { ...state.graph.getNodeAttributes(KAPPA_ID), label: 'Stranger' });
     const ctx = context(state, { focusId: JOE_ID });
     const node = buildNodeReducer(ctx);
     const lit = highlightSet(state.graph, JOE_ID)!;
@@ -436,7 +436,7 @@ describe('reducers', () => {
     const joe = node(JOE_ID, nodeData(state, JOE_ID));
     expect(joe.highlighted).toBe(true);
     expect(joe.forceLabel).toBe(true);
-    expect(joe.zIndex).toBeGreaterThan(Number(node(ACME_ID, nodeData(state, ACME_ID)).zIndex));
+    expect(joe.zIndex).toBeGreaterThan(Number(node(KAPPA_ID, nodeData(state, KAPPA_ID)).zIndex));
 
     for (const id of lit.nodes) {
       const out = node(id, nodeData(state, id));
@@ -467,17 +467,17 @@ describe('reducers', () => {
 
   it('the selection lights its neighbours when nothing is hovered, and the hover wins over it', () => {
     const state = loaded();
-    const selected = buildNodeReducer(context(state, { selectedId: ACME_ID }));
-    expect(selected(ACME_ID, nodeData(state, ACME_ID)).highlighted).toBe(true);
-    const hoverWins = buildNodeReducer(context(state, { selectedId: ACME_ID, focusId: JOE_ID }));
+    const selected = buildNodeReducer(context(state, { selectedId: KAPPA_ID }));
+    expect(selected(KAPPA_ID, nodeData(state, KAPPA_ID)).highlighted).toBe(true);
+    const hoverWins = buildNodeReducer(context(state, { selectedId: KAPPA_ID, focusId: JOE_ID }));
     expect(hoverWins(JOE_ID, nodeData(state, JOE_ID)).highlighted).toBe(true);
-    expect(hoverWins(ACME_ID, nodeData(state, ACME_ID)).highlighted).toBeUndefined();
+    expect(hoverWins(KAPPA_ID, nodeData(state, KAPPA_ID)).highlighted).toBeUndefined();
   });
 
   it('the TimeBar dims the nodes outside the window and the edges touching them, never a marked or focused node (GIC-15)', () => {
     const state = loaded();
     const faded = new Set([ANA_ID, JOE_ID]);
-    const node = buildNodeReducer({ ...context(state, { focusId: JOE_ID }), dimmedIds: faded, markedIds: new Set([ACME_ID]) });
+    const node = buildNodeReducer({ ...context(state, { focusId: JOE_ID }), dimmedIds: faded, markedIds: new Set([KAPPA_ID]) });
     const idle = buildNodeReducer(context(state, { focusId: JOE_ID }));
 
     // Dimmed: faded, unlabelled, unringed.
@@ -491,10 +491,10 @@ describe('reducers', () => {
     const timeOnly = buildNodeReducer({ ...context(state), dimmedIds: new Set([ANA_ID]) });
     const plain = buildNodeReducer(context(state));
     expect(timeOnly(ANA_ID, nodeData(state, ANA_ID)).label).toBe('');
-    expect(timeOnly(ACME_ID, nodeData(state, ACME_ID))).toEqual(plain(ACME_ID, nodeData(state, ACME_ID)));
+    expect(timeOnly(KAPPA_ID, nodeData(state, KAPPA_ID))).toEqual(plain(KAPPA_ID, nodeData(state, KAPPA_ID)));
     // A marked node is never dimmed.
-    const marked = buildNodeReducer({ ...context(state), dimmedIds: new Set([ACME_ID]), markedIds: new Set([ACME_ID]) });
-    expect(marked(ACME_ID, nodeData(state, ACME_ID)).highlighted).toBe(true);
+    const marked = buildNodeReducer({ ...context(state), dimmedIds: new Set([KAPPA_ID]), markedIds: new Set([KAPPA_ID]) });
+    expect(marked(KAPPA_ID, nodeData(state, KAPPA_ID)).highlighted).toBe(true);
 
     // An edge with a dimmed end is dimmed; the rest are untouched. Nothing dimmed: identical to no TimeBar.
     const edge = buildEdgeReducer({ ...context(state), dimmedIds: new Set([ANA_ID]) });
@@ -522,9 +522,9 @@ describe('reducers', () => {
 
   it('edges: the focus edges are lit and labelled, the others dimmed and unlabelled', () => {
     const state = loaded();
-    const edge = buildEdgeReducer(context(state, { focusId: ACME_ID }));
-    const own = state.graph.edges().filter((id) => state.graph.extremities(id).includes(ACME_ID));
-    const foreign = state.graph.edges().filter((id) => !state.graph.extremities(id).some((n) => highlightSet(state.graph, ACME_ID)!.nodes.has(n)));
+    const edge = buildEdgeReducer(context(state, { focusId: KAPPA_ID }));
+    const own = state.graph.edges().filter((id) => state.graph.extremities(id).includes(KAPPA_ID));
+    const foreign = state.graph.edges().filter((id) => !state.graph.extremities(id).some((n) => highlightSet(state.graph, KAPPA_ID)!.nodes.has(n)));
     expect(own.length).toBeGreaterThan(0);
     for (const id of own) {
       const out = edge(id, edgeData(state, id));
@@ -556,13 +556,13 @@ describe('reducers', () => {
   it('rings: a seed, a pinned and the selected node each get theirs; a plain node none', () => {
     const state = loaded();
     state.graph.setNodeAttribute(ANA_ID, 'fixed', true);
-    const node = buildNodeReducer(context(state, { selectedId: ACME_ID }));
+    const node = buildNodeReducer(context(state, { selectedId: KAPPA_ID }));
     const joe = node(JOE_ID, nodeData(state, JOE_ID));
     const ana = node(ANA_ID, nodeData(state, ANA_ID));
-    const acme = node(ACME_ID, nodeData(state, ACME_ID));
-    expect(joe.ringSize).toBeGreaterThan(Number(acme.ringSize));
+    const kappa = node(KAPPA_ID, nodeData(state, KAPPA_ID));
+    expect(joe.ringSize).toBeGreaterThan(Number(kappa.ringSize));
     expect(Number(ana.gapSize)).toBeGreaterThan(0);
-    expect(acme.ringColor).toBe('#1976d2');
+    expect(kappa.ringColor).toBe('#1976d2');
     const plain = buildNodeReducer(context(state))(Q3_MEETING_ID, nodeData(state, Q3_MEETING_ID));
     expect(plain.ringSize).toBeUndefined();
   });
@@ -588,7 +588,7 @@ describe('reducers', () => {
     const state = loaded();
     const node = buildNodeReducer(context(state, { compact: true }));
     expect(node(JOE_ID, nodeData(state, JOE_ID)).forceLabel).toBe(true);
-    expect(node(ACME_ID, nodeData(state, ACME_ID)).forceLabel).toBeUndefined();
+    expect(node(KAPPA_ID, nodeData(state, KAPPA_ID)).forceLabel).toBeUndefined();
   });
 });
 

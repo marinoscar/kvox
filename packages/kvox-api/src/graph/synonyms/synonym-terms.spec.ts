@@ -30,7 +30,7 @@ describe('expandNamesWith', () => {
     expect(expandNamesWith(['mit'], 'Organization', groups)).toEqual(['massachusetts institute of technology']);
   });
   it('adds nothing when no group matches or the names already cover the group', () => {
-    expect(expandNamesWith(['acme'], 'Organization', groups)).toEqual([]);
+    expect(expandNamesWith(['kappa'], 'Organization', groups)).toEqual([]);
     expect(expandNamesWith(['oac', 'org alpha consulting'], 'Organization', groups)).toEqual([]);
     expect(groupAppliesToType(null, 'X')).toBe(true);
   });

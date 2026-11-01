@@ -71,8 +71,8 @@ describeWithDb('Personal synonym dictionary (real Postgres)', () => {
     await expect(service.update(created.id, { terms: ['x1', 'y1'] }, b.actor)).rejects.toBeInstanceOf(NotFoundException);
     await expect(service.remove(created.id, b.actor)).rejects.toBeInstanceOf(NotFoundException);
 
-    const updated = await service.update(created.id, { terms: ['Acme', 'Roadrunner Supplies'], entityType: null }, a.actor);
-    expect(updated).toMatchObject({ terms: ['Acme', 'Roadrunner Supplies'], entityType: null });
+    const updated = await service.update(created.id, { terms: ['Kappa', 'Roadrunner Supplies'], entityType: null }, a.actor);
+    expect(updated).toMatchObject({ terms: ['Kappa', 'Roadrunner Supplies'], entityType: null });
 
     await service.remove(created.id, a.actor);
     expect(await prisma.kgSynonym.count({ where: { ownerId: a.user.id } })).toBe(0);
@@ -104,12 +104,12 @@ describeWithDb('Personal synonym dictionary (real Postgres)', () => {
 
   it('the duplicates pass lists two entities sharing a group as `synonym` (0.9)', async () => {
     const a = await owner('dup');
-    await a.g.entity('Organization', 'Acme');
+    await a.g.entity('Organization', 'Kappa');
     await a.g.entity('Organization', 'Roadrunner Supplies');
-    await service.create({ terms: ['Acme', 'Roadrunner Supplies'] }, a.actor);
+    await service.create({ terms: ['Kappa', 'Roadrunner Supplies'] }, a.actor);
     const { pairs } = await duplicates.list(a.actor, { limit: 50 });
     const pair = pairs.find((p) => p.reasons.includes('synonym'));
     expect(pair).toMatchObject({ score: 0.9, source: 'name_pass' });
-    expect([pair?.a.label, pair?.b.label].sort()).toEqual(['Acme', 'Roadrunner Supplies']);
+    expect([pair?.a.label, pair?.b.label].sort()).toEqual(['Kappa', 'Roadrunner Supplies']);
   });
 });

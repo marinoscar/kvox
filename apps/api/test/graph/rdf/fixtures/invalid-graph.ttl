@@ -29,7 +29,7 @@ ent:f0000000-0000-4000-8000-000000000002
 # 3. Closed-shape violation.
 ent:f0000000-0000-4000-8000-000000000003
     a kv:Organization ;
-    rdfs:label "Globex" ;
+    rdfs:label "Org Sigma" ;
     kv:Organization.revenue "12M" ;
     prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
 

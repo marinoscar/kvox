@@ -3,7 +3,7 @@ import { normalizeAlias, normalizeStatement, statementHash } from './normalize.j
 
 describe('normalizeAlias', () => {
   it('applies NFKC, so full-width letters fold to ASCII', () => {
-    expect(normalizeAlias('ＡＣＭＥ　Ｃｏｒｐ')).toBe('acme corp');
+    expect(normalizeAlias('ＯＲＧ　ＫＡＰＰＡ')).toBe('org kappa');
   });
 
   it('lowercases locale-independently', () => {
@@ -18,7 +18,7 @@ describe('normalizeAlias', () => {
   it('strips leading and trailing punctuation and symbols, but keeps internal ones', () => {
     expect(normalizeAlias('"Dr. Sarah Chen!"')).toBe('dr. sarah chen');
     expect(normalizeAlias('-- AT&T --')).toBe('at&t');
-    expect(normalizeAlias('★ Acme ★')).toBe('acme');
+    expect(normalizeAlias('★ Kappa ★')).toBe('kappa');
   });
 
   it('rejects an input that is empty once normalized', () => {

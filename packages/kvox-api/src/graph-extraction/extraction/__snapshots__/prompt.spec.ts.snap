@@ -21,7 +21,7 @@ exports[`assembleExtractionPrompt (#363) matches the snapshot of a small context
 ### Person (Person)
 A human being: one specific, individual person named or unambiguously identified in the source.
 - Never a role ("the CIO"), never a team, never an organization acting collectively.
-- Positive: "Sarah Chen"; "the Acme CIO whose name was given as Marcus Webb."
+- Positive: "Sarah Chen"; "the Kappa CIO whose name was given as Marcus Webb."
 - Negative: "the data team at OAC" is an Organization, or a Person if and only if one specific human is meant.
 - Negative: "whoever's on call" names no specific human, so there is nothing to create.
 
@@ -67,10 +67,10 @@ Title: Pilot kickoff call
 
 # Context
 Background the note's author wrote for this meeting. Treat it as authoritative: use it to identify who took part, the company, business unit and role of each person, and how names map to known entities. Cite it as \`C\`.
-Kickoff with Northwind about the pilot.
+Kickoff with Lambda about the pilot.
 
 # Known entities
-k1 | Person | Sarah Chen | aka: Sarah, S. Chen | Northwind Robotics
+k1 | Person | Sarah Chen | aka: Sarah, S. Chen | Org Lambda Robotics
 
 # Speakers
 A = Sarah Chen (k1)
@@ -79,13 +79,13 @@ B = unidentified
 # Note (version 2)
 # Pilot kickoff
 
-Sarah Chen (Northwind Robotics) sponsors the pick-path pilot.
+Sarah Chen (Org Lambda Robotics) sponsors the pick-path pilot.
 
 - Decision: use Postgres.
 - Sarah will send the updated proposal by Friday.
 
 # Transcript
-s1 [00:00:00] Sarah Chen: Hi everyone, I'm Sarah Chen, VP of Operations at Northwind Robotics.",
+s1 [00:00:00] Sarah Chen: Hi everyone, I'm Sarah Chen, VP of Operations at Org Lambda Robotics.",
 }
 `;
 
@@ -113,7 +113,7 @@ exports[`assembleExtractionPrompt (#363) matches the snapshot of the core + work
 ### Person (Person)
 A human being: one specific, individual person named or unambiguously identified in the source.
 - Never a role ("the CIO"), never a team, never an organization acting collectively.
-- Positive: "Sarah Chen"; "the Acme CIO whose name was given as Marcus Webb."
+- Positive: "Sarah Chen"; "the Kappa CIO whose name was given as Marcus Webb."
 - Negative: "the data team at OAC" is an Organization, or a Person if and only if one specific human is meant.
 - Negative: "whoever's on call" names no specific human, so there is nothing to create.
 

@@ -297,7 +297,7 @@ describe('GraphRelationEditsService.remove', () => {
 
 describe('manualRelationQuote', () => {
   it('reads as the fact, for each type', () => {
-    expect(manualRelationQuote('WORKS_FOR', 'Jenny Kim', 'Acme')).toBe('Set by hand: Jenny Kim works for Acme');
-    expect(manualRelationQuote('HAS_ROLE', 'Jenny Kim', 'Acme', { title: 'CFO' })).toBe('Set by hand: Jenny Kim is CFO at Acme');
+    expect(manualRelationQuote('WORKS_FOR', 'Jenny Kim', 'Kappa')).toBe('Set by hand: Jenny Kim works for Kappa');
+    expect(manualRelationQuote('HAS_ROLE', 'Jenny Kim', 'Kappa', { title: 'CFO' })).toBe('Set by hand: Jenny Kim is CFO at Kappa');
   });
 });

@@ -115,7 +115,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
         startMs: 0,
         endMs: 1000,
         ordinal: 1000,
-        text: 'Sarah joined Acme in 2019',
+        text: 'Sarah joined Kappa in 2019',
         words: [],
       },
     });
@@ -132,7 +132,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
   ) {
     return tx.kgEvidence.createMany({
       data: [
-        { ownerId, subjectKind, subjectId, transcriptId: c.transcript.id, segmentId: c.segment.id, quote: 'Sarah joined Acme' },
+        { ownerId, subjectKind, subjectId, transcriptId: c.transcript.id, segmentId: c.segment.id, quote: 'Sarah joined Kappa' },
         { ownerId, subjectKind, subjectId, noteId: c.note.id, noteVersion: 1, charStart: 0, charEnd: 5, quote: 'Sarah' },
       ],
     });
@@ -163,7 +163,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
       await tx.kgEntity.createMany({
         data: [
           { id: ids.p, ownerId, type: 'Person', label: 'Sarah Chen', ontologyVersion: v },
-          { id: ids.org, ownerId, type: 'Organization', label: 'Acme', ontologyVersion: v },
+          { id: ids.org, ownerId, type: 'Organization', label: 'Kappa', ontologyVersion: v },
           { id: ids.q, ownerId, type: 'Person', label: 'Tom Hale', ontologyVersion: v },
         ],
       });
@@ -179,7 +179,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
           { entityId: ids.p, ownerId, alias: 'SC', normalized: 'sc', source: 'user' },
           { entityId: ids.pPrime, ownerId, alias: 'S. Chen', normalized: 's chen', source: 'extraction' },
           { entityId: ids.q, ownerId, alias: 'Tom Hale', normalized: 'tom hale', source: 'extraction' },
-          { entityId: ids.org, ownerId, alias: 'Acme', normalized: 'acme', source: 'extraction' },
+          { entityId: ids.org, ownerId, alias: 'Kappa', normalized: 'kappa', source: 'extraction' },
         ],
       });
 
@@ -242,7 +242,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
       prisma.kgProposalItem.create({ data: { proposalId: ids.draft, kind: 'item', payload: { statement: 'x' }, editedPayload: { nested: [{ owner: { entityId: ids.p } }] } } }),
     ]);
     await prisma.kgProposalItem.create({
-      data: { id: ids.unrelatedDraftItem, proposalId: ids.draft, kind: 'entity', payload: { label: 'Acme', existingEntityId: ids.org }, distinctFrom: [ids.p, ids.org] },
+      data: { id: ids.unrelatedDraftItem, proposalId: ids.draft, kind: 'entity', payload: { label: 'Kappa', existingEntityId: ids.org }, distinctFrom: [ids.p, ids.org] },
     });
     await prisma.kgEvidence.create({
       data: { ownerId, subjectKind: 'proposal_item', subjectId: draftItems[0].id, noteId: c.note.id, noteVersion: 1, quote: 'Sarah' },

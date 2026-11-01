@@ -66,7 +66,7 @@ function setup(over: Setup = {}) {
   jobs.findLatest.mockImplementation(async () => over.latestJob ?? null);
   const access = {
     require: jest.fn().mockResolvedValue(
-      over.entity ?? { id: ENTITY, type: 'Organization', label: 'Acme', mergedIntoId: null },
+      over.entity ?? { id: ENTITY, type: 'Organization', label: 'Kappa', mergedIntoId: null },
     ),
   };
   const ontology = {
@@ -80,7 +80,7 @@ function setup(over: Setup = {}) {
     search:
       over.search ??
       jest.fn().mockResolvedValue({
-        results: [{ type: 'transcript', id: DOC, title: 'Call', score: 0.03, snippets: [{ html: '<mark>Acme</mark>', startMs: 10, field: 'segment' }] }],
+        results: [{ type: 'transcript', id: DOC, title: 'Call', score: 0.03, snippets: [{ html: '<mark>Kappa</mark>', startMs: 10, field: 'segment' }] }],
       }),
   };
   const readiness = over.readiness ?? jest.fn().mockResolvedValue({ ok: true, reason: null, model: 'model-x' });
@@ -125,8 +125,8 @@ beforeEach(() => {
 const DIGEST = {
   entityId: ENTITY,
   ownerId: OWNER,
-  summary: 'Acme chose blue',
-  citations: { version: 1, statements: [{ text: 'Acme chose blue', evidenceIds: [EV, U(99)] }], dropped: 0 },
+  summary: 'Kappa chose blue',
+  citations: { version: 1, statements: [{ text: 'Kappa chose blue', evidenceIds: [EV, U(99)] }], dropped: 0 },
   coversUntil: new Date('2026-09-01T00:00:00Z'),
   generatedAt: new Date('2026-09-02T00:00:00Z'),
   model: 'model-x',
@@ -151,7 +151,7 @@ describe('EntityBriefService.getBrief — digest staleness and the enqueue gate'
     expect(enqueuer.enqueue).not.toHaveBeenCalled();
     // Only evidence the caller still owns survives.
     expect(res.digest).toEqual({
-      statements: [{ text: 'Acme chose blue', evidenceIds: [EV] }],
+      statements: [{ text: 'Kappa chose blue', evidenceIds: [EV] }],
       coversUntil: DIGEST.coversUntil.toISOString(),
       generatedAt: DIGEST.generatedAt.toISOString(),
       model: 'model-x',
@@ -271,11 +271,11 @@ describe('EntityBriefService.getBrief — related sources', () => {
     const { service, search } = setup();
     const res = await service.getBrief(USER, ENTITY, opts());
     expect(search.search).toHaveBeenCalledWith(
-      { q: 'Acme', types: 'transcript,note', limit: 20 },
+      { q: 'Kappa', types: 'transcript,note', limit: 20 },
       { userId: OWNER, permissions: new Set(['graph:read', 'transcripts:read', 'notes:read']) },
     );
     expect(res.related).toEqual([
-      expect.objectContaining({ kind: 'transcript', id: DOC, inGraph: false, snippetHtml: '<mark>Acme</mark>', startMs: 10 }),
+      expect.objectContaining({ kind: 'transcript', id: DOC, inGraph: false, snippetHtml: '<mark>Kappa</mark>', startMs: 10 }),
     ]);
   });
 

@@ -49,7 +49,7 @@ describe('groupProposalItems', () => {
       groupKey: 'relations',
       flags: ['known'],
       fills: { businessUnit: 'Consulting' },
-      display: { title: 'Ana → has role → Acme', subtitle: 'Has role · VP · adds Business unit: Consulting' },
+      display: { title: 'Ana → has role → Kappa', subtitle: 'Has role · VP · adds Business unit: Consulting' },
     });
     const empty = proposalItem({ id: 'k-empty', kind: 'relation', groupKey: 'relations', flags: ['known'], fills: {} });
     const relations = groupProposalItems([plain, filling, empty]).find((group) => group.key === 'relations');
@@ -97,9 +97,9 @@ describe('blockingEndpoints', () => {
     expect(blockingEndpoints(worksFor, items)).toEqual([]);
 
     const rejected = items.map((item) =>
-      item.id === ITEM.northwind ? { ...item, decision: 'reject' as const } : item,
+      item.id === ITEM.lambda ? { ...item, decision: 'reject' as const } : item,
     );
-    expect(blockingEndpoints(worksFor, rejected).map((b) => b.label)).toEqual(['Northwind Robotics']);
+    expect(blockingEndpoints(worksFor, rejected).map((b) => b.label)).toEqual(['Org Lambda Robotics']);
   });
 
   it('ignores existing-entity endpoints and entity rows', () => {

@@ -79,7 +79,7 @@ function Harness({ initial = 'peek' as SheetSnap, onClose = () => undefined, onS
           }}
           label="Inspector"
         >
-          <h2>Acme Corp</h2>
+          <h2>Org Kappa</h2>
           <button type="button">Expand</button>
         </BottomSheet>
       </div>
@@ -161,7 +161,7 @@ describe('BottomSheet', () => {
     await user.click(screen.getByRole('button', { name: 'Expand' }));
     expect(sheet).toHaveAttribute('data-snap', 'peek');
 
-    await user.click(screen.getByRole('heading', { name: 'Acme Corp' }));
+    await user.click(screen.getByRole('heading', { name: 'Org Kappa' }));
     expect(sheet).toHaveAttribute('data-snap', 'half');
   });
 

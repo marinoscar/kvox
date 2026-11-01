@@ -96,13 +96,13 @@ export function mockAttributeDef(overrides: Partial<AttributeDef> = {}): Attribu
 export const JOE_ID = gid(1);
 export const ANA_ID = gid(2);
 export const BEN_ID = gid(3);
-export const ACME_ID = gid(4);
-export const GLOBEX_ID = gid(5);
+export const KAPPA_ID = gid(4);
+export const SIGMA_ID = gid(5);
 export const ATLAS_ID = gid(6);
 export const Q3_MEETING_ID = gid(7);
 export const SYNC_MEETING_ID = gid(8);
 export const CARLA_ID = gid(9);
-export const INITECH_ID = gid(10);
+export const OMEGA_ID = gid(10);
 export const BEACON_ID = gid(11);
 export const DANA_ID = gid(12);
 
@@ -114,11 +114,11 @@ export const SPEAKER_B_ID = gid(802);
 
 export const graphEntitySummaries: GraphEntitySummary[] = [
   { id: JOE_ID, type: 'Person', label: 'Joe Rivera', aliases: ['Joseph Rivera', 'Joe R.'], mentionCount: 14, lastSeenAt: '2026-09-20T15:00:00.000Z' },
-  { id: ACME_ID, type: 'Organization', label: 'Acme Corp', aliases: ['Acme'], mentionCount: 22, lastSeenAt: '2026-09-20T15:00:00.000Z' },
+  { id: KAPPA_ID, type: 'Organization', label: 'Org Kappa', aliases: ['Kappa'], mentionCount: 22, lastSeenAt: '2026-09-20T15:00:00.000Z' },
   { id: ANA_ID, type: 'Person', label: 'Ana Diaz', aliases: [], mentionCount: 9, lastSeenAt: '2026-09-18T10:00:00.000Z' },
-  { id: GLOBEX_ID, type: 'Organization', label: 'Globex', aliases: ['Globex Corporation'], mentionCount: 4, lastSeenAt: '2026-09-02T09:00:00.000Z' },
+  { id: SIGMA_ID, type: 'Organization', label: 'Org Sigma', aliases: ['Org Sigma Corporation'], mentionCount: 4, lastSeenAt: '2026-09-02T09:00:00.000Z' },
   { id: BEN_ID, type: 'Person', label: 'Ben Okafor', aliases: [], mentionCount: 6, lastSeenAt: '2026-08-30T09:00:00.000Z' },
-  { id: INITECH_ID, type: 'Organization', label: 'Initech', aliases: [], mentionCount: 2, lastSeenAt: null },
+  { id: OMEGA_ID, type: 'Organization', label: 'Org Omega', aliases: [], mentionCount: 2, lastSeenAt: null },
   { id: CARLA_ID, type: 'Person', label: 'Carla Mendes', aliases: ['Carla'], mentionCount: 3, lastSeenAt: '2026-07-11T09:00:00.000Z' },
   { id: DANA_ID, type: 'Person', label: 'Dana Li', aliases: [], mentionCount: 1, lastSeenAt: null },
   { id: ATLAS_ID, type: 'Project', label: 'Project Atlas', aliases: ['Atlas'], mentionCount: 11, lastSeenAt: '2026-09-20T15:00:00.000Z' },
@@ -263,7 +263,7 @@ export const evidenceFixtures: EvidenceLink[] = [
 
 const joeRef = { id: JOE_ID, label: 'Joe Rivera', type: 'Person' };
 const anaRef = { id: ANA_ID, label: 'Ana Diaz', type: 'Person' };
-const acmeRef = { id: ACME_ID, label: 'Acme Corp', type: 'Organization' };
+const kappaRef = { id: KAPPA_ID, label: 'Org Kappa', type: 'Organization' };
 
 export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief {
   return {
@@ -391,7 +391,7 @@ export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief 
           at: '2026-09-01T00:00:00.000Z',
           precision: 'month',
           person: joeRef,
-          other: acmeRef,
+          other: kappaRef,
           title: 'Director of Engineering',
           evidenceIds: [EV_NOTE],
         },
@@ -402,7 +402,7 @@ export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief 
           at: '2026-09-01T00:00:00.000Z',
           precision: 'month',
           person: joeRef,
-          other: acmeRef,
+          other: kappaRef,
           title: 'VP Engineering',
           evidenceIds: [EV_NOTE],
         },
@@ -457,7 +457,7 @@ export function neighborhoodFixture(overrides: Partial<GraphSlice> = {}): GraphS
     asOf: '2026-09-26T00:00:00.000Z',
     nodes: [
       node(JOE_ID, 0),
-      node(ACME_ID, 1),
+      node(KAPPA_ID, 1),
       node(ANA_ID, 1),
       node(Q3_MEETING_ID, 1),
       node(SYNC_MEETING_ID, 1),
@@ -473,7 +473,7 @@ export function neighborhoodFixture(overrides: Partial<GraphSlice> = {}): GraphS
       },
     ],
     edges: [
-      { id: gid(410), type: 'WORKS_FOR', source: JOE_ID, target: ACME_ID, valid: null, confidence: 0.94, virtual: false },
+      { id: gid(410), type: 'WORKS_FOR', source: JOE_ID, target: KAPPA_ID, valid: null, confidence: 0.94, virtual: false },
       { id: gid(411), type: 'REPORTS_TO', source: JOE_ID, target: ANA_ID, valid: { from: '2026-09-01T00:00:00.000Z', to: null, precision: 'month' }, confidence: 0.9, virtual: false },
       { id: gid(412), type: 'ATTENDED', source: JOE_ID, target: Q3_MEETING_ID, valid: null, confidence: null, virtual: false },
       { id: gid(413), type: 'ATTENDED', source: JOE_ID, target: SYNC_MEETING_ID, valid: null, confidence: null, virtual: false },
@@ -523,7 +523,7 @@ export function timelineFixture(includeSensitive = false): TimelineEvent[] {
         id: gid(402),
         type: 'HAS_ROLE',
         direction: 'out',
-        other: acmeRef,
+        other: kappaRef,
         valid: { from: '2026-09-01T00:00:00.000Z', to: null, precision: 'month' },
       },
       evidenceIds: [EV_NOTE],
@@ -538,7 +538,7 @@ export function timelineFixture(includeSensitive = false): TimelineEvent[] {
         id: gid(401),
         type: 'HAS_ROLE',
         direction: 'out',
-        other: acmeRef,
+        other: kappaRef,
         valid: { from: '2024-01-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z', precision: 'month' },
       },
       evidenceIds: [EV_NOTE],
@@ -638,11 +638,11 @@ export const EXISTING_ANA_ID = 'b0000000-0000-4000-8000-000000000003';
 export const ITEM = {
   sarah: 'c0000000-0000-4000-8000-000000000001',
   tom: 'c0000000-0000-4000-8000-000000000002',
-  northwind: 'c0000000-0000-4000-8000-000000000003',
+  lambda: 'c0000000-0000-4000-8000-000000000003',
   atlas: 'c0000000-0000-4000-8000-000000000004',
   meeting: 'c0000000-0000-4000-8000-000000000005',
   ana: 'c0000000-0000-4000-8000-000000000006',
-  contoso: 'c0000000-0000-4000-8000-000000000007',
+  theta: 'c0000000-0000-4000-8000-000000000007',
   decision: 'c0000000-0000-4000-8000-000000000008',
   commitment: 'c0000000-0000-4000-8000-000000000009',
   claim: 'c0000000-0000-4000-8000-00000000000a',
@@ -669,7 +669,7 @@ export function segmentEvidence(overrides: Partial<ProposalEvidence> = {}): Prop
     noteVersion: null,
     charStart: null,
     charEnd: null,
-    quote: 'Sarah from Northwind will lead the Atlas migration.',
+    quote: 'Sarah from Lambda will lead the Atlas migration.',
     speakerName: 'Oscar',
     stale: false,
     ...overrides,
@@ -813,18 +813,18 @@ export function draftItems(): ProposalItem[] {
       resolution: resolution({ ref: EXISTING_ANA_ID, score: 1, source: 'speaker', refLabel: 'Ana Ruiz' }),
     }),
     proposalItem({
-      id: ITEM.northwind,
+      id: ITEM.lambda,
       groupKey: 'Organization',
-      payload: entityPayload('e3', 'Organization', 'Northwind Robotics'),
-      display: { title: 'Northwind Robotics', subtitle: 'Organization' },
+      payload: entityPayload('e3', 'Organization', 'Org Lambda Robotics'),
+      display: { title: 'Org Lambda Robotics', subtitle: 'Organization' },
     }),
     proposalItem({
-      id: ITEM.contoso,
+      id: ITEM.theta,
       groupKey: 'Organization',
       origin: 'user',
-      payload: entityPayload('u1', 'Organization', 'Contoso'),
-      display: { title: 'Contoso', subtitle: 'Organization' },
-      evidence: [noteEvidence({ quote: 'Contoso' })],
+      payload: entityPayload('u1', 'Organization', 'Org Theta'),
+      display: { title: 'Org Theta', subtitle: 'Organization' },
+      evidence: [noteEvidence({ quote: 'Org Theta' })],
     }),
     proposalItem({
       id: ITEM.atlas,
@@ -864,10 +864,10 @@ export function draftItems(): ProposalItem[] {
       id: ITEM.claim,
       kind: 'item',
       groupKey: 'Claim',
-      payload: itemPayload('i3', 'claim', 'Northwind is hiring', 'Northwind is hiring engineers.', {
+      payload: itemPayload('i3', 'claim', 'Lambda is hiring', 'Lambda is hiring engineers.', {
         subject: { ref: 'e3' },
       }),
-      display: { title: 'Northwind is hiring', subtitle: 'Claim' },
+      display: { title: 'Lambda is hiring', subtitle: 'Claim' },
     }),
     proposalItem({
       id: ITEM.personFact,
@@ -904,7 +904,7 @@ export function draftItems(): ProposalItem[] {
         precision: 'month',
         props: {},
       },
-      display: { title: 'Sarah Chen → works for → Northwind Robotics', subtitle: 'since Jan 2026' },
+      display: { title: 'Sarah Chen → works for → Org Lambda Robotics', subtitle: 'since Jan 2026' },
     }),
     proposalItem({
       id: ITEM.tomWorksFor,
@@ -922,7 +922,7 @@ export function draftItems(): ProposalItem[] {
         precision: 'unknown',
         props: {},
       },
-      display: { title: 'Tom → works for → Northwind Robotics', subtitle: null },
+      display: { title: 'Tom → works for → Org Lambda Robotics', subtitle: null },
     }),
     proposalItem({
       id: ITEM.closing,
@@ -932,7 +932,7 @@ export function draftItems(): ProposalItem[] {
       prechecked: false,
       flags: ['closing_affects_commitments'],
       payload: { relationId: 'b1000000-0000-4000-8000-000000000001', validTo: '2026-09-18' },
-      display: { title: 'Closes: Sarah Chen → works for → Acme', subtitle: 'ended Sep 2026' },
+      display: { title: 'Closes: Sarah Chen → works for → Kappa', subtitle: 'ended Sep 2026' },
     }),
   ];
 }
@@ -1162,20 +1162,20 @@ const edge = (
 ): GraphEdge => ({ id: gid(n), type, source, target, valid, confidence: 0.9, virtual: false });
 
 export const explorerFixtureEdges: GraphEdge[] = [
-  edge(410, 'WORKS_FOR', JOE_ID, ACME_ID),
+  edge(410, 'WORKS_FOR', JOE_ID, KAPPA_ID),
   edge(411, 'REPORTS_TO', JOE_ID, ANA_ID, { from: '2026-09-01T00:00:00.000Z', to: null, precision: 'month' }),
   edge(414, 'REPORTS_TO', JOE_ID, BEN_ID, { from: '2026-03-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z', precision: 'month' }),
   edge(412, 'ATTENDED', JOE_ID, Q3_MEETING_ID),
   edge(413, 'ATTENDED', JOE_ID, SYNC_MEETING_ID),
   { id: `virt:${ATLAS_COMMITMENT_ID}:ASSIGNED_TO`, type: 'ASSIGNED_TO', source: ATLAS_COMMITMENT_ID, target: JOE_ID, valid: null, confidence: null, virtual: true },
-  edge(415, 'WORKS_FOR', ANA_ID, ACME_ID),
+  edge(415, 'WORKS_FOR', ANA_ID, KAPPA_ID),
   edge(416, 'ATTENDED', ANA_ID, Q3_MEETING_ID),
-  edge(417, 'WORKS_FOR', BEN_ID, GLOBEX_ID),
-  edge(418, 'WORKS_FOR', CARLA_ID, INITECH_ID),
+  edge(417, 'WORKS_FOR', BEN_ID, SIGMA_ID),
+  edge(418, 'WORKS_FOR', CARLA_ID, OMEGA_ID),
   edge(419, 'ATTENDED', CARLA_ID, SYNC_MEETING_ID),
-  edge(420, 'WORKS_FOR', DANA_ID, ACME_ID),
-  edge(421, 'PART_OF', ATLAS_ID, ACME_ID),
-  edge(422, 'PART_OF', BEACON_ID, GLOBEX_ID),
+  edge(420, 'WORKS_FOR', DANA_ID, KAPPA_ID),
+  edge(421, 'PART_OF', ATLAS_ID, KAPPA_ID),
+  edge(422, 'PART_OF', BEACON_ID, SIGMA_ID),
   { id: `virt:${Q3_DECISION_ID}:DECIDED_IN`, type: 'DECIDED_IN', source: Q3_DECISION_ID, target: Q3_MEETING_ID, valid: null, confidence: null, virtual: true },
 ];
 
@@ -1261,17 +1261,17 @@ export const OVERVIEW_COMPUTED_AT = '2026-09-20T15:00:00.000Z';
 
 /** Positioned nodes: three clusters around the fixture's entities, plus one isolated person. */
 export const overviewNodes: GraphOverviewNode[] = [
-  { id: ACME_ID, label: 'Acme Corp', type: 'Organization', x: -400, y: 120, clusterId: 0, degree: 5 },
+  { id: KAPPA_ID, label: 'Org Kappa', type: 'Organization', x: -400, y: 120, clusterId: 0, degree: 5 },
   { id: JOE_ID, label: 'Joe Rivera', type: 'Person', x: -330, y: 60, clusterId: 0, degree: 5 },
   { id: ATLAS_ID, label: 'Project Atlas', type: 'Project', x: -470, y: 40, clusterId: 0, degree: 3 },
   { id: BEN_ID, label: 'Ben Okafor', type: 'Person', x: -350, y: 210, clusterId: 0, degree: 2 },
   { id: DANA_ID, label: 'Dana Li', type: 'Person', x: -460, y: 200, clusterId: 0, degree: 1 },
   { id: Q3_MEETING_ID, label: 'Q3 planning', type: 'Meeting', x: -300, y: 160, clusterId: 0, degree: 2 },
-  { id: GLOBEX_ID, label: 'Globex', type: 'Organization', x: 380, y: -150, clusterId: 1, degree: 3 },
+  { id: SIGMA_ID, label: 'Org Sigma', type: 'Organization', x: 380, y: -150, clusterId: 1, degree: 3 },
   { id: ANA_ID, label: 'Ana Diaz', type: 'Person', x: 440, y: -90, clusterId: 1, degree: 3 },
   { id: CARLA_ID, label: 'Carla Mendes', type: 'Person', x: 320, y: -210, clusterId: 1, degree: 2 },
   { id: SYNC_MEETING_ID, label: 'Weekly sync', type: 'Meeting', x: 450, y: -220, clusterId: 1, degree: 2 },
-  { id: INITECH_ID, label: 'Initech', type: 'Organization', x: 150, y: 420, clusterId: 2, degree: 1 },
+  { id: OMEGA_ID, label: 'Org Omega', type: 'Organization', x: 150, y: 420, clusterId: 2, degree: 1 },
   { id: BEACON_ID, label: 'Project Beacon', type: 'Project', x: 210, y: 470, clusterId: 2, degree: 1 },
   { id: LONE_ID, label: 'Lee Park', type: 'Person', x: 700, y: 600, clusterId: -1, degree: 0 },
 ];
@@ -1295,8 +1295,8 @@ export function overviewFixture(overrides: Partial<GraphOverview> = {}): GraphOv
     nodeCount: 13,
     edgeCount: 16,
     clusters: [
-      { id: 0, label: 'Acme Corp', labelEntityId: ACME_ID, size: 6, x: -385, y: 125, radius: 48.99, typeCounts: { Person: 3, Organization: 1, Project: 1, Meeting: 1 }, memberSample: sampleOf(0) },
-      { id: 1, label: 'Globex', labelEntityId: GLOBEX_ID, size: 4, x: 397, y: -167, radius: 40, typeCounts: { Person: 2, Organization: 1, Meeting: 1 }, memberSample: sampleOf(1) },
+      { id: 0, label: 'Org Kappa', labelEntityId: KAPPA_ID, size: 6, x: -385, y: 125, radius: 48.99, typeCounts: { Person: 3, Organization: 1, Project: 1, Meeting: 1 }, memberSample: sampleOf(0) },
+      { id: 1, label: 'Org Sigma', labelEntityId: SIGMA_ID, size: 4, x: 397, y: -167, radius: 40, typeCounts: { Person: 2, Organization: 1, Meeting: 1 }, memberSample: sampleOf(1) },
       { id: 2, label: 'Cluster 3', labelEntityId: null, size: 2, x: 180, y: 445, radius: 28.28, typeCounts: { Organization: 1, Project: 1 }, memberSample: sampleOf(2) },
       { id: -1, label: 'Unconnected', labelEntityId: null, size: 1, x: 700, y: 600, radius: 20, typeCounts: { Person: 1 }, memberSample: sampleOf(-1) },
     ],

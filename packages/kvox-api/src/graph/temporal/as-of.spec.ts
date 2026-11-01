@@ -59,7 +59,7 @@ describe('edgesAsOf — promotion (§5.4 worked example)', () => {
   const engineer = edge({
     id: 'engineer',
     type: 'HAS_ROLE',
-    toId: 'acme',
+    toId: 'kappa',
     props: { title: 'Engineer' },
     valid: r('2019-01-01', '2026-03-01'),
     reviewStatus: 'superseded',
@@ -67,7 +67,7 @@ describe('edgesAsOf — promotion (§5.4 worked example)', () => {
   const staff = edge({
     id: 'staff',
     type: 'HAS_ROLE',
-    toId: 'acme',
+    toId: 'kappa',
     props: { title: 'Staff Engineer' },
     valid: r('2026-03-01', null),
     reviewStatus: 'edited',

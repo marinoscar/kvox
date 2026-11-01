@@ -28,7 +28,7 @@ import {
   overviewCaption,
 } from '../../src/graph/ui/pages/GraphOverviewPage.js';
 import type { GraphOverview } from '../../src/graph/headless/clients/graph.js';
-import { ACME_ID, ANA_ID, GLOBEX_ID, JOE_ID, overviewFixture, overviewStates } from './graphData.js';
+import { KAPPA_ID, ANA_ID, SIGMA_ID, JOE_ID, overviewFixture, overviewStates } from './graphData.js';
 import { server } from './msw-compat.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
 import { graphReader, graphWriter } from './graphTestUsers.js';
@@ -143,7 +143,7 @@ function renderOverview(route = '/graph', user: MockUser = graphWriter) {
 
 async function canvasReady() {
   const canvas = await screen.findByTestId('fake-canvas');
-  await within(canvas).findByRole('button', { name: /^Acme Corp/ });
+  await within(canvas).findByRole('button', { name: /^Org Kappa/ });
   return canvas;
 }
 
@@ -167,8 +167,8 @@ describe('GraphOverviewPage — layers', () => {
     expect(canvas).toHaveAttribute('data-layout', 'static');
     expect(within(canvas).getAllByRole('button', { name: /\(\d+\)$/ }).map((b) => b.textContent)).toEqual([
       'Unconnected (1)',
-      'Acme Corp (6)',
-      'Globex (4)',
+      'Org Kappa (6)',
+      'Org Sigma (4)',
       'Cluster 3 (2)',
     ]);
     expect(screen.getByTestId('edge-count')).toHaveTextContent('2');
@@ -197,9 +197,9 @@ describe('GraphOverviewPage — layers', () => {
     await user.click(await within(canvas).findByRole('button', { name: 'Ana Diaz' }));
     await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBe('1'));
     expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toHaveAttribute('data-dimmed', 'false');
-    expect(within(canvas).getByRole('button', { name: 'Globex' })).toHaveAttribute('data-dimmed', 'false');
+    expect(within(canvas).getByRole('button', { name: 'Org Sigma' })).toHaveAttribute('data-dimmed', 'false');
     expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toHaveAttribute('data-dimmed', 'true');
-    expect(await screen.findByRole('complementary', { name: 'Globex' })).toBeInTheDocument();
+    expect(await screen.findByRole('complementary', { name: 'Org Sigma' })).toBeInTheDocument();
   });
 });
 
@@ -208,16 +208,16 @@ describe('GraphOverviewPage — cluster selection and drill-down', () => {
     const user = userEvent.setup();
     renderOverview();
     const canvas = await canvasReady();
-    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp (6)' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Org Kappa (6)' }));
     await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBe('0'));
     expect(canvas).toHaveAttribute('data-selected', 'c0');
     expect(within(canvas).getByRole('button', { name: 'Unconnected (1)' })).toHaveAttribute('data-dimmed', 'true');
 
-    const panel = await screen.findByRole('complementary', { name: 'Acme Corp' });
+    const panel = await screen.findByRole('complementary', { name: 'Org Kappa' });
     expect(within(panel).getByText('6 entities')).toBeInTheDocument();
     expect(within(panel).getByText('Person 3')).toBeInTheDocument();
     expect(within(panel).getByRole('link', { name: 'Joe Rivera' })).toHaveAttribute('href', `/graph/entities/${JOE_ID}`);
-    expect(within(panel).getByRole('link', { name: 'Open Acme Corp' })).toHaveAttribute('href', `/graph/entities/${ACME_ID}`);
+    expect(within(panel).getByRole('link', { name: 'Open Org Kappa' })).toHaveAttribute('href', `/graph/entities/${KAPPA_ID}`);
 
     await user.click(within(panel).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBeNull());
@@ -242,33 +242,34 @@ describe('GraphOverviewPage — cluster selection and drill-down', () => {
   it('"Explore this cluster" hands the members over and opens the explorer', async () => {
     const user = userEvent.setup();
     renderOverview('/graph?cluster=1');
-    const panel = await screen.findByRole('complementary', { name: 'Globex' });
+    const panel = await screen.findByRole('complementary', { name: 'Org Sigma' });
     await user.click(within(panel).getByRole('button', { name: 'Explore this cluster' }));
 
     expect(await screen.findByRole('heading', { name: 'Explorer' })).toBeInTheDocument();
     expect(currentUrl().pathname).toBe('/graph/explore');
     expect(currentUrl().searchParams.get('cluster')).toBe('1');
     const handoff = takeExplorerHandoff();
-    expect(handoff?.title).toBe('Globex');
-    // Ana Diaz and Globex share the top degree; label breaks the tie.
-    expect(handoff?.seedIds.slice(0, 2)).toEqual([ANA_ID, GLOBEX_ID]);
+    expect(handoff?.title).toBe('Org Sigma');
+    // Ana Diaz and Org Sigma share the top degree; label breaks the tie.
+    expect(handoff?.seedIds.slice(0, 2)).toEqual([ANA_ID, SIGMA_ID]);
     expect(handoff?.seedIds).toHaveLength(4);
-    expect(handoff?.nodes).toContainEqual({ id: GLOBEX_ID, label: 'Globex', type: 'Organization', x: 380, y: -150, degree: 3 });
+    expect(handoff?.nodes).toContainEqual({ id: SIGMA_ID, label: 'Org Sigma', type: 'Organization', x: 380, y: -150, degree: 3 });
   });
 
   it('double-clicking a cluster explores it', async () => {
     renderOverview();
     const canvas = await canvasReady();
-    fireEvent.doubleClick(within(canvas).getByRole('button', { name: 'Acme Corp (6)' }));
+    fireEvent.doubleClick(within(canvas).getByRole('button', { name: 'Org Kappa (6)' }));
     expect(await screen.findByRole('heading', { name: 'Explorer' })).toBeInTheDocument();
-    expect(takeExplorerHandoff()?.seedIds[0]).toBe(ACME_ID);
+    // Joe Rivera and Org Kappa share the top degree; label breaks the tie.
+    expect(takeExplorerHandoff()?.seedIds[0]).toBe(JOE_ID);
   });
 
   it('renders the panel as a bottom sheet on a phone', async () => {
     act(() => setViewportWidth(390));
     renderOverview('/graph?cluster=0');
     const sheet = await screen.findByRole('presentation');
-    expect(within(sheet).getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
+    expect(within(sheet).getByRole('heading', { name: 'Org Kappa' })).toBeInTheDocument();
     expect(within(sheet).getByRole('button', { name: 'Explore this cluster' })).toBeInTheDocument();
     act(() => setViewportWidth(1024));
   });
@@ -283,7 +284,7 @@ describe('GraphOverviewPage — keyboard', () => {
 
     fireEvent.keyDown(app, { key: 'ArrowRight' });
     await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBe('0'));
-    expect(screen.getByText('Cluster Acme Corp, 6 entities')).toBeInTheDocument();
+    expect(screen.getByText('Cluster Org Kappa, 6 entities')).toBeInTheDocument();
     fireEvent.keyDown(app, { key: 'ArrowDown' });
     await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBe('1'));
     fireEvent.keyDown(app, { key: 'ArrowLeft' });
@@ -328,8 +329,8 @@ describe('GraphOverviewPage — list view', () => {
     expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();
     const rows = within(list).getAllByRole('button', { expanded: false });
     expect(rows.map((row) => row.textContent)).toEqual([
-      expect.stringMatching(/^Acme Corp6 entities · Person, Meeting, Organization/),
-      expect.stringMatching(/^Globex4 entities/),
+      expect.stringMatching(/^Org Kappa6 entities · Person, Meeting, Organization/),
+      expect.stringMatching(/^Org Sigma4 entities/),
       expect.stringMatching(/^Cluster 32 entities/),
       expect.stringMatching(/^Unconnected1 entity/),
     ]);
@@ -341,9 +342,9 @@ describe('GraphOverviewPage — list view', () => {
     expect(within(list).getByRole('link', { name: 'Ana Diaz' })).toBeInTheDocument();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
 
-    await user.click(within(list).getByRole('button', { name: 'Explore this cluster: Globex' }));
+    await user.click(within(list).getByRole('button', { name: 'Explore this cluster: Org Sigma' }));
     expect(await screen.findByRole('heading', { name: 'Explorer' })).toBeInTheDocument();
-    expect(takeExplorerHandoff()?.title).toBe('Globex');
+    expect(takeExplorerHandoff()?.title).toBe('Org Sigma');
   });
 
   it('collapsing the open row deselects; the toggle returns to the canvas', async () => {

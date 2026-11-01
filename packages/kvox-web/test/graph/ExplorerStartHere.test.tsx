@@ -56,7 +56,7 @@ describe('start-here helpers', () => {
   });
 
   it('shows real clusters only, largest first, and nothing for an unready or too-large snapshot', () => {
-    expect(themeClusters(overviewFixture()).map((c) => c.label)).toEqual(['Acme Corp', 'Globex', 'Cluster 3']);
+    expect(themeClusters(overviewFixture()).map((c) => c.label)).toEqual(['Org Kappa', 'Org Sigma', 'Cluster 3']);
     expect(themeClusters(overviewStates.empty())).toEqual([]);
     expect(themeClusters(overviewStates.tooLarge())).toEqual([]);
     expect(themeClusters(null)).toEqual([]);
@@ -69,7 +69,7 @@ describe('ExplorerStartHere', () => {
     expect(await screen.findByRole('heading', { name: 'Themes' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Who and what is active' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Recent' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /Acme Corp.*6 things/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Org Kappa.*6 things/ })).toBeInTheDocument();
     await screen.findByRole('region', { name: 'Last opened' });
     expect(await axe(container, { rules: { 'color-contrast': { enabled: false } } })).toHaveNoViolations();
   });
@@ -77,7 +77,7 @@ describe('ExplorerStartHere', () => {
   it('chooses a theme with the overview and its cluster id', async () => {
     const user = userEvent.setup();
     const { onChooseTheme } = renderStart();
-    await user.click(await screen.findByRole('button', { name: /Globex.*4 things/ }));
+    await user.click(await screen.findByRole('button', { name: /Org Sigma.*4 things/ }));
     expect(onChooseTheme).toHaveBeenCalledWith(expect.objectContaining({ status: 'ready' }), 1);
   });
 

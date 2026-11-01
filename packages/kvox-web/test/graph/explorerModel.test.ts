@@ -23,7 +23,7 @@ import {
 import { CATEGORICAL_PALETTE, NODE_SIZE_MIN, encodingFor, relationFamilyColor } from '../../src/graph/ui/components/explorer/explorerEncoding.js';
 import type { GraphSlice } from '../../src/graph/headless/clients/graph.js';
 import {
-  ACME_ID,
+  KAPPA_ID,
   ANA_ID,
   ATLAS_COMMITMENT_ID,
   BEN_ID,
@@ -102,10 +102,10 @@ describe('mergeSlice', () => {
   it('places the first seed at the origin and neighbours on a golden-angle ring around it', () => {
     const state = loaded();
     expect(state.graph.getNodeAttributes(JOE_ID)).toMatchObject({ x: 0, y: 0 });
-    // Ids sorted ascending; ACME (gid 4) is the first non-seed after JOE's
-    // neighbours ANA (gid 2) — index 0 is ANA, index 1 is ACME.
+    // Ids sorted ascending; KAPPA (gid 4) is the first non-seed after JOE's
+    // neighbours ANA (gid 2) — index 0 is ANA, index 1 is KAPPA.
     expect(state.graph.getNodeAttributes(ANA_ID)).toMatchObject(ringPosition(0, 0, 0));
-    expect(state.graph.getNodeAttributes(ACME_ID)).toMatchObject(ringPosition(0, 0, 1));
+    expect(state.graph.getNodeAttributes(KAPPA_ID)).toMatchObject(ringPosition(0, 0, 1));
   });
 
   it('places deterministically: two runs give identical positions', () => {
@@ -114,9 +114,9 @@ describe('mergeSlice', () => {
 
   it('rings new nodes around the expanded parent', () => {
     const state = loaded();
-    state.graph.mergeNodeAttributes(ACME_ID, { x: 500, y: 500 });
-    const { added } = mergeSlice(state, expandFixture({ nodeIds: [ACME_ID], cap: 300 })!, {
-      parentId: ACME_ID,
+    state.graph.mergeNodeAttributes(KAPPA_ID, { x: 500, y: 500 });
+    const { added } = mergeSlice(state, expandFixture({ nodeIds: [KAPPA_ID], cap: 300 })!, {
+      parentId: KAPPA_ID,
     });
     expect(added.length).toBeGreaterThan(0);
     const first = [...added].sort()[0];
@@ -196,9 +196,9 @@ describe('applyFilters', () => {
   it('drops non-qualifying types, a seed included, and keeps what was fetched from the seed (#764)', () => {
     const state = loaded();
     const { removed } = applyFilters(state, new Set(['Organization']), null);
-    // The Person seed leaves the canvas; ACME, fetched FROM it, stays.
+    // The Person seed leaves the canvas; KAPPA, fetched FROM it, stays.
     expect(state.graph.hasNode(JOE_ID)).toBe(false);
-    expect(state.graph.hasNode(ACME_ID)).toBe(true);
+    expect(state.graph.hasNode(KAPPA_ID)).toBe(true);
     expect(state.graph.hasNode(ANA_ID)).toBe(false);
     expect(state.graph.hasNode(Q3_MEETING_ID)).toBe(false);
     expect(removed).toEqual(expect.arrayContaining([JOE_ID, ANA_ID]));
@@ -211,7 +211,7 @@ describe('applyFilters', () => {
     applyFilters(state, new Set(['Organization']), null);
     const { removed } = applyFilters(state, new Set(['Organization']), null);
     expect(removed).toEqual([]);
-    expect(state.graph.hasNode(ACME_ID)).toBe(true);
+    expect(state.graph.hasNode(KAPPA_ID)).toBe(true);
   });
 
   it('a type no node has leaves the canvas empty — Products only with a Person seed (#764)', () => {
@@ -229,7 +229,7 @@ describe('applyFilters', () => {
     const { removed } = applyFilters(state, allTypes, relations);
     // Everyone reached along WORKS_FOR / REPORTS_TO / ATTENDED goes; the
     // commitment ASSIGNED_TO Joe stays.
-    expect(removed).toEqual(expect.arrayContaining([ANA_ID, ACME_ID, Q3_MEETING_ID]));
+    expect(removed).toEqual(expect.arrayContaining([ANA_ID, KAPPA_ID, Q3_MEETING_ID]));
     expect(state.graph.hasNode(ATLAS_COMMITMENT_ID)).toBe(true);
     expect(state.graph.hasNode(JOE_ID)).toBe(true);
     state.graph.forEachEdge((_e, attrs) => expect(relations.has(attrs.relationType)).toBe(true));
@@ -249,7 +249,7 @@ describe('visibleNodeIds', () => {
     state.hiddenTypes = new Set(['Person', 'Meeting']);
     const visible = visibleNodeIds(state);
     expect(visible).not.toContain(JOE_ID);
-    expect(visible).toContain(ACME_ID);
+    expect(visible).toContain(KAPPA_ID);
     expect(visible).not.toContain(ANA_ID);
     expect(visible).not.toContain(Q3_MEETING_ID);
   });
@@ -267,11 +267,11 @@ describe('removeNode and makeSeed', () => {
 
   it('promotes a node to a seed once', () => {
     const state = loaded();
-    expect(makeSeed(state, ACME_ID)).toBe(true);
-    expect(makeSeed(state, ACME_ID)).toBe(false);
+    expect(makeSeed(state, KAPPA_ID)).toBe(true);
+    expect(makeSeed(state, KAPPA_ID)).toBe(false);
     expect(makeSeed(state, gid(99999))).toBe(false);
-    expect(state.seedIds).toEqual([JOE_ID, ACME_ID]);
-    expect(removeNode(state, ACME_ID)).toBe(false);
+    expect(state.seedIds).toEqual([JOE_ID, KAPPA_ID]);
+    expect(removeNode(state, KAPPA_ID)).toBe(false);
   });
 });
 
@@ -295,7 +295,7 @@ describe('toListModel', () => {
 
   it('computes depth two hops out after an expansion', () => {
     const state = loaded();
-    mergeSlice(state, expandFixture({ nodeIds: [ACME_ID], cap: 300 })!, { parentId: ACME_ID });
+    mergeSlice(state, expandFixture({ nodeIds: [KAPPA_ID], cap: 300 })!, { parentId: KAPPA_ID });
     const dana = toListModel(state).find((row) => row.label === 'Dana Li');
     expect(dana?.depthFromSeed).toBe(2);
   });

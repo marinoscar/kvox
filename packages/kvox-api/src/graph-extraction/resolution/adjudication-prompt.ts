@@ -49,7 +49,7 @@ export interface DossierSide {
 
 export interface CandidateDossier extends DossierSide {
   entityId: string;
-  /** Lines like `WORKS_FOR → Northwind Robotics (2019–)`. */
+  /** Lines like `WORKS_FOR → Org Lambda Robotics (2019–)`. */
   neighbourhood: readonly string[];
 }
 

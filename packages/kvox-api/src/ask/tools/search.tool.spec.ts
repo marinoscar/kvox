@@ -8,7 +8,7 @@ import { SearchTool, snippetToText } from './search.tool.js';
 // plain-text excerpts, the recording date, and a uuid-free result.
 // =============================================================================
 
-const ACME = uid(1);
+const KAPPA = uid(1);
 const SARAH = uid(2);
 const T1 = uid(3);
 const N1 = uid(4);
@@ -38,7 +38,7 @@ function build(opts: { entities?: object[]; results?: object[]; searchError?: Er
   return { tool: new SearchTool(graphRead as never, search as never, prisma as never, visibility as never), graphRead, search, prisma, visibility, queryRaw };
 }
 
-const entity = (id: string, label: string, type = 'Organization') => ({ id, type, label, aliases: ['ACME Corp'], mentionCount: 2, lastSeenAt: null });
+const entity = (id: string, label: string, type = 'Organization') => ({ id, type, label, aliases: ['KAPPA Corp'], mentionCount: 2, lastSeenAt: null });
 const transcriptHit = {
   type: 'transcript',
   id: T1,
@@ -48,28 +48,28 @@ const transcriptHit = {
   status: 'ready',
   snippets: [
     { html: 'Weekly <mark>sync</mark>', startMs: null, field: 'title' },
-    { html: 'we signed with <mark>Acme</mark> &amp; co &lt;3', startMs: 61_000, field: 'segment' },
+    { html: 'we signed with <mark>Kappa</mark> &amp; co &lt;3', startMs: 61_000, field: 'segment' },
   ],
 };
 const noteHit = {
   type: 'note',
   id: N1,
-  title: 'Acme notes',
+  title: 'Kappa notes',
   score: 0.02,
   updatedAt: '2026-09-02T00:00:00.000Z',
   status: 'ready',
-  snippets: [{ html: '<mark>Acme</mark> renewal', startMs: null, field: 'body' }],
+  snippets: [{ html: '<mark>Kappa</mark> renewal', startMs: null, field: 'body' }],
 };
 
 describe('SearchTool', () => {
   it('runs both legs with defaults for null arguments', async () => {
     const { tool, graphRead, search } = build();
     const ctx = makeCtx();
-    const args = tool.input.parse({ query: ' Acme ', scope: null, limit: null });
+    const args = tool.input.parse({ query: ' Kappa ', scope: null, limit: null });
     await tool.run(ctx, args);
-    expect(graphRead.listEntities).toHaveBeenCalledWith(ctx.user, { q: 'Acme', sort: 'updated', limit: 5 });
+    expect(graphRead.listEntities).toHaveBeenCalledWith(ctx.user, { q: 'Kappa', sort: 'updated', limit: 5 });
     expect(search.search).toHaveBeenCalledWith(
-      { q: 'Acme', types: 'transcript,note', limit: 5 },
+      { q: 'Kappa', types: 'transcript,note', limit: 5 },
       { userId: ctx.user.id, permissions: new Set(ctx.user.permissions) },
     );
   });
@@ -80,42 +80,42 @@ describe('SearchTool', () => {
     ['all', 10, 10],
   ])('scope %s shortens the other leg but never skips it', async (scope, entityLimit, documentLimit) => {
     const { tool, graphRead, search } = build();
-    await tool.run(makeCtx(), tool.input.parse({ query: 'Acme', scope, limit: 10 }));
+    await tool.run(makeCtx(), tool.input.parse({ query: 'Kappa', scope, limit: 10 }));
     expect(graphRead.listEntities).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ limit: entityLimit }));
     expect(search.search).toHaveBeenCalledWith(expect.objectContaining({ limit: documentLimit }), expect.anything());
   });
 
   it('registers handles and returns a uuid-free shape', async () => {
-    const { tool } = build({ entities: [entity(ACME, 'Acme'), entity(SARAH, 'Sarah', 'Person')], results: [transcriptHit, noteHit] });
+    const { tool } = build({ entities: [entity(KAPPA, 'Kappa'), entity(SARAH, 'Sarah', 'Person')], results: [transcriptHit, noteHit] });
     const ctx = makeCtx();
-    const res = await tool.run(ctx, tool.input.parse({ query: 'Acme' }));
+    const res = await tool.run(ctx, tool.input.parse({ query: 'Kappa' }));
     expect(res.data).toEqual({
       entities: [
-        { ref: 'ent1', type: 'Organization', label: 'Acme', aliases: ['ACME Corp'] },
-        { ref: 'ent2', type: 'Person', label: 'Sarah', aliases: ['ACME Corp'] },
+        { ref: 'ent1', type: 'Organization', label: 'Kappa', aliases: ['KAPPA Corp'] },
+        { ref: 'ent2', type: 'Person', label: 'Sarah', aliases: ['KAPPA Corp'] },
       ],
       documents: [
-        { ref: 'doc1', kind: 'transcript', title: 'Weekly sync', excerpt: 'we signed with Acme & co <3', at: '2026-03-04', startMs: 61_000 },
-        { ref: 'doc2', kind: 'note', title: 'Acme notes', excerpt: 'Acme renewal', at: '2026-05-06', startMs: null },
+        { ref: 'doc1', kind: 'transcript', title: 'Weekly sync', excerpt: 'we signed with Kappa & co <3', at: '2026-03-04', startMs: 61_000 },
+        { ref: 'doc2', kind: 'note', title: 'Kappa notes', excerpt: 'Kappa renewal', at: '2026-05-06', startMs: null },
       ],
     });
     expect(ctx.handles.resolve('doc1')).toEqual({ kind: 'doc', id: T1, label: 'Weekly sync', documentKind: 'transcript', startMs: 61_000 });
-    expect(ctx.handles.resolve('ent1')).toEqual({ kind: 'ent', id: ACME, label: 'Acme' });
-    expect(res.summary).toBe('Searched "Acme" · 2 entities, 2 passages');
+    expect(ctx.handles.resolve('ent1')).toEqual({ kind: 'ent', id: KAPPA, label: 'Kappa' });
+    expect(res.summary).toBe('Searched "Kappa" · 2 entities, 2 passages');
     expect(res.resultCount).toBe(4);
     expectNoUuid(res.data);
   });
 
   it('never returns a personal-domain entity without the opt-in (#383)', async () => {
-    const { tool } = build({ entities: [entity(uid(30), 'Acme'), entity(uid(31), 'Lisbon trip', 'Trip')] });
+    const { tool } = build({ entities: [entity(uid(30), 'Kappa'), entity(uid(31), 'Lisbon trip', 'Trip')] });
     const ctx = makeCtx();
-    const res = await tool.run(ctx, tool.input.parse({ query: 'Acme' }));
+    const res = await tool.run(ctx, tool.input.parse({ query: 'Kappa' }));
     const entities = (res.data as { entities: Array<{ label: string }> }).entities;
-    expect(entities.map((e) => e.label)).toEqual(['Acme']);
+    expect(entities.map((e) => e.label)).toEqual(['Kappa']);
 
     const allowed = makeCtx({ personalFactsAllowed: true });
-    const withOptIn = await tool.run(allowed, tool.input.parse({ query: 'Acme' }));
-    expect((withOptIn.data as { entities: Array<{ label: string }> }).entities.map((e) => e.label)).toEqual(['Acme', 'Lisbon trip']);
+    const withOptIn = await tool.run(allowed, tool.input.parse({ query: 'Kappa' }));
+    expect((withOptIn.data as { entities: Array<{ label: string }> }).entities.map((e) => e.label)).toEqual(['Kappa', 'Lisbon trip']);
   });
 
   it('with zero entities still returns documents', async () => {
@@ -127,20 +127,20 @@ describe('SearchTool', () => {
   });
 
   it('degrades the document leg when the caller may read neither transcripts nor notes', async () => {
-    const { tool } = build({ entities: [entity(ACME, 'Acme')], searchError: new ForbiddenException() });
-    const res = await tool.run(makeCtx(), tool.input.parse({ query: 'Acme' }));
+    const { tool } = build({ entities: [entity(KAPPA, 'Kappa')], searchError: new ForbiddenException() });
+    const res = await tool.run(makeCtx(), tool.input.parse({ query: 'Kappa' }));
     expect(res.data).toMatchObject({ documents: [], documentsUnavailable: expect.any(String) });
   });
 
   it('rethrows any other search failure (a bug is not a model mistake)', async () => {
     const { tool } = build({ searchError: new TypeError('boom') });
-    await expect(tool.run(makeCtx(), tool.input.parse({ query: 'Acme' }))).rejects.toThrow(TypeError);
+    await expect(tool.run(makeCtx(), tool.input.parse({ query: 'Kappa' }))).rejects.toThrow(TypeError);
   });
 
   it('scopes the document-date lookup to what the caller may see', async () => {
     const { tool, prisma, visibility, queryRaw } = build({ results: [transcriptHit, noteHit] });
     const ctx = makeCtx();
-    await tool.run(ctx, tool.input.parse({ query: 'Acme' }));
+    await tool.run(ctx, tool.input.parse({ query: 'Kappa' }));
     // Transcripts: the host's visibility rule, in the viewer's scope.
     expect(visibility.viewerFor).toHaveBeenCalledWith(ctx.user.id);
     expect(visibility.transcriptVisibleSql).toHaveBeenCalledWith({ userId: ctx.user.id }, 't');
