@@ -88,6 +88,18 @@ export interface GraphPreferences {
      */
     readonly autoCommitSafeRows: boolean;
   };
+  /**
+   * The Person that is the account owner (#778). `entityId` is `null` until the user chooses one;
+   * it is never filled in by a guess (a suggestion is only offered, `GraphSelfService.suggest`).
+   * Read as `preferences.self.entityId`; the stored id may be merged away, so resolve it through
+   * `GraphSelfService.resolve` before using it.
+   */
+  readonly self: {
+    /**
+     * The chosen Person entity id, or null.
+     */
+    readonly entityId: string | null;
+  };
   /** `core` is always on and never stored; it is here so callers need no special case. */
   readonly domains: {
     /**
@@ -120,6 +132,7 @@ export const GRAPH_PREFERENCE_DEFAULTS: GraphPreferences = Object.freeze({
   }),
   review: Object.freeze({ minConfidence: 0.7, autoCommitSafeRows: true }),
   domains: Object.freeze({ core: true as const, work: true, personal: false }),
+  self: Object.freeze({ entityId: null }),
 });
 
 /** The sub-objects of the `graph` namespace, in a stable order. */
@@ -133,6 +146,7 @@ export const GRAPH_PREFERENCE_SECTIONS = [
   'resolution',
   'review',
   'domains',
+  'self',
 ] as const;
 /**
  * The graph preference section type.
@@ -171,6 +185,7 @@ export function resolveGraphPreferences(
       work: value?.domains?.work ?? d.domains.work,
       personal: value?.domains?.personal ?? d.domains.personal,
     },
+    self: { entityId: value?.self?.entityId ?? d.self.entityId },
   };
 }
 

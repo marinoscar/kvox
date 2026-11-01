@@ -89,6 +89,12 @@ describe('document-origin context', () => {
     expect(documentContext({ selfEntityId: SELF }).selfEntityId).toBe(SELF);
   });
 
+  it('takes the self entity from the resolved self row (#778) before selfEntityId', () => {
+    const self = { id: SELF, type: 'Person', label: 'Avery Example', aliases: [], reviewStatus: 'accepted', mergedIntoId: null };
+    expect(documentContext({ self }).selfEntityId).toBe(SELF);
+    expect(documentContext({ self, selfEntityId: 'other-id' }).selfEntityId).toBe(SELF);
+  });
+
   it('states the several-meetings rule for a document only', () => {
     const doc = assembleExtractionPrompt(documentContext());
     expect(doc.systemPrompt).toContain(documentMeetingsRule(documentContext()));

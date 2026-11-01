@@ -13,6 +13,7 @@ import {
 import { KG_EMBED_JOB_TYPE, KG_ENTITY_DIGEST_JOB_TYPE, KG_PURGE_JOB_TYPE } from './job-types.js';
 import type { GraphOntologyService } from './ontology/graph-ontology.service.js';
 import { GraphValidationError } from './write/graph-write.errors.js';
+import { ManualEvidence } from './write/manual-evidence.js';
 import type { GraphWriteService } from './write/graph-write.service.js';
 
 // =============================================================================
@@ -47,6 +48,7 @@ function setup(opts: { registered?: string[]; graphEnabled?: boolean; changed?: 
     auditEvent: { create: jest.fn(async () => ({})) },
   };
   const write = {
+    createEntity: jest.fn(async (_tx: unknown, input: { label: string }) => ({ ...entityRow, label: input.label.trim(), reviewStatus: 'accepted' })),
     updateEntityDetailed: jest.fn(async () => ({
       entity: entityRow,
       changed: opts.changed ?? true,
@@ -248,5 +250,32 @@ describe('GraphEntitiesService.forget (#357)', () => {
         meta: { entityId: ENTITY, jobId: 'job' },
       },
     });
+  });
+});
+
+describe('GraphEntitiesService.createSelfPerson (#778)', () => {
+  it('creates an accepted Person through GraphWriteService, cited by a manual citation, and tells the follow-ups', async () => {
+    const { service, write, prisma, events, jobs } = setup({ registered: [KG_EMBED_JOB_TYPE] });
+    const created = await service.createSelfPerson(user, '  Avery Example ');
+    expect(created).toEqual({ id: ENTITY, label: 'Avery Example', aliases: [] });
+    const [, input] = write.createEntity.mock.calls[0] as unknown as [unknown, Record<string, any>];
+    expect(input).toMatchObject({ ownerId: OWNER, type: 'Person', label: '  Avery Example ', reviewStatus: 'accepted', labelSource: 'user' });
+    expect(input.evidence).toHaveLength(1);
+    expect(input.evidence[0]).toBeInstanceOf(ManualEvidence);
+    expect(input.evidence[0].quote).toBe('Set by hand: Avery Example is you');
+    // ids only in the audit row, never the name
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: GRAPH_ENTITY_EDITED_ACTION, targetId: ENTITY, meta: { created: 'self_person' } }),
+    });
+    expect(jobs.enqueue).toHaveBeenCalledTimes(1);
+    expect(events.emit).toHaveBeenCalledWith('graph.changed', { ownerId: OWNER, reason: 'manual_edit' });
+  });
+
+  it('writes nothing after a failed create', async () => {
+    const { service, write, prisma, events } = setup();
+    write.createEntity.mockRejectedValueOnce(new GraphValidationError('bad', { issues: [] }));
+    await expect(service.createSelfPerson(user, 'Avery Example')).rejects.toBeDefined();
+    expect(prisma.auditEvent.create).not.toHaveBeenCalled();
+    expect(events.emit).not.toHaveBeenCalled();
   });
 });

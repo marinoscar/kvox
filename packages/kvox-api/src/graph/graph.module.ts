@@ -48,6 +48,8 @@ import { KgMigrateHandler } from './migrate/kg-migrate.handler.js';
 import { KgMigrateRepository } from './migrate/kg-migrate.repository.js';
 import { GraphOntologyService } from './ontology/graph-ontology.service.js';
 import { GraphPreferencesService } from './preferences/graph-preferences.service.js';
+import { GraphSelfController } from './self/graph-self.controller.js';
+import { GraphSelfService } from './self/graph-self.service.js';
 import { graphPreferencesSchema } from './preferences/graph-preferences.schema.js';
 import { KgPurgeService } from './purge/kg-purge.service.js';
 import { GraphEvidenceService } from './read/graph-evidence.service.js';
@@ -150,6 +152,7 @@ export class GraphModule {
       GraphSynonymsController,
       GraphReadController,
       GraphOverviewController,
+      GraphSelfController,
       GraphInsightsController,
       EntityBriefController,
     ];
@@ -161,6 +164,8 @@ export class GraphModule {
       GraphAiRunResolver,
       // The `graph` user-settings namespace, resolved with defaults (#369).
       GraphPreferencesService,
+      // Who the account owner is in their own graph (#778).
+      GraphSelfService,
       GraphSettingsRegistrar,
       GraphOntologyService,
       EvidenceValidator,
@@ -238,6 +243,7 @@ export class GraphModule {
         GraphAiRunResolver,
         GraphOntologyService,
         GraphPreferencesService,
+        GraphSelfService,
         EvidenceValidator,
         GraphWriteService,
         // `MergeService` reuses its guarded kg.embed / kg.entity_digest enqueue.

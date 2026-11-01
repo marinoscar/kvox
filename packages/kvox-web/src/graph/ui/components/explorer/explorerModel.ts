@@ -79,6 +79,8 @@ export interface ExplorerNodeAttributes {
   lastSeenAt: string | null;
   /** Set for the nodes the exploration started from; drawn with a thick ring. */
   isSeed: boolean;
+  /** The Person the user chose as themselves (#778): drawn as "You · label" with its own ring, always labelled. */
+  isSelf?: boolean;
   /** `data:` URL of the type's pictogram, drawn centred in the node by the G6 canvas. */
   image: string;
   /** Colour of the pictogram: white or near-black, whichever reads on `color`. */
@@ -470,6 +472,7 @@ function sliceNodeAttrs(node: SliceNode) {
   return {
     mentionCount: typeof node.mentionCount === 'number' ? node.mentionCount : null,
     lastSeenAt: typeof node.lastSeenAt === 'string' ? node.lastSeenAt : null,
+    isSelf: node.isSelf === true,
   };
 }
 

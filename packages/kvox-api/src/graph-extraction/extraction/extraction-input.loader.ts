@@ -18,7 +18,7 @@ import { KvoxTimeZoneService } from '../../core/index.js';
 
 import { defaultSpeakerName, parseSpeakerIdentities } from '../../transcripts/index.js';
 import { NOTE_NOT_FOUND_MESSAGE, NoteOriginService } from '../../notes/index.js';
-import { GraphOntologyService } from '../../graph/index.js';
+import { GraphOntologyService, GraphSelfService } from '../../graph/index.js';
 import type { UserGuidance } from './dto/extraction.dto.js';
 import { MAX_KNOWN_ENTITIES, type ExtractionInput, type KnownEntityRow } from './extraction-context.js';
 import { KVOX_PRISMA } from '../../ports/index.js';
@@ -37,12 +37,6 @@ export interface LoadExtractionInput {
   /** The version to extract from. Defaults to the note's current version. */
   noteVersion?: number;
   guidance: UserGuidance | null;
-  /**
-   * The owner's own Person entity (#780). The one caller that reads it from the per-user graph
-   * preferences (`preferences.self.entityId`, #778) is `KgExtractHandler`; the loader only
-   * threads it through. Null or absent: no self entity.
-   */
-  selfEntityId?: string | null;
 }
 
 @Injectable()
@@ -52,6 +46,7 @@ export class ExtractionInputLoader {
     private readonly origin: NoteOriginService,
     private readonly ontology: GraphOntologyService,
     @Optional() private readonly zones?: KvoxTimeZoneService,
+    @Optional() private readonly selfIdentity?: GraphSelfService,
   ) {}
 
   async load(args: LoadExtractionInput): Promise<ExtractionInput> {
@@ -113,10 +108,7 @@ export class ExtractionInputLoader {
     const effectiveSchema = await this.ontology.effectiveSchemaFor(userId);
 
     // Known-entity candidates, per priority bucket (the pure builder merges).
-    const selfEntityId = args.selfEntityId ?? null;
-    // The owner is always a candidate for the known-entities list, ahead of any pin, so the
-    // model can link them as an organizer or attendee by id.
-    const pinnedIds = [...new Set([...(selfEntityId ? [selfEntityId] : []), ...(args.guidance?.pinnedEntityIds ?? [])])];
+    const pinnedIds = args.guidance?.pinnedEntityIds ?? [];
     const speakerPersonIds = [...new Set(links.map((l) => l.toId))];
     const worksFor = speakerPersonIds.length
       ? await this.prisma.kgRelation.findMany({
@@ -142,9 +134,12 @@ export class ExtractionInputLoader {
         ? await this.rows({ ownerId: userId, ...LIVE }, CONTEXT_POOL_LIMIT)
         : [];
 
+    // The owner's own node (#778): a live Person of theirs, merges followed, else none.
+    const selfId = (await this.selfIdentity?.entityId(userId)) ?? null;
+
     const byIds = await this.rows({
       ownerId: userId,
-      id: { in: [...new Set([...pinnedIds, ...speakerPersonIds, ...orgIds, ...recentIds])] },
+      id: { in: [...new Set([...(selfId ? [selfId] : []), ...pinnedIds, ...speakerPersonIds, ...orgIds, ...recentIds])] },
     });
     const byId = new Map(byIds.map((r) => [r.id, r]));
     const pick = (ids: string[]) => ids.map((id) => byId.get(id)).filter((r): r is KnownEntityRow => r !== undefined);
@@ -186,6 +181,7 @@ export class ExtractionInputLoader {
       speakers,
       effectiveSchema,
       guidance: args.guidance,
+      self: selfId ? (byId.get(selfId) ?? null) : null,
       knownEntityCandidates: {
         pinned: pick(pinnedIds),
         speakerPersons: pick(speakerPersonIds),
@@ -195,7 +191,6 @@ export class ExtractionInputLoader {
       },
       existingMeeting,
       sourceType: note.sourceType,
-      selfEntityId,
       // The note owner's zone: the meeting date is the local day of the recording.
       timeZone: (await this.zones?.forUser(userId)) ?? 'UTC',
     };

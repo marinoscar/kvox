@@ -423,7 +423,7 @@ attributes, `occurredOn` (date, only if the source states it) and
 `meetingKind` (client, internal, partner, other). The system still creates the
 one `Meeting` per transcript or single note, so the type stays
 `extractable: false` and is not offered to the model, except for a document
-or record (§6.7): there the extractor proposes each separately dated meeting,
+or record (§6.8): there the extractor proposes each separately dated meeting,
 through `buildOfferedSchema(schema, guidance, { proposeTypes: ['Meeting'] })`
 (or `ExtractionInput.proposeTypes`), which a document-origin note turns on by
 itself (#780). *Domain:* `core` (§17.2).
@@ -446,7 +446,7 @@ proposal). Created by the system, never proposed by extraction
 row. Attributes (system-set): `title`, `preparedOn` (date), `classification`
 (text). `RECORDED_IN` (Meeting → Document) and `PREPARED_FOR` (Document →
 Person) are likewise system-written. A document-origin note gets exactly one
-(§6.7). Aligned to `schema:DigitalDocument`.
+(§6.8). Aligned to `schema:DigitalDocument`.
 *Domain:* `core` (§17.2). Added in ontology 1.4.0.
 
 **Commitment** — a task with an *owner* and, optionally, a *counterparty* and
@@ -1201,7 +1201,31 @@ document (a note whose body is the whole document), is read in **chunks**, insid
   entities and a lead-in of at most 800 characters), and the user's own key is spent N times.
   A note of about 6,000 words is four to five requests.
 
-### 6.7 A document that records several meetings (issue #780)
+### 6.7 Self identity (issue #778)
+
+Nothing in the graph used to say which Person is the account owner, so their name in a note
+scored 0.80 (exact match), under the 0.9 auto-link threshold, and their node was duplicated or
+left detached. The user now chooses it: the per-user preference `graph.self.entityId`
+(default `null`, sparse, PATCH `null` clears it; §10). Settings, Knowledge graph, "You in the
+graph" picks an existing Person, accepts a suggestion (a Person whose label or alias equals the
+profile name, `GET /api/graph/self`; **never applied without the user's click**) or adds a Person
+by hand (`POST /api/graph/self/person`, through `GraphWriteService`, cited "Set by hand").
+
+`GraphSelfService.resolve` turns the stored id into a Person that is live and the user's own,
+following `mergedIntoId` when it was merged; anything else reads as no self.
+
+- **Extraction.** The self Person leads the known entities (so it always has a `k#`), and the
+  user content gains a `# You` section, after the known entities, naming that handle and the
+  label and aliases, telling the model those names are the note's owner. With no self the
+  section and the prompt are exactly as before.
+- **Resolution.** In the `resolution` stage, a Person row whose label or alias, normalized as
+  resolution normalizes (`normalizeAlias`), equals the self's label or an alias is linked to the
+  self entity with `source: 'self'` and a score of at least 0.9 (`selfMatchScore`), without
+  candidate search or adjudication. A speaker-identified Person still wins first.
+- **Read side.** The explorer's slice nodes and overview nodes carry `isSelf: true` on that one
+  Person; the canvas draws it "You · label" with its own ring and always labels it.
+
+### 6.8 A document that records several meetings (issue #780)
 
 A note made from an uploaded document or record (`sourceType = document`, no transcript behind it)
 may describe more than one meeting. For such a note, and only for it, the run is different:
@@ -1218,10 +1242,9 @@ may describe more than one meeting. For such a note, and only for it, the run is
   normalized title and `occurredOn`, so a weekly meeting stays one row per date.
 - **The Document.** One system row (ref `document`, label and `title` = the note's title,
   `preparedOn` when the date is stated), cited with the note's title like the system Meeting, with
-  `RECORDED_IN` from each meeting. `PREPARED_FOR` goes to the owner's own Person only when
-  `ExtractionInput.selfEntityId` is set; it is offered to the model as a known entity too. The handler
-  passes null until the per-user `self` graph preference (#778) exists; that is the one place to
-  change. The Document and its edges still reach the graph only through the proposal's commit.
+  `RECORDED_IN` from each meeting. `PREPARED_FOR` goes to the owner's own Person (§6.7) only when
+  one is chosen; the loader resolves it and it is offered to the model as a known entity too. The
+  Document and its edges still reach the graph only through the proposal's commit.
 - **Evaluation.** `m60` (`kvox-eval`, fixtures README) is an invented 6,000-word record of six
   meetings; `kg-long-record.spec.ts` asserts the pass criteria through this pipeline.
 
@@ -1929,6 +1952,7 @@ graph?: {
   domains?: { work: boolean; personal: boolean };                 // core is never stored (always on); personal default false
   review?: { minConfidence: number;                               // 0–1, default 0.7: the lowest confidence the safe policy accepts (§19.2)
            autoCommitSafeRows?: boolean };                      // default true: commit the safe rows of every note's draft automatically (ADR-0007); a library's own auto_commit overrides it
+  self?: { entityId: string | null };                             // default null: the Person that is the account owner (§6.7); read as preferences.self.entityId
 }
 ```
 

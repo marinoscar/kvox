@@ -68,6 +68,8 @@ import type {
   GraphConflictReason as ContractGraphConflictReason,
   UserGuidance as ContractUserGuidance,
   GraphOverviewRefreshResponse as ContractGraphOverviewRefreshResponse,
+  GraphSelfEntity as ContractGraphSelfEntity,
+  GraphSelfResponse as ContractGraphSelfResponse,
   GraphInsightsResponse as ContractGraphInsightsResponse,
   GraphInsightsWindow as ContractGraphInsightsWindow,
   GraphInsightTheme as ContractGraphInsightTheme,
@@ -3035,6 +3037,8 @@ export interface GraphOverviewNode {
   clusterId: number;
   /** Readable edges the entity has in the whole graph. */
   degree: number;
+  /** True on the Person the user chose as themselves (#778); absent otherwise. */
+  isSelf?: boolean;
 }
 
 /**
@@ -3122,6 +3126,38 @@ export function getGraphOverview(
   if (params.edges) q.set('edges', 'true');
   const qs = q.toString();
   return kvoxGet<GraphOverview>(host, `/graph/overview${qs ? `?${qs}` : ''}`, { signal });
+}
+
+/**
+ * The Person shown as the account owner: id, label and the alias strings other than the label. Alias of the contract's `GraphSelfEntity`.
+ *
+ * @stability experimental
+ */
+export type GraphSelfEntity = ContractGraphSelfEntity;
+
+/**
+ * Who you are in the graph: the chosen Person (resolved), else suggestions matching your profile name. Alias of the contract's `GraphSelfResponse`.
+ *
+ * @stability experimental
+ */
+export type GraphSelf = ContractGraphSelfResponse;
+
+/**
+ * Fetches who you are in your graph (`GET /api/graph/self`, `graph:read`). A suggestion is never applied; choose with the `graph.self.entityId` preference.
+ *
+ * @stability experimental
+ */
+export function getGraphSelf(host: KvoxWebHost, signal?: AbortSignal): Promise<GraphSelf> {
+  return kvoxGet<GraphSelf>(host, '/graph/self', { signal });
+}
+
+/**
+ * Adds a Person to stand for you (`POST /api/graph/self/person`, `graph:write`), cited "Set by hand". Does not choose it.
+ *
+ * @stability experimental
+ */
+export function createSelfPerson(host: KvoxWebHost, label: string): Promise<GraphSelfEntity> {
+  return kvoxPost<GraphSelfEntity>(host, '/graph/self/person', { label });
 }
 
 /**
