@@ -1,5 +1,18 @@
 # @marinoscar/kvox-api
 
+## 0.1.0-next.21
+
+### Minor Changes
+
+- 2810359: Add the optional `KVOX_WEBHOOKS` port (`emit(eventKey, data, { orgId, userId })`, a no-op when unbound; `KvoxPortBindings.webhooks`, `NOOP_KVOX_WEBHOOKS`, `createRecordingKvoxWebhooks`) and `@marinoscar/kvox-api/webhooks` (marinoscar/kvox#795): `KVOX_WEBHOOK_EVENTS` (`kvox.graph.proposal_drafted`, `kvox.graph.committed`, `kvox.notes.import_batch_settled`, `kvox.transcripts.speakers_identified`, ids and counts only, strict zod payloads) and `KvoxWebhooksModule.forRoot`, whose listeners only enqueue the server-only `kvox.webhook_emit` job that publishes through the port. `graph.changed` for a proposal commit now also carries `proposalId` and `counts` (additive).
+- 41c6751: Every date the API derives from an instant or from "now" now follows the user's time zone. `KvoxSettingsPort` gains `readUserTimeZone(userId)` (the web edition answers the profile zone, KVox Desktop the device zone); `@marinoscar/platform-contract` becomes a required peer of `@marinoscar/kvox-api`, which may import exactly its pure `timezone` entry. The Ask prompt states the asker's local date, weekday, time and zone (captured at enqueue as `timeZone` in the `ask.respond` payload) and Ask tools show instants as the asker's local day; the extraction meeting date is the owner's local day; note exports print "saved", "Exported" and the source date in the requester's zone with its name, and note exports (and PDF transcript exports, whose cover is dated by the recording) carry the zone in their content address; the graph activity buckets are cut in the requester's zone (`timeZone` in the response, DST-correct, weeks start Monday locally); a bare `since`, `from` or `to` over an instant column is local midnight in the requester's zone while a bare `as_of` and every calendar value stay floating dates; a relation set without `validFrom` starts on the requester's today; the import batch label uses the local day and the review-queue group key carries the batch `createdAt`; graph insights sentences and the graph export file name use the requester's or owner's day. The API reads the request zone from the `X-Time-Zone` header when the user has none stored. `graphExportFilename` takes an optional IANA zone.
+
+### Patch Changes
+
+- 41c6751: Dependency and peer ranges on the platform packages move from 0.1.0-next.17 to 0.1.0-next.18, the release that adds the user's time zone (`profile.timezone`, the world-map picker on the profile page) and renders every packaged date in it. kvox-web formats its own dates through the same display-zone store.
+- d41c7c7: Ontology descriptions, the graph extraction prompt, evaluation fixtures and code examples now use invented placeholders (Org Alpha, Product X, Avery Example) instead of real people, companies and products. No keys, schemas or behaviour change; the extraction prompt text and its recorded requests differ only in the example names.
+- 06665e8: Dependency and peer ranges on the platform packages move from 0.1.0-next.18 to 0.1.0-next.19, the release whose date operations and emails follow the user's time zone (`@marinoscar/platform-contract/timezone`, `X-Time-Zone`, `SettingsResolver.resolveUserTimeZone`).
+
 ## 0.1.0-next.20
 
 ### Minor Changes
