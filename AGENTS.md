@@ -39,11 +39,15 @@ Full index: [docs/README.md](docs/README.md). The most used:
 - Use one subagent at a time; hand it the doc section to read, not the whole doc.
 - Area rules are in the nested `AGENTS.md` of the folder you work in.
 
-## MANDATORY: No real people, companies or user material
+## MANDATORY: No real people, companies, emails or user material
 
-- **Never reuse material a user shares** (documents, notes, transcripts, screenshots) anywhere in the repo, issues, PRs or commits.
-- **No real people, companies, organizations or products as examples.** Use invented placeholders (`Person A`, `Org Alpha`, `Product X`, `@example.test`). Exempt only: named vendor integrations and legal/authorship metadata.
-- Detail and the full placeholder list: [docs/AI-ASSISTANTS.md](docs/AI-ASSISTANTS.md#no-real-people-companies-or-user-material).
+Zero tolerance, with no exception for "just an example": **never** write the name of a real person (including the repo owner or any user), a real company or organization, or a real email address, in code, comments, tests, mock data, snapshots, fixtures, prompts, eval scenarios, docs, changelogs and changesets, commit messages, issue or PR text. Case, abbreviation, initials, tickers, translations and possessives all count; if unsure whether a name is real, it is real.
+
+- **Placeholders only**: `Person A`, `Avery Example`, `Org Alpha`, `Org Beta`, `Product X`, `Project P1`; emails only `@example.test` (or RFC 2606 `example.com/.org/.net`). No well-known fictional brands.
+- **Exempt, narrowly**: a vendor the code actually integrates with, named as that integration (never as example data), and legal/authorship metadata (LICENSE, package `author`, git author).
+- **Shared material**: nothing from documents, notes, transcripts or screenshots a user shares (names, companies, titles, meeting names) enters the repo.
+- **Before every commit**: read the staged diff for proper nouns and run `git diff --cached | grep -nE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' | grep -v '@example\.'`.
+- Detail: [docs/AI-ASSISTANTS.md](docs/AI-ASSISTANTS.md#no-real-people-companies-emails-or-user-material).
 
 ## MANDATORY: Issue-Driven Development (Traceability)
 

@@ -186,14 +186,24 @@ The path is: same OpenAI-compatible endpoint, different server.
 
 OpenCode differs between versions (for example in how nested `AGENTS.md` files and compaction settings are handled). **Verify** with the version you run: check that a nested `AGENTS.md` loads when you open a file in its folder, and that the settings in `opencode.json` are accepted without a warning.
 
-## No real people, companies or user material
+## No real people, companies, emails or user material
 
-The root `AGENTS.md` carries the short rule; this is the full text.
+The root `AGENTS.md` carries the short rule; this is the full text. The rule is absolute: there is no "just this once" and no "only as an example".
 
-- **Material a user shares is never reused.** Never use the content of documents, notes, transcripts, screenshots or any other material the user shares with an assistant, or anything derived from it (names, numbers, quotes, structure that identifies it), in code, tests, fixtures, evaluation sets, prompts, documentation, examples, issues, pull requests or commit messages. Shared material is used only to diagnose the problem in the conversation.
-- **No real names as examples.** Never use the name of a real person, or a real company, organization, product or brand, as an example anywhere in the repository: code comments, prompts, test data, fixtures, evaluation scenarios, docs, issue and PR text. Use clearly invented placeholders: `Person A`, `Avery Example`, `Org Alpha`, `Org Beta`, `Product X`, `Project P1`, and `@example.test` email addresses. Do not borrow well-known fictional brands either (Contoso, Acme, Northwind, Initech).
-- **Exempt, and only these:** a real vendor or service a feature integrates by name (for example a provider adapter calling that vendor's API, its SDK package names, its documented endpoints), and legal or authorship metadata (package `author`, copyright lines, code-signing publisher name).
-- **Fix what you find.** When you find a real name used as an example, replace it with a placeholder in the same change, or open a follow-up if it changes recorded snapshots.
+- **Zero tolerance, everywhere.** Never write the name of a real person, a real company or organization, or a real email address in code, comments, test names, mock data, snapshots, fixtures, prompts, evaluation scenarios, recorded requests, documentation, CHANGELOGs and changesets, commit messages, or issue and PR text. Case, abbreviation, initials, stock tickers, translations and possessives all count. If you are unsure whether a name is real, it is real: replace it.
+- **Placeholders.** Use clearly invented ones: `Person A`, `Avery Example`, `Org Alpha`, `Org Beta`, `Product X`, `Project P1`. Do not borrow well-known fictional brands either (Contoso, Acme, Northwind, Initech).
+- **Emails.** Only `@example.test` addresses, or the reserved `example.com`, `example.org` and `example.net` domains (RFC 2606, RFC 6761). Never a real person's address, never the repo owner's or a user's own address, never a real company domain.
+- **Nobody's own name.** The repo owner's name and the name of the user you are talking to are real names too; they are never example data.
+- **Material a user shares is never reused.** Never use the content of documents, notes, transcripts, screenshots or any other material shared with an assistant, or anything derived from it (names, companies, titles, meeting names, numbers, quotes, structure that identifies it), anywhere in the repository, issues, pull requests or commit messages. Shared material is used only to diagnose the problem in the conversation.
+- **Exempt, and only these.** (1) A real vendor or service the code actually integrates with (an OAuth, AI or storage provider adapter, its SDK package names, documented endpoints), named because the code talks to it; the exemption covers the vendor as an integration, never as example data. (2) Legal and authorship metadata: LICENSE, copyright lines, package `author` and `maintainers`, git author, code-signing publisher name. A real email address is permitted only in (2).
+- **Scan before every commit.** Read the staged diff for proper nouns (people, companies, products, initials) and run:
+
+  ```bash
+  git diff --cached | grep -nE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' | grep -v '@example\.'
+  ```
+
+  Also scan commit messages and the issue or PR text you are about to file.
+- **Fix what you find.** When you find a real name or email used as an example, replace it with a placeholder in the same change, or open a follow-up if it changes recorded snapshots.
 
 ## 6. Maintenance
 

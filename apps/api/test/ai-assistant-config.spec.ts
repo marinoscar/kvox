@@ -17,7 +17,7 @@ import { join, resolve } from 'node:path';
 const REPO_ROOT = resolve(__dirname, '..', '..', '..');
 const p = (...parts: string[]) => join(REPO_ROOT, ...parts);
 
-const ROOT_AGENTS_BUDGET = 24_000;
+const ROOT_AGENTS_BUDGET = 25_000;
 const NESTED_AGENTS_BUDGET = 6_000;
 const OPENCODE_AGENT_BUDGET = 6_000;
 const SKILL_BUDGET = 10_000;
