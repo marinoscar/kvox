@@ -176,6 +176,13 @@
         "rxjs",
         "zod"
       ]
+    },
+    "webhooks": {
+      "peers": [
+        "@marinoscar/kvox-contract",
+        "@nestjs/common",
+        "zod"
+      ]
     }
   },
   "kvox-web": {
