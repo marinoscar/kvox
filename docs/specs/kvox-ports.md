@@ -24,6 +24,7 @@ A token is `Symbol.for('@marinoscar/kvox/<NAME>')`. The description string is pe
 | `KVOX_SECRETS` | `KvoxSecretsPort` | yes |
 | `KVOX_EVENTS` | `KvoxEventsPort` | no (default: in-process emitter) |
 | `KVOX_AUDIT` | `KvoxAuditPort` | no (default: no-op) |
+| `KVOX_WEBHOOKS` | `KvoxWebhooksPort` | no (default: no-op; Desktop binds none) |
 
 `KvoxPortsModule.forRoot({ ports })` (in `core`, because its default `KVOX_EVENTS` is a `core` class and `ports` may not import `core`) is global. Each entry is a Nest custom provider without the token: `useClass`, `useExisting`, `useValue` or `useFactory`. It throws when called, so at start-up, naming every required port left unbound (`no binding for ports KVOX_JOBS (ports.jobs), KVOX_SECRETS (ports.secrets)`). The web edition's call is `apps/api/src/platform-kvox/platform-kvox.module.ts`, imported by `AppModule` before every domain module; a test builds the module with a binding removed and asserts the message.
 
@@ -106,6 +107,10 @@ The host's client, seen through `KvoxPrismaClientLike` (`$queryRaw`, `$executeRa
 ### 3.11 KVOX_BRAND
 
 Not a port to implement but a value a host provides through `KvoxPortsModule.forRoot({ brand })`: `{ appName, appSlug }`, the product name a slice prints where a document carries one (the PDF export footer) and the slug it builds names from. A slice injects it `@Optional()` and falls back to `DEFAULT_KVOX_BRAND`, so no slice names a product.
+
+### 3.12 KVOX_WEBHOOKS
+
+`emit(eventKey, data, { orgId, userId })` publishes one event of `KVOX_WEBHOOK_EVENTS` (`@marinoscar/kvox-api/webhooks`; marinoscar/kvox#795) to the webhooks a user configured. `data` is ids and counts only and is parsed with the event's strict schema before the call; a `sensitive` PersonFact never crosses it. A binding records the delivery and enqueues the sending job; it must not do network I/O inline. The package calls it only from the server-only `kvox.webhook_emit` job (its listeners just enqueue). `orgId` is `null` when the host should resolve the user's own organization. Unbound, `NOOP_KVOX_WEBHOOKS` answers.
 
 ## 4. The `core` helpers and the cycles they cut
 

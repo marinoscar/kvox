@@ -34,6 +34,10 @@ Resumable upload (`initUpload`, `signParts`, `completeUpload`, `abortUpload`), `
 
 `emit` and `subscribe` for in-process domain events after commit. Optional: the default is an in-process emitter.
 
+### KVOX_WEBHOOKS
+
+`emit(eventKey, data, { orgId, userId })` publishes one catalog event (`KVOX_WEBHOOK_EVENTS` of `@marinoscar/kvox-api/webhooks`) to the webhooks a user configured. Optional: unbound (KVox Desktop) the default is a no-op. `data` is ids and counts only, never content and never `sensitive` PersonFact data. A binding must not do network I/O inline: it may record delivery rows and enqueue the delivery job, nothing slower. The package calls it only from the `kvox.webhook_emit` job. `orgId` is `null` when the host should resolve the user's own organization.
+
 ### KVOX_PRISMA
 
 The host's Prisma client, seen through `KvoxPrismaClientLike`. A slice narrows it with the delegates it uses and builds raw SQL with the `Prisma` helper of `core`.

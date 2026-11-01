@@ -101,6 +101,10 @@
       "types": "./dist/ask/testing/index.d.ts",
       "default": "./dist/ask/testing/index.js"
     },
+    "./webhooks": {
+      "types": "./dist/webhooks/index.d.ts",
+      "default": "./dist/webhooks/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
