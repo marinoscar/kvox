@@ -63,7 +63,7 @@ jobs:
     env:
       NODE_ENV: test
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -272,7 +272,7 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -295,7 +295,7 @@ jobs:
     # No `needs:` — this reads decorator metadata only and shares nothing with
     # the build job, so it runs concurrently rather than queueing behind it.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -412,7 +412,7 @@ jobs:
       INITIAL_ADMIN_EMAIL: smoke-admin@example.test
       OTEL_ENABLED: 'false'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -529,7 +529,7 @@ jobs:
       POSTGRES_DB: appdb
       POSTGRES_SSL: 'false'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
