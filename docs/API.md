@@ -6256,6 +6256,26 @@ that a true fact ended, set the next one instead. Audited as
 without `graph:write` · `404` either id missing, another user's, merged, or a
 relation that does not start at `{id}`.
 
+#### GET /graph/self, POST /graph/self/person
+
+Who you are in your graph (issue #778; `docs/specs/ontology.md` §6.7). The choice is the
+`graph.self.entityId` preference (`PATCH /api/user-settings`, `{ "graph": { "self": { "entityId": "<id>" } } }`;
+`null` clears it; default `null`, read back as `preferences.self.entityId`).
+
+`GET /graph/self` (`graph:read`) answers `{ self, suggestions, displayName }`: `self` is the chosen
+Person resolved (`{ id, label, aliases }`: a Person merged into another is followed to it; one that
+is no longer a live Person of yours reads as `null`); while `self` is `null`, `suggestions` lists up
+to 5 live Persons whose label or alias equals your profile name. A suggestion is never applied for
+you.
+
+`POST /graph/self/person` (`graph:write`), body `{ "label": "<name>" }`, answers `201` with
+`{ id, label, aliases }`: a new Person cited "Set by hand". It does not choose it.
+
+**Marking the node.** `isSelf: true` appears on the one Person you chose, in the nodes of the graph
+slices (`GET /graph/entities/{id}/neighborhood`, `POST /graph/explore/expand`, paths, connect) and
+of `GET /graph/overview`; it is absent on every other node. A resolution row linked to your own
+node reports `resolution.source: "self"`.
+
 #### POST /graph/notes/{noteId}/extract
 
 Extract a **draft proposal** from one of your notes (issue #363;
