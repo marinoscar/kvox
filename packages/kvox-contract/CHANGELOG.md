@@ -1,5 +1,7 @@
 # @marinoscar/kvox-contract
 
+## 0.1.0-next.22
+
 ## 0.1.0-next.21
 
 ### Minor Changes
