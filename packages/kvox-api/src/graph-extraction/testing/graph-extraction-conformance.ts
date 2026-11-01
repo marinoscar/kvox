@@ -49,7 +49,7 @@ export interface GraphExtractionConformanceTarget {
 }
 
 const PINNED_TYPES = [
-  { type: KG_EXTRACT_JOB_TYPE, maxRuntimeMs: 20 * 60_000, maxAttempts: 1 },
+  { type: KG_EXTRACT_JOB_TYPE, maxRuntimeMs: 12 * 8 * 60_000, maxAttempts: 1 },
   { type: KG_RESOLVE_JOB_TYPE, maxRuntimeMs: 20 * 60_000, maxAttempts: 1 },
   { type: KG_EMBED_JOB_TYPE, maxRuntimeMs: 5 * 60_000, maxAttempts: 3 },
   // #666 — every proposal is written whole, so a retry only skips what is already proposed.

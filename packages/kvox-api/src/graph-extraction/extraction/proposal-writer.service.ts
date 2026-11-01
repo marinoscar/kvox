@@ -46,6 +46,18 @@ export class ProposalWriter {
     await this.prisma.kgProposal.update({ where: { id: proposalId }, data });
   }
 
+  /** #777: progress after one chunk — the client-visible counts and the internal resume state. */
+  async saveChunkProgress(
+    proposalId: string,
+    stats: ExtractionStats,
+    resume: Record<string, unknown>,
+  ): Promise<void> {
+    await this.prisma.kgProposal.updateMany({
+      where: { id: proposalId, status: 'extracting' },
+      data: { stats: stats as unknown as InputJsonValue, commitLog: resume as unknown as InputJsonValue },
+    });
+  }
+
   /** Replace this proposal's items with `rows`; returns the ids, in row order. */
   async writeItems(
     proposalId: string,
@@ -178,7 +190,11 @@ export class ProposalWriter {
       const prechecked = decisions.filter((d) => d.decision === 'accept').map((d) => d.id);
       await tx.kgProposal.update({
         where: { id: proposalId },
-        data: { status: 'draft', stats: { ...stats, prechecked } as unknown as InputJsonValue },
+        data: {
+          status: 'draft',
+          stats: { ...stats, prechecked } as unknown as InputJsonValue,
+          commitLog: Prisma.DbNull, // #777: the resume state is spent
+        },
       });
       return true;
     });
@@ -192,7 +208,11 @@ export class ProposalWriter {
   ): Promise<void> {
     await this.prisma.kgProposal.updateMany({
       where: { id: proposalId, status: 'extracting' },
-      data: { status: 'failed', stats: { ...stats, failure } as unknown as InputJsonValue },
+      data: {
+        status: 'failed',
+        stats: { ...stats, failure } as unknown as InputJsonValue,
+        commitLog: Prisma.DbNull,
+      },
     });
   }
 }
