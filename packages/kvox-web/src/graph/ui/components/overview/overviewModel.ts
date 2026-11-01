@@ -99,6 +99,8 @@ export interface OverviewNodeAttributes {
   baseLabel: string;
   /** Nodes layer only: the ontology type key. */
   entityType?: string;
+  /** Clusters layer only: how many entities the cluster holds; the canvas sizes the node by it. */
+  memberCount?: number;
   zIndex?: number;
 }
 
@@ -143,6 +145,7 @@ export function buildClusterGraph(o: GraphOverview, theme: OverviewPalette): Ove
       clusterId: cluster.id,
       baseColor: color,
       baseLabel: label,
+      memberCount: cluster.size,
     });
   }
   const edgeColor = theme.palette.text.disabled;

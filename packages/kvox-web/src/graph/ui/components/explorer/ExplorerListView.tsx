@@ -3,7 +3,7 @@
  *
  * Two jobs: the ACCESSIBLE view of everything the canvas shows (every canvas
  * action — expand, open, hide — is a real button here), and the ONLY view when
- * the browser has no WebGL. Nodes are grouped by type, the seeds' groups
+ * the browser cannot draw the canvas. Nodes are grouped by type, the seeds' groups
  * first; within a group, seeds first, then nearest, then best connected
  * (`explorerModel.toListModel`).
  */

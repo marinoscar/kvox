@@ -1,16 +1,15 @@
 /**
- * The canvas's `nodeReducer` and `edgeReducer` (#667, epic #661), as pure
- * builders. NO SIGMA IMPORT, so a unit test drives them with a plain graphology
- * graph, and `GraphCanvas` only hands the result to `setSettings`.
+ * The canvas's node and edge "reducers" (#667, epic #661), as pure builders. NO
+ * G6 IMPORT, so a unit test drives them with a plain graphology graph;
+ * `g6/canvasData.ts` turns their output into G6 element states.
  *
- * WHY REDUCERS. Sigma lets a reducer change how a node or edge DRAWS without
- * touching the graph. Hover, first tap, selection and rings are all view state
- * that changes many times a second; writing them into node attributes would
- * mutate the model on every mouse move and make the model depend on the view.
- * So the graph holds only facts (type, size, colour, `isSeed`, `fixed`), and the
- * reducers add what the current interaction says.
+ * WHY REDUCERS. Hover, first tap, selection and rings are view state that
+ * changes many times a second; writing them into node attributes would mutate
+ * the model on every pointer move and make the model depend on the view. So the
+ * graph holds only facts (type, size, colour, `isSeed`, `fixed`), and a reducer
+ * says how the current interaction changes the way an element draws.
  *
- * The rules, each pinned by `explorerReducers.test.ts`:
+ * The rules, each pinned by `explorerVisual.test.ts`:
  *   - nothing outside `visibleIds` is drawn;
  *   - with a FOCUS (hover, else first tap, else selection) the focus, its
  *     neighbours and the edges between them are lit and labelled, and everything
@@ -18,10 +17,7 @@
  *   - the focus's own edges, and any hovered edge, show their label; no other
  *     edge ever does;
  *   - a seed, a pinned and the selected node get a ring, each a different shape
- *     (`ringFor`);
- *   - a node with a pictogram draws with the `pictogram` program, an edge with a
- *     curvature with the `curvedArrow` one. A graph with neither (the overview's)
- *     draws exactly as before.
+ *     (`ringFor`).
  */
 
 import { alpha } from '@mui/material/styles';
@@ -29,10 +25,6 @@ import type { MultiDirectedGraph, UndirectedGraph } from 'graphology';
 
 import { DIM_OPACITY, highlightSet, type HighlightSet } from './explorerModel.js';
 import { ringFor } from './explorerEncoding.js';
-
-/** The names of the node and edge programs `GraphCanvas` registers. */
-export const PICTOGRAM_PROGRAM = 'pictogram';
-export const CURVED_ARROW_PROGRAM = 'curvedArrow';
 
 /** Above this many incident edges, a focus does not label them (a hub would paint a wall of text). */
 export const MAX_FOCUS_EDGE_LABELS = 12;
@@ -117,7 +109,6 @@ function buildFocusNodeReducer(ctx: ReducerContext): (node: string, data: Displa
     if (!ctx.visibleIds.has(node)) return { ...data, hidden: true };
 
     const out: Display = { ...data };
-    if (typeof data.image === 'string' && data.image) out.type = PICTOGRAM_PROGRAM;
 
     const ring = ringFor({
       isSeed: data.isSeed === true,
@@ -198,7 +189,6 @@ function buildFocusEdgeReducer(ctx: ReducerContext): (edge: string, data: Displa
     if (!ctx.visibleIds.has(source) || !ctx.visibleIds.has(target)) return { ...data, hidden: true };
 
     const out: Display = { ...data, label: '' };
-    if (typeof data.curvature === 'number' && data.curvature !== 0) out.type = CURVED_ARROW_PROGRAM;
 
     const hovered = ctx.hoveredEdgeId === edge;
     if (hovered || (labelFocusEdges && lit!.edges.has(edge))) {

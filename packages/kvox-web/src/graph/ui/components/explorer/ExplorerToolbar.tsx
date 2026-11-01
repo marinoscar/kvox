@@ -59,7 +59,7 @@ export interface ExplorerToolbarProps {
   onFit: () => void;
   onReset: () => void;
   listView: boolean;
-  /** Without WebGL the list is the only view: the toggle is disabled on. */
+  /** Without a drawing canvas the list is the only view: the toggle is disabled on. */
   listViewForced: boolean;
   onToggleListView: () => void;
   nodeCount: number;

@@ -3,7 +3,7 @@
  * into a graphology graph by the same `explorerModel.mergeSlice` the explorer
  * uses (deterministic ring placement around the entity), drawn by the same
  * `GraphCanvas`. Lives under `explorer/` and is lazy-loaded by
- * `NeighborhoodWidget`, so graphology and sigma stay out of the entity page's
+ * `NeighborhoodWidget`, so graphology and G6 stay out of the entity page's
  * own chunk.
  */
 

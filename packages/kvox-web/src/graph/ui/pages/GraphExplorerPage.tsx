@@ -53,8 +53,8 @@
  * right-click (pointer) opens the node's menu; "Select" mode marks nodes by
  * tapping. A pointer keeps hover = preview and click = open.
  *
- * The canvas (sigma, WebGL) is lazy-loaded a second time inside this lazy
- * page, so the list view — and a browser without WebGL — never downloads it.
+ * The canvas (G6) is lazy-loaded a second time inside this lazy page, so the
+ * list view — and a browser that cannot draw a canvas — never downloads it.
  * Every rule about the graph itself lives in `explorerModel.ts`.
  */
 
@@ -142,7 +142,7 @@ import { ExplorerListView } from '../components/explorer/ExplorerListView.js';
 import { ExplorerToolbar, ExplorerToolbarSkeleton } from '../components/explorer/ExplorerToolbar.js';
 import type { GraphCanvasControls, NodeContextMenuEvent } from '../components/explorer/GraphCanvas.js';
 import { CONCENTRIC_EGO_MAX_NODES } from '../components/explorer/layout/layoutBudgets.js';
-import type { CanvasLayout } from '../components/explorer/layout/useCanvasLayout.js';
+import type { CanvasLayout } from '../components/explorer/layout/canvasLayouts.js';
 import { ConnectNotesNotice, ConnectResults, FindConnectionsButton } from '../components/explorer/connect/ConnectResults.js';
 import { summarySentence } from '../components/explorer/connect/connectModel.js';
 import { ExplorerMinimap } from '../components/explorer/ExplorerMinimap.js';
@@ -210,7 +210,7 @@ export const NOT_IN_GRAPH_TITLE = "That entity isn't in your graph";
 export const CLUSTER_HINT =
   'This view was opened from the graph overview. Open the cluster again from the overview, or start from someone below.';
 export const NO_WEBGL_TEXT =
-  "Your browser can't draw the graph (WebGL is unavailable), so it is shown as a list.";
+  "Your browser can't draw the graph (canvas drawing is unavailable), so it is shown as a list.";
 export const BUILDING_MAP_TEXT = 'Building your graph map\u2026';
 export const TOO_LARGE_HINT =
   'Your graph is too large to draw whole. Start from someone below, or search for them.';
@@ -614,7 +614,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         clientX: event.clientX,
         clientY: event.clientY,
         isSeed: state.seedIds.includes(event.id),
-        // The layout's pin (sessionStorage-backed), not sigma's `fixed`: one pin function for every path.
+        // The layout's pin (sessionStorage-backed), not the model's `fixed`: one pin function for every path.
         pinned: canvasControls.current?.isPinned(event.id) ?? false,
       });
     },
@@ -1211,6 +1211,8 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
 
   // No minimap over the whole graph: it IS the overview, and 5,000 dots redrawn every frame cost more than they say.
   const minimapShown = !fullView && minimapVisible({ windowClass, nodeCount, mediumOn: mediumMinimap, listView });
+  // The frame `ExplorerMinimap` renders; G6's minimap plugin (inside the canvas chunk) draws into it.
+  const [minimapElement, setMinimapElement] = useState<HTMLDivElement | null>(null);
 
   // Path mode ("Connect A <-> B", GIC-13): its state and UI come from the hook.
   const pathMode = usePathMode({
@@ -1801,17 +1803,13 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                       }}
                       height="100%"
                       controlsRef={canvasControls}
+                      minimapContainer={minimapShown ? minimapElement : null}
                     />
                   </Suspense>
                 )}
                 {hasGraph && minimapShown && (
                   <Box sx={{ position: 'absolute', left: 12, bottom: 12 + canvasInsets.bottom, zIndex: 2 }}>
-                    <ExplorerMinimap
-                      graph={graph}
-                      version={version}
-                      visibleIds={visibleIds}
-                      controlsRef={canvasControls}
-                    />
+                    <ExplorerMinimap onContainer={setMinimapElement} />
                   </Box>
                 )}
                 {filteredEmpty && (

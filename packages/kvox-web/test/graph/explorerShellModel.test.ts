@@ -8,12 +8,12 @@ import {
   explorerBudgets,
 } from '../../src/graph/ui/components/explorer/shell/explorerBudgets.js';
 import {
-  capPixelRatio,
   createLongPress,
   LONG_PRESS_MS,
   pickNearestNode,
   revealDelta,
 } from '../../src/graph/ui/components/explorer/shell/canvasGestures.js';
+import { cappedPixelRatio } from '../../src/graph/ui/components/explorer/g6/viewport.js';
 import {
   DEFAULT_PANE_STATE,
   PANE_LIMITS,
@@ -229,36 +229,19 @@ describe('pickNearestNode', () => {
   });
 });
 
-describe('capPixelRatio', () => {
+describe('cappedPixelRatio', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  function fakeSigma() {
-    const sigma = { pixelRatio: 3, pickingDownSizingRatio: 6, resize: vi.fn() };
-    return sigma;
-  }
-
-  it('caps a 3x display at 2 and restores it', () => {
+  it('caps a 3x display at 2', () => {
     vi.stubGlobal('devicePixelRatio', 3);
-    const sigma = fakeSigma();
-    const restore = capPixelRatio(sigma, 2);
-    expect(sigma.pixelRatio).toBe(2);
-    expect(sigma.pickingDownSizingRatio).toBe(4);
-    // Sigma re-assigns the native ratio on every resize; the cap must hold.
-    sigma.pixelRatio = 3;
-    expect(sigma.pixelRatio).toBe(2);
-    expect(sigma.resize).toHaveBeenCalledWith(true);
-    restore();
-    expect(sigma.pixelRatio).toBe(3);
-    expect(sigma.pickingDownSizingRatio).toBe(6);
+    expect(cappedPixelRatio(2)).toBe(2);
   });
 
-  it('leaves a display at or under the cap alone', () => {
+  it('leaves a display at or under the cap, and a missing cap, to the renderer', () => {
     vi.stubGlobal('devicePixelRatio', 2);
-    const sigma = fakeSigma();
-    sigma.pixelRatio = 2;
-    capPixelRatio(sigma, 2)();
-    expect(sigma.resize).not.toHaveBeenCalled();
-    expect(sigma.pixelRatio).toBe(2);
+    expect(cappedPixelRatio(2)).toBeUndefined();
+    expect(cappedPixelRatio(null)).toBeUndefined();
+    expect(cappedPixelRatio(undefined)).toBeUndefined();
   });
 });
 
