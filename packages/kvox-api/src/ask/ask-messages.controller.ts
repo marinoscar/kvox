@@ -2,7 +2,7 @@ import { Body, Controller, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } fr
 import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ZodValidationPipe } from 'nestjs-zod';
 
-import { CurrentKvoxPrincipal, KvoxAuth } from '../core/index.js';
+import { CurrentKvoxPrincipal, KvoxAuth, KvoxTimeZoneService, TimeZoneHeader } from '../core/index.js';
 import { ApiDataResponse, GRAPH_READ_PERMISSION } from '../graph/index.js';
 import type { KvoxPrincipal } from '../ports/index.js';
 import { ASK_MAX_TOOL_STEPS } from './ask-limits.js';
@@ -32,7 +32,10 @@ const CONFLICTS =
 @ApiTags('Ask')
 @Controller('ask')
 export class AskMessagesController {
-  constructor(private readonly messages: AskMessagesService) {}
+  constructor(
+    private readonly messages: AskMessagesService,
+    private readonly zones: KvoxTimeZoneService,
+  ) {}
 
   @Post('conversations/:id/messages')
   @KvoxAuth(GRAPH_READ_PERMISSION)
@@ -65,7 +68,11 @@ export class AskMessagesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(postAskMessageSchema)) dto: PostAskMessage,
     @CurrentKvoxPrincipal() who: KvoxPrincipal,
+    @TimeZoneHeader() timeZoneHeader?: string,
   ): Promise<PostAskMessageResponse> {
-    return this.messages.post(who.userId, id, dto);
+    // The turn runs later as a job: capture the asker's zone now (profile, then X-Time-Zone, then UTC)
+    // so "today" in the prompt is the day the user asked on.
+    const timeZone = await this.zones.forRequest(who.userId, timeZoneHeader);
+    return this.messages.post(who.userId, id, dto, timeZone);
   }
 }

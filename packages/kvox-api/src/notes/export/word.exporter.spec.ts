@@ -68,7 +68,7 @@ describe('WordNoteExporter', () => {
     expect(text).toMatch(/Source\nWeekly Sync — Sep 12, 2026 \(transcript\)/);
     expect(text).toMatch(/Template\nConcise Meeting Notes/);
     expect(text).toMatch(/Note version\nVersion 3/);
-    expect(text).toMatch(/Exported\n2026-09-14T04:37:11.000Z/);
+    expect(text).toMatch(/Exported\nSep 14, 2026, 04:37 UTC/);
   });
 
   it('renders every block kind of the body', async () => {

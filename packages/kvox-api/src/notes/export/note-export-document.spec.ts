@@ -48,12 +48,31 @@ describe('provenanceEntries', () => {
     expect(labels).toEqual(['Source', 'Template', 'Note version', 'Exported']);
   });
 
-  it('carries the export timestamp as ISO-8601, not a locale string', () => {
+  it('prints the export time as a local date, 24-hour time and the zone name (UTC without a zone)', () => {
     const entries = provenanceEntries(noteDocument());
 
-    expect(entries.find((entry) => entry.label === 'Exported')?.value).toBe(
-      '2026-09-14T04:37:11.000Z',
+    expect(entries.find((entry) => entry.label === 'Exported')?.value).toBe('Sep 14, 2026, 04:37 UTC');
+  });
+
+  it("renders every instant in the requester's zone and names it", () => {
+    // 2026-09-14T04:37:11Z is still the evening of the 13th in Chicago (CDT) and the 14th in Tokyo.
+    const chicago = provenanceEntries(noteDocument({ timeZone: 'America/Chicago' }));
+    expect(chicago.find((e) => e.label === 'Exported')?.value).toBe('Sep 13, 2026, 23:37 America/Chicago');
+    // The version was saved 2026-09-12T10:00Z: 05:00 in Chicago, 19:00 in Tokyo, the same day in both.
+    expect(chicago.find((e) => e.label === 'Note version')?.value).toBe(
+      'Version 3 · saved Sep 12, 2026, 05:00 America/Chicago',
     );
+    const tokyo = provenanceEntries(noteDocument({ timeZone: 'Asia/Tokyo' }));
+    expect(tokyo.find((e) => e.label === 'Exported')?.value).toBe('Sep 14, 2026, 13:37 Asia/Tokyo');
+  });
+
+  it('cuts the source date in the same zone', () => {
+    // The source was recorded 2026-09-12T09:00Z; make it cross midnight in Tokyo.
+    const doc = noteDocument({
+      timeZone: 'Asia/Tokyo',
+      source: { type: 'transcript', id: 't1', title: 'Weekly Sync', date: new Date('2026-09-12T16:30:00Z') },
+    });
+    expect(provenanceEntries(doc)[0]?.value).toBe('Weekly Sync — Sep 13, 2026 (transcript)');
   });
 });
 
@@ -94,6 +113,12 @@ describe('formatDate', () => {
     // identical requests legitimately disagree about what they contain.
     expect(formatDate(new Date('2026-01-01T23:30:00Z'))).toBe('Jan 1, 2026');
     expect(formatDate(new Date('2026-12-31T00:30:00Z'))).toBe('Dec 31, 2026');
+  });
+
+  it("cuts the day in the requester's zone when one is given", () => {
+    expect(formatDate(new Date('2026-12-31T00:30:00Z'), 'America/Chicago')).toBe('Dec 30, 2026');
+    expect(formatDate(new Date('2026-12-31T00:30:00Z'), 'Asia/Tokyo')).toBe('Dec 31, 2026');
+    expect(formatDate(new Date('2026-12-31T00:30:00Z'), 'Not/AZone')).toBe('Dec 31, 2026');
   });
 });
 

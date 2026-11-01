@@ -33,7 +33,7 @@ import {
 import { GraphLayoutEnqueuer } from './graph-layout.enqueuer.js';
 import { countReadableEntities, readSourceUpdatedAt } from './layout-source.js';
 import { isWindowed, readEntityIdsInWindow, readOverviewEdges, readTypeCounts, type OverviewWindow } from './overview-filter.js';
-import { asOfOr400, resolveNodeTypes } from '../read/read-params.js';
+import { instantBoundOr400, resolveNodeTypes } from '../read/read-params.js';
 import { GraphOntologyService } from '../ontology/graph-ontology.service.js';
 import { storedClustersSchema, storedPositionsSchema } from './layout-snapshot.js';
 import { KVOX_PRISMA } from '../../ports/index.js';
@@ -62,15 +62,16 @@ export class GraphOverviewService {
     private readonly ontology: GraphOntologyService,
   ) {}
 
-  async overview(ownerId: string, query: GraphOverviewQuery = {}): Promise<GraphOverviewResponse> {
+  async overview(ownerId: string, query: GraphOverviewQuery = {}, timeZone = 'UTC'): Promise<GraphOverviewResponse> {
     // Validate first: a typo'd filter is a 400 even before a snapshot exists.
     let schema: EffectiveSchema | undefined;
     const rawTypes = query.types?.trim();
     if (rawTypes) schema = await this.ontology.effectiveSchemaFor(ownerId);
     const typeFilter = schema ? resolveNodeTypes(schema, rawTypes, 'types') : undefined;
     const window: OverviewWindow = {
-      from: query.from ? asOfOr400(query.from) : null,
-      to: query.to ? asOfOr400(query.to) : null,
+      // Bare days are local midnights in the requester's zone (the window is over evidence INSTANTS).
+      from: query.from ? instantBoundOr400(query.from, timeZone) : null,
+      to: query.to ? instantBoundOr400(query.to, timeZone) : null,
     };
 
     const [latest, active] = await Promise.all([

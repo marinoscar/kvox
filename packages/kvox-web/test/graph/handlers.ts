@@ -168,7 +168,13 @@ export const graphHandlers = [
   // GIC-15: the TimeBar's activity. No dated evidence by default; a test overrides it with `server.use`.
   http.get(`${API_BASE}/graph/activity`, ({ request }) =>
     HttpResponse.json({
-      data: { bucket: new URL(request.url).searchParams.get('bucket') ?? 'month', series: [], byEntity: {} },
+      data: {
+        bucket: new URL(request.url).searchParams.get('bucket') ?? 'month',
+        // The API echoes the zone it cut the buckets in: the request's `X-Time-Zone`, else UTC.
+        timeZone: request.headers.get('x-time-zone') ?? 'UTC',
+        series: [],
+        byEntity: {},
+      },
     }),
   ),
 

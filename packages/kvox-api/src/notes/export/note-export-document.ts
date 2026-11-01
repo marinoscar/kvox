@@ -39,6 +39,9 @@
 // materially different files sharing one export row's meaning.
 // =============================================================================
 
+
+import { localDateKey, localTimeOfDay, pickTimeZone } from '../../core/index.js';
+
 /** Where a note's content came from, as the export names it. */
 /**
  * NoteExportSource.
@@ -112,6 +115,12 @@ export interface NoteExportDocument {
   createdAt: Date;
   /** When this document was rendered. */
   exportedAt: Date;
+  /**
+   * The requester's IANA time zone (absent: UTC). Every date and time the document PRINTS (the
+   * "saved" line, "Exported", the source date) is cut in it and the zone is named; the
+   * machine-readable `exportedAt` of the Markdown front matter stays an ISO instant.
+   */
+  timeZone?: string;
   /** Who saved the exported version, or `null` for the AI. */
   author: NoteExportAuthor | null;
   /** The model that generated the note, when one did. */
@@ -175,10 +184,13 @@ export interface ProvenanceEntry {
  */
 export function provenanceEntries(doc: NoteExportDocument): ProvenanceEntry[] {
   const entries: ProvenanceEntry[] = [
-    { label: 'Source', value: formatSource(doc.source) },
+    { label: 'Source', value: formatSource(doc.source, doc.timeZone) },
     { label: 'Template', value: doc.templateName ?? 'None' },
-    { label: 'Note version', value: `Version ${doc.version} · saved ${formatDate(doc.createdAt)}` },
-    { label: 'Exported', value: doc.exportedAt.toISOString() },
+    {
+      label: 'Note version',
+      value: `Version ${doc.version} · saved ${formatDateTime(doc.createdAt, doc.timeZone)}`,
+    },
+    { label: 'Exported', value: formatDateTime(doc.exportedAt, doc.timeZone) },
   ];
 
   if (doc.provider) {
@@ -203,16 +215,22 @@ export function provenanceEntries(doc: NoteExportDocument): ProvenanceEntry[] {
  * "generated from a recording" and a reader outside this application has no
  * other way to tell them apart.
  */
-export function formatSource(source: NoteExportSource): string {
+export function formatSource(source: NoteExportSource, timeZone?: string): string {
   const kind = `(${source.type})`;
 
   return source.date
-    ? `${source.title} — ${formatDate(source.date)} ${kind}`
+    ? `${source.title} — ${formatDate(source.date, timeZone)} ${kind}`
     : `${source.title} ${kind}`;
 }
 
-/** `Sep 12, 2026`, in UTC and without a locale. */
-export function formatDate(date: Date): string {
+/**
+ * `Sep 12, 2026`: the calendar day of an instant in `timeZone` (UTC when absent), without a locale.
+ *
+ * @param date - the instant.
+ * @param timeZone - the requester's IANA zone; absent or invalid reads as UTC.
+ * @returns the day, English month abbreviation.
+ */
+export function formatDate(date: Date, timeZone?: string): string {
   const months = [
     'Jan',
     'Feb',
@@ -228,12 +246,29 @@ export function formatDate(date: Date): string {
     'Dec',
   ];
 
-  // ⚠ UTC GETTERS AND A HAND-WRITTEN MONTH TABLE, never `toLocaleDateString`.
+  // ⚠ A HAND-WRITTEN MONTH TABLE over the zone's day key, never `toLocaleDateString`.
   // The same export rendered on two machines must produce the same bytes —
   // content-addressed reuse (spec §8.4) hands the SECOND caller the FIRST
-  // caller's file, so a date that depended on the renderer's timezone or ICU
-  // build would make two identical requests legitimately disagree.
-  return `${months[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`;
+  // caller's file, so a date that depended on the renderer's locale or ICU
+  // build would make two identical requests legitimately disagree. The REQUESTER'S
+  // zone is deliberate input instead, and it is part of the content address
+  // (`hashExportRequest`'s `timeZone`), so two zones never share a file.
+  const [year, month, day] = localDateKey(date, timeZone ?? 'UTC').split('-').map(Number) as [number, number, number];
+
+  return `${months[month - 1]} ${day}, ${year}`;
+}
+
+/**
+ * `Sep 12, 2026, 21:42 America/Chicago`: the local date, the 24-hour time and the zone's name.
+ *
+ * @param date - the instant.
+ * @param timeZone - the requester's IANA zone; absent or invalid reads as UTC.
+ * @returns the date, time and zone label.
+ */
+export function formatDateTime(date: Date, timeZone?: string): string {
+  const zone = pickTimeZone(timeZone);
+
+  return `${formatDate(date, zone)}, ${localTimeOfDay(date, zone)} ${zone}`;
 }
 
 /**

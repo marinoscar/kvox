@@ -98,6 +98,10 @@ describe('note-document-style', () => {
     expect(exportedLabel({ exportedAt: new Date('2026-09-12T10:00:00Z') })).toBe(
       'Exported Sep 12, 2026',
     );
+    // 02:00Z on the 12th is still the 11th in Chicago.
+    expect(exportedLabel({ exportedAt: new Date('2026-09-12T02:00:00Z'), timeZone: 'America/Chicago' })).toBe(
+      'Exported Sep 11, 2026',
+    );
     expect(kickerText({ templateName: 'Meeting notes' })).toBe('MEETING NOTES');
     expect(kickerText({ templateName: null })).toBe('NOTE');
     expect(noteFooterText(1, 3, 2, 'KVox')).toBe('Page 1 of 3 · Version 2 · Exported from KVox');

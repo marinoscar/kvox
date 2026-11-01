@@ -38,6 +38,7 @@ import ListItemText from '@mui/material/ListItemText';
 import Skeleton from '@mui/material/Skeleton';
 import Typography from '@mui/material/Typography';
 import { useEffect, useMemo, useState } from 'react';
+import { useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 import { useKvoxHost } from '../../../../../core/headless/index.js';
 import {
@@ -50,6 +51,7 @@ import { useGraphOverview } from '../../../../headless/hooks/useGraphOverview.js
 import { EntityTypeIcon } from '../../entityTypeIcon.js';
 import { PENDING_TEXT, STALE_TEXT, TOO_LARGE_TEXT } from '../../overview/OverviewBanners.js';
 import type { WindowClass } from '../shell/useWindowClass.js';
+import { addDaysToKey, todayKey } from '../timebar/timeAxis.js';
 
 /** Types shown under "Who and what is active", in this order. */
 export const ACTIVE_TYPES = ['Person', 'Project', 'Product', 'Topic'] as const;
@@ -95,9 +97,13 @@ export function startColumns(windowClass: WindowClass): 1 | 2 | 3 {
   return windowClass === 'medium' ? 2 : 1;
 }
 
-/** The ISO date `days` days before now, as `YYYY-MM-DD`. */
-export function sinceDate(days: number, now: Date = new Date()): string {
-  return new Date(now.getTime() - days * 86_400_000).toISOString().slice(0, 10);
+/**
+ * The user's local calendar day `days` days before today, as `YYYY-MM-DD`: today
+ * is read in `timeZone` (default the display zone), then counted back in whole
+ * calendar days. Sent as `since`, which the API reads as that day's local midnight.
+ */
+export function sinceDate(days: number, now: Date = new Date(), timeZone?: string): string {
+  return addDaysToKey(todayKey(now, timeZone), -days) ?? todayKey(now, timeZone);
 }
 
 /** The themes to show: real clusters (not "Unconnected"), largest first. */
@@ -143,7 +149,8 @@ export function ExplorerStartHere(props: ExplorerStartHereProps) {
   const { overview, isLoading: overviewLoading, error: overviewError } = useGraphOverview();
   const themes = useMemo(() => themeClusters(overview), [overview]);
 
-  const since = useMemo(() => sinceDate(ACTIVE_WINDOW_DAYS), []);
+  const timeZone = useDisplayTimeZone();
+  const since = useMemo(() => sinceDate(ACTIVE_WINDOW_DAYS, new Date(), timeZone), [timeZone]);
   const person = useEntityList({ type: ['Person'], sort: 'mentions', since, limit: ACTIVE_ROWS });
   const project = useEntityList({ type: ['Project'], sort: 'mentions', since, limit: ACTIVE_ROWS });
   const product = useEntityList({ type: ['Product'], sort: 'mentions', since, limit: ACTIVE_ROWS });

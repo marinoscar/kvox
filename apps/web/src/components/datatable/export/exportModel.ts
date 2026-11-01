@@ -23,6 +23,7 @@
  *    authorization and the same active filters as the table itself.
  */
 
+import { zonedDateKey } from '@marinoscar/platform-web/timezone/headless';
 import type { DataTableColumn, DataTableExportFetchPage } from '../types';
 import { extractColumnValue } from '../desktop/columnAdapter';
 import { toCsvFile } from './csv';
@@ -151,7 +152,10 @@ export function slugifyExportName(name: string | undefined | null): string {
  * not collide in a Downloads folder, and `jobs (3).csv` tells nobody anything.
  */
 export function exportFilename(base: string | undefined | null, now: Date = new Date()): string {
-  const iso = Number.isNaN(now.getTime()) ? '' : `-${now.toISOString().slice(0, 10)}`;
+  // The user's calendar day (display time zone), not UTC's: a file exported at
+  // 9pm in Costa Rica is named for that day, not the next.
+  const day = zonedDateKey(now);
+  const iso = day === null ? '' : `-${day}`;
   return `${slugifyExportName(base)}${iso}.csv`;
 }
 

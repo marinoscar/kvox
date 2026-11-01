@@ -114,6 +114,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 
 import { NoteBody } from '../components/NoteBody.js';
@@ -237,6 +238,8 @@ interface NotePageViewProps {
 
 function NotePageView({ id, slots, ai }: NotePageViewProps) {
   const navigate = useNavigate();
+  // Dates on the page are the reader's, in their display zone; a saved profile re-renders them.
+  const zone = useDisplayTimeZone();
   const host = useKvoxHost();
   const hasPermission = useKvoxPermissionCheck();
   const HeaderActions = slots?.HeaderActions;
@@ -965,7 +968,7 @@ function NotePageView({ id, slots, ai }: NotePageViewProps) {
             component="p"
             data-testid="note-import-revision"
           >
-            {`${aiRevision.summary} · version ${aiRevision.version}, ${formatShortDate(aiRevision.createdAt)}`}
+            {`${aiRevision.summary} · version ${aiRevision.version}, ${formatShortDate(aiRevision.createdAt, new Date(), zone)}`}
           </Typography>
         ) : null}
       </Box>

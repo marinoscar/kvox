@@ -75,7 +75,15 @@
 
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 
-import { StreamFlusher, aiProviderThrottleKey, budgetRefusalMessage, computeTokenBudget, OUTPUT_RESERVE_TOKENS } from '../../core/index.js';
+import {
+  KvoxTimeZoneService,
+  StreamFlusher,
+  aiProviderThrottleKey,
+  budgetRefusalMessage,
+  computeTokenBudget,
+  isValidTimeZone,
+  OUTPUT_RESERVE_TOKENS,
+} from '../../core/index.js';
 import {
   GraphAiConflict,
   GraphAiRunResolver,
@@ -289,6 +297,7 @@ export class AskRespondHandler implements KvoxJobHandler, OnModuleInit {
     private readonly toolset: AskToolset,
     @Inject(SEARCH_TRANSCRIPT_VISIBILITY) private readonly visibility: SearchTranscriptVisibility,
     @Inject(ASK_MODULE_OPTIONS) options?: ResolvedAskOptions,
+    private readonly zones?: KvoxTimeZoneService,
   ) {
     this.maxSteps = options?.limits.maxSteps ?? ASK_MAX_TOOL_STEPS;
     this.maxCallsPerStep = options?.limits.maxCallsPerStep ?? ASK_MAX_TOOL_CALLS_PER_STEP;
@@ -444,10 +453,16 @@ export class AskRespondHandler implements KvoxJobHandler, OnModuleInit {
     });
     if (claimed.count === 0) throw new AskTurnGone();
 
-    // 5. Tool context, with the scope entity pre-registered as `ent1`.
+    // 5. Tool context, with the scope entity pre-registered as `ent1`. The asker's zone was captured when the
+    //    question was posted (payload.timeZone); a job queued before that, or one with no usable zone, reads
+    //    the user's zone now. "Today" in the prompt and the dates the tools derive from instants follow it.
+    const timeZone = isValidTimeZone(payload.timeZone)
+      ? payload.timeZone
+      : ((await this.zones?.forUser(userId)) ?? 'UTC');
     const toolCtx = await this.toolset.createContext(actor, {
       scopeEntityId: row.conversation.scopeEntityId,
       now: new Date(this.clock()),
+      timeZone,
       countTokens,
     });
     const scope = await this.registerScope(userId, row.conversation.scopeEntityId, toolCtx);
@@ -471,7 +486,7 @@ export class AskRespondHandler implements KvoxJobHandler, OnModuleInit {
     });
     const { question, history } = await this.loadHistory(row);
     const fit = fitToBudget({
-      system: buildAskSystemPrompt({ now: toolCtx.now, scope, selection }),
+      system: buildAskSystemPrompt({ now: toolCtx.now, timeZone, scope, selection }),
       history,
       question,
       availableTokens: budget.availableInputTokens,

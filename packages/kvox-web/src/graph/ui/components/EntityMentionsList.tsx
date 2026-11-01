@@ -21,6 +21,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import { useGraphMentions } from '../../headless/hooks/useGraphMentions.js';
 import type { EntityMention } from '../../headless/clients/graph.js';
+import { formatDate, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 function mentionHref(mention: EntityMention): string {
   return mention.kind === 'note'
@@ -28,16 +29,16 @@ function mentionHref(mention: EntityMention): string {
     : `/transcripts/${encodeURIComponent(mention.id)}`;
 }
 
-function formatDay(iso: string | null): string | undefined {
+/** The day in the reader's display zone, or `undefined` when absent or unparseable. */
+function formatDay(iso: string | null, timeZone: string): string | undefined {
   if (!iso) return undefined;
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? undefined
-    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+  const text = formatDate(iso, { dateStyle: 'medium', timeZone, fallback: '' });
+  return text === '' ? undefined : text;
 }
 
 export function EntityMentionsList({ entityId }: { entityId: string }) {
   const mentions = useGraphMentions(entityId);
+  const zone = useDisplayTimeZone();
 
   return (
     <Box component="section" aria-labelledby="entity-mentions-title" sx={{ mb: 3 }}>
@@ -71,7 +72,7 @@ export function EntityMentionsList({ entityId }: { entityId: string }) {
               const icon =
                 mention.kind === 'note' ? <DescriptionOutlinedIcon /> : <GraphicEqOutlinedIcon />;
               const kind = mention.kind === 'note' ? 'Note' : 'Transcript';
-              const date = formatDay(mention.occurredAt);
+              const date = formatDay(mention.occurredAt, zone);
               if (!mention.available) {
                 return (
                   <ListItem key={`${mention.kind}-${mention.id}`} disablePadding>

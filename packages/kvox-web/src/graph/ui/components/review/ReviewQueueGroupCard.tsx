@@ -36,6 +36,7 @@ import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import { useId, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
+import { useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 import { useKvoxHost } from '../../../../core/headless/index.js';
 import type { CommitBatchTarget, ReviewQueueGroup } from '../../../headless/clients/reviewQueue.js';
@@ -95,7 +96,9 @@ export function ReviewQueueGroupCard(props: ReviewQueueGroupCardProps) {
   const headingId = useId();
   const tableId = useId();
 
-  const label = reviewGroupLabel(group.key);
+  // The import's day is the reader's; a zone change re-renders it.
+  const timeZone = useDisplayTimeZone();
+  const label = reviewGroupLabel(group.key, timeZone);
   const { totals } = group;
   const committable = totals.proposals - totals.stale;
   const target = reviewGroupTarget(group);

@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
+import { setPreferredTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
@@ -43,6 +44,17 @@ describe('start-here helpers', () => {
     expect(sinceDate(30, new Date('2026-10-21T12:00:00Z'))).toBe('2026-09-21');
   });
 
+  it('counts back from the local today, in calendar days', () => {
+    // 20:00 UTC on 21 October: 22 October in Tokyo, 21 October in Los Angeles.
+    const now = new Date('2026-10-21T20:00:00Z');
+    expect(sinceDate(30, now, 'Asia/Tokyo')).toBe('2026-09-22');
+    expect(sinceDate(30, now, 'America/Los_Angeles')).toBe('2026-09-21');
+    setPreferredTimeZone('Asia/Tokyo');
+    expect(sinceDate(30, now)).toBe('2026-09-22');
+    // Across the US DST change (1 November): still 30 calendar days.
+    expect(sinceDate(30, new Date('2026-11-02T07:30:00Z'), 'America/Los_Angeles')).toBe('2026-10-02');
+  });
+
   it('shows real clusters only, largest first, and nothing for an unready or too-large snapshot', () => {
     expect(themeClusters(overviewFixture()).map((c) => c.label)).toEqual(['Acme Corp', 'Globex', 'Cluster 3']);
     expect(themeClusters(overviewStates.empty())).toEqual([]);
@@ -67,6 +79,20 @@ describe('ExplorerStartHere', () => {
     const { onChooseTheme } = renderStart();
     await user.click(await screen.findByRole('button', { name: /Globex.*4 things/ }));
     expect(onChooseTheme).toHaveBeenCalledWith(expect.objectContaining({ status: 'ready' }), 1);
+  });
+
+  it('asks for the activity since the local day 30 days back in the display zone', async () => {
+    // UTC+14: its calendar day is ahead of UTC for most of the day.
+    setPreferredTimeZone('Pacific/Kiritimati');
+    const seen: string[] = [];
+    server.events.on('request:start', ({ request }) => {
+      const since = new URL(request.url).searchParams.get('since');
+      if (since) seen.push(since);
+    });
+    renderStart();
+    await screen.findByRole('region', { name: 'Person' });
+    await waitFor(() => expect(seen.length).toBeGreaterThan(0));
+    expect(new Set(seen)).toEqual(new Set([sinceDate(30, new Date(), 'Pacific/Kiritimati')]));
   });
 
   it('chooses an entity from Active', async () => {

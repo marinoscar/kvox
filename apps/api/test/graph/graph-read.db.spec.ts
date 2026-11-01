@@ -70,8 +70,8 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     return { user, g: new GraphFixture(prisma, user.id) };
   }
 
-  const list = (userId: string, q: Record<string, unknown> = {}) =>
-    reads.listEntities({ id: userId }, { sort: 'updated', limit: 25, ...q } as never);
+  const list = (userId: string, q: Record<string, unknown> = {}, timeZone?: string) =>
+    reads.listEntities({ id: userId }, { sort: 'updated', limit: 25, ...q } as never, timeZone);
   const timeline = (userId: string, id: string, q: Record<string, unknown> = {}) =>
     reads.timeline({ id: userId }, id, { includeSensitive: false, limit: 25, ...q } as never);
 
@@ -171,6 +171,27 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     expect(allTime.items.map((i) => i.id)).not.toContain(theirs);
 
     await expect(list(user.id, { sort: 'mentions', since: 'yesterday' })).rejects.toThrow(BadRequestException);
+  });
+
+  // ⚠ NOT RUN where this was written (no Postgres in that environment): run with `npm run test:db`.
+  it('reads a bare `since` day as LOCAL midnight in the requester zone (it filters mention instants)', async () => {
+    const { user, g } = await owner('mentions-zone');
+    const person = await g.entity('Person', 'Zoned');
+    const note = await g.note({ title: 'Zone' });
+    // 2026-10-26T04:30Z is 23:30 on the 25th in Chicago (CDT, UTC-5): before Chicago's 26th, inside UTC's.
+    await prisma.kgMention.create({
+      data: { ownerId: user.id, entityId: person, noteId: note.id, createdAt: new Date('2026-10-26T04:30:00Z') },
+    });
+    const ids = async (zone?: string) =>
+      (await list(user.id, { sort: 'mentions', since: '2026-10-26', limit: 10 }, zone)).items.map((i) => i.id);
+
+    expect(await ids('America/Chicago')).toEqual([]);
+    expect(await ids('UTC')).toEqual([person]);
+    expect(await ids()).toEqual([person]);
+    // A full instant is itself, whatever the zone.
+    expect(
+      (await list(user.id, { sort: 'mentions', since: '2026-10-26T04:00:00Z', limit: 10 }, 'America/Chicago')).items.map((i) => i.id),
+    ).toEqual([person]);
   });
 
   it('searches labels and aliases by trigram similarity', async () => {

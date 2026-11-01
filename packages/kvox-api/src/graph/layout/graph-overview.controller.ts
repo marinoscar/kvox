@@ -13,7 +13,7 @@ import {
   type GraphOverviewResponse,
 } from './dto/graph-overview.dto.js';
 import { GraphOverviewService } from './graph-overview.service.js';
-import { KvoxAuth } from '../../core/index.js';
+import { KvoxAuth, KvoxTimeZoneService, TimeZoneHeader } from '../../core/index.js';
 import { GRAPH_READ_PERMISSION, GRAPH_WRITE_PERMISSION } from '../graph.permissions.js';
 import { CurrentGraphActor } from '../graph-actor.js';
 import type { GraphActor } from '../graph-actor.js';
@@ -31,7 +31,10 @@ import { ApiDataResponse } from '../api-data-response.js';
 @ApiTags('Graph')
 @Controller('graph/overview')
 export class GraphOverviewController {
-  constructor(private readonly overviews: GraphOverviewService) {}
+  constructor(
+    private readonly overviews: GraphOverviewService,
+    private readonly zones: KvoxTimeZoneService,
+  ) {}
 
   @Get()
   @KvoxAuth(GRAPH_READ_PERMISSION)
@@ -68,8 +71,11 @@ export class GraphOverviewController {
   async overview(
     @CurrentGraphActor() user: GraphActor,
     @Query(new ZodValidationPipe(graphOverviewQuerySchema)) query: GraphOverviewQuery,
+    @TimeZoneHeader() timeZoneHeader?: string,
   ): Promise<GraphOverviewResponse> {
-    return this.overviews.overview(user.id, query);
+    // `from`/`to` bound evidence instants: a bare day is local midnight in the requester's zone.
+    const timeZone = query.from || query.to ? await this.zones.forRequest(user.id, timeZoneHeader) : undefined;
+    return this.overviews.overview(user.id, query, timeZone);
   }
 
   @Post('refresh')

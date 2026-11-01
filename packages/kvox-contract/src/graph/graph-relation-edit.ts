@@ -58,7 +58,7 @@ export const createManualRelationSchema = z
       .regex(ISO_DAY, 'Use YYYY-MM-DD.')
       .refine((v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v), 'Not a real date.')
       .optional()
-      .describe('Since when (`YYYY-MM-DD`, day precision). Default: today (UTC).'),
+      .describe("Since when (`YYYY-MM-DD`, day precision). Default: today in the requester's time zone (their profile zone, else the `X-Time-Zone` header, else UTC); stored as a floating date."),
   })
   .strict()
   .superRefine((v, ctx) => {

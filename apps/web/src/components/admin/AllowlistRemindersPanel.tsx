@@ -31,6 +31,7 @@ import { Alert, Box, Button, CircularProgress, Paper, Stack, Typography } from '
 import SendIcon from '@mui/icons-material/Send';
 import { useAllowlist, usePermissions } from '@marinoscar/platform-web/identity/headless';
 import type { AllowedEmailEntry } from '@marinoscar/platform-web/identity/headless';
+import { formatDateTime, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 import { DataTable } from '../datatable';
 import type { DataTableColumn, DataTableSortState } from '../datatable';
 import {
@@ -51,8 +52,21 @@ function asSortField(field: string | undefined): ReminderSortField | undefined {
   return SORTABLE_FIELDS.find((candidate) => candidate === field);
 }
 
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString();
+/**
+ * A moment (when an entry was added, when a reminder went out) in the user's
+ * display time zone (or `timeZone`), in the runtime's default numeric
+ * date-and-time format, the one `toLocaleString()` gave.
+ */
+function formatWhen(value: string, timeZone?: string): string {
+  return formatDateTime(value, {
+    timeZone,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  });
 }
 
 /**
@@ -63,10 +77,13 @@ function formatDateTime(value: string): string {
  * third. A column reading "0" on every row is noise that trains the eye to skip
  * it, so the count appears only once there is something to be restrained by.
  */
-export function formatReminderSummary(state: AllowlistReminderState | undefined): string {
+export function formatReminderSummary(
+  state: AllowlistReminderState | undefined,
+  timeZone?: string,
+): string {
   if (!state || state.reminderCount < 1) return '';
   if (!state.lastReminderAt) return `${state.reminderCount} sent`;
-  return `${state.reminderCount} sent · ${formatDateTime(state.lastReminderAt)}`;
+  return `${state.reminderCount} sent · ${formatWhen(state.lastReminderAt, timeZone)}`;
 }
 
 interface ReminderCellProps {
@@ -84,7 +101,8 @@ interface ReminderCellProps {
  */
 function ReminderCell({ entry, state, canSend, onSend }: ReminderCellProps) {
   const [sending, setSending] = useState(false);
-  const summary = formatReminderSummary(state);
+  const zone = useDisplayTimeZone();
+  const summary = formatReminderSummary(state, zone);
 
   const handleClick = useCallback(async () => {
     setSending(true);
@@ -123,6 +141,8 @@ function ReminderCell({ entry, state, canSend, onSend }: ReminderCellProps) {
 }
 
 export function AllowlistRemindersPanel() {
+  // The table's times are in the display zone; a saved profile re-renders them.
+  const zone = useDisplayTimeZone();
   const { entries, total, isLoading, error, fetchAllowlist } = useAllowlist();
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission('allowlist:write');
@@ -220,7 +240,7 @@ export function AllowlistRemindersPanel() {
         priority: 'secondary',
         sortable: true, // sortBy=addedAt (the endpoint's default order)
         minWidth: 180,
-        value: (entry) => formatDateTime(entry.addedAt),
+        value: (entry) => formatWhen(entry.addedAt, zone),
       },
       {
         // Neither sortable nor filterable: the allowlist endpoint knows nothing
@@ -231,7 +251,7 @@ export function AllowlistRemindersPanel() {
         priority: 'primary',
         minWidth: 300,
         flex: 1.2,
-        value: (entry) => formatReminderSummary(reminders[entry.id]),
+        value: (entry) => formatReminderSummary(reminders[entry.id], zone),
         render: (entry) => (
           <ReminderCell
             entry={entry}
@@ -242,7 +262,7 @@ export function AllowlistRemindersPanel() {
         ),
       },
     ],
-    [reminders, canWrite, handleSend],
+    [reminders, canWrite, handleSend, zone],
   );
 
   const emptyState = useMemo(

@@ -25,7 +25,7 @@ import {
   type CreateManualRelationResponse,
   type RemoveManualRelationResponse,
 } from './dto/graph-relation-edit.dto.js';
-import { KvoxAuth } from '../core/index.js';
+import { KvoxAuth, TimeZoneHeader } from '../core/index.js';
 import { GRAPH_WRITE_PERMISSION } from './graph.permissions.js';
 import { CurrentGraphActor } from './graph-actor.js';
 import type { GraphActor } from './graph-actor.js';
@@ -167,8 +167,9 @@ export class GraphEntitiesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(createManualRelationSchema)) dto: CreateManualRelationDto,
     @CurrentGraphActor() user: GraphActor,
+    @TimeZoneHeader() timeZoneHeader?: string,
   ): Promise<CreateManualRelationResponse> {
-    return this.relationEdits.set(id, dto, user);
+    return this.relationEdits.set(id, dto, user, timeZoneHeader);
   }
 
   @Delete(':id/relations/:relationId')

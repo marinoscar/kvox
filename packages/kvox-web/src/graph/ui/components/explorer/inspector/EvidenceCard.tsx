@@ -23,7 +23,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import type { EvidenceLink } from '../../../../headless/clients/graph.js';
-import { formatPrecisionDate } from '../../../../headless/utils/graphDisplay.js';
+import { formatDate, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 /** A quote longer than this gets "Show more" when it is clamped. */
 const LONG_QUOTE_CHARS = 110;
@@ -78,10 +78,12 @@ export interface EvidenceCardProps {
  */
 export function EvidenceCard({ link, clampQuote = false, touch = false }: EvidenceCardProps) {
   const titleId = useId();
+  const zone = useDisplayTimeZone();
   const [expanded, setExpanded] = useState(false);
   const { source } = link;
   const title = evidenceSourceTitle(link);
-  const date = formatPrecisionDate(link.createdAt, 'day');
+  // When the citation was recorded: an instant, shown in the reader's display zone.
+  const date = formatDate(link.createdAt, { dateStyle: 'medium', timeZone: zone, fallback: 'Date unknown' });
   const changed =
     (source.kind === 'segment' && source.textChanged) || (source.kind === 'note' && source.versionChanged);
   const unavailable = !source.available;

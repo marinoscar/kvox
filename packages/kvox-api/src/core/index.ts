@@ -17,3 +17,4 @@ export * from './pdf/pdf-fonts.js';
 export * from './purge/owner-purge.js';
 export * from './pdf/pdf-brand-mark.js';
 export * from './document/index.js';
+export * from './time-zone/index.js';

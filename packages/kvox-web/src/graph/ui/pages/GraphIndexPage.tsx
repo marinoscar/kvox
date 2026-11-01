@@ -60,6 +60,7 @@ import {
 } from '../../headless/utils/graphDisplay.js';
 
 import { useHasPermission } from '../../../core/headless/index.js';
+import { formatDate, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 /**
  * How the entity page hands a "Forgetting…" message to this page.
  *
@@ -92,6 +93,8 @@ const IMPORT_STATUS_COLORS: Record<ProposalStatus, 'default' | 'info' | 'success
 };
 
 function RecentImports({ imports }: { imports: readonly ProposalSummary[] }) {
+  // The import's day in the reader's display zone; a saved profile re-renders it.
+  const zone = useDisplayTimeZone();
   if (imports.length === 0) return null;
   return (
     <Box component="section" aria-labelledby="graph-imports-heading" sx={{ mt: 3 }}>
@@ -105,7 +108,7 @@ function RecentImports({ imports }: { imports: readonly ProposalSummary[] }) {
             <ListItemButton key={proposal.id} component={RouterLink} to={`/graph/imports/${encodeURIComponent(proposal.id)}`}>
               <ListItemText
                 primary={stats.filename ?? 'Import'}
-                secondary={new Date(proposal.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                secondary={formatDate(proposal.createdAt, { day: 'numeric', month: 'short', year: 'numeric', timeZone: zone })}
                 slotProps={{ primary: { noWrap: true } }}
               />
               <Chip size="small" label={IMPORT_STATUS_LABELS[proposal.status]} color={IMPORT_STATUS_COLORS[proposal.status]} sx={{ ml: 1 }} />

@@ -141,7 +141,7 @@
   },
   "peerDependencies": {
     "@marinoscar/kvox-contract": ">=0.0.0-0 || >=0.1.0-0",
-    "@marinoscar/platform-web": "0.1.0-next.17",
+    "@marinoscar/platform-web": "0.1.0-next.19",
     "@mui/icons-material": "^9.1.0",
     "@mui/material": "^9.1.0",
     "@react-sigma/core": "^5.0.6",
@@ -167,9 +167,6 @@
     "sigma": "^3.0.3"
   },
   "peerDependenciesMeta": {
-    "@marinoscar/platform-web": {
-      "optional": true
-    },
     "@mui/icons-material": {
       "optional": true
     },

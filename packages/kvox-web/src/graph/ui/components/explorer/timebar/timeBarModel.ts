@@ -1,6 +1,10 @@
 /**
  * The TimeBar's data model (GIC-15, #676): the API's activity response turned
  * into columns to draw, and into the sets of nodes the canvas dims. Pure.
+ *
+ * The bucket starts are calendar days of the response's `timeZone` and are
+ * compared as day numbers with the brush, whose days are the display zone's
+ * (the same zone, as the request carries it).
  */
 
 import type {
@@ -24,9 +28,9 @@ import {
  * @stability experimental
  */
 export interface TimeColumn {
-  /** UTC ms of the bucket start. */
+  /** The bucket start, as a day number (UTC midnight of its calendar date; see `timeAxis.ts`). */
   start: number;
-  /** UTC ms of the next bucket start (exclusive). */
+  /** The next bucket start (exclusive), as a day number. */
   end: number;
   /** Evidence attributions in the bucket. */
   total: number;
@@ -36,7 +40,7 @@ export interface TimeColumn {
   overlay: number;
 }
 
-/** The first and last instant the data covers, widened to whole buckets, or `null` without data. */
+/** The first and last day the data covers (day numbers), widened to whole buckets, or `null` without data. */
 export function activityExtent(
   response: Pick<GraphActivityResponse, 'series' | 'bucket'> | null,
 ): [number, number] | null {

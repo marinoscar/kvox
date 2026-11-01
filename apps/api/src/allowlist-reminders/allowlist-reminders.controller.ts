@@ -7,7 +7,9 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 
@@ -76,7 +78,8 @@ export class AllowlistRemindersController {
   async sendReminder(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') adminUserId: string,
+    @Req() request: FastifyRequest,
   ) {
-    return this.reminders.sendReminder(id, adminUserId);
+    return this.reminders.sendReminder(id, adminUserId, request);
   }
 }
