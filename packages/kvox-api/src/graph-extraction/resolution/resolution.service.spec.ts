@@ -83,6 +83,7 @@ function build(options: {
   embedder?: { ok: false; reason: string } | { ok: true };
   speakerLinked?: boolean;
   adjudicate?: jest.Mock;
+  self?: { entityId: string; label: string; aliases: string[] } | null;
 }) {
   const updates: Array<{ id: string; resolution: any; flags: string[] }> = [];
   const prisma = {
@@ -134,6 +135,7 @@ function build(options: {
     features as never,
     embedder as never,
     adjudication as never,
+    { resolve: jest.fn(async () => options.self ?? null) } as never,
   );
   const ctx = (prefs: Partial<GraphPreferences['resolution']> = {}): ProposalStageContext => ({
     proposalId: PROPOSAL,
@@ -164,6 +166,40 @@ describe('ResolutionService.resolveProposal', () => {
     expect(t.updates[0].resolution).toMatchObject({ ref: SARAH, score: 1, source: 'speaker', candidates: [] });
     expect(t.candidates.forMention).not.toHaveBeenCalled();
     expect(stats).toMatchObject({ entities: 1, linked: 1, speaker: 1 });
+  });
+
+  describe('the owner\'s own node (#778)', () => {
+    const SELF = { entityId: OTHER, label: 'Avery Example', aliases: ['Avery'] };
+
+    it('links a Person named by the owner\'s label or alias above the auto-link threshold, without scoring it', async () => {
+      const t = build({ items: [entityItem('i1', 'e1', 'AVERY EXAMPLE'), entityItem('i2', 'e2', 'Someone', { payload: { ref: 'e2', type: 'Person', label: 'Someone', aliases: ['avery'], props: {}, occurredAt: null } })], self: SELF });
+      const stats = await t.service.resolveProposal(t.ctx(), 'kg.extract');
+      for (const update of t.updates) {
+        expect(update.resolution).toMatchObject({ ref: OTHER, source: 'self', adjudication: null });
+        expect(update.resolution.score).toBeGreaterThanOrEqual(0.9);
+        expect(update.resolution.candidates[0]).toMatchObject({ entityId: OTHER, signals: ['self'] });
+      }
+      expect(t.candidates.forMention).not.toHaveBeenCalled();
+      expect(stats).toMatchObject({ entities: 2, linked: 2, self: 2 });
+    });
+
+    it('stays above a raised threshold', async () => {
+      const t = build({ items: [entityItem('i1', 'e1', 'Avery')], self: SELF });
+      await t.service.resolveProposal(t.ctx({ autoLinkThreshold: 0.99, newThreshold: 0.5 }), 'kg.extract');
+      expect(t.updates[0].resolution.score).toBeGreaterThanOrEqual(0.99);
+    });
+
+    it('does not touch another name, another type, or any name when no self is set', async () => {
+      const other = entityItem('i1', 'e1', 'Jordan Example');
+      const org = entityItem('i2', 'e2', 'Avery Example', { payload: { ref: 'e2', type: 'Organization', label: 'Avery Example', aliases: [], props: {} } });
+      const withSelf = build({ items: [other, org], self: SELF });
+      const stats = await withSelf.service.resolveProposal(withSelf.ctx(), 'kg.extract');
+      expect(withSelf.candidates.forMention).toHaveBeenCalledTimes(2);
+      expect(stats.self).toBeUndefined();
+      const none = build({ items: [entityItem('i1', 'e1', 'Avery Example')], self: null });
+      await none.service.resolveProposal(none.ctx(), 'kg.extract');
+      expect(none.candidates.forMention).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('leaves the deterministic Meeting row as extraction decided it', async () => {

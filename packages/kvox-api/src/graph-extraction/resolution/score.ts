@@ -172,3 +172,14 @@ export function bandFor(topScore: number | null, thresholds: { autoLinkThreshold
   if (topScore >= thresholds.autoLinkThreshold) return 'link';
   return 'middle';
 }
+
+/** The score a mention of the account owner's own node is linked with (#778): above every auto-link threshold the preference allows (max 0.99). */
+export const SELF_MATCH_SCORE = 0.99;
+
+/**
+ * The score of a mention that names the note's owner (their label or an alias, normalized as
+ * resolution normalizes). Always an auto-link: at least `autoLinkThreshold`, and never below 0.9.
+ */
+export function selfMatchScore(autoLinkThreshold: number): number {
+  return Math.max(SELF_MATCH_SCORE, autoLinkThreshold, 0.9);
+}

@@ -1,4 +1,4 @@
-import { bandFor, rankCandidates, scoreCandidate, sourceForArm, type CandidateFeatures } from './score.js';
+import { bandFor, rankCandidates, scoreCandidate, selfMatchScore, sourceForArm, type CandidateFeatures } from './score.js';
 
 const none: CandidateFeatures = {
   aliasExact: false,
@@ -125,5 +125,20 @@ describe('bandFor / sourceForArm', () => {
     expect(sourceForArm('trigram')).toBe('trigram');
     expect(sourceForArm('vector')).toBe('vector');
     expect(sourceForArm(null)).toBeNull();
+  });
+});
+
+describe('selfMatchScore (#778)', () => {
+  it('is an auto-link under every threshold the preference allows', () => {
+    for (const autoLinkThreshold of [0.8, 0.9, 0.95, 0.99]) {
+      const score = selfMatchScore(autoLinkThreshold);
+      expect(score).toBeGreaterThanOrEqual(0.9);
+      expect(bandFor(score, { autoLinkThreshold, newThreshold: 0.55 })).toBe('link');
+    }
+  });
+
+  it('lifts an exact name match (0.80) over the default threshold', () => {
+    expect(scoreCandidate(f({ aliasExact: true })).score).toBeLessThan(0.9);
+    expect(selfMatchScore(0.9)).toBeGreaterThan(0.9);
   });
 });

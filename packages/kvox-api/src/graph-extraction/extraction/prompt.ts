@@ -40,12 +40,29 @@ export const HEADING_MEETING = '# Meeting';
 /** The note's Context field (#440), right after the meeting; omitted when blank. */
 export const HEADING_CONTEXT = '# Context';
 export const HEADING_KNOWN_ENTITIES = '# Known entities';
+/** The note owner's own node (#778), right after the known entities; omitted when none is chosen. */
+export const HEADING_YOU = '# You';
 export const HEADING_SPEAKERS = '# Speakers';
 export const HEADING_NOTE = '# Note';
 export const HEADING_TRANSCRIPT = '# Transcript';
 
 /** The line that frames the `# Context` section (#440). */
 export const CONTEXT_FRAMING = `Background the note's author wrote for this meeting. Treat it as authoritative: use it to identify who took part, the company, business unit and role of each person, and how names map to known entities. Cite it as \`${CONTEXT_ALIAS}\`.`;
+
+/**
+ * The `# You` section (#778): the note's owner is the known entity `k#`, and these names are
+ * theirs. The model uses the handle instead of proposing a second Person.
+ */
+export function youSection(ctx: ExtractionContext): string[] {
+  const you = ctx.self;
+  if (!you) return [];
+  const names = [you.label, ...you.aliases].join(', ');
+  return [
+    HEADING_YOU,
+    `The owner of this note is the known entity ${you.alias}. These names refer to the owner: ${names}. ` +
+      `When the text mentions one of them, use \`${you.alias}\` as the ref (or as an endpoint); never propose another Person for the owner.`,
+  ];
+}
 
 /** The Context rule (#440), present only when there is a Context. */
 export const CONTEXT_RULE = `Read the Context first. Every person, company, business unit and role it states is in scope even if the transcript never says it; propose them citing \`${CONTEXT_ALIAS}\`, and prefer the Context's spelling of a name over the transcript's.`;
@@ -350,6 +367,9 @@ export function assembleExtractionPrompt(
     if (k.orgLabel) parts.push(k.orgLabel);
     user.push(parts.join(' | '));
   }
+
+  const you = youSection(ctx);
+  if (you.length > 0) user.push('', ...you);
 
   if (ctx.transcript !== null) {
     user.push('', HEADING_SPEAKERS);
