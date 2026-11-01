@@ -2,7 +2,7 @@
  * `LayoutMenu` — the explorer's layout control (GIC-07, #668): choose Force,
  * Concentric by hop or Static, re-lay out everything, or release the pins.
  *
- * Presentational: it holds only whether the menu is open. It imports no sigma
+ * Presentational: it holds only whether the menu is open. It imports no G6
  * and no layout code, so the page can render it without the canvas chunk.
  */
 
@@ -14,7 +14,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import { useId, useState, type ReactElement } from 'react';
 
-import type { CanvasLayout } from './layout/useCanvasLayout.js';
+import type { CanvasLayout } from './layout/canvasLayouts.js';
 
 /** The layouts in menu order, with their labels. */
 export const LAYOUT_OPTIONS: ReadonlyArray<{ value: CanvasLayout; label: string; hint: string }> = [

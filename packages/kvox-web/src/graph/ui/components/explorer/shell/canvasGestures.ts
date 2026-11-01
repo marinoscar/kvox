@@ -1,11 +1,10 @@
 /**
  * Framework-free helpers of the touch model (GIC-08, #669). No React and no
- * sigma import: `GraphCanvas` (the one file that imports sigma) wires them to
- * sigma's events, and each is tested on its own.
+ * G6 import: `GraphCanvas` (the one file that imports G6) wires them to the
+ * canvas's pointer events, and each is tested on its own.
  *
  *   - `createLongPress`: the 500ms press that opens the context menu;
  *   - `pickNearestNode`: the enlarged pick radius (a 44px target at least) of a coarse pointer;
- *   - `capPixelRatio`: the `devicePixelRatio` budget;
  *   - `revealDelta`: how far to pan so a selection is not under the inspector.
  */
 
@@ -88,7 +87,7 @@ export function createLongPress(options: {
 }
 
 /**
- * Finds the node nearest to `point` within `radiusPx`. Sigma's own picking hits only the drawn disc, which on a phone is far under 44px; this widens it.
+ * Finds the node nearest to `point` within `radiusPx`. The canvas's own picking hits only the drawn disc, which on a phone is far under 44px; this widens it.
  *
  * `positions` gives where a node is drawn, in viewport px, or `null` when it is hidden.
  *
@@ -114,45 +113,6 @@ export function pickNearestNode(
     }
   }
   return best;
-}
-
-/** The slice of a sigma instance `capPixelRatio` touches. */
-export interface PixelRatioTarget {
-  resize(force?: boolean): unknown;
-}
-
-/**
- * Caps sigma's `devicePixelRatio` (sigma 3 has no setting for it: it reads `window.devicePixelRatio` on construction and on every resize). The instance's `pixelRatio` and its picking ratio become capped accessors, then it is resized. Returns a function that restores the native ratio. A native ratio at or under the cap is left alone.
- *
- * @stability experimental
- */
-export function capPixelRatio(sigma: PixelRatioTarget, cap: number): () => void {
-  const target = sigma as unknown as Record<string, unknown>;
-  const native = () => (typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
-  if (native() <= cap) return () => undefined;
-  const capped = () => Math.min(cap, native());
-  const original = {
-    pixelRatio: Object.getOwnPropertyDescriptor(target, 'pixelRatio'),
-    picking: Object.getOwnPropertyDescriptor(target, 'pickingDownSizingRatio'),
-  };
-  Object.defineProperty(target, 'pixelRatio', { configurable: true, get: capped, set: () => undefined });
-  Object.defineProperty(target, 'pickingDownSizingRatio', {
-    configurable: true,
-    get: () => 2 * capped(),
-    set: () => undefined,
-  });
-  sigma.resize(true);
-  return () => {
-    if (original.pixelRatio) Object.defineProperty(target, 'pixelRatio', original.pixelRatio);
-    else delete target.pixelRatio;
-    if (original.picking) Object.defineProperty(target, 'pickingDownSizingRatio', original.picking);
-    else delete target.pickingDownSizingRatio;
-    try {
-      sigma.resize(true);
-    } catch {
-      // The instance was killed first (an unmount tears sigma down before this runs): nothing to redraw.
-    }
-  };
 }
 
 /**

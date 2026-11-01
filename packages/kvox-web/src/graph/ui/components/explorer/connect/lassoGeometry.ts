@@ -2,7 +2,7 @@
  * The geometry of the explorer's lasso (GIC-14, #675): pure functions over
  * viewport points, so "exactly the nodes inside the polygon" is a unit test and
  * not a canvas test. The caller converts graph coordinates to viewport pixels
- * (sigma's `graphToViewport`) first; nothing here knows sigma.
+ * (G6's `getViewportByCanvas`) first; nothing here knows the renderer.
  */
 
 /**

@@ -1,21 +1,19 @@
 /**
  * The graph explorer's pure model (#374, epic #347; spec §22.2).
  *
- * NO REACT, NO SIGMA. Every rule the explorer has — the 300-node cap, where a
+ * NO REACT, NO G6. Every rule the explorer has — the 300-node cap, where a
  * new node is placed, what a filter removes, what the list view shows — lives
- * here, so it is covered by plain unit tests without a WebGL context (jsdom has
+ * here, so it is covered by plain unit tests without a canvas (jsdom has
  * none). `GraphCanvas` only draws the `x`/`y`/`size`/`color`/`label`
  * attributes this file writes; it never computes styling of its own.
  *
- * ⚠ ATTRIBUTE NAMES. Sigma reads a node's or edge's `type` attribute as the
- * name of the WebGL PROGRAM to draw it with (`circle`, `arrow`), so the graph
- * type key lives in `entityType` and the relation type in `relationType`.
- * Writing `type: 'Person'` onto a node makes sigma throw at render time.
+ * ⚠ ATTRIBUTE NAMES. A node's or edge's `type` attribute is reserved for a
+ * drawing hint (`arrow`), so the graph type key lives in `entityType` and the
+ * relation type in `relationType`. Never write `type: 'Person'` onto a node.
  *
  * ⚠ DETERMINISM. Placement is a pure function of the ids involved (sorted
  * ascending) and of the parent's position — never `Math.random()` — so the
- * static layout (`?layout=static`, `prefers-reduced-motion`, the visual
- * baselines) is identical across runs.
+ * static layout (`?layout=static`, `prefers-reduced-motion`) is identical across runs.
  */
 
 import { MultiDirectedGraph, type UndirectedGraph } from 'graphology';
@@ -31,6 +29,7 @@ import {
   iconUrlFor,
   nodeSize,
   parallelCurvatures,
+  relationFamilyColor,
   type ExplorerMode,
   type Stance,
 } from './explorerEncoding.js';
@@ -45,7 +44,7 @@ export const EXPLORER_MAX_REQUEST_SEEDS = 50;
 // -----------------------------------------------------------------------------
 
 /**
- * Attributes of a node in the explorer graph. Sigma draws `x`, `y`, `size`, `color` and `label` as they are.
+ * Attributes of a node in the explorer graph. The G6 canvas draws `x`, `y`, `size` (as a diameter, `nodeDiameter`), `color` and `label`.
  *
  * @stability experimental
  */
@@ -70,9 +69,9 @@ export interface ExplorerNodeAttributes {
   status: string | null;
   /** ISO 8601 instant for an event-like entity or an item, or `null` when it has none. */
   occurredAt: string | null;
-  /** Set by a drag on the canvas; ForceAtlas2 leaves a fixed node where it is. */
+  /** Set by a drag on the canvas; the force layout leaves a fixed node where it is. */
   fixed?: boolean;
-  /** Sigma draws this node's label at every zoom (the full view's best-connected nodes, #768). */
+  /** The canvas draws this node's label at every zoom (the full view's best-connected nodes, #768). */
   forceLabel?: boolean;
   /** How many notes mention the node, when the API sends it (#671); drives size and rank, `null` until then. */
   mentionCount: number | null;
@@ -80,7 +79,7 @@ export interface ExplorerNodeAttributes {
   lastSeenAt: string | null;
   /** Set for the nodes the exploration started from; drawn with a thick ring. */
   isSeed: boolean;
-  /** `data:` URL of the type's pictogram, drawn by `@sigma/node-image`. */
+  /** `data:` URL of the type's pictogram, drawn centred in the node by the G6 canvas. */
   image: string;
   /** Colour of the pictogram: white or near-black, whichever reads on `color`. */
   iconColor: string;
@@ -95,14 +94,14 @@ export interface ExplorerNodeAttributes {
 }
 
 /**
- * Attributes of an edge in the explorer graph. Sigma draws `size` and `color` as they are.
+ * Attributes of an edge in the explorer graph. The G6 canvas draws `size` (as a line width, `edgeLineWidth`) and `color`.
  *
  * @stability experimental
  */
 export interface ExplorerEdgeAttributes {
-  /** Sigma's edge program — always an arrow: the stored direction is meaningful. */
+  /** Always an arrow: the stored direction is meaningful. */
   type: 'arrow';
-  /** Relation type key, e.g. `WORKS_FOR`. Stored here because `type` names sigma's drawing program. */
+  /** Relation type key, e.g. `WORKS_FOR`. Stored here because `type` is kept as the drawing hint `arrow`. */
   relationType: string;
   /** When the relation holds, or `null` for a non-temporal relation. */
   valid: GraphValidRange | null;
@@ -296,8 +295,9 @@ export function edgeStyle(
   theme: ExplorerPalette = DEFAULT_EXPLORER_PALETTE,
   edge?: EdgeStyleInput,
 ): { color: string; size: number; stance: Stance | null; dashed: boolean; label: string } {
-  const base = theme.palette.text.disabled;
-  if (!edge) return { color: base, size: 1.5, stance: null, dashed: false, label: '' };
+  if (!edge) return { color: theme.palette.text.disabled, size: 1.5, stance: null, dashed: false, label: '' };
+  // The relation family's mid-contrast colour, never the disabled-text grey (it vanished on a busy canvas).
+  const base = relationFamilyColor(edge.type, modeOf(theme));
   return edgeAppearance(
     {
       relationType: edge.type,

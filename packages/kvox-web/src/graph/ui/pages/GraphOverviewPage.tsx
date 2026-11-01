@@ -35,7 +35,7 @@
  * URL and nowhere else — never persisted.
  *
  * URL STATE: `layer`, `cluster`, `view=list`. The list view is also the only
- * view without WebGL, and the canvas (sigma) is lazy-loaded a second time
+ * view without a drawing canvas, and the canvas (G6) is lazy-loaded a second time
  * inside this lazy page, so the list view never downloads it.
  */
 
@@ -104,7 +104,7 @@ export const SPARSE_TITLE = 'Your map is just getting started';
 /** Below this many entities the map is "sparse" and the page says so (#782). */
 export const SPARSE_ENTITY_COUNT = 5;
 export const OVERVIEW_NO_WEBGL_TEXT =
-  "Your browser can't draw the graph (WebGL is unavailable), so it is shown as a list.";
+  "Your browser can't draw the graph (canvas drawing is unavailable), so it is shown as a list.";
 
 type Layer = 'clusters' | 'nodes';
 

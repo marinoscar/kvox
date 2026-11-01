@@ -18,6 +18,8 @@
 // offering Extract.
 // =============================================================================
 
+import ReplayIcon from '@mui/icons-material/ReplayOutlined';
+import Button from '@mui/material/Button';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -237,14 +239,26 @@ export function useGraphNoteAsideWidth(): number {
 export function GraphNoteHeaderActions({ noteId }: NoteHeaderActionsProps) {
   const graph = useNotePageGraph();
   if (!graph?.graphVisible) return null;
-  const { proposal, reviewOpen, setReviewOpen } = graph;
+  const { proposal, reviewOpen, setReviewOpen, canWriteGraph, setExtractMode } = graph;
+  const summary = proposal.detail === undefined ? undefined : (proposal.detail?.proposal ?? null);
   return (
     <>
       <GraphReviewButton
-        summary={proposal.detail === undefined ? undefined : (proposal.detail?.proposal ?? null)}
+        summary={summary}
         open={reviewOpen}
         onClick={() => setReviewOpen((value) => !value)}
       />
+      {/* #779: runs `POST /graph/notes/:id/extract` again; the server discards an earlier open draft
+          once the new one is ready, and answers 409 while a run is already going. */}
+      {canWriteGraph && summary !== undefined && summary?.status !== 'extracting' && (
+        <Button
+          size="small"
+          startIcon={<ReplayIcon fontSize="small" />}
+          onClick={() => setExtractMode(summary ? 're-extract' : 'extract')}
+        >
+          Re-run extraction
+        </Button>
+      )}
       <NoteExploreActions noteId={noteId} />
     </>
   );

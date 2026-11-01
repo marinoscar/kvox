@@ -5034,7 +5034,8 @@ owner-only: another user's answers `404`, never `403`. Spec:
 ##### POST /notes/libraries
 
 Creates a library. Body `{ "name": "Work notes" }` (1 to 120 characters).
-`autoExtract` starts `true`, `autoCommit` starts `false`.
+`autoExtract` starts `true`, `autoCommit` starts `null` (follow your
+`graph.review.autoCommitSafeRows` preference, on by default).
 
 **Requires:** `notes:write`
 
@@ -5058,8 +5059,9 @@ Your libraries, newest first, each with its file counts by status.
 ##### PATCH /notes/libraries/{id}
 
 Any of `name`, `autoExtract` (extract graph proposals from each imported
-note), `autoCommit` (let the safe policy commit those proposals without a
-person, the opt-in of ADR-0007); at least one is required.
+note), `autoCommit` (`true` or `false` is this library's own choice for the
+safe-policy auto-commit of ADR-0007 and overrides your `graph.review.autoCommitSafeRows`
+preference; `null` follows the preference again); at least one is required.
 
 **Requires:** `notes:write`. **Response:** `200` — the library. **Error
 Cases:** `400` - No field sent · `404` - No such library, or not yours.
@@ -6263,8 +6265,14 @@ identified speakers), the meeting context you typed and your **effective
 ontology**, makes **one** structured-output call on **your own** AI key, and
 writes a proposal: people, organizations, projects, relations, decisions,
 commitments, claims and person facts, each citing the transcript line or note
-span it came from. **Nothing is added to your graph** until you review and
-commit the proposal. A ready note is also extracted automatically once, when
+span it came from. Rows reach your graph only through a
+commit of the proposal: yours, or the automatic commit of its **safe** rows
+(`graph.review.autoCommitSafeRows`, on by default; a note library's own
+`autoCommit` overrides it). Ambiguous or possible-duplicate matches, closings,
+low-confidence rows and sensitive person facts always wait for you. Calling
+this again for a note supersedes its earlier open draft once the new one is
+ready, and answers `409 extraction_running` while a run is in flight, so a
+repeat is safe. A ready note is also extracted automatically once, when
 connected knowledge is on, you hold `graph:write` and your
 `extraction.autoExtract` preference is on (the default) — the same job,
 `reason: "note_ready"`.

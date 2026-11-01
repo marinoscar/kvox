@@ -1,7 +1,6 @@
 // The host-neutral half of the graph slice: the API client, the hooks over it
 // and the pure helpers other screens share. No component, no `@mui/*`, no
-// router, and none of the drawing libraries (sigma and its React bindings,
-// `graphology*`): those are the `ui` entry's optional peers.
+// router, and none of the drawing libraries (`@antv/g6`, `graphology`): those are the `ui` entry's optional peers.
 
 // The API client. Each call takes the `KvoxWebHost` first.
 export * from './clients/graph.js';

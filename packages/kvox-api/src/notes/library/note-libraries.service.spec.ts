@@ -86,7 +86,7 @@ describe('NoteLibrariesService', () => {
         ownerId: ACTOR.id,
         name: 'Docs',
         autoExtract: true,
-        autoCommit: false,
+        autoCommit: null,
         lastScanAt: null,
         createdAt: now,
         updatedAt: now,
@@ -396,5 +396,12 @@ describe('NoteLibraryPolicy', () => {
 
     noteLibraryFile.findFirst.mockResolvedValue(null);
     await expect(policy.forNote('n2')).resolves.toBeNull();
+  });
+
+  it('passes an unset auto-commit through as null, so the owner preference decides (#779)', async () => {
+    const { policy, noteLibraryFile } = build();
+    noteLibraryFile.findFirst.mockResolvedValue({ library: { id: LIB, autoExtract: true, autoCommit: null } });
+
+    await expect(policy.forNote('n1')).resolves.toEqual({ libraryId: LIB, autoExtract: true, autoCommit: null });
   });
 });

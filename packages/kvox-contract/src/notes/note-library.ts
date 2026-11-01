@@ -214,8 +214,12 @@ export const noteLibrarySchema = z.object({
   name: z.string().min(1).max(120),
   /** Extract graph proposals from each imported note automatically. */
   autoExtract: z.boolean(),
-  /** Commit those proposals without review. */
-  autoCommit: z.boolean(),
+  /**
+   * Commit the safe rows of those proposals without review. `null` follows the owner's graph
+   * preference "Commit confident rows automatically" (on by default); `true` or `false` is this
+   * library's own choice and overrides it.
+   */
+  autoCommit: z.boolean().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   lastScanAt: z.string().nullable(),
@@ -254,7 +258,8 @@ export const updateNoteLibraryRequestSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
     autoExtract: z.boolean(),
-    autoCommit: z.boolean(),
+    /** `null` hands the decision back to the owner's graph preference. */
+    autoCommit: z.boolean().nullable(),
   })
   .partial()
   .refine((value) => Object.values(value).some((field) => field !== undefined), {

@@ -201,6 +201,12 @@ beforeAll(async () => {
     dataDir: join(here, '..', '.data', `graph-${process.pid}`),
     log: (line) => console.log(line),
   });
+  // This scenario walks the manual review path (extract, accept, commit), so the owner turns off
+  // auto-committing safe rows, which is on by default (#779).
+  const { KVOX_SETTINGS } = load('@marinoscar/kvox-api/ports') as typeof import('@marinoscar/kvox-api/ports');
+  const { LOCAL_USER_ID } = load('../dist/seed.js') as typeof import('../src/seed.js');
+  const settings = host.resolve(KVOX_SETTINGS as never) as import('@marinoscar/kvox-api/ports').KvoxSettingsPort;
+  await settings.patchUser(LOCAL_USER_ID, 'graph', { review: { minConfidence: 0.7, autoCommitSafeRows: false } });
 });
 
 afterAll(async () => {

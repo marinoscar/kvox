@@ -9,9 +9,9 @@ import type { NeighborhoodCanvasProps } from './NeighborhoodCanvas.js';
  *
  * @remarks
  * This file holds the two dynamic `import()` calls that pull `GraphCanvas.tsx`
- * (the one file that imports sigma and graphology's layout) into its own
- * chunk, so a screen that never draws a graph never downloads either. The
- * loaders are replaceable because jsdom has no WebGL: a host's tests swap in a
+ * (the one file that imports `@antv/g6`, about 410 KB gzipped) into its own
+ * chunk, so a screen that never draws a graph never downloads it. The
+ * loaders are replaceable because jsdom has no canvas: a host's tests swap in a
  * stand-in with `mockGraphCanvas` from `@marinoscar/kvox-web/graph/testing`.
  *
  * @stability experimental

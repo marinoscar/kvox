@@ -12,7 +12,7 @@ import { CONV_JOE_SCOPED_ID, installEntityAskApi } from '../support/askApi';
  *
  * `?ask=<id>` opens it straight on the conversation (the reload path), and
  * `?layout=static` keeps the page's Neighbourhood canvas deterministic
- * underneath (see `graph-explorer.spec.ts`).
+ * underneath.
  *
  * ⚠ These baselines are valid only when generated inside the pinned Playwright
  * image (`.github/workflows/visual-baselines.yml`).

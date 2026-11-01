@@ -336,8 +336,8 @@ export interface NoteLibraryRow {
   name: string;
   /** The `auto_extract` column. */
   autoExtract: boolean;
-  /** The `auto_commit` column. */
-  autoCommit: boolean;
+  /** The `auto_commit` column: `null` follows the owner's graph preference (ADR-0007, #779). */
+  autoCommit: boolean | null;
   /** The `last_scan_at` column. */
   lastScanAt: Date | null;
   /** The `created_at` column. */

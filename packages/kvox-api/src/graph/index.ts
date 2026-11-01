@@ -144,7 +144,7 @@ export type { KgMigrateDefinition, KgMigrateTable } from './migrate/kg-migrate.p
 export { KG_MIGRATE_OWNERS_PER_TICK, KgMigrateEnqueuer } from './migrate/kg-migrate.enqueuer.js';
 export { KgMigrateRepository } from './migrate/kg-migrate.repository.js';
 export { GraphOntologyService } from './ontology/graph-ontology.service.js';
-export { GRAPH_PREFERENCE_DEFAULTS } from './preferences/graph-preferences.defaults.js';
+export { GRAPH_PREFERENCE_DEFAULTS, effectiveAutoCommit } from './preferences/graph-preferences.defaults.js';
 export type { GraphPreferences } from './preferences/graph-preferences.defaults.js';
 export { GRAPH_PREFERENCES_CHANGED_EVENT } from './preferences/graph-preferences.events.js';
 export type { GraphPreferencesChangedEvent } from './preferences/graph-preferences.events.js';

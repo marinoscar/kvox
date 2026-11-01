@@ -838,11 +838,12 @@ model NoteLibrary {
   // Policy, snapshotted per library rather than read from user settings so a
   // later settings change never re-interprets an already-watched folder.
   // `autoExtract`: queue an import for every new or changed file the scan
-  // finds. `autoCommit`: let an import's graph proposals commit without the
-  // review step; OFF by default because nothing enters the graph except
-  // through a reviewed proposal unless the user explicitly opts in.
-  autoExtract Boolean @default(true) @map("auto_extract")
-  autoCommit  Boolean @default(false) @map("auto_commit")
+  // finds. `autoCommit`: let the safe rows of an import's graph proposals commit
+  // without the review step. NULL (the default) means "follow the owner's graph
+  // preference" (`review.autoCommitSafeRows`, on by default); true or false is the
+  // library's own choice and overrides that preference (ADR-0007, #779).
+  autoExtract Boolean  @default(true) @map("auto_extract")
+  autoCommit  Boolean? @map("auto_commit")
 
   // When the last scan completed; null until the first one.
   lastScanAt DateTime? @map("last_scan_at") @db.Timestamptz(3)

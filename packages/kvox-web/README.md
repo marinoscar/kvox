@@ -21,7 +21,7 @@ Status: filled (Epic 7, issues 7.1 to 7.6). All the domain slices are in: `core`
 - `@marinoscar/kvox-web/notes/ui`: `NotesPage`, `NotePage`, `NoteHistoryPage`, `NewNotePage`, `UserNoteTemplatesPage`, `NotesLibraryView`, `TranscriptNotesSection`, `MarkdownView`, the page slots, `kvoxNotesDestinations`, `kvoxNotesUserSettingsSections` and `kvoxNotesRoutes`.
 - `@marinoscar/kvox-web/graph/headless`: the client of `/api/graph/**`, the entity, brief, timeline, mention, evidence, proposal, ontology, preference, attribute-definition, overview, export, import and transcript-people hooks, and the pure display, span, proposal and explorer helpers. [README](src/graph/README.md).
 - `@marinoscar/kvox-web/graph/ui`: `GraphIndexPage`, `GraphEntityPage`, `GraphExplorerPage`, `GraphOverviewPage`, `GraphImportPage`, `UserKnowledgeGraphPage`, `EvidenceChip`, `NeighborhoodWidget`, `SchemaForm`, the slot components for the transcript and note pages and the libraries, `kvoxGraphDestinations`, `kvoxGraphUserSettingsSections` and `kvoxGraphRoutes`.
-- `@marinoscar/kvox-web/graph/testing`: `mockGraphCanvas`, the stand-in for the WebGL canvases. Test code only.
+- `@marinoscar/kvox-web/graph/testing`: `mockGraphCanvas`, the stand-in for the G6 canvases (jsdom has no canvas). Test code only.
 - `@marinoscar/kvox-web/ask/headless`: the client of `/api/ask/**`, the answer stream over `host.sse`, the conversation, conversation-list, stream and AI-configuration hooks, and the pure error-copy, citation-parsing, model-choice and suggestion helpers. [README](src/ask/README.md).
 - `@marinoscar/kvox-web/ask/ui`: `AskPage`, `AskThread`, `AskComposer`, `ConversationList`, `EntityAskPanel`, `EntityAskButton`, the slot components `AskEntityPanelSlot` and `AskEntityButtonSlot` for the graph entity page, and `kvoxAskRoutes`.
 - `@marinoscar/kvox-web/brand`: the single source of the KVox look for every host: `createKvoxTheme`, `kvoxLightTheme`, `kvoxDarkTheme`, `kvoxTokens`, `kvoxLightPalette`, `kvoxDarkPalette`, `kvoxComponentOverrides`, `KVOX_BRAND`, and the inline-SVG `BrandMark` and `BrandLockup`. Needs MUI and `@marinoscar/platform-web`. [README](src/brand/README.md).
@@ -61,14 +61,8 @@ Optional peers, installed for the entries that need them. A host that uses only 
 | `react-markdown` | `^10.1.0` | `notes/ui`, `ask/ui` (keep one copy: the citation plugin walks the tree it builds) |
 | `remark-gfm` | `^4.0.1` | `notes/ui` |
 | `@tiptap/core`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/extension-table`, `@tiptap/markdown`, `@tiptap/pm` | `^3.31.3` | `notes/ui` (the visual editor, loaded lazily) |
-| `sigma` | `^3.0.3` | `graph/ui` (the canvas, loaded lazily) |
-| `@react-sigma/core` | `^5.0.6` | `graph/ui` (the canvas, loaded lazily) |
-| `@sigma/node-image` | `^3.0.0` | `graph/ui` (the canvas's pictograms, loaded lazily) |
-| `@sigma/node-border` | `^3.0.0` | `graph/ui` (the canvas's rings, loaded lazily) |
-| `@sigma/edge-curve` | `^3.1.0` | `graph/ui` (the canvas's curved parallel edges, loaded lazily) |
 | `graphology` | `^0.26.0` | `graph/ui` (one copy only) |
-| `graphology-layout-forceatlas2` | `^0.10.1` | `graph/ui` (the canvas, loaded lazily) |
-| `graphology-layout-noverlap` | `^0.4.2` | `graph/ui` (the canvas's layout worker, loaded lazily) |
+| `@antv/g6` | `^5.1.1` | `graph/ui` (the canvas, loaded lazily in its own chunk; Canvas renderer, no worker) |
 | `@testing-library/react` | `^16.3.2` | `core/testing` |
 
 The per-slice data is `packages/kvox-slice-peers.json` (a slice's `entries` list the peers only one entry may import); `node scripts/kvox-packages/check-slice-peers.mjs --table` prints it.

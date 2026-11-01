@@ -9,8 +9,11 @@ export interface NoteLibraryPolicyView {
   libraryId: string;
   /** Extract graph proposals automatically. */
   autoExtract: boolean;
-  /** Commit them without review. */
-  autoCommit: boolean;
+  /**
+   * Commit the safe rows without review: `true` or `false` is the library's own choice and
+   * overrides the owner's preference, `null` follows it (ADR-0007, #779).
+   */
+  autoCommit: boolean | null;
 }
 
 /**

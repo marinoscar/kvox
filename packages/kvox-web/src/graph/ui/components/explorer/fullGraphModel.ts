@@ -17,7 +17,7 @@
  *     (no curve program for 20,000 edges);
  *   - labels: only the top {@link FULL_VIEW_FORCED_LABELS} nodes by degree are
  *     labelled whatever the zoom; the rest appear as zooming in makes them big
- *     enough (`fullViewBudgets` raises sigma's label threshold).
+ *     enough (`fullViewBudgets` raises the canvas's label threshold).
  */
 
 import type { GraphOverview } from '../../../headless/clients/graph.js';

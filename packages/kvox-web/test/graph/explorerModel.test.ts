@@ -20,7 +20,7 @@ import {
   visibleNodeIds,
   type ExplorerPalette,
 } from '../../src/graph/ui/components/explorer/explorerModel.js';
-import { CATEGORICAL_PALETTE, NODE_SIZE_MIN, encodingFor } from '../../src/graph/ui/components/explorer/explorerEncoding.js';
+import { CATEGORICAL_PALETTE, NODE_SIZE_MIN, encodingFor, relationFamilyColor } from '../../src/graph/ui/components/explorer/explorerEncoding.js';
 import type { GraphSlice } from '../../src/graph/headless/clients/graph.js';
 import {
   KAPPA_ID,
@@ -334,7 +334,10 @@ describe('nodeStyle', () => {
     const before = positionsOf(state);
     restyle(state, darkPalette);
     expect(state.graph.getNodeAttribute(JOE_ID, 'color')).toBe(CATEGORICAL_PALETTE.dark[0]);
-    expect(state.graph.getEdgeAttribute(gid(410), 'color')).toBe('#888888');
+    // An edge takes its relation family's colour for the theme variant, never the disabled-text grey.
+    const relation = state.graph.getEdgeAttribute(gid(410), 'relationType');
+    expect(state.graph.getEdgeAttribute(gid(410), 'color')).toBe(relationFamilyColor(relation, 'dark'));
+    expect(state.graph.getEdgeAttribute(gid(410), 'color')).not.toBe('#888888');
     expect(positionsOf(state)).toEqual(before);
     restyle(state, DEFAULT_EXPLORER_PALETTE);
     expect(state.graph.getNodeAttribute(JOE_ID, 'color')).toBe(CATEGORICAL_PALETTE.light[0]);

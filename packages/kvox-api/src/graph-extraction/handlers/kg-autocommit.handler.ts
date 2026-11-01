@@ -2,8 +2,8 @@
 // kg.autocommit (#718, epic #708; ADR-0007)
 // =============================================================================
 //
-// Commits the SAFE rows of one freshly drafted extraction proposal when its note's library
-// opted into auto-commit. No new write path: the work is `ProposalBatchCommitService.commitSafe`
+// Commits the SAFE rows of one freshly drafted extraction proposal of ANY note when auto-commit
+// is on for it (#779). No new write path: the work is `ProposalBatchCommitService.commitSafe`
 // (the safe policy, then `ProposalCommitService` and `GraphWriteService`). Rows the policy does
 // not accept (a sensitive PersonFact, a closing, an ambiguous or merge row, a row under the
 // owner's `review.minConfidence`) stay in a draft for a person.
@@ -14,9 +14,14 @@
 //   payload     { proposalId, ownerId }
 //   trigger     `kvox.graph.proposal_drafted` (a subscriber that only enqueues)
 //
-// It NO-OPS (returns normally, nothing is retried) when: the proposal is not an `extraction`
-// draft of the owner, the note moved on (stale), the note has no library or the library's
-// `auto_commit` is off, the graph is disabled, or the owner no longer holds `graph:write`.
+// WHEN IT IS ON (`effectiveAutoCommit`): the note's library `auto_commit`, when that library set
+// one (true or false), else the owner's `graph.review.autoCommitSafeRows` preference (on by
+// default). A note outside any library follows the preference.
+//
+// It NO-OPS (returns normally, nothing is retried) when: the proposal is not an open `extraction`
+// draft of the owner (a second run after the commit lands here), the note moved on (stale),
+// auto-commit is off for the note, the graph is disabled, or the owner no longer holds
+// `graph:write`.
 //
 // Audit: one `graph:autocommit` row with ids and counts. ⚠ Never a statement or evidence text.
 // =============================================================================
@@ -24,7 +29,13 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { z } from 'zod';
 
-import { GRAPH_WRITE_PERMISSION, GraphAiRunResolver, KG_AUTOCOMMIT_JOB_TYPE } from '../../graph/index.js';
+import {
+  GRAPH_WRITE_PERMISSION,
+  GraphAiRunResolver,
+  GraphPreferencesService,
+  KG_AUTOCOMMIT_JOB_TYPE,
+  effectiveAutoCommit,
+} from '../../graph/index.js';
 import type { GraphActor, KvoxGraphDb } from '../../graph/index.js';
 import { NoteLibraryPolicy } from '../../notes/index.js';
 import {
@@ -78,6 +89,7 @@ export class KgAutocommitHandler implements KvoxJobHandler, OnModuleInit {
     @Inject(KVOX_AUDIT) private readonly audit: KvoxAuditPort,
     private readonly resolver: GraphAiRunResolver,
     private readonly libraries: NoteLibraryPolicy,
+    private readonly prefs: GraphPreferencesService,
     private readonly batch: ProposalBatchCommitService,
   ) {}
 
@@ -103,7 +115,8 @@ export class KgAutocommitHandler implements KvoxJobHandler, OnModuleInit {
     }
 
     const policy = await this.libraries.forNote(proposal.noteId);
-    if (!policy?.autoCommit) return;
+    const preferences = await this.prefs.get(ownerId);
+    if (!effectiveAutoCommit(policy?.autoCommit, preferences)) return;
 
     if (!(await this.resolver.graphEnabled())) return;
     if (!(await this.identity.hasPermission(ownerId, GRAPH_WRITE_PERMISSION))) return;
@@ -125,7 +138,8 @@ export class KgAutocommitHandler implements KvoxJobHandler, OnModuleInit {
         targetId: proposalId,
         meta: {
           noteId: proposal.noteId,
-          libraryId: policy.libraryId,
+          libraryId: policy?.libraryId ?? null,
+          source: policy?.autoCommit == null ? 'preference' : 'library',
           status: result.status,
           ...(result.reason ? { reason: result.reason } : {}),
           accepted: result.accepted,

@@ -990,8 +990,8 @@ The domain tables below (transcripts, notes, search, the `kg_*` graph tables, As
   only — it never gates create/regenerate/preview reading the template by id.
 - `note_libraries`, `note_library_files`, `note_import_batches`, `note_import_batch_items` - Note libraries
   (epic #708, `docs/specs/notes.md` §8.8). A library is a folder the client reads on its own
-  device (`owner_id` cascades; `auto_extract` default true, `auto_commit` default false, the
-  opt-in of [ADR-0007](decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)).
+  device (`owner_id` cascades; `auto_extract` default true, `auto_commit` nullable: `null` follows the
+  owner's graph preference, `true`/`false` overrides it, [ADR-0007](decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)).
   `note_library_files` has one row per file, unique `(library_id, relative_path)`, with size,
   mtime, content hash, the note it became (`SetNull`) and `imported_version` /
   `extracted_version`. `note_import_batches` is one scan or drop (`library_id` nullable,

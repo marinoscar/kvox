@@ -140,14 +140,11 @@
     "brand:check": "node scripts/sync-brand-identity.mjs --check"
   },
   "peerDependencies": {
+    "@antv/g6": "^5.1.1",
     "@marinoscar/kvox-contract": ">=0.0.0-0 || >=0.1.0-0",
     "@marinoscar/platform-web": "0.1.0-next.20",
     "@mui/icons-material": "^9.1.0",
     "@mui/material": "^9.1.0",
-    "@react-sigma/core": "^5.0.6",
-    "@sigma/edge-curve": "^3.1.0",
-    "@sigma/node-border": "^3.0.0",
-    "@sigma/node-image": "^3.0.0",
     "@tanstack/react-virtual": "^3.14.12",
     "@testing-library/react": "^16.3.2",
     "@tiptap/core": "^3.31.3",
@@ -157,32 +154,20 @@
     "@tiptap/react": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
     "graphology": "^0.26.0",
-    "graphology-layout-forceatlas2": "^0.10.1",
-    "graphology-layout-noverlap": "^0.4.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.17.0",
-    "remark-gfm": "^4.0.1",
-    "sigma": "^3.0.3"
+    "remark-gfm": "^4.0.1"
   },
   "peerDependenciesMeta": {
+    "@antv/g6": {
+      "optional": true
+    },
     "@mui/icons-material": {
       "optional": true
     },
     "@mui/material": {
-      "optional": true
-    },
-    "@react-sigma/core": {
-      "optional": true
-    },
-    "@sigma/edge-curve": {
-      "optional": true
-    },
-    "@sigma/node-border": {
-      "optional": true
-    },
-    "@sigma/node-image": {
       "optional": true
     },
     "@tanstack/react-virtual": {
@@ -212,12 +197,6 @@
     "graphology": {
       "optional": true
     },
-    "graphology-layout-forceatlas2": {
-      "optional": true
-    },
-    "graphology-layout-noverlap": {
-      "optional": true
-    },
     "react-markdown": {
       "optional": true
     },
@@ -226,20 +205,14 @@
     },
     "remark-gfm": {
       "optional": true
-    },
-    "sigma": {
-      "optional": true
     }
   },
   "devDependencies": {
+    "@antv/g6": "^5.1.1",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^9.1.0",
     "@mui/material": "^9.1.0",
-    "@react-sigma/core": "^5.0.6",
-    "@sigma/edge-curve": "^3.1.0",
-    "@sigma/node-border": "^3.0.0",
-    "@sigma/node-image": "^3.0.0",
     "@tanstack/react-virtual": "^3.14.12",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.9.1",
@@ -255,15 +228,12 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "graphology": "^0.26.0",
-    "graphology-layout-forceatlas2": "^0.10.1",
-    "graphology-layout-noverlap": "^0.4.2",
     "jsdom": "^29.1.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.17.0",
     "remark-gfm": "^4.0.1",
-    "sigma": "^3.0.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8",
     "vitest-axe": "^1.0.0-pre.5"

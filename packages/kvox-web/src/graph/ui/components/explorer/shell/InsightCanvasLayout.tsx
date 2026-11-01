@@ -17,7 +17,7 @@
  *
  * THE CANVAS NEVER REMOUNTS. The slots sit at fixed positions in the tree
  * whatever the class, so a rotation or a resize across a class boundary keeps
- * sigma, its camera and the page's selection exactly as they were.
+ * the G6 canvas, its camera and the page's selection exactly as they were.
  *
  * What the slots can read: {@link useInsightCanvas} gives the window class, the
  * input modality, the performance budgets and the `canvasInsets` (the part of
