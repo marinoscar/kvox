@@ -3507,7 +3507,7 @@ at the same version are semantically, not byte-for-byte, equivalent:
 `updatedAt` moves when a poll writes `lastPolledAt`, and the version does not
 identify that.
 
-Naming an AI-detected speaker for the first time ("Speaker A" → "Oscar")
+Naming an AI-detected speaker for the first time ("Speaker A" → "Orlo")
 changes this response's `speakers` without moving `currentVersion` — it is an
 identification, not a version (see `POST /operations` below) — so the
 validator carries a **fingerprint**: the first twelve hex digits of a SHA-256
@@ -3664,15 +3664,15 @@ a split's `newSegmentId` and resolved `atWordIndex`, a `speaker.create`'s
 the same seams.
 
 **A batch made only of `speaker.rename` ops that each identify a
-still-placeholder speaker ("Speaker A" → "Oscar"), or change nothing, does
+still-placeholder speaker ("Speaker A" → "Orlo"), or change nothing, does
 not create a version** (issue #323). Naming a speaker is metadata about the
 recording, not a correction of it, so it is written straight to the live
 speaker and to `speakerIdentities`, without bumping `currentVersion`, `rev`,
 or the version history. The response's `version` equals the transcript's
 **current** version, unchanged, and `summary` reads `"Named Speaker A as
-Oscar"` (joined with `; ` for more than one) or `"No changes"`. Such a batch is
+Orlo"` (joined with `; ` for more than one) or `"No changes"`. Such a batch is
 still audited, as `transcript.speaker_identified`. Renaming an
-already-identified speaker ("Oscar" → "Jonty") is an ordinary correction and
+already-identified speaker ("Orlo" → "Jonty") is an ordinary correction and
 stays versioned as before, and any batch mixing an identification with
 another op — including a text edit — is one version, exactly like any other
 mixed batch. Stale-`rev` conflicts on this path answer the identical `409`
@@ -3887,8 +3887,8 @@ scoped by `transcriptId`, which *is* the authorisation.
 #### Name Checks
 
 AI-assisted detection of speech-recognition errors in names — epic #326.
-After a speaker is renamed "Oscar," the transcript text still says what the
-provider heard: "Skar," "Oh scar." A name check finds spans that are probably
+After a speaker is renamed "Orlo," the transcript text still says what the
+provider heard: "Rolo," "Or low." A name check finds spans that are probably
 a mis-hearing of a known name and **proposes** a fix; nothing in the
 transcript changes until a proposal is accepted. Full design — the phonetic
 retrieval pass, the optional thorough discovery pass, LLM adjudication and
@@ -3950,8 +3950,8 @@ while `run.status` is `pending` or `running`.
     "run": { "id": "…", "mode": "standard", "status": "ready", "suggestionCount": 3, "…": "…" },
     "suggestions": [
       {
-        "id": "…", "segmentId": "…", "original": "Oh scar", "replacement": "Oscar",
-        "confidence": 0.94, "source": "phonetic", "preview": "…said Oh scar was right…", "stale": false
+        "id": "…", "segmentId": "…", "original": "Or low", "replacement": "Orlo",
+        "confidence": 0.94, "source": "phonetic", "preview": "…said Or low was right…", "stale": false
       }
     ],
     "counts": { "pending": 3, "accepted": 0, "rejected": 0, "stale": 0 }

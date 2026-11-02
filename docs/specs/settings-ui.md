@@ -422,26 +422,9 @@ rather than asserted:
 - **The collapse toggle is a real `<button>` with `aria-expanded`**, not an
   icon-shaped `div` or a link masquerading as a button.
 
-## 7. The visual harness must learn every new card's permission
+## 7. Retired: the visual harness
 
-`apps/web/visual/main.tsx`'s `DEFAULT_PERMISSIONS` is a separate, manually
-maintained list of permission strings — broad enough to see every card in
-both registries — that seeds the fake authenticated user the Playwright
-visual-regression suite renders against. It is not derived from
-`ADMIN_SECTIONS` or `USER_SETTINGS_SECTIONS`; it is copied by hand. A card
-whose `permission` is new and not yet in that list is invisible to the
-harness: `visibleSettingsSections` filters it out for the fake user exactly
-as it would for a real one lacking the permission, so the hub the harness
-screenshots simply has one fewer card than the real one — and the pixel
-baselines pass green over a layout the suite is no longer actually looking
-at. This is not hypothetical: it is called out in `DEFAULT_PERMISSIONS`'s own
-comment as the failure the Operations group's five permissions
-(`jobs:read`/`write`, `nodes:read`/`write`, `db_backup:read`/`write`/
-`restore`) were added to prevent — "a card the harness cannot see is a card
-this suite silently stops asserting pixels for." Any change that adds a new
-`permission` string to either registry must add it to
-`DEFAULT_PERMISSIONS` in the same change, or the baselines are testing a
-smaller grid than the one that ships.
+This section described the permission list of the pixel-regression harness. The harness and its suite were removed (the project has no pixel tests by decision), so a new card's `permission` string needs no second list; the registry tests are the only gate.
 
 ## 8. The AI cards (issue #477)
 
@@ -462,8 +445,6 @@ The `feature` field is a registry-level gate, resolved in `apps/web/src/config/s
 - **The user card has a gate the old one did not.** Before #477 the `AI Provider` card had no `permission`, because `/api/ai-credentials` enforced none. The platform's `/api/ai/keys` enforces `ai:use`, so the card mirrors it (§3). A role without `ai:use` sees no card and gets 403 from the route.
 - **`AiPlaygroundPage` is not offered.** This app is not a general chat product, so no card is registered for it, and the org AI keys page is out of scope for a single-organization deployment.
 - **The browser never calls a provider.** The pages read and write settings; every model call goes through `KvoxAi` on the API.
-
-The visual harness (§7) needs `ai_config:read` and `ai:use` in `DEFAULT_PERMISSIONS` for these cards to appear in its baselines.
 
 The registry tests that pin the four rows: `apps/web/src/__tests__/config/settingsRegistry.test.ts` and `userSettingsSections.test.ts`.
 

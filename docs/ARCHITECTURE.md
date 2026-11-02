@@ -867,7 +867,7 @@ The domain tables below (transcripts, notes, search, the `kg_*` graph tables, As
   intentional schema drift as `jobs`/`database_backup_runs`/`transcript_speakers`. See
   `docs/specs/search.md` §2. `speaker_identities` (JSONB, default `{}`, issue #323) maps speaker
   id to display name for a speaker **identified** rather than corrected — naming "Speaker A" as
-  "Oscar" writes here and to the live speaker row without bumping `current_version`, and
+  "Orlo" writes here and to the live speaker row without bumping `current_version`, and
   `materialize()` overlays this map onto any speaker still at its placeholder at every version;
   see `docs/specs/transcription.md` §4.6. `recorded_at` (issue #352, `timestamptz`, `NOT NULL`,
   indexed `(owner_id, recorded_at desc)`) is when the recording was made — defaulting to the

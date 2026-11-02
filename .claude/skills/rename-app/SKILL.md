@@ -94,35 +94,15 @@ The guard (`apps/cli/src/template-identity.test.ts`) is the one that matters
 most: it derives its patterns from the manifest, so after a rename it is
 checking the **new** name. If it fails, it names the offending `file:line`.
 
-## Step 4 — the visual baselines
+## Step 4 — commit
 
-```bash
-docker run --rm -it -v "$PWD":/w -w /w mcr.microsoft.com/playwright:v1.62.1-noble \
-  npx playwright test --config=tests/visual/playwright.config.ts --update-snapshots
-```
-
-**Tell the user plainly that CI is red until this is done, and that this is
-expected rather than a regression.** Seven of eleven baselines are full-page
-screenshots containing the app-name wordmark, and the suite runs at
-`maxDiffPixels: 4` — effectively zero tolerance. Changing the name *is* a pixel
-change.
-
-Baselines are only ever regenerated inside that pinned container; a locally
-installed browser renders differently and will produce baselines that fail in CI.
-
-## Step 5 — commit
-
-Two commits, not one:
-
-- `feat(core): rebrand to <name>` — the code and configuration. It is genuinely
-  one intent, so one commit is right.
-- `chore(tests): regenerate visual baselines after rebrand` — the pixels. A diff
-  of eleven PNGs does not belong in a reviewable code commit.
+One commit: `feat(core): rebrand to <name>` — the code and configuration. It is
+genuinely one intent, so one commit is right.
 
 Reference the issue (`Relates to #<n>`). Follow the Conventional Commits rules in
 `CLAUDE.md`.
 
-## Step 6 — hand back the rest
+## Step 5 — hand back the rest
 
 Remind the user of what nothing in the repository can do:
 

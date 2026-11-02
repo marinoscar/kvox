@@ -126,7 +126,7 @@
         "recordedAt": "2026-09-10T14:30:00.000Z",
         "provider": { "id": "assemblyai", "model": "best" },
         "speakers": [
-          { "id": "spk_a", "displayName": "Oscar", "talkTimeMs": 920100 },
+          { "id": "spk_a", "displayName": "Orlo", "talkTimeMs": 920100 },
           { "id": "spk_b", "displayName": "Pia", "talkTimeMs": 741300 }
         ],
         "segments": [

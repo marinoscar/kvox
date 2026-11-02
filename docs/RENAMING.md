@@ -30,7 +30,7 @@ Pick one of two equivalent routes:
 **Directly:**
 
 ```bash
-node scripts/rename.mjs --name "Kappa Hub" --repo oscar/kappa-hub --theme '#7c3aed'
+node scripts/rename.mjs --name "Kappa Hub" --repo orlo/kappa-hub --theme '#7c3aed'
 ```
 
 Either way, three things happen after the codemod finishes, and none of them
@@ -40,10 +40,7 @@ are optional:
 npm install                                   # the lockfile carries the old workspace name too
 ```
 
-Then regenerate the visual baselines — see [step 5](#the-manual-steps) —
-and expect the visual suite to fail locally until you do; that's covered
-in its own section below because it's the thing most likely to cause a
-moment of panic on a first fork.
+Then finish the manual steps in [the manual steps](#the-manual-steps).
 
 ## What gets renamed, and what doesn't
 
@@ -135,7 +132,7 @@ rename (its manifest currently says `"Prior Name"` / `prior/prior-repo`) and
 is being renamed again, with `--dry-run` so nothing is written:
 
 ```bash
-node scripts/rename.mjs --name "Kappa Hub" --repo oscar/kappa-hub --theme '#7c3aed' --dry-run
+node scripts/rename.mjs --name "Kappa Hub" --repo orlo/kappa-hub --theme '#7c3aed' --dry-run
 ```
 
 ```
@@ -163,7 +160,7 @@ Planned edits (Prior Name -> Kappa Hub):
   ~ packages/shared/identity.json  (structured write)
       productName: "Kappa Hub"
       tagline: "A production-grade full-stack application foundation..."
-      repoSlug: "oscar/kappa-hub"
+      repoSlug: "orlo/kappa-hub"
       themeColor: "#7c3aed"
       backgroundColor: "#ffffff"
 
@@ -218,21 +215,7 @@ human, in this order:
    Dockerfiles run as their first step — fails hard if the two disagree.
    Skipping this step doesn't fail quietly; it fails the very next build.
 
-2. **Regenerate the visual baselines**, from inside the pinned container
-   (never a local browser — see `tests/visual/playwright.config.ts` for why
-   rendering differences between browser builds would produce false diffs):
-
-   ```bash
-   docker run --rm -it -v "$PWD":/w -w /w mcr.microsoft.com/playwright:v1.62.1-noble \
-     npx playwright test --config=tests/visual/playwright.config.ts --update-snapshots
-   ```
-
-   See [The visual suite fails until you regenerate the baselines](#the-visual-suite-fails-until-you-regenerate-the-baselines)
-   below for why this isn't optional. The `visual-baselines.yml` workflow
-   (Actions, "Regenerate visual baselines") does the same thing without
-   Docker on your machine.
-
-3. **Regenerate the email logo**, if the rebrand changed the theme colour
+2. **Regenerate the email logo**, if the rebrand changed the theme colour
    (identity's icon rasters carry no product name, so a name-only rename has
    nothing here to redo):
 
@@ -251,13 +234,13 @@ human, in this order:
    fix is teaching `generate-icons.py` to emit this raster itself so this
    step disappears; nothing does that today.
 
-4. **Rename the repository on GitHub, then re-point the local remote:**
+3. **Rename the repository on GitHub, then re-point the local remote:**
 
    ```bash
-   git remote set-url origin https://github.com/oscar/kappa-hub.git
+   git remote set-url origin https://github.com/orlo/kappa-hub.git
    ```
 
-5. **Update the OAuth redirect URIs** in the Google Cloud Console (and any
+4. **Update the OAuth redirect URIs** in the Google Cloud Console (and any
    other provider you've enabled), so the callback still matches `APP_URL`.
    Nothing in this repository can reach into a third-party console for you.
 
@@ -274,25 +257,6 @@ stay exactly as it is. The first row is the one that matters most.
 | The `# Managed by appctl deploy` sentinel comment | `@marinoscar/platform-cli` (its deploy `proxy`) | This line is written into an nginx vhost file on a live server *and* parsed back out of it later to recognise which vhosts the CLI itself manages. Change the string and the CLI stops recognising vhosts it wrote before the change. The command is `kvox deploy` now; this sentinel keeps the historical `appctl` spelling on purpose, because it's read back from vhost files already written by servers deployed before this rename. |
 | The `.appctl-deploy.json` filename | `@marinoscar/platform-cli` (its deploy `state`) | Read from live deployment servers as the CLI's own state file. Renaming it orphans the deployment state of every server the CLI has already touched. Kept under its historical `appctl` name for the identical reason — it's the same file already sitting on servers deployed under the old name, and `appctlVersion`, the field inside it recording the CLI version at time of write, stays spelled the same way for the same reason. |
 | `@app/shared`, and the `api` / `web` / `nginx` Compose service names | — | These are internal plumbing names, not identity — nothing user-facing reads them, and nothing about a rebrand depends on them. |
-
-## The visual suite fails until you regenerate the baselines
-
-Say this loudly, because it is the single most likely thing to cause a
-moment of panic on a first fork: **after you rename the product name, the
-visual suite will fail until you regenerate the baselines, and that is
-expected — it is not a sign that something went wrong.** The suite is no
-longer a CI job, so nothing turns red on a pull request; the failure shows up
-the next time anyone runs it.
-
-Seven of the eleven visual-regression baselines under
-`tests/visual/specs/**/*-snapshots/` are full-page (`fullPage`) screenshots
-that include the AppBar wordmark, and the suite runs at `maxDiffPixels: 4` —
-effectively zero pixel tolerance. Changing the product name is a genuine
-pixel change to every one of those seven screenshots, so the very next run
-of the suite after a rename will show seven failing visual tests until you run the
-[baseline regeneration command](#the-manual-steps) above and commit the
-result. The remaining four baselines are rail-scoped or drill-down shots
-that don't include the wordmark and are unaffected.
 
 ## Troubleshooting
 
