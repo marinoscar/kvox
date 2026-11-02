@@ -211,6 +211,9 @@ export class GraphNeighborhoodService {
     const virtualEdges = this.virtualEdgesFor(opts.relationTypes);
     const rowCap = opts.cap * WALK_ROW_FACTOR;
     const schema = opts.schema ?? (await this.ontology.effectiveSchemaFor(ownerId));
+    // Before the transaction: the lookup reads through the root client, which on a
+    // one-connection database would wait for the transaction's own connection (#805).
+    const selfId = await this.selfEntityId(ownerId);
 
     const slice = await withGraphStatementTimeout(
       this.prisma,
@@ -238,7 +241,7 @@ export class GraphNeighborhoodService {
         const induced = await this.inducedEdges(tx, ownerId, nodes.map((n) => n.id), opts, virtualEdges, schema);
         // Enrichment runs on the FINAL page only (after the cap), never on the walk.
         const [enrichedNodes, edges] = await Promise.all([
-          this.enrichNodes(tx, ownerId, nodes),
+          this.enrichNodes(tx, ownerId, nodes, selfId),
           this.enrichEdges(tx, ownerId, induced),
         ]);
 
@@ -424,8 +427,22 @@ export class GraphNeighborhoodService {
    * One LATERAL aggregate per row, driven by `kg_mentions(owner_id, entity_id)`
    * and `kg_evidence(subject_kind, subject_id)`.
    */
-  /** @internal Shared with GraphPathsService. */
-  async enrichNodes(tx: Tx, ownerId: string, nodes: GraphNode[]): Promise<GraphNode[]> {
+  /**
+   * The Person the user chose as themselves (#778), or null. Reads through the root client:
+   * call it BEFORE opening a read transaction, never inside one (#805).
+   *
+   * @internal Shared with GraphPathsService.
+   */
+  async selfEntityId(ownerId: string): Promise<string | null> {
+    return (await this.selfIdentity?.entityId(ownerId)) ?? null;
+  }
+
+  /**
+   * `selfId` is resolved by the caller before the transaction (`selfEntityId`).
+   *
+   * @internal Shared with GraphPathsService.
+   */
+  async enrichNodes(tx: Tx, ownerId: string, nodes: GraphNode[], selfId: string | null): Promise<GraphNode[]> {
     if (nodes.length === 0) return nodes;
     const owner = Prisma.sql`${ownerId}::uuid`;
     const entityIds = nodes.filter((n) => n.nodeKind === 'entity').map((n) => n.id);
@@ -444,10 +461,6 @@ export class GraphNeighborhoodService {
     ]);
     const mentions = new Map(mentionRows.map((r) => [r.id, r]));
     const evidence = new Map(evidenceRows.map((r) => [r.id, r]));
-    // The Person the user chose as themselves (#778); only looked up when a Person is in the slice.
-    const selfId = nodes.some((n) => n.nodeKind === 'entity' && n.type === 'Person')
-      ? ((await this.selfIdentity?.entityId(ownerId)) ?? null)
-      : null;
     return nodes.map((n) => {
       if (n.nodeKind === 'entity') {
         const r = mentions.get(n.id);
