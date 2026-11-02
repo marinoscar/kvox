@@ -20,17 +20,17 @@ import type {
 // write path (`ProposalCommitService` -> `GraphWriteService`) with real
 // evidence rows, and the deferred `kg_assert_has_evidence` trigger runs.
 //
-//   "Weekly sync with Maria Lopez"   Maria Lopez, Jenny Kim, Joe Park attend.
-//                                    Jenny Kim REPORTS_TO Maria Lopez.
-//                                    Joe owns one OPEN commitment (the budget
-//                                    draft, owed to Maria) and one DONE one
+//   "Weekly sync with Maren Fixture"   Maren Fixture, Jarek Stubbs, Jonty Mockwell attend.
+//                                    Jarek Stubbs REPORTS_TO Maren Fixture.
+//                                    Jonty owns one OPEN commitment (the budget
+//                                    draft, owed to Maren) and one DONE one
 //                                    (the vendor review) that an "open action
 //                                    items" answer must leave out.
-//   "Joe and Jenny standup"          Joe and Jenny only: a meeting Maria did
-//                                    NOT attend, which "meetings with Jenny's
+//   "Jonty and Jarek standup"          Jonty and Jarek only: a meeting Maren did
+//                                    NOT attend, which "meetings with Jarek's
 //                                    boss" must leave out.
 //
-// NO MEETING SAYS WHO JOE REPORTS TO. The Ask leg sets it by hand on Joe's
+// NO MEETING SAYS WHO JONTY REPORTS TO. The Ask leg sets it by hand on Jonty's
 // entity page (`POST /api/graph/entities/:id/relations`, #586) and asks
 // `ASK_QUESTIONS.manualBossMeetings`: the answer follows the manual
 // REPORTS_TO, cited "Set by hand".
@@ -76,38 +76,38 @@ function segments(lines: Array<[label: string, text: string]>): NormalizedTransc
 
 /** The meeting the boss attended. */
 export const WEEKLY_SYNC: ScenarioRecording = {
-  title: 'Weekly sync with Maria Lopez',
+  title: 'Weekly sync with Maren Fixture',
   transcript: {
     language: 'en',
     durationMs: 16_000,
     speakers: [{ label: 'A' }, { label: 'B' }, { label: 'C' }],
     segments: segments([
-      ['A', "Hi all, I'm Maria Lopez. Jenny Kim reports to me on the platform team."],
-      ['B', 'Thanks Maria. Joe Park, can you send the budget draft by Friday?'],
-      ['C', 'Yes, I will send the budget draft to Maria by Friday.'],
+      ['A', "Hi all, I'm Maren Fixture. Jarek Stubbs reports to me on the platform team."],
+      ['B', 'Thanks Maren. Jonty Mockwell, can you send the budget draft by Friday?'],
+      ['C', 'Yes, I will send the budget draft to Maren by Friday.'],
       ['C', 'I also finished the vendor review last week.'],
     ]),
   },
   people: [
-    { label: 'Maria Lopez', quote: "I'm Maria Lopez", attended: true },
-    { label: 'Jenny Kim', quote: 'Jenny Kim reports to me', attended: true },
-    { label: 'Joe Park', quote: 'Joe Park, can you send the budget draft', attended: true },
+    { label: 'Maren Fixture', quote: "I'm Maren Fixture", attended: true },
+    { label: 'Jarek Stubbs', quote: 'Jarek Stubbs reports to me', attended: true },
+    { label: 'Jonty Mockwell', quote: 'Jonty Mockwell, can you send the budget draft', attended: true },
   ],
-  relations: [{ type: 'REPORTS_TO', from: 'Jenny Kim', to: 'Maria Lopez', quote: 'Jenny Kim reports to me on the platform team.' }],
+  relations: [{ type: 'REPORTS_TO', from: 'Jarek Stubbs', to: 'Maren Fixture', quote: 'Jarek Stubbs reports to me on the platform team.' }],
   commitments: [
     {
-      owner: 'Joe Park',
-      counterparty: 'Maria Lopez',
+      owner: 'Jonty Mockwell',
+      counterparty: 'Maren Fixture',
       title: 'Send the budget draft',
-      statement: 'Joe Park will send the budget draft to Maria Lopez by Friday.',
+      statement: 'Jonty Mockwell will send the budget draft to Maren Fixture by Friday.',
       status: 'open',
-      quote: 'I will send the budget draft to Maria by Friday.',
+      quote: 'I will send the budget draft to Maren by Friday.',
     },
     {
-      owner: 'Joe Park',
+      owner: 'Jonty Mockwell',
       counterparty: null,
       title: 'Finish the vendor review',
-      statement: 'Joe Park finished the vendor review.',
+      statement: 'Jonty Mockwell finished the vendor review.',
       status: 'done',
       quote: 'I also finished the vendor review last week.',
     },
@@ -116,19 +116,19 @@ export const WEEKLY_SYNC: ScenarioRecording = {
 
 /** A meeting without the boss. */
 export const STANDUP: ScenarioRecording = {
-  title: 'Joe and Jenny standup',
+  title: 'Jonty and Jarek standup',
   transcript: {
     language: 'en',
     durationMs: 8000,
     speakers: [{ label: 'A' }, { label: 'B' }],
     segments: segments([
-      ['A', 'Morning Jenny, this is Joe Park with the standup.'],
-      ['B', 'Morning Joe, Jenny Kim here. The release notes are ready.'],
+      ['A', 'Morning Jarek, this is Jonty Mockwell with the standup.'],
+      ['B', 'Morning Jonty, Jarek Stubbs here. The release notes are ready.'],
     ]),
   },
   people: [
-    { label: 'Joe Park', quote: 'this is Joe Park', attended: true },
-    { label: 'Jenny Kim', quote: 'Jenny Kim here', attended: true },
+    { label: 'Jonty Mockwell', quote: 'this is Jonty Mockwell', attended: true },
+    { label: 'Jarek Stubbs', quote: 'Jarek Stubbs here', attended: true },
   ],
   relations: [],
   commitments: [],
@@ -139,8 +139,8 @@ export const GRAPH_SCENARIO: readonly ScenarioRecording[] = [WEEKLY_SYNC, STANDU
 
 /** The two reference questions of the Ask leg. */
 export const ASK_QUESTIONS = {
-  actionItems: 'What are the action items from Joe?',
-  bossMeetings: "What meetings have we had with Jenny's boss?",
-  /** Answerable only once Joe's manager is set by hand (#586): no meeting states it. */
-  manualBossMeetings: "What meetings have we had with Joe's boss?",
+  actionItems: 'What are the action items from Jonty?',
+  bossMeetings: "What meetings have we had with Jarek's boss?",
+  /** Answerable only once Jonty's manager is set by hand (#586): no meeting states it. */
+  manualBossMeetings: "What meetings have we had with Jonty's boss?",
 } as const;
