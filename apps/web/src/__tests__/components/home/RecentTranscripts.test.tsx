@@ -110,12 +110,12 @@ describe('TranscriptSummaryCard', () => {
   it('names the owner when the API supplies one', () => {
     render(
       <TranscriptSummaryCard
-        transcript={{ ...transcript({ access: 'viewer' }), ownerName: 'Ana Ruiz' }}
+        transcript={{ ...transcript({ access: 'viewer' }), ownerName: 'Anders Stubbs' }}
         showOwner
       />,
     );
 
-    expect(screen.getByText('Shared by Ana Ruiz')).toBeInTheDocument();
+    expect(screen.getByText('Shared by Anders Stubbs')).toBeInTheDocument();
   });
 
   it('names no owner unless asked to, even though every row carries one', () => {

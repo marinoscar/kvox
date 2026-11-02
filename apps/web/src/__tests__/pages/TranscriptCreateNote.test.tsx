@@ -65,7 +65,7 @@ function serveTranscript(value: TranscriptDetail) {
 }
 
 const SPEAKERS: TranscriptSpeaker[] = [
-  { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
+  { id: 'sp1', label: 'A', displayName: 'Anders', colorIndex: 0, rev: 1 },
 ];
 
 function detail(overrides: Partial<TranscriptDetail> = {}): TranscriptDetail {

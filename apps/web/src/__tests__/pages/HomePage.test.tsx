@@ -383,9 +383,9 @@ describe('HomePage — data', () => {
 
 describe('HomePage — the hero', () => {
   it('greets the user by first name', async () => {
-    renderHome({ ...homeUser, displayName: 'Ana Ruiz' });
+    renderHome({ ...homeUser, displayName: 'Anders Stubbs' });
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Hi, Ana' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Hi, Anders' })).toBeInTheDocument();
   });
 
   it('greets a user with no display name', async () => {

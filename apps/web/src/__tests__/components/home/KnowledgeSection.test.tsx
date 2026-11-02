@@ -31,7 +31,7 @@ describe('KnowledgeSection', () => {
 
     const section = await screen.findByRole('region', { name: 'Knowledge' });
     expect(within(section).getAllByRole('listitem')).toHaveLength(6);
-    expect(within(section).getByRole('link', { name: /Joe Rivera/ })).toHaveAttribute(
+    expect(within(section).getByRole('link', { name: /Jonty Placeholder/ })).toHaveAttribute(
       'href',
       `/graph/entities/${graphEntitySummaries[0].id}`,
     );

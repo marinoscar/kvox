@@ -21,8 +21,8 @@ import { AXE_OPTIONS, transcript } from './homeFixtures';
  */
 
 const SHARED = [
-  { ...transcript({ id: 's1', title: 'Design review', access: 'viewer' }), ownerName: 'Ana Ruiz' },
-  { ...transcript({ id: 's2', title: 'Roadmap sync', access: 'editor' }), ownerName: 'Ben Olsen' },
+  { ...transcript({ id: 's1', title: 'Design review', access: 'viewer' }), ownerName: 'Anders Stubbs' },
+  { ...transcript({ id: 's2', title: 'Roadmap sync', access: 'editor' }), ownerName: 'Bram Fixture' },
 ];
 
 beforeEach(() => {
@@ -59,8 +59,8 @@ describe('SharedWithMe', () => {
   it('names who shared each one', () => {
     render(<SharedWithMe items={SHARED} />);
 
-    expect(screen.getByText('Shared by Ana Ruiz')).toBeInTheDocument();
-    expect(screen.getByText('Shared by Ben Olsen')).toBeInTheDocument();
+    expect(screen.getByText('Shared by Anders Stubbs')).toBeInTheDocument();
+    expect(screen.getByText('Shared by Bram Fixture')).toBeInTheDocument();
   });
 
   it('chips a read-only share as Viewer', () => {
@@ -91,11 +91,11 @@ describe('SharedWithMe', () => {
     // recording is the whole reason this section is separate from Recent.
     render(
       <SharedWithMe
-        items={[{ ...transcript({ id: 's3', access: 'viewer' }), ownerName: 'Dana Willis' }]}
+        items={[{ ...transcript({ id: 's3', access: 'viewer' }), ownerName: 'Darcy Testcase' }]}
       />,
     );
 
-    expect(screen.getByText('Shared by Dana Willis')).toBeInTheDocument();
+    expect(screen.getByText('Shared by Darcy Testcase')).toBeInTheDocument();
   });
 
   it('opens a shared transcript when tapped', async () => {
