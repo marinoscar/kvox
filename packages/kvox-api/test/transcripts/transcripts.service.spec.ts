@@ -890,13 +890,13 @@ describe('TranscriptsService', () => {
 
     it('parses the speaker_identities column off the SAME row the access check read', async () => {
       access.require.mockResolvedValue({
-        transcript: transcriptRow({ speakerIdentities: { A: 'Oscar' } }),
+        transcript: transcriptRow({ speakerIdentities: { A: 'Orlo' } }),
         role: 'owner',
       });
 
       const { identities } = await service.detailConditional(TRANSCRIPT_ID, USER);
 
-      expect(identities).toEqual({ A: 'Oscar' });
+      expect(identities).toEqual({ A: 'Orlo' });
       // No second read of the transcript for this — the row access.require()
       // already fetched is enough.
       expect(prisma.transcript.findUnique).not.toHaveBeenCalled();
@@ -915,7 +915,7 @@ describe('TranscriptsService', () => {
 
     it('detail() is exactly detailConditional()\'s payload', async () => {
       access.require.mockResolvedValue({
-        transcript: transcriptRow({ speakerIdentities: { A: 'Oscar' } }),
+        transcript: transcriptRow({ speakerIdentities: { A: 'Orlo' } }),
         role: 'owner',
       });
 
@@ -931,14 +931,14 @@ describe('TranscriptsService', () => {
   describe('segmentsConditional', () => {
     it('carries the same version and identities as detailConditional, off the same access check', async () => {
       access.require.mockResolvedValue({
-        transcript: transcriptRow({ currentVersion: 7, speakerIdentities: { A: 'Oscar' } }),
+        transcript: transcriptRow({ currentVersion: 7, speakerIdentities: { A: 'Orlo' } }),
         role: 'owner',
       });
 
       const { version, identities } = await service.segmentsConditional(TRANSCRIPT_ID, USER);
 
       expect(version).toBe(7);
-      expect(identities).toEqual({ A: 'Oscar' });
+      expect(identities).toEqual({ A: 'Orlo' });
     });
 
     it('segments() is exactly segmentsConditional()\'s payload', async () => {

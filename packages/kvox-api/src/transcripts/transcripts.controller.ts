@@ -57,7 +57,7 @@
 // it move without the version doing so.
 //
 // ⚠ AND IT IS NOT ONLY THE VERSION (#323). Naming an AI-detected speaker for
-// the first time ("Speaker A" → "Oscar") deliberately does NOT create a
+// the first time ("Speaker A" → "Orlo") deliberately does NOT create a
 // version, yet it changes what `GET /:id` says. So the validator is
 // `W/"v<currentVersion>"` while nobody has named a speaker — every ETag issued
 // before #323 stays valid — and `W/"v<currentVersion>-<fingerprint>"` once

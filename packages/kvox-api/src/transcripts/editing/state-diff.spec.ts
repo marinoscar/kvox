@@ -161,7 +161,7 @@ describe('speakersWithChangedNames (#405)', () => {
 describe('speakerNameChanges (#405)', () => {
   it('reports renamed, added and removed speakers, and nothing for an identical set', () => {
     const live = [
-      { id: 'A', displayName: 'Oscar' },
+      { id: 'A', displayName: 'Orlo' },
       { id: 'B', displayName: 'Speaker B' },
       { id: 'C', displayName: 'Darcy' },
     ];

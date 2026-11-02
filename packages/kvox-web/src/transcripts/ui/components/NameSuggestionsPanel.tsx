@@ -14,12 +14,12 @@
  *   ready, nothing    "No likely misspellings found"
  *   ready, something  suggestions GROUPED by `original → replacement`
  *
- * WHY GROUPED. The same mis-hearing recurs: "Skar" for "Oscar" twelve times in
+ * WHY GROUPED. The same mis-hearing recurs: "Rolo" for "Orlo" twelve times in
  * one meeting. Reviewing twelve identical rows one at a time is the kind of
  * chore that makes people click "Accept all" without reading; a group header
- * that says "Skar → Oscar ×12" makes that decision ONE honest decision, and
+ * that says "Rolo → Orlo ×12" makes that decision ONE honest decision, and
  * the rows stay underneath for the one occurrence that really was "scar".
- * The key is case-insensitive so "skar"/"Skar" do not split one mistake into
+ * The key is case-insensitive so "rolo"/"Rolo" do not split one mistake into
  * two groups.
  *
  * A STALE row (its line was edited since the check ran and the span could not

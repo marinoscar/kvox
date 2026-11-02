@@ -744,7 +744,7 @@ export function segmentEvidence(overrides: Partial<ProposalEvidence> = {}): Prop
     charStart: null,
     charEnd: null,
     quote: 'Sasha from Lambda will lead the Atlas migration.',
-    speakerName: 'Oscar',
+    speakerName: 'Orlo',
     stale: false,
     ...overrides,
   };

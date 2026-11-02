@@ -20,7 +20,7 @@ describe('doubleMetaphone', () => {
     ['Xavier', 'SF', 'SFR'],
     ['Jose', 'HS', 'HS'],
     ['Philips', 'FLPS', 'FLPS'],
-    ['Oscar', 'ASKR', 'ASKR'],
+    ['Orlo', 'ARL', 'ARL'],
     ['Nguyen', 'NKN', 'NKN'],
     ['Siobhan', 'SPN', 'XPN'],
     ['Shivon', 'XFN', 'XFN'],
@@ -33,7 +33,7 @@ describe('doubleMetaphone', () => {
   });
 
   it('is case-insensitive', () => {
-    expect(doubleMetaphone('oScAr')).toEqual(doubleMetaphone('OSCAR'));
+    expect(doubleMetaphone('oRlO')).toEqual(doubleMetaphone('ORLO'));
   });
 
   it('returns two empty keys for an empty input', () => {
@@ -64,11 +64,11 @@ describe('normalizeName / phoneticKeys', () => {
 
   it('encodes José and Jose identically', () => {
     expect(phoneticKeys('José')).toEqual(phoneticKeys('Jose'));
-    expect(phoneticKeys('Óscar')).toEqual(phoneticKeys('Oscar'));
+    expect(phoneticKeys('Órlo')).toEqual(phoneticKeys('Orlo'));
   });
 
   it('de-duplicates primary and alternate', () => {
-    expect(phoneticKeys('Oscar')).toEqual(['ASKR']);
+    expect(phoneticKeys('Orlo')).toEqual(['ARL']);
     expect(phoneticKeys('Smith')).toEqual(['SM0', 'XMT']);
     expect(phoneticKeys('')).toEqual([]);
   });
@@ -82,7 +82,7 @@ describe('jaroWinkler', () => {
   });
 
   it('is 1 for identical strings and 0 for disjoint or empty ones', () => {
-    expect(jaroWinkler('oscar', 'oscar')).toBe(1);
+    expect(jaroWinkler('orlo', 'orlo')).toBe(1);
     expect(jaroWinkler('', '')).toBe(1);
     expect(jaroWinkler('abc', '')).toBe(0);
     expect(jaroWinkler('abc', 'xyz')).toBe(0);
@@ -90,7 +90,7 @@ describe('jaroWinkler', () => {
 
   it('is symmetric and bounded', () => {
     for (const [a, b] of [
-      ['oscar', 'skar'],
+      ['orlo', 'rolo'],
       ['siobhan', 'shivon'],
       ['nguyen', 'nwin'],
     ]) {
@@ -107,7 +107,7 @@ describe('levenshtein', () => {
     expect(levenshtein('kitten', 'sitting')).toBe(3);
     expect(levenshtein('', 'abc')).toBe(3);
     expect(levenshtein('abc', 'abc')).toBe(0);
-    expect(levenshtein('ASKR', 'SKR')).toBe(1);
+    expect(levenshtein('ARL', 'RL')).toBe(1);
   });
 
   it('returns max + 1 once the bound is exceeded', () => {

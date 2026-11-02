@@ -37,9 +37,9 @@ function originals(names: string[], text: string): string[] {
 
 describe('tokenize', () => {
   it('reports UTF-16 offsets that exclude surrounding punctuation', () => {
-    const text = '"Oh, scar!" — O\'Brien-Smith’s café… 2024';
+    const text = '"Or, low!" — O\'Brien-Smith’s café… 2024';
     const toks = tokenize(text);
-    expect(toks.map((t) => t.text)).toEqual(['Oh', 'scar', "O'Brien-Smith’s", 'café', '2024']);
+    expect(toks.map((t) => t.text)).toEqual(['Or', 'low', "O'Brien-Smith’s", 'café', '2024']);
     for (const t of toks) expect(text.slice(t.start, t.end)).toBe(t.text);
   });
 
@@ -74,40 +74,40 @@ describe('buildTargets', () => {
   });
 });
 
-describe('findCandidates — Oscar', () => {
+describe('findCandidates — Orlo', () => {
   it('finds a one-token mis-hearing with exact offsets', () => {
-    const text = 'I talked to Skar yesterday.';
-    const [c, ...rest] = run(['Oscar'], [text]);
+    const text = 'I talked to Rolo yesterday.';
+    const [c, ...rest] = run(['Orlo'], [text]);
     expect(rest).toHaveLength(0);
-    expect(c).toMatchObject({ original: 'Skar', target: 'Oscar', segmentRev: 3 });
-    expect(text.slice(c!.start, c!.end)).toBe('Skar');
+    expect(c).toMatchObject({ original: 'Rolo', target: 'Orlo', segmentRev: 3 });
+    expect(text.slice(c!.start, c!.end)).toBe('Rolo');
     expect(c!.score).toBeGreaterThanOrEqual(DEFAULT_MIN_SCORE);
   });
 
   it('replaces a two-token mis-hearing as one span', () => {
-    const text = 'Well, Oh scar, are you there?';
-    const cands = run(['Oscar'], [text]);
+    const text = 'Well, Or low, are you there?';
+    const cands = run(['Orlo'], [text]);
     expect(cands).toHaveLength(1);
     const c = cands[0]!;
-    expect(c.original).toBe('Oh scar');
-    expect([c.start, c.end]).toEqual([6, 13]);
-    expect(text.slice(c.start, c.end)).toBe('Oh scar');
+    expect(c.original).toBe('Or low');
+    expect([c.start, c.end]).toEqual([6, 12]);
+    expect(text.slice(c.start, c.end)).toBe('Or low');
     expect(c.signals.tokenCount).toBe(2);
     expect(c.signals.phonetic).toBe('exact');
   });
 
   it('never proposes the correct name, its possessive, plural, or accented spelling', () => {
-    expect(originals(['Oscar'], 'Oscar is here.')).toEqual([]);
-    expect(originals(['Oscar'], "That is Oscar's car.")).toEqual([]);
-    expect(originals(['Oscar'], 'That is Oscar’s car.')).toEqual([]);
-    expect(originals(['Oscar'], 'Both Oscars agreed.')).toEqual([]);
-    expect(originals(['Oscar'], 'Óscar llegó tarde.')).toEqual([]);
-    expect(originals(['Óscar'], 'OSCAR llegó tarde.')).toEqual([]);
+    expect(originals(['Orlo'], 'Orlo is here.')).toEqual([]);
+    expect(originals(['Orlo'], "That is Orlo's car.")).toEqual([]);
+    expect(originals(['Orlo'], 'That is Orlo’s car.')).toEqual([]);
+    expect(originals(['Orlo'], 'Both Orlos agreed.')).toEqual([]);
+    expect(originals(['Orlo'], 'Órlo llegó tarde.')).toEqual([]);
+    expect(originals(['Órlo'], 'ORLO llegó tarde.')).toEqual([]);
   });
 
   it('never proposes a correctly spelled OTHER name', () => {
-    // "Oscar" and "Osca" are close, but "Osca" is a name the user gave us.
-    expect(originals(['Oscar', 'Osca'], 'Osca and Oscar met.')).toEqual([]);
+    // "Orlo" and "Orl" are close, but "Orl" is a name the user gave us.
+    expect(originals(['Orlo', 'Orl'], 'Orl and Orlo met.')).toEqual([]);
   });
 
   it('does not let a window swallow a correct name next to a misspelling', () => {
@@ -129,7 +129,7 @@ describe('findCandidates — Oscar', () => {
       'from my side, let us take a short break and continue with the engineering demo in ten minutes.';
     const sentences = paragraph.split(/(?<=[.:;])\s+/);
     expect(paragraph.split(/\s+/).length).toBeGreaterThanOrEqual(200);
-    const r = findCandidates(sentences.map((s) => seg(s)), buildTargets(['Oscar']));
+    const r = findCandidates(sentences.map((s) => seg(s)), buildTargets(['Orlo']));
     expect(r.candidates).toEqual([]);
     expect(r.scannedSegments).toBe(sentences.length);
     expect(r.scannedTokens).toBeGreaterThanOrEqual(200);
@@ -161,16 +161,16 @@ describe('findCandidates — other names', () => {
   });
 
   it('never crosses a segment boundary', () => {
-    const cands = run(['Oscar'], ['We said oh', 'scar tissue heals']);
-    expect(cands.every((c) => c.original !== 'oh scar')).toBe(true);
+    const cands = run(['Orlo'], ['We said or', 'low tide heals']);
+    expect(cands.every((c) => c.original !== 'or low')).toBe(true);
   });
 
   it('keeps at most one candidate per character, ordered by segment then offset', () => {
-    const cands = run(['Oscar'], ['Skar and Oh scar', 'Skar']);
+    const cands = run(['Orlo'], ['Rolo and Or low', 'Rolo']);
     expect(cands.map((c) => [c.segmentId, c.original])).toEqual([
-      [cands[0]!.segmentId, 'Skar'],
-      [cands[0]!.segmentId, 'Oh scar'],
-      [cands[2]!.segmentId, 'Skar'],
+      [cands[0]!.segmentId, 'Rolo'],
+      [cands[0]!.segmentId, 'Or low'],
+      [cands[2]!.segmentId, 'Rolo'],
     ]);
     expect(cands[0]!.segmentId).not.toBe(cands[2]!.segmentId);
     for (let i = 1; i < 2; i++) expect(cands[i]!.start).toBeGreaterThanOrEqual(cands[i - 1]!.end);
@@ -184,8 +184,8 @@ describe('findCandidates — other names', () => {
   });
 
   it('is deterministic', () => {
-    const texts = ['Skar and Shivon', 'Oh scar met Nwin', 'Mari Hose'];
-    const names = ['Oscar', 'Siobhan', 'Nguyen', 'María José'];
+    const texts = ['Rolo and Shivon', 'Or low met Nwin', 'Mari Hose'];
+    const names = ['Orlo', 'Siobhan', 'Nguyen', 'María José'];
     expect(run(names, texts).map(({ segmentId: _s, ...c }) => c)).toEqual(
       run(names, texts).map(({ segmentId: _s, ...c }) => c),
     );
@@ -194,15 +194,15 @@ describe('findCandidates — other names', () => {
 
 describe('findCandidates — word confidence', () => {
   it('raises the score when the aligned words have low confidence', () => {
-    const text = 'I spoke with Skar, today.';
+    const text = 'I spoke with Rolo, today.';
     const words = (c: number | null) => [
       { t: 'I', c: 0.99 },
       { t: 'spoke', c: 0.98 },
       { t: 'with', c: 0.97 },
-      { t: 'Skar,', c },
+      { t: 'Rolo,', c },
       { t: 'today.', c: 0.99 },
     ];
-    const targets = buildTargets(['Oscar']);
+    const targets = buildTargets(['Orlo']);
     const plain = findCandidates([seg(text)], targets).candidates[0]!;
     const confident = findCandidates([seg(text, words(0.95))], targets).candidates[0]!;
     const doubtful = findCandidates([seg(text, words(0.2))], targets).candidates[0]!;
@@ -218,8 +218,8 @@ describe('findCandidates — word confidence', () => {
 
   it('survives words that do not line up with the text', () => {
     const r = findCandidates(
-      [seg('I spoke with Skar today', [{ t: 'completely', c: 0.1 }, { t: 'different', c: 0.1 }])],
-      buildTargets(['Oscar']),
+      [seg('I spoke with Rolo today', [{ t: 'completely', c: 0.1 }, { t: 'different', c: 0.1 }])],
+      buildTargets(['Orlo']),
     );
     expect(r.candidates).toHaveLength(1);
     expect(r.candidates[0]!.signals.minConfidence).toBeNull();
@@ -228,15 +228,15 @@ describe('findCandidates — word confidence', () => {
 
 describe('findCandidates — cap', () => {
   it('keeps the highest scores and reports truncation', () => {
-    const texts = Array.from({ length: 10 }, (_, i) => (i % 2 === 0 ? 'Oh scar' : 'Skar'));
-    const targets = buildTargets(['Oscar']);
+    const texts = Array.from({ length: 10 }, (_, i) => (i % 2 === 0 ? 'Or low' : 'Rolo'));
+    const targets = buildTargets(['Orlo']);
     const full = findCandidates(texts.map((t) => seg(t)), targets);
     expect(full.truncated).toBe(false);
     expect(full.candidates).toHaveLength(10);
 
     const capped = findCandidates(texts.map((t) => seg(t)), targets, { maxCandidates: 5 });
     expect(capped.truncated).toBe(true);
-    expect(capped.candidates.map((c) => c.original)).toEqual(Array(5).fill('Oh scar'));
+    expect(capped.candidates.map((c) => c.original)).toEqual(Array(5).fill('Or low'));
   });
 });
 
@@ -265,15 +265,15 @@ describe('findCandidates — performance', () => {
   ).split(/\s+/);
 
   const NAMES = [
-    'Oscar', 'Siobhan', 'Nguyen', 'María José', 'Kathryn', 'Joaquín', 'Xiomara', 'Priya', 'Rajesh',
+    'Orlo', 'Siobhan', 'Nguyen', 'María José', 'Kathryn', 'Joaquín', 'Xiomara', 'Priya', 'Rajesh',
     'Wojciech', 'Saoirse', 'Guillermo', 'Deepak', 'Chandra', 'Ximena', 'Ignacio', 'Bartholomew',
     'Penelope', 'Thaddeus', 'Ingrid',
   ];
 
   // [misspelling, expected target]
   const INJECTED: Array<[string, string]> = [
-    ['Skar', 'Oscar'],
-    ['Oh scar', 'Oscar'],
+    ['Rolo', 'Orlo'],
+    ['Or low', 'Orlo'],
     ['Shivon', 'Siobhan'],
     ['Nguyin', 'Nguyen'],
     ['Mari Hose', 'María José'],

@@ -14,13 +14,13 @@ function segments(n: number) {
     rev: 1,
     speakerId: 'A',
     startMs: i * 1000,
-    text: `Segment number ${i} mentions Skar the friend.`,
+    text: `Segment number ${i} mentions Rolo the friend.`,
   }));
 }
 
 describe('estimateNameCheck', () => {
   it('standard mode counts only the adjudication requests, no discovery', () => {
-    const targets = buildTargets(['Oscar']);
+    const targets = buildTargets(['Orlo']);
     const segs = segments(3);
     const segmentIndex = new Map(segs.map((s, i) => [s.id, i]));
 
@@ -39,7 +39,7 @@ describe('estimateNameCheck', () => {
   });
 
   it('thorough mode adds discovery requests on top of adjudication', () => {
-    const targets = buildTargets(['Oscar']);
+    const targets = buildTargets(['Orlo']);
     const segs = segments(3);
     const segmentIndex = new Map(segs.map((s, i) => [s.id, i]));
     const speakerNames = new Map([['A', 'Ana']]);
@@ -66,7 +66,7 @@ describe('estimateNameCheck', () => {
   });
 
   it('returns zero requests and tokens when there are no candidates and no segments', () => {
-    const targets = buildTargets(['Oscar']);
+    const targets = buildTargets(['Orlo']);
 
     const estimate = estimateNameCheck({
       mode: 'standard',
@@ -83,7 +83,7 @@ describe('estimateNameCheck', () => {
   });
 
   it('honours a custom chunkTokens for discovery packing', () => {
-    const targets = buildTargets(['Oscar']);
+    const targets = buildTargets(['Orlo']);
     const segs = segments(6);
     const segmentIndex = new Map(segs.map((s, i) => [s.id, i]));
     const speakerNames = new Map([['A', 'Ana']]);

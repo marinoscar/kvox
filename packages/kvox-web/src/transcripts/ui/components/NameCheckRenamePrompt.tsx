@@ -1,9 +1,9 @@
 /**
  * The nudge after a speaker rename — issue #329, epic #326.
  *
- * The moment somebody types "Oscar" over "Speaker A" is the moment they know
+ * The moment somebody types "Orlo" over "Speaker A" is the moment they know
  * the name the recognizer has probably been mangling all along, so this offers
- * to go and look: `Check the transcript for misheard "Oscar"?`.
+ * to go and look: `Check the transcript for misheard "Orlo"?`.
  *
  * It is a NUDGE, so unlike the explicit "Fix names with AI" action it is shown
  * only when the check could actually run — a key saved and AI enabled. An

@@ -65,7 +65,7 @@ export class TranscriptNameChecksController {
     summary: 'Check a transcript for mis-transcribed names',
     description:
       'Queues a `transcript.name_check` job that looks for places where speech recognition ' +
-      'mis-heard a name — "Skar" or "Oh scar" for "Oscar" — and proposes corrections. Nothing ' +
+      'mis-heard a name — "Rolo" or "Or low" for "Orlo" — and proposes corrections. Nothing ' +
       'in the transcript changes until suggestions are accepted through ' +
       '`POST /api/transcripts/{id}/name-checks/{checkId}/apply`.\n\n' +
       'The names checked for are the display names of the selected speakers (`speakerIds`, ' +

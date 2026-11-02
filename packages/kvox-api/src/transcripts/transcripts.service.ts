@@ -460,7 +460,7 @@ export class TranscriptsService {
    * from.
    *
    * ⚠ THE VERSION IS NOT ENOUGH ON ITS OWN ANY MORE (#323). Naming "Speaker A"
-   * as "Oscar" changes this response's `speakers` without moving
+   * as "Orlo" changes this response's `speakers` without moving
    * `currentVersion`, so a validator built from the version alone would answer
    * a polling editor `304` forever and they would never see the name. The
    * identities map comes off the SAME row the access check already read, so

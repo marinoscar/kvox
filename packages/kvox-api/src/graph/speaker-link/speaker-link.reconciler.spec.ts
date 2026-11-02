@@ -402,11 +402,11 @@ describe('effectiveSpeakerNames (#405)', () => {
   it('overlays an identity only on a speaker still on its placeholder', () => {
     const names = effectiveSpeakerNames(
       [speaker('a', 'A', 'Speaker A'), speaker('b', 'B', 'Jonty')],
-      { a: 'Oscar', b: 'Oscar' },
+      { a: 'Orlo', b: 'Orlo' },
     );
-    // `b` was renamed Oscar → Jonty through the versioned path: the correction
+    // `b` was renamed Orlo → Jonty through the versioned path: the correction
     // recorded in the live row outranks the stale identity, as in materialize().
-    expect(Object.fromEntries(names)).toEqual({ a: 'Oscar', b: 'Jonty' });
+    expect(Object.fromEntries(names)).toEqual({ a: 'Orlo', b: 'Jonty' });
   });
 
   it('reads a live name that has no identity entry (a versioned rename, a created speaker)', () => {

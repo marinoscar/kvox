@@ -41,7 +41,7 @@ const segmentRows = [
     rev: 1,
     speakerId: 's-a',
     startMs: 0,
-    text: 'They called him Skar yesterday.',
+    text: 'They called him Rolo yesterday.',
     words: null,
   },
 ];
@@ -53,7 +53,7 @@ function runRow(overrides: Record<string, unknown> = {}) {
     requestedById: USER_ID,
     mode: 'standard',
     status: 'pending',
-    terms: ['Oscar'],
+    terms: ['Orlo'],
     providerId: null,
     model: null,
     transcript: { id: TRANSCRIPT_ID, status: 'ready', deletedAt: null },
@@ -115,7 +115,7 @@ function userPrompts(ai: FakeKvoxAi): string[] {
 const keepJson = JSON.stringify({ results: [{ id: 'c1', verdict: 'keep' }] });
 /** A replace-with-target adjudication answer. */
 const replaceJson = JSON.stringify({
-  results: [{ id: 'c1', verdict: 'replace', replacement: 'Oscar', confidence: 0.95, reason: 'sounds like it' }],
+  results: [{ id: 'c1', verdict: 'replace', replacement: 'Orlo', confidence: 0.95, reason: 'sounds like it' }],
 });
 
 interface Harness {
@@ -235,12 +235,12 @@ describe('describeNameCheckError', () => {
 
 describe('readTerms', () => {
   it('keeps only non-blank strings', () => {
-    expect(readTerms(['Oscar', '', '  ', 42, null, 'Anders'])).toEqual(['Oscar', 'Anders']);
+    expect(readTerms(['Orlo', '', '  ', 42, null, 'Anders'])).toEqual(['Orlo', 'Anders']);
   });
 
   it('returns [] for anything that is not an array', () => {
     expect(readTerms(null)).toEqual([]);
-    expect(readTerms('Oscar')).toEqual([]);
+    expect(readTerms('Orlo')).toEqual([]);
   });
 });
 
@@ -297,8 +297,8 @@ describe('TranscriptNameCheckHandler — a standard run', () => {
     expect(suggestions[0]).toMatchObject({
       checkId: CHECK_ID,
       segmentId: 'seg-1',
-      original: 'Skar',
-      replacement: 'Oscar',
+      original: 'Rolo',
+      replacement: 'Orlo',
       source: 'phonetic',
     });
 
@@ -392,7 +392,7 @@ describe('TranscriptNameCheckHandler — malformed answers', () => {
     // "no suggestions from discovery" must not become "no suggestions at
     // all", let alone a failed run.
     const segments = [
-      { id: 'seg-1', rev: 1, speakerId: 's-a', startMs: 0, text: 'They called him Skar yesterday.', words: null },
+      { id: 'seg-1', rev: 1, speakerId: 's-a', startMs: 0, text: 'They called him Rolo yesterday.', words: null },
     ];
     const { handler, tx, prisma } = harness({
       ai: answering('garbage', 'garbage', replaceJson),
@@ -531,7 +531,7 @@ describe('TranscriptNameCheckHandler — failure handling', () => {
 
 describe('TranscriptNameCheckHandler — thorough mode', () => {
   it('runs a discovery call before adjudicating, merging discovery findings with the phonetic pass', async () => {
-    // "Skar" is caught by the phonetic pass on its own; "a car" (further along
+    // "Rolo" is caught by the phonetic pass on its own; "a car" (further along
     // the same line) is not — only discovery finds it, and the two spans do
     // not overlap, so both survive `mergeCandidates`.
     const segments = [
@@ -540,17 +540,17 @@ describe('TranscriptNameCheckHandler — thorough mode', () => {
         rev: 1,
         speakerId: 's-a',
         startMs: 0,
-        text: 'They called him Skar and later a car appeared.',
+        text: 'They called him Rolo and later a car appeared.',
         words: null,
       },
     ];
     const discoveryAnswer = JSON.stringify({
-      findings: [{ seg: 0, text: 'a car', target: 'Oscar' }],
+      findings: [{ seg: 0, text: 'a car', target: 'Orlo' }],
     });
     const bothReplaceJson = JSON.stringify({
       results: [
-        { id: 'c1', verdict: 'replace', replacement: 'Oscar' },
-        { id: 'c2', verdict: 'replace', replacement: 'Oscar' },
+        { id: 'c1', verdict: 'replace', replacement: 'Orlo' },
+        { id: 'c2', verdict: 'replace', replacement: 'Orlo' },
       ],
     });
     const { handler, tx, ai } = harness({
@@ -571,7 +571,7 @@ describe('TranscriptNameCheckHandler — thorough mode', () => {
     expect(suggestions).toHaveLength(2);
     expect(suggestions.map((s) => s.source).sort()).toEqual(['discovery', 'phonetic']);
     expect(suggestions.find((s) => s.source === 'discovery')?.original).toBe('a car');
-    expect(suggestions.find((s) => s.source === 'phonetic')?.original).toBe('Skar');
+    expect(suggestions.find((s) => s.source === 'phonetic')?.original).toBe('Rolo');
   });
 });
 

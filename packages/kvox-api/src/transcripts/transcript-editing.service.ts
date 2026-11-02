@@ -44,12 +44,12 @@
 // -----------------------------------------------------------------------------
 //
 // A batch made ONLY of `speaker.rename` ops that each either replace an
-// ingest placeholder with a real name ("Speaker A" → "Oscar") or change
+// ingest placeholder with a real name ("Speaker A" → "Orlo") or change
 // nothing at all takes a second, unversioned path: `saveIdentifications`. It
 // writes the name to the live speaker row and to
 // `transcripts.speaker_identities`, and nothing else — no `current_version`
 // bump, no `transcript_versions` row, no snapshot. `materialize()` overlays the
-// map on every version, so history shows "Oscar" too. Renaming Oscar to Jonty is
+// map on every version, so history shows "Orlo" too. Renaming Orlo to Jonty is
 // a correction and stays versioned. `editing/speaker-identity.ts` carries the
 // full argument; the two invariants this file must keep for it are:
 //
@@ -59,7 +59,7 @@
 //     in `replay` mode;
 //   • a versioned batch that puts a speaker BACK on its placeholder deletes
 //     that speaker's identity entry in the same transaction — otherwise the
-//     overlay would turn the live "Speaker A" back into "Oscar" and
+//     overlay would turn the live "Speaker A" back into "Orlo" and
 //     `materialize(current) == live` would break.
 //
 // -----------------------------------------------------------------------------
@@ -296,7 +296,7 @@ export class TranscriptEditingService {
 
         await this.afterCommit(transcript.id, saved, expanded, user);
 
-        // #405: a versioned rename ("Oscar" → "Jonty"), a clear back to the
+        // #405: a versioned rename ("Orlo" → "Jonty"), a clear back to the
         // placeholder, a created, merged or deleted speaker — each changes
         // which name a speaker shows, so the graph must re-reconcile exactly
         // as it does after an identification.
@@ -580,7 +580,7 @@ export class TranscriptEditingService {
           // bump above cannot see it — may have committed since. Writing the
           // placeholder back into live while the map names that speaker would
           // leave live saying "Speaker A" where `materialize(current)` says
-          // "Oscar". The overlay is idempotent, so re-applying it is free.
+          // "Orlo". The overlay is idempotent, so re-applying it is free.
           const identities = await this.readIdentities(tx, transcript.id);
 
           restored = applyIdentities(target.state, identities);
@@ -758,15 +758,15 @@ export class TranscriptEditingService {
         // not move `current_version` and the bump's lock is the only thing
         // ordering this read after one that committed a moment ago.
         //
-        // Without this, "Oscar" → "Speaker A" would be written to live and
-        // then overlaid straight back to "Oscar" by every `materialize()`,
+        // Without this, "Orlo" → "Speaker A" would be written to live and
+        // then overlaid straight back to "Orlo" by every `materialize()`,
         // breaking `materialize(current) == live`. The honest consequence of
         // deleting the entry: every OLDER version that replays to the
         // placeholder for this speaker now shows "Speaker A" too, where it
-        // showed "Oscar" before — the user has, in effect, withdrawn the
+        // showed "Orlo" before — the user has, in effect, withdrawn the
         // identification, and the overlay can only express "identified" or
         // "not" for the whole history, never per version. (Versions whose
-        // snapshot was taken from live tables after the naming keep "Oscar"
+        // snapshot was taken from live tables after the naming keep "Orlo"
         // baked in; that is the only place the old name survives.)
         await this.retireIdentities(tx, transcriptId, applied.state);
 
@@ -1079,14 +1079,14 @@ export class TranscriptEditingService {
 
     if (saved.identified.length > 0) {
       // The search index chunks carry speaker names, so a naming changes what
-      // a search for "Oscar" should find — for the same reason `afterCommit`
+      // a search for "Orlo" should find — for the same reason `afterCommit`
       // enqueues it unconditionally. There is deliberately NO snapshot: no
       // version was created, so there is nothing new to compact.
       await this.pipeline.enqueueSearchIndex(transcriptId);
 
       // AUDITED because it is the one change to what a transcript says that
       // leaves no row in its version history: without this, "who decided that
-      // voice was Oscar?" would have no answer anywhere.
+      // voice was Orlo?" would have no answer anywhere.
       await this.audit(user.id, 'transcript.speaker_identified', transcriptId, {
         speakers: saved.identified,
       });
@@ -1167,7 +1167,7 @@ export class TranscriptEditingService {
           // named or renamed this speaker between the routing read and this
           // lock — and because an identification leaves `rev` alone, a rev
           // check alone might not notice. Proceeding would overwrite their
-          // "Jonty" with this client's "Oscar" without either of them seeing
+          // "Jonty" with this client's "Orlo" without either of them seeing
           // the other's choice.
           if (kind !== 'identification' || speaker.rev !== op.rev) {
             conflicts.push({ entity: 'speaker', id: speaker.id, current: speaker.rev });

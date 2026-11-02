@@ -21,7 +21,7 @@ import {
 describe('resolveTerms', () => {
   const speakers = [
     { id: 's-a', label: 'A', displayName: 'Speaker A' },
-    { id: 's-b', label: 'B', displayName: 'Oscar' },
+    { id: 's-b', label: 'B', displayName: 'Orlo' },
     { id: 's-c', label: null, displayName: 'Unknown speaker' },
   ];
 
@@ -46,17 +46,17 @@ describe('resolveTerms', () => {
 
   it('includes a speaker with a real display name', () => {
     const out = resolveTerms({ speakers, providerOptions: {} });
-    expect(out).toContain('Oscar');
+    expect(out).toContain('Orlo');
   });
 
   it('dedups case-insensitively, first spelling wins, across speakers/terms/keyterms', () => {
     const out = resolveTerms({
       speakers,
-      terms: ['oscar', 'Anders'],
+      terms: ['orlo', 'Anders'],
       providerOptions: { keyterms: ['ANDERS'] },
     });
-    // Speaker "Oscar" first, then "Anders" from terms (not re-added by keyterms).
-    expect(out.filter((n) => n.toLowerCase() === 'oscar')).toHaveLength(1);
+    // Speaker "Orlo" first, then "Anders" from terms (not re-added by keyterms).
+    expect(out.filter((n) => n.toLowerCase() === 'orlo')).toHaveLength(1);
     expect(out.filter((n) => n.toLowerCase() === 'anders')).toHaveLength(1);
   });
 
@@ -67,7 +67,7 @@ describe('resolveTerms', () => {
 
   it('filters to only the requested speakerIds, and rejects an unknown one', () => {
     const out = resolveTerms({ speakers, speakerIds: ['s-b'], providerOptions: {} });
-    expect(out).toEqual(['Oscar']);
+    expect(out).toEqual(['Orlo']);
 
     expect(() =>
       resolveTerms({ speakers, speakerIds: ['s-b', 'does-not-exist'], providerOptions: {} }),
@@ -87,7 +87,7 @@ describe('toRunView', () => {
       mode: 'standard',
       status: 'ready',
       basedOnVersion: 3,
-      terms: ['Oscar'],
+      terms: ['Orlo'],
       providerId: 'openai',
       model: 'gpt-4o',
       candidateCount: 1,
@@ -166,7 +166,7 @@ function harness() {
         mode: 'standard',
         status: 'pending',
         basedOnVersion: 3,
-        terms: ['Oscar'],
+        terms: ['Orlo'],
         providerId: 'openai',
         model: 'gpt-4o',
         candidateCount: 0,
@@ -247,7 +247,7 @@ describe('TranscriptNameCheckService.create', () => {
 
   it('asks readiness for the name-check feature on the default model, as the caller', async () => {
     const { service, ai, prisma } = harness();
-    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Oscar' }]);
+    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Orlo' }]);
 
     await service.create(TRANSCRIPT_ID, { mode: 'standard' } as never, USER);
 
@@ -260,7 +260,7 @@ describe('TranscriptNameCheckService.create', () => {
 
   it('records the provider and model the run will use', async () => {
     const { service, prisma } = harness();
-    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Oscar' }]);
+    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Orlo' }]);
 
     await service.create(TRANSCRIPT_ID, { mode: 'standard' } as never, USER);
 
@@ -292,7 +292,7 @@ describe('TranscriptNameCheckService.create', () => {
 
   it('enqueues transcript.name_check carrying the created run id as payload.checkId', async () => {
     const { service, prisma, jobs } = harness();
-    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Oscar' }]);
+    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Orlo' }]);
 
     const result = await service.create(TRANSCRIPT_ID, { mode: 'standard' } as never, USER);
 
@@ -311,7 +311,7 @@ describe('TranscriptNameCheckService.create', () => {
 
   it('returns a 202-shaped body: { run, estimate }', async () => {
     const { service, prisma } = harness();
-    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Oscar' }]);
+    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Orlo' }]);
 
     const result = await service.create(TRANSCRIPT_ID, { mode: 'standard' } as never, USER);
 
@@ -368,7 +368,7 @@ describe('TranscriptNameCheckService.latest', () => {
       mode: 'standard',
       status: 'ready',
       basedOnVersion: 3,
-      terms: ['Oscar'],
+      terms: ['Orlo'],
       providerId: 'openai',
       model: 'gpt-4o',
       candidateCount: 1,
@@ -388,20 +388,20 @@ describe('TranscriptNameCheckService.latest', () => {
         segmentId: 'seg-1',
         start: 999,
         end: 1003,
-        original: 'Skar',
-        replacement: 'Oscar',
+        original: 'Rolo',
+        replacement: 'Orlo',
         confidence: 0.9,
         reason: 'sounds like it',
         source: 'phonetic',
       },
-      { id: 'seg-1', text: 'They called him Skar yesterday.', speakerId: 's-a', startMs: 0 },
+      { id: 'seg-1', text: 'They called him Rolo yesterday.', speakerId: 's-a', startMs: 0 },
     );
 
     const result = await service.latest(TRANSCRIPT_ID, USER);
 
     expect(result.suggestions).toHaveLength(1);
-    // The stored [999,1003) no longer reads "Skar"; it relocates because
-    // "Skar" occurs exactly once as a whole word.
+    // The stored [999,1003) no longer reads "Rolo"; it relocates because
+    // "Rolo" occurs exactly once as a whole word.
     expect(result.suggestions[0]!.stale).toBe(false);
     expect(result.suggestions[0]!.start).toBe(16);
     expect(result.suggestions[0]!.end).toBe(20);
@@ -415,7 +415,7 @@ describe('TranscriptNameCheckService.latest', () => {
       mode: 'standard',
       status: 'ready',
       basedOnVersion: 3,
-      terms: ['Oscar'],
+      terms: ['Orlo'],
       providerId: 'openai',
       model: 'gpt-4o',
       candidateCount: 1,
@@ -435,8 +435,8 @@ describe('TranscriptNameCheckService.latest', () => {
         segmentId: 'seg-1',
         start: 999,
         end: 1003,
-        original: 'Skar',
-        replacement: 'Oscar',
+        original: 'Rolo',
+        replacement: 'Orlo',
         confidence: 0.9,
         reason: null,
         source: 'phonetic',
@@ -510,8 +510,8 @@ describe('TranscriptNameCheckService.apply', () => {
         status: 'pending',
         start: 16,
         end: 20,
-        original: 'Skar',
-        replacement: 'Oscar',
+        original: 'Rolo',
+        replacement: 'Orlo',
       },
     ]);
     (prisma as unknown as { transcriptSegment: { findMany: jest.Mock } }).transcriptSegment = {
@@ -519,7 +519,7 @@ describe('TranscriptNameCheckService.apply', () => {
         {
           id: 'seg-1',
           rev: 7,
-          text: 'They called him Skar yesterday.',
+          text: 'They called him Rolo yesterday.',
           startMs: 0,
           ordinal: 1,
         },
@@ -543,7 +543,7 @@ describe('TranscriptNameCheckService.apply', () => {
 
     expect(editing.applyOperations).toHaveBeenCalledTimes(1);
     const [, dto, , options] = editing.applyOperations.mock.calls[0];
-    expect(dto.ops).toEqual([{ op: 'segment.update_text', segmentId: 'seg-1', rev: 7, text: 'They called him Oscar yesterday.' }]);
+    expect(dto.ops).toEqual([{ op: 'segment.update_text', segmentId: 'seg-1', rev: 7, text: 'They called him Orlo yesterday.' }]);
     expect(options?.summary).toContain('AI name correction');
     expect(result.applied).toBe(1);
     expect(result.version).toBe(4);
@@ -560,8 +560,8 @@ describe('TranscriptNameCheckService.apply', () => {
       status: 'pending',
       start: 0,
       end: 4,
-      original: 'Skar',
-      replacement: 'Oscar',
+      original: 'Rolo',
+      replacement: 'Orlo',
     }));
     prisma.transcriptNameSuggestion.findMany.mockResolvedValue(suggestions);
     (prisma as unknown as { transcriptSegment: { findMany: jest.Mock } }).transcriptSegment = {
@@ -569,7 +569,7 @@ describe('TranscriptNameCheckService.apply', () => {
         Array.from({ length: MAX + 1 }, (_, i) => ({
           id: `seg-${i}`,
           rev: 1,
-          text: 'Skar was here.',
+          text: 'Rolo was here.',
           startMs: i,
           ordinal: i,
         })),
@@ -598,13 +598,13 @@ describe('TranscriptNameCheckService.apply', () => {
       status: 'pending',
       start: 16,
       end: 20,
-      original: 'Skar',
-      replacement: 'Oscar',
+      original: 'Rolo',
+      replacement: 'Orlo',
     };
     prisma.transcriptNameSuggestion.findMany.mockResolvedValue([suggestion]);
     (prisma as unknown as { transcriptSegment: { findMany: jest.Mock } }).transcriptSegment = {
       findMany: jest.fn().mockResolvedValue([
-        { id: 'seg-1', rev: 7, text: 'They called him Skar yesterday.', startMs: 0, ordinal: 1 },
+        { id: 'seg-1', rev: 7, text: 'They called him Rolo yesterday.', startMs: 0, ordinal: 1 },
       ]),
     };
     editing.applyOperations.mockResolvedValue({ version: 4, summary: 'x', speakers: [], segments: [], merges: [] });
@@ -629,13 +629,13 @@ describe('TranscriptNameCheckService.apply', () => {
       status: 'pending',
       start: 16,
       end: 20,
-      original: 'Skar',
-      replacement: 'Oscar',
+      original: 'Rolo',
+      replacement: 'Orlo',
     };
     prisma.transcriptNameSuggestion.findMany.mockResolvedValue([suggestion]);
     (prisma as unknown as { transcriptSegment: { findMany: jest.Mock } }).transcriptSegment = {
       findMany: jest.fn().mockResolvedValue([
-        { id: 'seg-1', rev: 7, text: 'They called him Skar yesterday.', startMs: 0, ordinal: 1 },
+        { id: 'seg-1', rev: 7, text: 'They called him Rolo yesterday.', startMs: 0, ordinal: 1 },
       ]),
     };
 
@@ -643,7 +643,7 @@ describe('TranscriptNameCheckService.apply', () => {
     // seg-1 as an edited segment.
     (prisma as unknown as { transcriptVersion: { findUnique: jest.Mock } }).transcriptVersion = {
       findUnique: jest.fn().mockResolvedValue({
-        ops: [{ op: 'segment.update_text', segmentId: 'seg-1', rev: 7, text: 'They called him Oscar yesterday.' }],
+        ops: [{ op: 'segment.update_text', segmentId: 'seg-1', rev: 7, text: 'They called him Orlo yesterday.' }],
       }),
     };
     editing.applyOperations.mockResolvedValue({ version: 4, summary: 'Applied', speakers: [], segments: [], merges: [] });
@@ -668,8 +668,8 @@ describe('TranscriptNameCheckService.apply', () => {
       status: 'pending',
       start: 999,
       end: 1003,
-      original: 'Skar',
-      replacement: 'Oscar',
+      original: 'Rolo',
+      replacement: 'Orlo',
     };
     prisma.transcriptNameSuggestion.findMany.mockResolvedValue([suggestion]);
     (prisma as unknown as { transcriptSegment: { findMany: jest.Mock } }).transcriptSegment = {
@@ -701,13 +701,13 @@ describe('TranscriptNameCheckService.apply', () => {
         status: 'pending',
         start: 16,
         end: 20,
-        original: 'Skar',
-        replacement: 'Oscar',
+        original: 'Rolo',
+        replacement: 'Orlo',
       },
     ]);
     (prisma as unknown as { transcriptSegment: { findMany: jest.Mock } }).transcriptSegment = {
       findMany: jest.fn().mockResolvedValue([
-        { id: 'seg-1', rev: 7, text: 'They called him Skar yesterday.', startMs: 0, ordinal: 1 },
+        { id: 'seg-1', rev: 7, text: 'They called him Rolo yesterday.', startMs: 0, ordinal: 1 },
       ]),
     };
     editing.applyOperations.mockResolvedValue({ version: 4, summary: 'x', speakers: [], segments: [], merges: [] });
@@ -739,7 +739,7 @@ describe('TranscriptNameCheckService.estimate', () => {
         source: 'default',
       };
     };
-    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Oscar' }]);
+    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Orlo' }]);
 
     const estimate = await service.estimate(TRANSCRIPT_ID, { mode: 'standard' } as never, USER);
 

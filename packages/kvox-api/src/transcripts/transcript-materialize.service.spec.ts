@@ -67,13 +67,13 @@ describe('materialize() overlays speaker identities (#323)', () => {
   it('shows the identified name on an OLDER version rebuilt from a snapshot', async () => {
     const { service, prisma, objects } = build();
 
-    // The transcript is at v5 today, with "Speaker A" identified as "Oscar" —
+    // The transcript is at v5 today, with "Speaker A" identified as "Orlo" —
     // an unversioned write that never touched the snapshot below.
     prisma.transcript.findUnique.mockResolvedValue({
       id: TRANSCRIPT_ID,
       currentVersion: 5,
       deletedAt: null,
-      speakerIdentities: { [SPEAKER_A]: 'Oscar' },
+      speakerIdentities: { [SPEAKER_A]: 'Orlo' },
     });
 
     // A v1 snapshot, taken before anybody named the speaker: it genuinely
@@ -101,7 +101,7 @@ describe('materialize() overlays speaker identities (#323)', () => {
 
     const { state } = await service.materialize(TRANSCRIPT_ID, 2);
 
-    expect(state.speakers.find((row) => row.id === SPEAKER_A)?.displayName).toBe('Oscar');
+    expect(state.speakers.find((row) => row.id === SPEAKER_A)?.displayName).toBe('Orlo');
   });
 
   it('keeps a VERSIONED rename — the overlay never overrides a real correction', async () => {
@@ -115,7 +115,7 @@ describe('materialize() overlays speaker identities (#323)', () => {
       // versioned rename puts it back on the placeholder and retires the
       // entry (`retireIdentities`, in the editing service). Here it has not
       // been retired, and the overlay must still lose to the version log.
-      speakerIdentities: { [SPEAKER_A]: 'Oscar' },
+      speakerIdentities: { [SPEAKER_A]: 'Orlo' },
     });
 
     const snapshotPayload: SnapshotPayload = {
@@ -146,7 +146,7 @@ describe('materialize() overlays speaker identities (#323)', () => {
 
     const { state } = await service.materialize(TRANSCRIPT_ID, 2);
 
-    // Not "Oscar": the speaker is no longer carrying its placeholder, so
+    // Not "Orlo": the speaker is no longer carrying its placeholder, so
     // `applyIdentities` leaves it alone.
     expect(state.speakers.find((row) => row.id === SPEAKER_A)?.displayName).toBe('Renamed');
   });

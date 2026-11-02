@@ -339,7 +339,7 @@ describe('SegmentList — per-line playback (#108)', () => {
   });
 
   it('mounts NO play button when no handler is given', () => {
-    // The read-only preview (the history page, the visual baselines) gets the
+    // The read-only preview (the history page) gets the
     // reader #30 shipped: the control does not exist rather than existing
     // disabled, because a disabled button is still something to announce.
     renderList();

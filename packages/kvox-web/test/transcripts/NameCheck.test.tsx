@@ -29,7 +29,7 @@ import type {
 import type { TranscriptSpeaker } from '../../src/transcripts/headless/clients/transcripts.js';
 
 const SPEAKERS: TranscriptSpeaker[] = [
-  { id: '11111111-1111-4111-8111-111111111111', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
+  { id: '11111111-1111-4111-8111-111111111111', label: 'A', displayName: 'Orlo', colorIndex: 0, rev: 1 },
   { id: '22222222-2222-4222-8222-222222222222', label: 'B', displayName: 'Speaker B', colorIndex: 1, rev: 1 },
   { id: '33333333-3333-4333-8333-333333333333', label: 'C', displayName: 'Anders Testcase', colorIndex: 2, rev: 1 },
 ];
@@ -59,7 +59,7 @@ function run(overrides: Partial<NameCheckRun> = {}): NameCheckRun {
     mode: 'standard',
     status: 'ready',
     basedOnVersion: 4,
-    terms: ['Oscar'],
+    terms: ['Orlo'],
     providerId: 'openai',
     model: 'gpt-test',
     candidateCount: 3,
@@ -83,12 +83,12 @@ function suggestion(id: string, overrides: Partial<NameSuggestion> = {}): NameSu
     startMs: 12_000,
     start: 4,
     end: 8,
-    original: 'Skar',
-    replacement: 'Oscar',
+    original: 'Rolo',
+    replacement: 'Orlo',
     confidence: 0.92,
     reason: 'Sounds like the speaker name',
     source: 'phonetic',
-    preview: 'Hi, Skar here',
+    preview: 'Hi, Rolo here',
     stale: false,
     ...overrides,
   };
@@ -160,7 +160,7 @@ describe('NameCheckDialog', () => {
   it('lists only named speakers, all checked, and shows the estimate', async () => {
     renderDialog();
 
-    expect(await screen.findByRole('checkbox', { name: 'Oscar' })).toBeChecked();
+    expect(await screen.findByRole('checkbox', { name: 'Orlo' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Anders Testcase' })).toBeChecked();
     // A generic label is never offered — the server would drop it anyway.
     expect(screen.queryByRole('checkbox', { name: 'Speaker B' })).not.toBeInTheDocument();
@@ -203,7 +203,7 @@ describe('NameCheckDialog', () => {
     renderDialog({ initialSpeakerIds: [SPEAKERS[2].id] });
 
     expect(await screen.findByRole('checkbox', { name: 'Anders Testcase' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Oscar' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Orlo' })).not.toBeChecked();
   });
 
   it('renders AiKeyRequired when the caller has no key', async () => {
@@ -263,8 +263,8 @@ describe('NameSuggestionsPanel', () => {
     suggestion('b1111111-0000-4000-8000-000000000002', {
       segmentId: 's2',
       startMs: 30_000,
-      original: 'skar',
-      preview: 'said skar again',
+      original: 'rolo',
+      preview: 'said rolo again',
     }),
     suggestion('b1111111-0000-4000-8000-000000000003', {
       segmentId: 's3',
@@ -309,7 +309,7 @@ describe('NameSuggestionsPanel', () => {
     const groups = groupNameSuggestions(SUGGESTIONS);
     expect(groups.map((group) => [group.original, group.replacement, group.suggestions.length]))
       .toEqual([
-        ['Skar', 'Oscar', 3],
+        ['Rolo', 'Orlo', 3],
         ['Annika Fixture', 'Anders Testcase', 1],
       ]);
     // The stale row is in the group but never in what a group Accept sends.
@@ -320,7 +320,7 @@ describe('NameSuggestionsPanel', () => {
     renderPanel();
 
     expect(screen.getByRole('region', { name: 'Name suggestions' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Skar → Oscar ×3/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Rolo → Orlo ×3/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Annika Fixture → Anders Testcase ×1/ })).toBeInTheDocument();
   });
 
@@ -328,7 +328,7 @@ describe('NameSuggestionsPanel', () => {
     const user = userEvent.setup();
     const { onAccept } = renderPanel();
 
-    await user.click(screen.getByRole('button', { name: 'Accept all "Skar" → "Oscar"' }));
+    await user.click(screen.getByRole('button', { name: 'Accept all "Rolo" → "Orlo"' }));
 
     expect(onAccept).toHaveBeenCalledWith([SUGGESTIONS[0].id, SUGGESTIONS[1].id]);
   });

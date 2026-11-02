@@ -36,11 +36,11 @@ describe('isUnidentified', () => {
   });
 
   it('is false once the display name differs from the placeholder', () => {
-    expect(isUnidentified({ label: 'A', displayName: 'Oscar' })).toBe(false);
+    expect(isUnidentified({ label: 'A', displayName: 'Orlo' })).toBe(false);
   });
 
   it('is NEVER true for a speaker a person created (label: null), whatever the name', () => {
-    expect(isUnidentified({ label: null, displayName: 'Oscar' })).toBe(false);
+    expect(isUnidentified({ label: null, displayName: 'Orlo' })).toBe(false);
     // Even a name that happens to read like a placeholder for some other
     // label: there is no placeholder to replace when there was no label.
     expect(isUnidentified({ label: null, displayName: 'Speaker A' })).toBe(false);
@@ -50,31 +50,31 @@ describe('isUnidentified', () => {
 describe('classifyRename', () => {
   it('is an identification: unidentified speaker, a real new name', () => {
     expect(
-      classifyRename({ label: 'A', displayName: 'Speaker A' }, { displayName: 'Oscar' }),
+      classifyRename({ label: 'A', displayName: 'Speaker A' }, { displayName: 'Orlo' }),
     ).toBe('identification');
   });
 
   it('is a noop: the trimmed new name is the name the speaker already has', () => {
     expect(
-      classifyRename({ label: 'A', displayName: 'Oscar' }, { displayName: 'Oscar' }),
+      classifyRename({ label: 'A', displayName: 'Orlo' }, { displayName: 'Orlo' }),
     ).toBe('noop');
   });
 
   it('is a noop even across whitespace — the comparison trims first', () => {
     expect(
-      classifyRename({ label: 'A', displayName: 'Oscar' }, { displayName: '  Oscar  ' }),
+      classifyRename({ label: 'A', displayName: 'Orlo' }, { displayName: '  Orlo  ' }),
     ).toBe('noop');
   });
 
-  it('is versioned: correcting an already-identified speaker (Oscar -> Jonty)', () => {
+  it('is versioned: correcting an already-identified speaker (Orlo -> Jonty)', () => {
     expect(
-      classifyRename({ label: 'A', displayName: 'Oscar' }, { displayName: 'Jonty' }),
+      classifyRename({ label: 'A', displayName: 'Orlo' }, { displayName: 'Jonty' }),
     ).toBe('versioned');
   });
 
   it('is versioned: putting an identified speaker back on its placeholder', () => {
     expect(
-      classifyRename({ label: 'A', displayName: 'Oscar' }, { displayName: 'Speaker A' }),
+      classifyRename({ label: 'A', displayName: 'Orlo' }, { displayName: 'Speaker A' }),
     ).toBe('versioned');
   });
 
@@ -88,7 +88,7 @@ describe('classifyRename', () => {
   });
 
   it('is versioned for a speaker not in the state at all — the versioned path owns that 409', () => {
-    expect(classifyRename(undefined, { displayName: 'Oscar' })).toBe('versioned');
+    expect(classifyRename(undefined, { displayName: 'Orlo' })).toBe('versioned');
   });
 });
 
@@ -109,27 +109,27 @@ describe('isIdentificationBatch', () => {
     ).toBe(false);
   });
 
-  it('is false for [A -> Oscar, A -> Jonty]: the second op corrects the first\'s own identification', () => {
+  it('is false for [A -> Orlo, A -> Jonty]: the second op corrects the first\'s own identification', () => {
     // Classified IN BATCH ORDER — the second op sees the name the first one
     // gave, exactly as the reducers would.
-    expect(isIdentificationBatch(twoSpeakers, [rename('A', 'Oscar'), rename('A', 'Jonty')])).toBe(
+    expect(isIdentificationBatch(twoSpeakers, [rename('A', 'Orlo'), rename('A', 'Jonty')])).toBe(
       false,
     );
   });
 
   it('is true when every op is an identification or a no-op', () => {
     expect(
-      isIdentificationBatch(twoSpeakers, [rename('A', 'Oscar'), rename('B', 'Darcy')]),
+      isIdentificationBatch(twoSpeakers, [rename('A', 'Orlo'), rename('B', 'Darcy')]),
     ).toBe(true);
   });
 
   it('is true for an all-noop batch, which is what makes an idempotent retry route the same way', () => {
     const identified = state(
-      [speaker('A', 'Oscar'), B],
+      [speaker('A', 'Orlo'), B],
       [segment('s1', 'A', 'hello there')],
     );
 
-    expect(isIdentificationBatch(identified, [rename('A', 'Oscar')])).toBe(true);
+    expect(isIdentificationBatch(identified, [rename('A', 'Orlo')])).toBe(true);
   });
 });
 
@@ -139,23 +139,23 @@ describe('applyIdentities', () => {
   const withTwoSpeakers = state([A, B], [segment('s1', 'A', 'hi')]);
 
   it('overlays only a speaker STILL carrying its placeholder', () => {
-    const result = applyIdentities(withTwoSpeakers, { A: 'Oscar', B: 'Should not appear' });
+    const result = applyIdentities(withTwoSpeakers, { A: 'Orlo', B: 'Should not appear' });
 
-    expect(result.speakers.find((s) => s.id === 'A')?.displayName).toBe('Oscar');
+    expect(result.speakers.find((s) => s.id === 'A')?.displayName).toBe('Orlo');
     // B was already identified by a versioned op — that correction outranks
     // the entry beside it.
     expect(result.speakers.find((s) => s.id === 'B')?.displayName).toBe('Bob');
   });
 
   it('never touches rev — the identification write does not either', () => {
-    const result = applyIdentities(withTwoSpeakers, { A: 'Oscar' });
+    const result = applyIdentities(withTwoSpeakers, { A: 'Orlo' });
 
     expect(result.speakers.find((s) => s.id === 'A')?.rev).toBe(A.rev);
   });
 
   it('is idempotent: a second pass over its own output changes nothing further', () => {
-    const once = applyIdentities(withTwoSpeakers, { A: 'Oscar' });
-    const twice = applyIdentities(once, { A: 'Oscar' });
+    const once = applyIdentities(withTwoSpeakers, { A: 'Orlo' });
+    const twice = applyIdentities(once, { A: 'Orlo' });
 
     expect(twice).toEqual(once);
   });
@@ -175,9 +175,9 @@ describe('parseSpeakerIdentities', () => {
   it('is total over non-object input', () => {
     expect(parseSpeakerIdentities(null)).toEqual({});
     expect(parseSpeakerIdentities(undefined)).toEqual({});
-    expect(parseSpeakerIdentities('Oscar')).toEqual({});
+    expect(parseSpeakerIdentities('Orlo')).toEqual({});
     expect(parseSpeakerIdentities(42)).toEqual({});
-    expect(parseSpeakerIdentities(['Oscar'])).toEqual({});
+    expect(parseSpeakerIdentities(['Orlo'])).toEqual({});
   });
 
   it('drops a non-string value', () => {
@@ -189,8 +189,8 @@ describe('parseSpeakerIdentities', () => {
   });
 
   it('keeps a well-formed entry, untrimmed', () => {
-    expect(parseSpeakerIdentities({ A: 'Oscar', B: ' Darcy ' })).toEqual({
-      A: 'Oscar',
+    expect(parseSpeakerIdentities({ A: 'Orlo', B: ' Darcy ' })).toEqual({
+      A: 'Orlo',
       B: ' Darcy ',
     });
   });
@@ -202,22 +202,22 @@ describe('identitiesFingerprint', () => {
   });
 
   it('is a 12-hex-digit string once the map is non-empty', () => {
-    expect(identitiesFingerprint({ A: 'Oscar' })).toMatch(/^[0-9a-f]{12}$/);
+    expect(identitiesFingerprint({ A: 'Orlo' })).toMatch(/^[0-9a-f]{12}$/);
   });
 
   it('is stable regardless of key insertion order', () => {
-    expect(identitiesFingerprint({ A: 'Oscar', B: 'Darcy' })).toBe(
-      identitiesFingerprint({ B: 'Darcy', A: 'Oscar' }),
+    expect(identitiesFingerprint({ A: 'Orlo', B: 'Darcy' })).toBe(
+      identitiesFingerprint({ B: 'Darcy', A: 'Orlo' }),
     );
   });
 
   it('changes when a name changes', () => {
-    expect(identitiesFingerprint({ A: 'Oscar' })).not.toBe(identitiesFingerprint({ A: 'Jonty' }));
+    expect(identitiesFingerprint({ A: 'Orlo' })).not.toBe(identitiesFingerprint({ A: 'Jonty' }));
   });
 
   it('changes when the set of identified speakers changes', () => {
-    expect(identitiesFingerprint({ A: 'Oscar' })).not.toBe(
-      identitiesFingerprint({ A: 'Oscar', B: 'Darcy' }),
+    expect(identitiesFingerprint({ A: 'Orlo' })).not.toBe(
+      identitiesFingerprint({ A: 'Orlo', B: 'Darcy' }),
     );
   });
 });

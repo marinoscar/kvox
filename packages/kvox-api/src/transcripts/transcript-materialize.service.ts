@@ -54,11 +54,11 @@
 // SPEAKER IDENTITIES ARE AN OVERLAY, NOT AN OP (issue #323)
 // -----------------------------------------------------------------------------
 //
-// Naming an AI-detected speaker for the first time ("Speaker A" → "Oscar") does
+// Naming an AI-detected speaker for the first time ("Speaker A" → "Orlo") does
 // not create a version (see `editing/speaker-identity.ts` for why that is the
 // right line to draw). It is written to the live speaker row and to the
 // `transcripts.speaker_identities` map — and NOWHERE in the version log. So a
-// replay alone would say "Speaker A" where the live table says "Oscar", and
+// replay alone would say "Speaker A" where the live table says "Orlo", and
 // `materialize(current) == live` would be false.
 //
 // Every answer this service returns therefore has the map overlaid on it,
@@ -66,8 +66,8 @@
 // placeholder at the requested version takes its identified name. Three things
 // make that correct rather than merely convenient:
 //
-//   • it is RETROACTIVE ON PURPOSE — Oscar was Oscar in the recording, so v1
-//     viewed today says "Oscar" too, which is exactly what the user asked for;
+//   • it is RETROACTIVE ON PURPOSE — Orlo was Orlo in the recording, so v1
+//     viewed today says "Orlo" too, which is exactly what the user asked for;
 //   • it is REV-NEUTRAL — the identification write does not bump the speaker's
 //     `rev`, and the overlay does not either, so a later versioned op carries
 //     the rev a replay will actually reproduce and the log stays replayable;

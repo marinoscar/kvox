@@ -56,7 +56,7 @@ describe('EvidenceList', () => {
       <EvidenceList evidence={[segmentEvidence({ segmentId: 'seg-4', startMs: 65_000 }), noteEvidence()]} />,
     );
     expect(screen.getByText('“Sasha from Lambda will lead the Atlas migration.”')).toBeInTheDocument();
-    expect(screen.getByText('Oscar · 1:05')).toBeInTheDocument();
+    expect(screen.getByText('Orlo · 1:05')).toBeInTheDocument();
     expect(screen.getByText('From the note')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open in transcript' })).toHaveAttribute(
       'href',
