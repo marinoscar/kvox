@@ -12,9 +12,9 @@
 
 crm:nickname rdfs:label "Nickname" .
 
-src:joe a kv:Person ;
-    rdfs:label "Joe Smith" ;
-    crm:nickname "Joey" ;
+src:jonty a kv:Person ;
+    rdfs:label "Jonty Sample" ;
+    crm:nickname "Jonno" ;
     kv:WORKS_FOR src:kappa ;
     prov:wasDerivedFrom src:crm-1 .
 

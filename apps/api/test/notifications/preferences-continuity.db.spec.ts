@@ -83,7 +83,7 @@ const ROLE_CHANGED = {
   recipientEmail: 'ignored@example.test',
   roles: ['viewer'],
   previousRoles: ['contributor'],
-  changedBy: 'Ana Rivera',
+  changedBy: 'Anders Sample',
 };
 
 describeWithDb('stored notification preferences still govern delivery (db)', () => {

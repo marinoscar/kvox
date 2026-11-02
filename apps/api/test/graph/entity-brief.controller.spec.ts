@@ -174,7 +174,7 @@ describe('GET /api/graph/entities/:id/brief (integration)', () => {
       id: ENTITY,
       ownerId: user.id,
       type: 'Person',
-      label: 'Sarah',
+      label: 'Sasha',
       reviewStatus: 'accepted',
       mergedIntoId: null,
     } as never);

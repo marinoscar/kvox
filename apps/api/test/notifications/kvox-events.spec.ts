@@ -206,7 +206,7 @@ describe('the transcript events', () => {
       resourceId: 'tr-1',
       title: 'Board meeting',
       role: 'viewer',
-      sharedBy: 'Ana Rivera',
+      sharedBy: 'Anders Sample',
       path: '/transcripts/tr-1',
     });
 

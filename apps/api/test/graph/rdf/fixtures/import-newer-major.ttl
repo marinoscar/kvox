@@ -10,6 +10,6 @@
 
 kv: a owl:Ontology ; owl:versionInfo "99.0.0" .
 
-src:joe a kv:Person ;
-    rdfs:label "Joe Smith" ;
+src:jonty a kv:Person ;
+    rdfs:label "Jonty Sample" ;
     prov:wasDerivedFrom src:crm-1 .

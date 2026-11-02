@@ -108,9 +108,9 @@ describeWithDb('Ask toolset (real Postgres)', () => {
     const b = await owner('b');
     const aKappa = await a.g.entity('Organization', 'Org Kappa');
     const bKappa = await b.g.entity('Organization', 'Org Kappa');
-    const bSarah = await b.g.entity('Person', 'Sarah Secret');
-    await b.g.relation('WORKS_AT', bSarah, bKappa);
-    await b.g.item('commitment', { ownerPersonId: bSarah, counterpartyId: bKappa, statement: 'B private promise' });
+    const bSasha = await b.g.entity('Person', 'Sasha Mockwell');
+    await b.g.relation('WORKS_AT', bSasha, bKappa);
+    await b.g.item('commitment', { ownerPersonId: bSasha, counterpartyId: bKappa, statement: 'B private promise' });
     await a.g.item('commitment', { counterpartyId: aKappa, statement: 'A own promise' });
 
     // search: A sees only A's Kappa.
@@ -122,12 +122,12 @@ describeWithDb('Ask toolset (real Postgres)', () => {
 
     // Forge handles to B's ids — something no tool would ever issue to A.
     const forgedKappa = a.ctx.handles.register({ kind: 'ent', id: bKappa, label: 'forged' });
-    const forgedSarah = a.ctx.handles.register({ kind: 'ent', id: bSarah, label: 'forged' });
+    const forgedSasha = a.ctx.handles.register({ kind: 'ent', id: bSasha, label: 'forged' });
 
     for (const [name, args] of [
       ['get_entity', { entity: forgedKappa }],
       ['neighbors', { entity: forgedKappa }],
-      ['timeline', { entity: forgedSarah }],
+      ['timeline', { entity: forgedSasha }],
       ['evidence', { subject: forgedKappa }],
       ['entity_brief', { entity: forgedKappa }],
     ] as const) {
@@ -137,7 +137,7 @@ describeWithDb('Ask toolset (real Postgres)', () => {
       expect(out.json).not.toContain('B private');
     }
 
-    const commitments = await call(a.ctx, 'list_commitments', { entity: forgedSarah, direction: 'any' });
+    const commitments = await call(a.ctx, 'list_commitments', { entity: forgedSasha, direction: 'any' });
     expect(JSON.parse(commitments.json)).toEqual({ items: [], truncated: false });
     const all = await call(a.ctx, 'list_commitments', {});
     expect(JSON.stringify(JSON.parse(all.json))).toContain('A own promise');
@@ -147,13 +147,13 @@ describeWithDb('Ask toolset (real Postgres)', () => {
   it('answers the tools for the caller’s own graph', async () => {
     const a = await owner('a');
     const kappa = await a.g.entity('Organization', 'Org Sigma');
-    const sarah = await a.g.entity('Person', 'Sarah Chen');
-    await a.g.relation('WORKS_AT', sarah, kappa, { valid: '[2019-03-01,)', precision: 'month' });
+    const sasha = await a.g.entity('Person', 'Sasha Example');
+    await a.g.relation('WORKS_AT', sasha, kappa, { valid: '[2019-03-01,)', precision: 'month' });
     await a.g.item('decision', { subjectId: kappa, statement: 'Renew Org Sigma', occurredAt: new Date('2026-09-01T00:00:00Z') });
-    await a.g.item('person_fact', { subjectId: sarah, statement: 'Private hobby', sensitivity: 'personal' });
-    await a.g.item('person_fact', { subjectId: sarah, statement: 'Health detail', sensitivity: 'sensitive' });
+    await a.g.item('person_fact', { subjectId: sasha, statement: 'Private hobby', sensitivity: 'personal' });
+    await a.g.item('person_fact', { subjectId: sasha, statement: 'Health detail', sensitivity: 'sensitive' });
 
-    const h = a.ctx.handles.register({ kind: 'ent', id: sarah, label: 'Sarah Chen' });
+    const h = a.ctx.handles.register({ kind: 'ent', id: sasha, label: 'Sasha Example' });
     for (const [name, args] of [
       ['get_entity', { entity: h }],
       ['neighbors', { entity: h, hops: 2 }],
@@ -170,18 +170,18 @@ describeWithDb('Ask toolset (real Postgres)', () => {
 
   it('list_commitments filters and orders by due date, then by when it was made', async () => {
     const a = await owner('a');
-    const sarah = await a.g.entity('Person', 'Sarah');
+    const sasha = await a.g.entity('Person', 'Sasha');
     const kappa = await a.g.entity('Organization', 'Kappa');
     const mk = (statement: string, opts: Record<string, unknown>) => a.g.item('commitment', { statement, ...opts });
-    await mk('due late', { ownerPersonId: sarah, dueAt: new Date('2026-12-01T00:00:00Z'), occurredAt: new Date('2026-01-01T00:00:00Z') });
-    await mk('due soon', { ownerPersonId: sarah, dueAt: new Date('2026-10-01T00:00:00Z'), occurredAt: new Date('2026-01-01T00:00:00Z') });
-    await mk('no due, newer', { ownerPersonId: sarah, occurredAt: new Date('2026-06-01T00:00:00Z') });
-    await mk('no due, older', { ownerPersonId: sarah, occurredAt: new Date('2026-02-01T00:00:00Z') });
-    await mk('owed to sarah', { ownerPersonId: kappa, counterpartyId: sarah, dueAt: new Date('2026-11-01T00:00:00Z') });
-    await mk('done already', { ownerPersonId: sarah, status: 'done' });
-    await mk('draft', { ownerPersonId: sarah, reviewStatus: 'unreviewed' });
+    await mk('due late', { ownerPersonId: sasha, dueAt: new Date('2026-12-01T00:00:00Z'), occurredAt: new Date('2026-01-01T00:00:00Z') });
+    await mk('due soon', { ownerPersonId: sasha, dueAt: new Date('2026-10-01T00:00:00Z'), occurredAt: new Date('2026-01-01T00:00:00Z') });
+    await mk('no due, newer', { ownerPersonId: sasha, occurredAt: new Date('2026-06-01T00:00:00Z') });
+    await mk('no due, older', { ownerPersonId: sasha, occurredAt: new Date('2026-02-01T00:00:00Z') });
+    await mk('owed to sasha', { ownerPersonId: kappa, counterpartyId: sasha, dueAt: new Date('2026-11-01T00:00:00Z') });
+    await mk('done already', { ownerPersonId: sasha, status: 'done' });
+    await mk('draft', { ownerPersonId: sasha, reviewStatus: 'unreviewed' });
 
-    const h = a.ctx.handles.register({ kind: 'ent', id: sarah, label: 'Sarah' });
+    const h = a.ctx.handles.register({ kind: 'ent', id: sasha, label: 'Sasha' });
     const statements = async (args: Record<string, unknown>) => {
       const out = await call(a.ctx, 'list_commitments', args);
       expect(out.ok).toBe(true);
@@ -189,9 +189,9 @@ describeWithDb('Ask toolset (real Postgres)', () => {
     };
 
     expect(await statements({ entity: h, direction: 'owned_by' })).toEqual(['due soon', 'due late', 'no due, newer', 'no due, older']);
-    expect(await statements({ entity: h, direction: 'owed_to' })).toEqual(['owed to sarah']);
-    expect(await statements({ entity: h })).toEqual(['due soon', 'owed to sarah', 'due late', 'no due, newer', 'no due, older']);
-    expect(await statements({ entity: h, dueBefore: '2026-11-01' })).toEqual(['due soon', 'owed to sarah']);
+    expect(await statements({ entity: h, direction: 'owed_to' })).toEqual(['owed to sasha']);
+    expect(await statements({ entity: h })).toEqual(['due soon', 'owed to sasha', 'due late', 'no due, newer', 'no due, older']);
+    expect(await statements({ entity: h, dueBefore: '2026-11-01' })).toEqual(['due soon', 'owed to sasha']);
     expect(await statements({ entity: h, status: 'done' })).toEqual(['done already']);
     expect(await statements({ entity: h, status: 'any', direction: 'owned_by' })).toHaveLength(5);
   });

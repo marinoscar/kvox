@@ -20,7 +20,7 @@
 // What it asserts, per the issue: citation validity detected as < 1 for the
 // deliberately-invalid answer and 1.0 for the rest, and the leak check finds
 // nothing anywhere it looked (the graph's `sensitive` PersonFacts are real —
-// Marcus Webb's shellfish allergy — and are never returned by any tool).
+// Maddox Sample's shellfish allergy — and are never returned by any tool).
 // =============================================================================
 
 import type { PrismaClient } from '@prisma/client';
@@ -36,7 +36,7 @@ import { createAskTurn, toKvoxJob } from '../helpers/ask-ports.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-eval.replay.db.spec');
 
-/** Marcus Webb's `sensitive` PersonFact (m13) — must never appear in a tool result or an answer. */
+/** Maddox Sample's `sensitive` PersonFact (m13) — must never appear in a tool result or an answer. */
 const SENSITIVE_TEXT = 'shellfish allergy';
 
 describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no model)', () => {
@@ -94,10 +94,10 @@ describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no mod
   }
 
   it('search → get_entity → cites [^ent1]: valid, citation validity 1.0', async () => {
-    const { message } = await ask('Who does Sarah Chen work for?', () => {
-      provider.enqueue([toolCall('c1', 'search', JSON.stringify({ query: 'Sarah Chen', scope: 'entities', limit: null })), done('tool_calls')]);
+    const { message } = await ask('Who does Sasha Example work for?', () => {
+      provider.enqueue([toolCall('c1', 'search', JSON.stringify({ query: 'Sasha Example', scope: 'entities', limit: null })), done('tool_calls')]);
       provider.enqueue([toolCall('c2', 'get_entity', JSON.stringify({ entity: 'ent1' })), done('tool_calls')]);
-      provider.enqueue([text('Sarah Chen works for Org Lambda Robotics.[^ent1]'), done('stop')]);
+      provider.enqueue([text('Sasha Example works for Org Lambda Robotics.[^ent1]'), done('stop')]);
     });
     expect(message.status).toBe('complete');
     expect(scoreCitationValidity(message.citations)).toBe(1);
@@ -128,9 +128,9 @@ describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no mod
   });
 
   it('a not-found question: search returns nothing, the answer cites nothing (citation validity vacuously 1.0)', async () => {
-    const { message } = await ask('What did Jamie Fontaine decide about the Meridian project?', () => {
-      provider.enqueue([toolCall('c1', 'search', JSON.stringify({ query: 'Jamie Fontaine', scope: 'all', limit: null })), done('tool_calls')]);
-      provider.enqueue([text("I couldn't find Jamie Fontaine or a Meridian project in your graph."), done('stop')]);
+    const { message } = await ask('What did Jalen Mockwell decide about the Meridian project?', () => {
+      provider.enqueue([toolCall('c1', 'search', JSON.stringify({ query: 'Jalen Mockwell', scope: 'all', limit: null })), done('tool_calls')]);
+      provider.enqueue([text("I couldn't find Jalen Mockwell or a Meridian project in your graph."), done('stop')]);
     });
     expect(message.status).toBe('complete');
     expect(message.citations).toHaveLength(0);
@@ -139,10 +139,10 @@ describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no mod
 
   it('cites entity + evidence together, all valid: citation validity 1.0', async () => {
     const { message } = await ask('Who runs the northern depots cutover, and what is the evidence?', () => {
-      provider.enqueue([toolCall('c1', 'search', JSON.stringify({ query: 'Marcus Webb', scope: 'entities', limit: null })), done('tool_calls')]);
+      provider.enqueue([toolCall('c1', 'search', JSON.stringify({ query: 'Maddox Sample', scope: 'entities', limit: null })), done('tool_calls')]);
       provider.enqueue([toolCall('c2', 'get_entity', JSON.stringify({ entity: 'ent1' })), done('tool_calls')]);
       provider.enqueue([toolCall('c3', 'evidence', JSON.stringify({ subject: 'ent1', limit: 3 })), done('tool_calls')]);
-      provider.enqueue([text('Marcus Webb is involved.[^ent1] See here.[^ev1]'), done('stop')]);
+      provider.enqueue([text('Maddox Sample is involved.[^ent1] See here.[^ev1]'), done('stop')]);
     });
     expect(message.status).toBe('complete');
     expect(scoreCitationValidity(message.citations)).toBe(1);
@@ -162,7 +162,7 @@ describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no mod
   });
 
   it('the leak gate: a sensitive PersonFact never reaches a tool result or an answer, across every question above', async () => {
-    // Marcus Webb's shellfish allergy is `sensitive` and must never leave the
+    // Maddox Sample's shellfish allergy is `sensitive` and must never leave the
     // deployment — not in what the provider was shown, and not in what it said.
     for (const prompt of allCapturedPrompts) {
       expect(prompt.toLowerCase()).not.toContain(SENSITIVE_TEXT);

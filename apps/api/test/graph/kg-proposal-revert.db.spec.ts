@@ -124,9 +124,9 @@ describeWithDb('graph proposal revert (real Postgres)', () => {
     // A later relation, written after the commit, points at the meeting.
     await prisma.$transaction(async (tx) => {
       const later = await tx.kgRelation.create({
-        data: { ownerId: f.ownerId, type: 'ATTENDED', fromId: f.existing.sarah, toId: meeting, ontologyVersion: 'test', createdAt: new Date(Date.now() + 60_000) },
+        data: { ownerId: f.ownerId, type: 'ATTENDED', fromId: f.existing.sasha, toId: meeting, ontologyVersion: 'test', createdAt: new Date(Date.now() + 60_000) },
       });
-      await tx.kgEvidence.create({ data: { ownerId: f.ownerId, subjectKind: 'relation', subjectId: later.id, quote: 'Sarah attended' } });
+      await tx.kgEvidence.create({ data: { ownerId: f.ownerId, subjectKind: 'relation', subjectId: later.id, quote: 'Sasha attended' } });
     });
 
     const err = await services.reverts.revert(f.caller, f.proposal.id, false).catch((e: unknown) => e);

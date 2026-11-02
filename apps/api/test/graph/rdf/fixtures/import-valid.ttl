@@ -19,16 +19,16 @@
 
 kv: a owl:Ontology ; owl:versionInfo "1.0.0" .
 
-src:joe a kv:Person ;
-    rdfs:label "Joe Smith" ;
-    skos:altLabel "Joseph Smith" ;
+src:jonty a kv:Person ;
+    rdfs:label "Jonty Sample" ;
+    skos:altLabel "Jonathan Sample" ;
     schema:jobTitle "Head of Sales" ;
     kv:WORKS_FOR src:kappa ;
     prov:wasDerivedFrom src:note-1 .
 
-src:ana a kv:Person ;
-    rdfs:label "Ana Ruiz" ;
-    kv:REPORTS_TO src:joe ;
+src:anders a kv:Person ;
+    rdfs:label "Anders Stubbs" ;
+    kv:REPORTS_TO src:jonty ;
     prov:wasDerivedFrom src:crm-2 .
 
 src:kappa a kv:Organization ;
@@ -36,8 +36,8 @@ src:kappa a kv:Organization ;
     schema:url "https://kappa.example.test"^^xsd:anyURI ;
     prov:wasDerivedFrom src:crm-3 .
 
-src:joe-at-kappa a kv:Assertion ;
-    rdf:subject src:joe ;
+src:jonty-at-kappa a kv:Assertion ;
+    rdf:subject src:jonty ;
     rdf:predicate kv:WORKS_FOR ;
     rdf:object src:kappa ;
     prov:startedAtTime "2019-03-01T00:00:00.000Z"^^xsd:dateTime ;
@@ -48,12 +48,12 @@ src:joe-at-kappa a kv:Assertion ;
 
 src:deck a kv:Commitment ;
     rdfs:label "Send the deck" ;
-    kv:Commitment.statement "Joe will send the deck to Kappa by Friday." ;
-    kv:ASSIGNED_TO src:joe ;
+    kv:Commitment.statement "Jonty will send the deck to Kappa by Friday." ;
+    kv:ASSIGNED_TO src:jonty ;
     kv:OWED_TO src:kappa ;
     kv:status "open" ;
     kv:dueAt "2026-04-10T00:00:00.000Z"^^xsd:dateTime ;
     prov:wasDerivedFrom src:note-1 .
 
 src:note-1 a oa:Annotation ;
-    oa:hasBody [ rdf:value "Joe joined Kappa in March 2019 and owes them the deck." ] .
+    oa:hasBody [ rdf:value "Jonty joined Kappa in March 2019 and owes them the deck." ] .

@@ -182,11 +182,11 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
     const { transcript, speakerA, segment } = await g.transcript({ title: 'Weekly sync' });
     const note = await g.note({ title: 'Pilot notes' });
 
-    const sarah = await g.entity('Person', 'Sarah Chen', {
-      aliases: ['Sarah', 'S. Chen'],
+    const sasha = await g.entity('Person', 'Sasha Example', {
+      aliases: ['Sasha', 'S. Example'],
       props: { title: 'Staff Engineer', u_medical001: 'SECRET-ATTRIBUTE-VALUE' },
     });
-    await g.evidence('entity', sarah, {
+    await g.evidence('entity', sasha, {
       transcriptId: transcript.id,
       segmentId: segment.id,
       segmentRev: 1,
@@ -194,9 +194,9 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
       endMs: 4000,
       charStart: 0,
       charEnd: 5,
-      quote: 'Sarah joined Kappa',
+      quote: 'Sasha joined Kappa',
     });
-    const marcus = await g.entity('Person', 'Marcus Webb');
+    const maddox = await g.entity('Person', 'Maddox Sample');
     const people = [];
     for (let i = 0; i < 8; i++) people.push(await g.entity('Person', `Person ${i}`));
     const kappa = await g.entity('Organization', 'Kappa', { props: { website: 'https://kappa.example.test', u_tier000001: 'gold' } });
@@ -206,40 +206,40 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
       props: { dateSource: 'stated', topics: ['budget', 'hiring'] },
     });
     const project = await g.entity('Project', 'Q2 pilot', { props: { status: 'active', startDate: '2026-04-01' } });
-    const tombstone = await g.entity('Person', 'Sarah C.', { reviewStatus: 'merged', mergedIntoId: sarah });
+    const tombstone = await g.entity('Person', 'Sasha C.', { reviewStatus: 'merged', mergedIntoId: sasha });
     // #383's personal domain — exported (personal is not sensitive), and even
     // though this owner has switched the domain OFF: rows that exist are exported.
     await prisma.userSettings.create({ data: { userId: user.id, value: { graph: { domains: { personal: false } } } } });
     const trip = await g.entity('Trip', 'Lisbon trip', { props: { destination: 'Lisbon', startDate: '2026-05-01' } });
     const interest = await g.entity('Interest', 'Sailing');
     const milestone = await g.entity('Milestone', 'Wedding anniversary', { props: { kind: 'anniversary' } });
-    const spouseOf = await g.relation('SPOUSE_OF', sarah, people[4], { valid: '[2015-06-01,)', precision: 'month' });
-    await g.relation('FRIEND_OF', people[5], sarah);
-    await g.relation('PARENT_OF', sarah, people[6]);
-    await g.relation('TRAVELED_ON', sarah, trip);
-    await g.relation('INTERESTED_IN', sarah, interest);
-    await g.relation('HAS_MILESTONE', sarah, milestone);
+    const spouseOf = await g.relation('SPOUSE_OF', sasha, people[4], { valid: '[2015-06-01,)', precision: 'month' });
+    await g.relation('FRIEND_OF', people[5], sasha);
+    await g.relation('PARENT_OF', sasha, people[6]);
+    await g.relation('TRAVELED_ON', sasha, trip);
+    await g.relation('INTERESTED_IN', sasha, interest);
+    await g.relation('HAS_MILESTONE', sasha, milestone);
     const unreviewed = await g.entity('Person', 'Maybe Person', { reviewStatus: 'unreviewed' });
     const rejected = await g.entity('Organization', 'Rejected Org', { reviewStatus: 'rejected' });
 
-    const worksFor = await g.relation('WORKS_FOR', sarah, kappa, { valid: '[2019-01-01,2024-06-01)', precision: 'month', confidence: 0.9 });
-    const hasRole = await g.relation('HAS_ROLE', sarah, kappa, { valid: '[2024-06-01,)', precision: 'month' });
+    const worksFor = await g.relation('WORKS_FOR', sasha, kappa, { valid: '[2019-01-01,2024-06-01)', precision: 'month', confidence: 0.9 });
+    const hasRole = await g.relation('HAS_ROLE', sasha, kappa, { valid: '[2024-06-01,)', precision: 'month' });
     await prisma.kgRelation.update({ where: { id: hasRole }, data: { props: { title: 'Staff Engineer' } } });
-    await g.relation('REPORTS_TO', sarah, marcus, { valid: '[2024-01-01,)', precision: 'day' });
-    await g.relation('ATTENDED', sarah, meeting);
-    await g.relation('ATTENDED', marcus, meeting);
+    await g.relation('REPORTS_TO', sasha, maddox, { valid: '[2024-01-01,)', precision: 'day' });
+    await g.relation('ATTENDED', sasha, meeting);
+    await g.relation('ATTENDED', maddox, meeting);
     for (const p of people.slice(0, 3)) await g.relation('ATTENDED', p, meeting);
     await g.relation('WORKS_FOR', people[3], sigma, { valid: '[2020-01-01,)', precision: 'year' });
     await g.relation('DISCUSSED', meeting, project);
     await g.relation('PART_OF', project, kappa);
-    const toUnreviewed = await g.relation('REPORTS_TO', marcus, unreviewed);
-    const rejectedRel = await g.relation('WORKS_FOR', marcus, sigma, { reviewStatus: 'rejected' });
-    const speakerLink = await g.relation('IDENTIFIED_AS', null, sarah, { fromSpeakerId: speakerA.id });
+    const toUnreviewed = await g.relation('REPORTS_TO', maddox, unreviewed);
+    const rejectedRel = await g.relation('WORKS_FOR', maddox, sigma, { reviewStatus: 'rejected' });
+    const speakerLink = await g.relation('IDENTIFIED_AS', null, sasha, { fromSpeakerId: speakerA.id });
 
     const commitment = await g.item('commitment', {
       title: 'Send the proposal',
-      statement: 'Sarah will send the updated proposal by Friday.',
-      ownerPersonId: sarah,
+      statement: 'Sasha will send the updated proposal by Friday.',
+      ownerPersonId: sasha,
       counterpartyId: kappa,
       meetingId: meeting,
       subjectId: project,
@@ -260,14 +260,14 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
       precision: 'month',
     });
     await g.evidence('item', claim, { noteId: note.id, noteVersion: 1, charStart: 2, charEnd: 9, quote: 'budget cut' });
-    const personal = await g.item('person_fact', { statement: 'Sarah prefers written updates.', subjectId: sarah, sensitivity: 'personal' });
-    const sensitive = await g.item('person_fact', { statement: 'SECRET-FACT-STATEMENT', subjectId: sarah, sensitivity: 'sensitive' });
+    const personal = await g.item('person_fact', { statement: 'Sasha prefers written updates.', subjectId: sasha, sensitivity: 'personal' });
+    const sensitive = await g.item('person_fact', { statement: 'SECRET-FACT-STATEMENT', subjectId: sasha, sensitivity: 'sensitive' });
     await g.evidence('item', sensitive, { quote: 'SECRET-FACT-QUOTE' });
     const unreviewedItem = await g.item('claim', { statement: 'UNREVIEWED-CLAIM', subjectId: kappa, reviewStatus: 'unreviewed' });
 
     return {
       user,
-      ids: { trip, interest, milestone, spouseOf, sarah, kappa, meeting, tombstone, unreviewed, rejected, worksFor, toUnreviewed, rejectedRel, speakerLink, commitment, newDecision, oldDecision, personal, sensitive, unreviewedItem },
+      ids: { trip, interest, milestone, spouseOf, sasha, kappa, meeting, tombstone, unreviewed, rejected, worksFor, toUnreviewed, rejectedRel, speakerLink, commitment, newDecision, oldDecision, personal, sensitive, unreviewedItem },
       defs: { tier, medical },
     };
   }
@@ -307,7 +307,7 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
       // A symmetric edge: exactly one direct triple, as stored, and one assertion.
       const spouse = quads.filter((q) => q.predicate.value === `${NS}SPOUSE_OF`);
       expect(spouse).toHaveLength(1);
-      expect(spouse[0].subject.value).toBe(`${NS}entity/${ids.sarah}`);
+      expect(spouse[0].subject.value).toBe(`${NS}entity/${ids.sasha}`);
       expect(quads.filter((q) => q.predicate.value === 'http://www.w3.org/1999/02/22-rdf-syntax-ns#predicate' && q.object.value === `${NS}SPOUSE_OF`)).toHaveLength(1);
       expect(quads.some((q) => q.subject.value === `${NS}relation/${ids.spouseOf}`)).toBe(true);
 

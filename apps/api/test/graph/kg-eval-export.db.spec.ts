@@ -95,7 +95,7 @@ describeWithDb('kg:eval --export-note (real Postgres)', () => {
     });
     await prisma.transcript.update({
       where: { id: transcript.id },
-      data: { speakerIdentities: { [a.id]: 'Dana Ortiz' } },
+      data: { speakerIdentities: { [a.id]: 'Darcy Sample' } },
     });
     // Inserted out of order: the export must follow `ordinal`, not insertion.
     await prisma.transcriptSegment.create({
@@ -139,7 +139,7 @@ describeWithDb('kg:eval --export-note (real Postgres)', () => {
     expect(fixture.hasTranscript).toBe(true);
     expect(fixture.note).toEqual({ version: 2, body: '# Planning call notes\n\nEdited body.' });
     expect(fixture.segments.map((s) => s.text)).toEqual(['First line.', 'Second line.']);
-    expect(fixture.speakers.find((s) => s.id === a.id)?.displayName).toBe('Dana Ortiz');
+    expect(fixture.speakers.find((s) => s.id === a.id)?.displayName).toBe('Darcy Sample');
     expect(fixture.labels).toEqual({ entities: [], relations: [], items: [], negatives: [] });
 
     // A second export takes the next free id.

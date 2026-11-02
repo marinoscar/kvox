@@ -129,34 +129,34 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
   }
 
   /**
-   * Sarah at Kappa: §5.4's manager change (Jane until 2026-03-01, then Will),
+   * Sasha at Kappa: §5.4's manager change (Jane until 2026-03-01, then Will),
    * a role, commitments in both directions, a decision, a claim and a
    * sensitive fact.
    */
-  async function seedSarah(g: GraphFixture) {
+  async function seedSasha(g: GraphFixture) {
     const kappa = await g.entity('Organization', 'Kappa');
-    const sarah = await g.entity('Person', 'Sarah Chen');
+    const sasha = await g.entity('Person', 'Sasha Example');
     const jane = await g.entity('Person', 'Jane');
     const will = await g.entity('Person', 'Will');
     const bob = await g.entity('Person', 'Bob');
-    await g.relation('WORKS_FOR', sarah, kappa, { valid: '[2019-01-01,)', precision: 'year' });
-    await g.relation('REPORTS_TO', sarah, jane, { valid: '[2020-01-01,2026-03-01)', precision: 'month', reviewStatus: 'superseded' });
-    await g.relation('REPORTS_TO', sarah, will, { valid: '[2026-03-01,)', precision: 'month' });
-    const role = await g.relation('HAS_ROLE', sarah, kappa, { valid: '[2019-01-01,)', precision: 'year' });
+    await g.relation('WORKS_FOR', sasha, kappa, { valid: '[2019-01-01,)', precision: 'year' });
+    await g.relation('REPORTS_TO', sasha, jane, { valid: '[2020-01-01,2026-03-01)', precision: 'month', reviewStatus: 'superseded' });
+    await g.relation('REPORTS_TO', sasha, will, { valid: '[2026-03-01,)', precision: 'month' });
+    const role = await g.relation('HAS_ROLE', sasha, kappa, { valid: '[2019-01-01,)', precision: 'year' });
     await prisma.$executeRaw`UPDATE kg_relations SET props = '{"title":"Engineer"}'::jsonb WHERE id = ${role}::uuid`;
 
     const recent = new Date(Date.now() - 5 * 86_400_000);
-    const theirs = await g.item('commitment', { ownerPersonId: sarah, counterpartyId: bob, statement: 'Sarah will send the deck', occurredAt: recent });
-    const yours = await g.item('commitment', { ownerPersonId: bob, counterpartyId: sarah, statement: 'Bob will review the plan', occurredAt: recent });
-    const decision = await g.item('decision', { subjectId: sarah, statement: 'Sarah leads the migration', occurredAt: recent });
-    const claim = await g.item('claim', { subjectId: sarah, statement: 'Sarah thinks the date slips', occurredAt: recent });
+    const theirs = await g.item('commitment', { ownerPersonId: sasha, counterpartyId: bob, statement: 'Sasha will send the deck', occurredAt: recent });
+    const yours = await g.item('commitment', { ownerPersonId: bob, counterpartyId: sasha, statement: 'Bob will review the plan', occurredAt: recent });
+    const decision = await g.item('decision', { subjectId: sasha, statement: 'Sasha leads the migration', occurredAt: recent });
+    const claim = await g.item('claim', { subjectId: sasha, statement: 'Sasha thinks the date slips', occurredAt: recent });
     const sensitive = await g.item('person_fact', {
-      subjectId: sarah,
+      subjectId: sasha,
       statement: 'SENSITIVE-HEALTH-DETAIL',
       sensitivity: 'sensitive',
       occurredAt: recent,
     });
-    return { kappa, sarah, jane, will, bob, role, theirs, yours, decision, claim, sensitive };
+    return { kappa, sasha, jane, will, bob, role, theirs, yours, decision, claim, sensitive };
   }
 
   const get = (reader: never, id: string, opts: Partial<Parameters<EntityBriefService['getBrief']>[2]> = {}) =>
@@ -164,11 +164,11 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
 
   it('assembles the full cited brief and never includes a sensitive fact', async () => {
     const { user, reader, g } = await owner();
-    const s = await seedSarah(g);
+    const s = await seedSasha(g);
 
-    const brief = await get(reader, s.sarah, { enqueueStaleDigest: false });
+    const brief = await get(reader, s.sasha, { enqueueStaleDigest: false });
     expect(entityBriefResponseSchema.safeParse(brief).success).toBe(true);
-    expect(brief.entity).toEqual({ id: s.sarah, label: 'Sarah Chen', type: 'Person' });
+    expect(brief.entity).toEqual({ id: s.sasha, label: 'Sasha Example', type: 'Person' });
     expect(brief.window.sinceSource).toBe('default');
 
     const ids = (list: { itemId: string }[]) => list.map((e) => e.itemId).sort();
@@ -187,7 +187,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
 
     // Something to summarize and no digest yet: stale, but the Ask tool path enqueues nothing.
     expect(brief).toMatchObject({ digest: null, digestStale: true, digestPending: false });
-    expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sarah } })).toBe(0);
+    expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sasha } })).toBe(0);
 
     // Every evidence id is the caller's own.
     const cited = [...new Set(allEvidenceIds(brief))];
@@ -200,7 +200,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     const { reader, g } = await owner();
     const kappa = await g.entity('Organization', 'Kappa');
     const project = await g.entity('Project', 'Product X rollout');
-    const sarah = await g.entity('Person', 'Sarah Chen');
+    const sasha = await g.entity('Person', 'Sasha Example');
     const recent = new Date(Date.now() - 5 * 86_400_000);
     const older = new Date(Date.now() - 9 * 86_400_000);
     const mk = (subjectId: string, statement: string, opts: Record<string, unknown>) => g.item('risk', { subjectId, statement, ...opts });
@@ -210,7 +210,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     await mk(project, 'Mitigated one', { status: 'mitigated', props: { severity: 'high' }, occurredAt: recent });
     await mk(project, 'Draft one', { reviewStatus: 'unreviewed', props: { severity: 'high' }, occurredAt: recent });
     const gone = await mk(project, 'Superseded one', { reviewStatus: 'superseded', status: 'superseded', supersededById: highNew, occurredAt: recent });
-    await mk(sarah, 'A risk about a person', { props: { severity: 'high' }, occurredAt: recent });
+    await mk(sasha, 'A risk about a person', { props: { severity: 'high' }, occurredAt: recent });
     await mk(kappa, 'Kappa may not renew', { props: { severity: 'medium' }, occurredAt: recent });
 
     const forProject = await get(reader, project, { enqueueStaleDigest: false, since: '2020-01-01' });
@@ -224,7 +224,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     expect(forOrg.sections.openRisks).toHaveLength(1);
 
     // A Person never carries the section, whatever risks name them; an entity with none has no key at all.
-    const forPerson = await get(reader, sarah, { enqueueStaleDigest: false, since: '2020-01-01' });
+    const forPerson = await get(reader, sasha, { enqueueStaleDigest: false, since: '2020-01-01' });
     expect(forPerson.sections).not.toHaveProperty('openRisks');
     const empty = await g.entity('Project', 'Quiet project');
     const forEmpty = await get(reader, empty, { enqueueStaleDigest: false });
@@ -233,20 +233,20 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
 
   it('shows the stored digest, keeping only statements cited by the caller’s own evidence', async () => {
     const { user, reader, g } = await owner();
-    const s = await seedSarah(g);
+    const s = await seedSasha(g);
     const stranger = await owner('b');
     const theirEntity = await stranger.g.entity('Person', 'Other');
     const foreignEv = await prisma.kgEvidence.findFirstOrThrow({ where: { subjectId: theirEntity } });
     const ownEv = await prisma.kgEvidence.findFirstOrThrow({ where: { subjectId: s.decision } });
     await prisma.kgEntityDigest.create({
       data: {
-        entityId: s.sarah,
+        entityId: s.sasha,
         ownerId: user.id,
-        summary: 'Sarah leads the migration\nLeaked',
+        summary: 'Sasha leads the migration\nLeaked',
         citations: {
           version: 1,
           statements: [
-            { text: 'Sarah leads the migration', evidenceIds: [ownEv.id] },
+            { text: 'Sasha leads the migration', evidenceIds: [ownEv.id] },
             { text: 'Leaked', evidenceIds: [foreignEv.id] },
           ],
           dropped: 0,
@@ -257,8 +257,8 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
       },
     });
 
-    const brief = await get(reader, s.sarah);
-    expect(brief.digest?.statements).toEqual([{ text: 'Sarah leads the migration', evidenceIds: [ownEv.id] }]);
+    const brief = await get(reader, s.sasha);
+    expect(brief.digest?.statements).toEqual([{ text: 'Sasha leads the migration', evidenceIds: [ownEv.id] }]);
     expect(brief.digest?.model).toBe('model-x');
     expect(brief.digestStale).toBe(false);
     expect(resolveTaskCalls()).toHaveLength(0);
@@ -268,7 +268,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
 
   it('starts the second visit where the first one left off, and shows a promotion in between', async () => {
     const { user, reader, g } = await owner();
-    const s = await seedSarah(g);
+    const s = await seedSasha(g);
 
     const first = await get(reader, s.kappa, { enqueueStaleDigest: false });
     expect(first.window.sinceSource).toBe('default');
@@ -281,7 +281,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     const at = new Date();
     await prisma.$executeRaw`UPDATE kg_relations SET valid = tstzrange(lower(valid), ${at}::timestamptz, '[)'),
       review_status = 'superseded' WHERE id = ${s.role}::uuid`;
-    const promoted = await g.relation('HAS_ROLE', s.sarah, s.kappa, { valid: `[${at.toISOString()},)`, precision: 'day' });
+    const promoted = await g.relation('HAS_ROLE', s.sasha, s.kappa, { valid: `[${at.toISOString()},)`, precision: 'day' });
     await prisma.$executeRaw`UPDATE kg_relations SET props = '{"title":"Staff Engineer"}'::jsonb WHERE id = ${promoted}::uuid`;
     await sleep(10);
 
@@ -296,7 +296,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
       ['ended', 'Engineer', s.role],
       ['started', 'Staff Engineer', promoted],
     ]);
-    expect(hasRole[0].person.id).toBe(s.sarah);
+    expect(hasRole[0].person.id).toBe(s.sasha);
     expect(hasRole[0].other.id).toBe(s.kappa);
 
     // For an Organization, "theirs" is what its current workers owe.
@@ -310,9 +310,9 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
 
   it('as_of=2024-01-15 reads that date’s REPORTS_TO state, with no digest, no job and no view', async () => {
     const { user, reader, g } = await owner();
-    const s = await seedSarah(g);
+    const s = await seedSasha(g);
 
-    const brief = await get(reader, s.sarah, { asOf: '2024-01-15', since: '2019-06-01' });
+    const brief = await get(reader, s.sasha, { asOf: '2024-01-15', since: '2019-06-01' });
     expect(brief.window.asOf).toBe('2024-01-15T00:00:00.000Z');
     expect(brief).toMatchObject({ digest: null, digestStale: false, digestPending: false, digestUnavailable: null });
     const reports = brief.sections.peopleChanges.filter((c) => c.type === 'REPORTS_TO');
@@ -322,7 +322,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     expect(brief.sections.whatChanged).toEqual([]);
 
     expect(await prisma.kgEntityView.count({ where: { userId: user.id } })).toBe(0);
-    expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sarah } })).toBe(0);
+    expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sasha } })).toBe(0);
     expect(resolveTaskCalls()).toHaveLength(0);
   });
 
@@ -346,40 +346,40 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
 
   it('enqueues exactly one digest job across concurrent stale GETs', async () => {
     const { reader, g } = await owner();
-    const s = await seedSarah(g);
-    const results = await Promise.all([get(reader, s.sarah), get(reader, s.sarah), get(reader, s.sarah)]);
+    const s = await seedSasha(g);
+    const results = await Promise.all([get(reader, s.sasha), get(reader, s.sasha), get(reader, s.sasha)]);
     for (const r of results) expect(r).toMatchObject({ digestStale: true, digestPending: true, digestUnavailable: null });
-    const jobs = await prisma.job.findMany({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sarah } });
+    const jobs = await prisma.job.findMany({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sasha } });
     expect(jobs).toHaveLength(1);
     expect(jobs[0]).toMatchObject({ subjectType: 'kg_entity', reason: 'backfill', status: 'pending' });
-    expect(jobs[0].payload).toEqual({ entityId: s.sarah, ownerId: expect.any(String) });
+    expect(jobs[0].payload).toEqual({ entityId: s.sasha, ownerId: expect.any(String) });
   });
 
   it('reports a missing key and enqueues nothing', async () => {
     const { reader, g } = await owner();
-    const s = await seedSarah(g);
+    const s = await seedSasha(g);
     ai.script.failWith = 'key_missing';
-    const brief = await get(reader, s.sarah);
+    const brief = await get(reader, s.sasha);
     expect(brief).toMatchObject({ digestStale: true, digestPending: false, digestUnavailable: 'ai_key_missing' });
-    expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sarah } })).toBe(0);
+    expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sasha } })).toBe(0);
   });
 
   it('does not re-enqueue within 15 minutes of a failed digest job', async () => {
     const { reader, g } = await owner();
-    const s = await seedSarah(g);
+    const s = await seedSasha(g);
     await prisma.job.create({
       data: {
         type: KG_ENTITY_DIGEST_JOB_TYPE,
         reason: 'backfill',
         subjectType: 'kg_entity',
-        subjectId: s.sarah,
+        subjectId: s.sasha,
         status: 'failed',
         finishedAt: new Date(Date.now() - 60_000),
-        payload: { entityId: s.sarah },
+        payload: { entityId: s.sasha },
       },
     });
-    const brief = await get(reader, s.sarah);
+    const brief = await get(reader, s.sasha);
     expect(brief).toMatchObject({ digestStale: true, digestPending: false, digestUnavailable: null });
-    expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sarah } })).toBe(1);
+    expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sasha } })).toBe(1);
   });
 });

@@ -12,7 +12,7 @@
 // this harness's problem.
 //
 // AN ENTITY THAT RECURS ACROSS MEETINGS BECOMES ONE ROW, not one per meeting.
-// A fixture's `knownEntities[].id` (e.g. `"g-person-sarah-chen"`) is the
+// A fixture's `knownEntities[].id` (e.g. `"g-person-sasha-example"`) is the
 // stable, cross-fixture identity a later meeting's `existingId` links back
 // to; fixtures are seeded in id order so a person's first mention (which
 // never carries `existingId`) creates the row, and a later fixture's

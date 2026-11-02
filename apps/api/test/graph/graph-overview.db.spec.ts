@@ -87,15 +87,15 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
 
   /** Two people who met, a project, and an isolated organization. */
   async function seedSmallGraph(g: GraphFixture) {
-    const sarah = await g.entity('Person', 'Sarah Chen');
-    const tom = await g.entity('Person', 'Tom Diaz');
+    const sasha = await g.entity('Person', 'Sasha Example');
+    const tobias = await g.entity('Person', 'Tobias Example');
     const meeting = await g.entity('Meeting', 'Weekly sync');
     const project = await g.entity('Project', 'Atlas');
     const lonely = await g.entity('Organization', 'Nowhere Inc');
-    await g.relation('ATTENDED', sarah, meeting);
-    await g.relation('ATTENDED', tom, meeting);
-    await g.relation('WORKS_ON', sarah, project);
-    return { sarah, tom, meeting, project, lonely };
+    await g.relation('ATTENDED', sasha, meeting);
+    await g.relation('ATTENDED', tobias, meeting);
+    await g.relation('WORKS_ON', sasha, project);
+    return { sasha, tobias, meeting, project, lonely };
   }
 
   it('writes one snapshot and the overview joins labels live', async () => {
@@ -107,20 +107,20 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     const rows = await prisma.kgGraphLayout.findMany({ where: { ownerId: user.id } });
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ nodeCount: 5, edgeCount: 3 });
-    expect(JSON.stringify(rows[0].positions)).not.toContain('Sarah');
-    expect(JSON.stringify(rows[0].clusters)).not.toContain('Sarah');
+    expect(JSON.stringify(rows[0].positions)).not.toContain('Sasha');
+    expect(JSON.stringify(rows[0].clusters)).not.toContain('Sasha');
 
     const view = await overview.overview(user.id);
     expect(view).toMatchObject({ status: 'ready', pending: false, stale: false, tooLarge: false, nodeCount: 5 });
     expect(view.nodes).toHaveLength(5);
     expect(view.nodesTruncated).toBe(false);
     const byId = Object.fromEntries(view.nodes.map((n) => [n.id, n]));
-    expect(byId[ids.sarah]).toMatchObject({ label: 'Sarah Chen', type: 'Person' });
+    expect(byId[ids.sasha]).toMatchObject({ label: 'Sasha Example', type: 'Person' });
     const unconnected = view.clusters.find((c) => c.id === -1);
     expect(unconnected).toMatchObject({ label: 'Unconnected', labelEntityId: null, size: 1 });
     expect(unconnected?.memberSample.map((m) => m.label)).toEqual(['Nowhere Inc']);
-    const main = view.clusters.find((c) => c.id >= 0 && c.labelEntityId === ids.sarah);
-    expect(main?.label).toBe('Sarah Chen');
+    const main = view.clusters.find((c) => c.id >= 0 && c.labelEntityId === ids.sasha);
+    expect(main?.label).toBe('Sasha Example');
     expect(await layoutJobs(user.id)).toHaveLength(0);
   });
 
@@ -143,24 +143,24 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     const ids = await seedSmallGraph(g);
     await run(user.id);
 
-    // Merge Tom into Sarah (a tombstone), then forget Sarah — which takes
-    // Tom's tombstone with her. Sarah is also the main cluster's label source.
+    // Merge Tobias into Sasha (a tombstone), then forget Sasha — which takes
+    // Tobias's tombstone with her. Sasha is also the main cluster's label source.
     await prisma.kgEntity.update({
-      where: { id: ids.tom },
-      data: { reviewStatus: 'merged', mergedIntoId: ids.sarah },
+      where: { id: ids.tobias },
+      data: { reviewStatus: 'merged', mergedIntoId: ids.sasha },
     });
-    const forgotten = await purge.purgePerson(user.id, ids.sarah);
-    expect(forgotten?.entityIds).toEqual(expect.arrayContaining([ids.sarah, ids.tom]));
+    const forgotten = await purge.purgePerson(user.id, ids.sasha);
+    expect(forgotten?.entityIds).toEqual(expect.arrayContaining([ids.sasha, ids.tobias]));
 
     const view = await overview.overview(user.id);
     const text = JSON.stringify(view);
-    expect(text).not.toContain('Sarah Chen');
-    expect(text).not.toContain('Tom Diaz');
-    expect(view.nodes.map((n) => n.id)).not.toContain(ids.sarah);
-    expect(view.nodes.map((n) => n.id)).not.toContain(ids.tom);
-    // The cluster Sarah named falls back to its number.
-    const formerlySarah = view.clusters.find((c) => c.id >= 0 && c.label.startsWith('Cluster '));
-    expect(formerlySarah?.labelEntityId).toBeNull();
+    expect(text).not.toContain('Sasha Example');
+    expect(text).not.toContain('Tobias Example');
+    expect(view.nodes.map((n) => n.id)).not.toContain(ids.sasha);
+    expect(view.nodes.map((n) => n.id)).not.toContain(ids.tobias);
+    // The cluster Sasha named falls back to its number.
+    const formerlySasha = view.clusters.find((c) => c.id >= 0 && c.label.startsWith('Cluster '));
+    expect(formerlySasha?.labelEntityId).toBeNull();
     // The snapshot itself is untouched; only the read filters.
     expect(view.nodeCount).toBe(5);
   });
@@ -170,32 +170,32 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     const ids = await seedSmallGraph(g);
     await run(user.id);
 
-    // Move Tom's and the meeting's own evidence into 2020; the rest stays "now".
+    // Move Tobias's and the meeting's own evidence into 2020; the rest stays "now".
     const old = new Date('2020-03-01T00:00:00Z');
     await prisma.$executeRaw`UPDATE kg_evidence SET created_at = ${old}
-      WHERE owner_id = ${user.id}::uuid AND subject_kind = 'entity' AND subject_id = ANY(${[ids.tom, ids.meeting]}::uuid[])`;
-    // A relation's evidence counts for both ends, so Tom's one relation (ATTENDED) moves to 2020 too.
+      WHERE owner_id = ${user.id}::uuid AND subject_kind = 'entity' AND subject_id = ANY(${[ids.tobias, ids.meeting]}::uuid[])`;
+    // A relation's evidence counts for both ends, so Tobias's one relation (ATTENDED) moves to 2020 too.
     await prisma.$executeRaw`UPDATE kg_evidence SET created_at = ${old}
       WHERE owner_id = ${user.id}::uuid AND subject_kind = 'relation'
-        AND subject_id IN (SELECT id FROM kg_relations WHERE from_id = ${ids.tom}::uuid OR to_id = ${ids.tom}::uuid)`;
+        AND subject_id IN (SELECT id FROM kg_relations WHERE from_id = ${ids.tobias}::uuid OR to_id = ${ids.tobias}::uuid)`;
 
     const all = await overview.overview(user.id);
     expect(all.typeCounts).toEqual({ Person: 2, Meeting: 1, Project: 1, Organization: 1 });
 
     const people = await overview.overview(user.id, { types: 'Person' });
-    expect(people.nodes.map((n) => n.id).sort()).toEqual([ids.sarah, ids.tom].sort());
+    expect(people.nodes.map((n) => n.id).sort()).toEqual([ids.sasha, ids.tobias].sort());
     expect(people.typeCounts).toEqual(all.typeCounts);
-    const sarahBefore = all.nodes.find((n) => n.id === ids.sarah);
-    expect(people.nodes.find((n) => n.id === ids.sarah)).toMatchObject({ x: sarahBefore?.x, y: sarahBefore?.y });
+    const sashaBefore = all.nodes.find((n) => n.id === ids.sasha);
+    expect(people.nodes.find((n) => n.id === ids.sasha)).toMatchObject({ x: sashaBefore?.x, y: sashaBefore?.y });
 
     const recent = await overview.overview(user.id, { from: '2021-01-01' });
-    expect(recent.nodes.map((n) => n.id)).not.toContain(ids.tom);
-    expect(recent.nodes.map((n) => n.id)).toContain(ids.sarah);
+    expect(recent.nodes.map((n) => n.id)).not.toContain(ids.tobias);
+    expect(recent.nodes.map((n) => n.id)).toContain(ids.sasha);
     expect(recent.typeCounts.Person).toBe(1);
 
     const ancient = await overview.overview(user.id, { to: '2021-01-01' });
-    expect(ancient.nodes.map((n) => n.id)).toContain(ids.tom);
-    expect(ancient.nodes.map((n) => n.id)).not.toContain(ids.sarah);
+    expect(ancient.nodes.map((n) => n.id)).toContain(ids.tobias);
+    expect(ancient.nodes.map((n) => n.id)).not.toContain(ids.sasha);
 
     await expect(overview.overview(user.id, { types: 'Spaceship' })).rejects.toThrow();
   });
@@ -216,7 +216,7 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     // Dropping the meeting drops both ATTENDED edges.
     const noMeeting = await overview.overview(user.id, { edges: true, types: 'Person,Project' });
     expect(noMeeting.edges?.map((e) => e.type)).toEqual(['WORKS_ON']);
-    expect(noMeeting.edges?.[0]).toMatchObject({ source: ids.sarah, target: ids.project });
+    expect(noMeeting.edges?.[0]).toMatchObject({ source: ids.sasha, target: ids.project });
   });
 
   it('reports stale after a relation is committed, without enqueueing', async () => {
@@ -225,7 +225,7 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     await run(user.id);
     expect((await overview.overview(user.id)).stale).toBe(false);
 
-    await g.relation('WORKS_ON', ids.tom, ids.project);
+    await g.relation('WORKS_ON', ids.tobias, ids.project);
 
     const view = await overview.overview(user.id);
     expect(view.stale).toBe(true);

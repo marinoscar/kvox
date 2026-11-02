@@ -72,7 +72,7 @@ describe('Graph share non-propagation (integration)', () => {
         id: ENTITY_ID,
         ownerId,
         type: 'Person',
-        label: 'Sarah Chen',
+        label: 'Sasha Example',
         props: {},
         reviewStatus: 'accepted',
         mergedIntoId: null,
@@ -91,7 +91,7 @@ describe('Graph share non-propagation (integration)', () => {
         subjectId: ENTITY_ID,
         transcriptId: TRANSCRIPT_ID,
         segmentId: SEGMENT_ID,
-        quote: 'Sarah joined Kappa',
+        quote: 'Sasha joined Kappa',
         createdAt: now,
       },
     ];

@@ -259,17 +259,17 @@ describeWithDb('admin.factory_reset on this app’s data (real Postgres, rolled 
 
       return row.id as string;
     };
-    const sarah = await entity(`Sarah ${label}`);
+    const sasha = await entity(`Sasha ${label}`);
     const bob = await entity(`Bob ${label}`);
     const relation = await tx.kgRelation.create({
-      data: { ownerId: user.id, type: 'KNOWS', fromId: sarah, toId: bob, reviewStatus: 'accepted', ontologyVersion: '1.0.0' },
+      data: { ownerId: user.id, type: 'KNOWS', fromId: sasha, toId: bob, reviewStatus: 'accepted', ontologyVersion: '1.0.0' },
     });
     await tx.kgEvidence.create({ data: { ownerId: user.id, subjectKind: 'relation', subjectId: relation.id, quote: 'knows' } });
     const item = await tx.kgItem.create({
       data: {
         ownerId: user.id,
         kind: 'claim',
-        subjectId: sarah,
+        subjectId: sasha,
         statement: `claim ${label}`,
         status: 'active',
         statementHash: randomUUID(),

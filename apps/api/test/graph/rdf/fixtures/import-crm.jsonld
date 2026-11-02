@@ -16,15 +16,15 @@
     {
       "@id": "https://crm.example/contacts/101",
       "@type": "kv:Person",
-      "label": "Priya Natarajan",
-      "alias": "Priya",
+      "label": "Pia Mockwell",
+      "alias": "Pia",
       "worksFor": "https://crm.example/accounts/7",
       "source": "https://crm.example/records/101"
     },
     {
       "@id": "https://crm.example/contacts/102",
       "@type": "kv:Person",
-      "label": "Marcus Webb",
+      "label": "Maddox Sample",
       "worksFor": "https://crm.example/accounts/7",
       "source": "https://crm.example/records/102"
     },

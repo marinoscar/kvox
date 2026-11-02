@@ -36,7 +36,7 @@ ent:f0000000-0000-4000-8000-000000000003
 # 4. Endpoint of the wrong class.
 ent:f0000000-0000-4000-8000-000000000004
     a kv:Person ;
-    rdfs:label "Joe" ;
+    rdfs:label "Jonty" ;
     kv:WORKS_FOR ent:f0000000-0000-4000-8000-000000000005 ;
     prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
 

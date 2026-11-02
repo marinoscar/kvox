@@ -74,12 +74,12 @@ describeWithDb('GET /api/graph/duplicates (real Postgres)', () => {
   it('leaves out merged, unreviewed and other owners, and honours distinct pairs', async () => {
     const { user, g } = await owner('filters');
     const { g: other } = await owner('filters-other');
-    const a = await g.entity('Person', 'Sara Chen');
-    const b = await g.entity('Person', 'Sara Chen Jr');
-    await g.entity('Person', 'Sara Chen Sr', { reviewStatus: 'unreviewed' });
-    await g.entity('Person', 'Sara Chenn', { reviewStatus: 'merged', mergedIntoId: a });
-    await other.entity('Person', 'Sara Chen Other');
-    expect(labels(await service.list(actor(user.id), { limit: 50 }))).toEqual(['Sara Chen | Sara Chen Jr']);
+    const a = await g.entity('Person', 'Sasa Example');
+    const b = await g.entity('Person', 'Sasa Example Jr');
+    await g.entity('Person', 'Sasa Example Sr', { reviewStatus: 'unreviewed' });
+    await g.entity('Person', 'Sasa Examplee', { reviewStatus: 'merged', mergedIntoId: a });
+    await other.entity('Person', 'Sasa Example Other');
+    expect(labels(await service.list(actor(user.id), { limit: 50 }))).toEqual(['Sasa Example | Sasa Example Jr']);
 
     const [aId, bId] = a < b ? [a, b] : [b, a];
     await prisma.kgDistinctPair.create({ data: { ownerId: user.id, aId, bId } });
@@ -88,8 +88,8 @@ describeWithDb('GET /api/graph/duplicates (real Postgres)', () => {
 
   it('maps an open resolution proposal item and applies type and limit', async () => {
     const { user, g } = await owner('proposal');
-    const a = await g.entity('Person', 'Dana Whitfield');
-    const b = await g.entity('Person', 'Ms Whitfield');
+    const a = await g.entity('Person', 'Darcy Stubbs');
+    const b = await g.entity('Person', 'Ms Stubbs');
     await g.entity('Organization', 'Org Omega');
     await g.entity('Organization', 'Org Omega Inc');
     const proposal = await prisma.kgProposal.create({ data: { ownerId: user.id, kind: 'resolution', status: 'draft' } });
@@ -97,7 +97,7 @@ describeWithDb('GET /api/graph/duplicates (real Postgres)', () => {
       data: {
         proposalId: proposal.id,
         kind: 'entity',
-        payload: { ref: 'x1', type: 'Person', label: 'Dana Whitfield', aliases: [], props: {}, existingEntityId: a },
+        payload: { ref: 'x1', type: 'Person', label: 'Darcy Stubbs', aliases: [], props: {}, existingEntityId: a },
         resolution: { ref: b, score: 0.82, source: 'trigram', candidates: [], adjudication: null },
         decision: 'pending',
       },

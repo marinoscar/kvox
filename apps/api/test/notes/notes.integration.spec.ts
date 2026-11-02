@@ -136,7 +136,7 @@ describe('Notes API (#53)', () => {
     jest.clearAllMocks();
 
     sources.resolve.mockResolvedValue({
-      text: '**Ana** · 00:00\n\nWe should ship on Friday.',
+      text: '**Anders** · 00:00\n\nWe should ship on Friday.',
       describe: 'transcript at version 3',
     });
 
@@ -992,7 +992,7 @@ describe('Notes API (#53)', () => {
 
       ownedNote(user.id);
       prismaMock.noteVersion.findMany.mockResolvedValue([
-        versionRow({ version: 2, kind: 'edit', authorId: user.id, author: { id: user.id, displayName: 'Ana', providerDisplayName: null, email: user.email } }),
+        versionRow({ version: 2, kind: 'edit', authorId: user.id, author: { id: user.id, displayName: 'Anders', providerDisplayName: null, email: user.email } }),
         versionRow({ version: 1 }),
       ]);
 
@@ -1004,7 +1004,7 @@ describe('Notes API (#53)', () => {
       expect(prismaMock.noteVersion.findMany.mock.calls[0][0].orderBy).toEqual({
         version: 'desc',
       });
-      expect(response.body.data.items[0].author.name).toBe('Ana');
+      expect(response.body.data.items[0].author.name).toBe('Anders');
       expect(response.body.data.items[1].author).toBeNull();
       expect(response.body.data.items[1].kind).toBe('ai_generated');
     });

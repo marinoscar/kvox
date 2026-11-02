@@ -33,7 +33,7 @@ const APP_URL = 'https://app.example.test';
 
 const data: UserWelcomeEmailData = {
   recipientEmail: 'new-person@example.test',
-  recipientName: 'Ana Rivera',
+  recipientName: 'Anders Sample',
   roles: ['viewer'],
   appUrl: APP_URL,
 };
@@ -115,7 +115,7 @@ describe('userWelcomeEmail — the Get started CTA', () => {
     // The account exists, under which address, with what access — the facts
     // #128 wrote this template for. The CTA must not have displaced any of
     // them.
-    expect(rendered.text).toContain('Ana Rivera');
+    expect(rendered.text).toContain('Anders Sample');
     expect(rendered.text).toContain('new-person@example.test');
     expect(rendered.text).toContain('Viewer');
   });

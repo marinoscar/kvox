@@ -428,7 +428,7 @@ describeWithDb('user.data.purge on the platform registries (real Postgres)', () 
     await prisma.askMessage.create({ data: { conversationId: convA.id, role: 'user', content: 'q' } });
     const convB = await prisma.askConversation.create({ data: { ownerId: b.id, title: 'B asks' } });
 
-    const entityA = await new GraphFixture(prisma, a.id).entity('Person', 'Sarah');
+    const entityA = await new GraphFixture(prisma, a.id).entity('Person', 'Sasha');
     const entityB = await new GraphFixture(prisma, b.id).entity('Person', 'Bob');
 
     await prisma.userAiKey.create({ data: { userId: a.id, provider: 'openai', secret: 'encrypted' } });

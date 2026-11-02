@@ -2,7 +2,7 @@
 // Real-Postgres test: a `known` relation fills the props it adds (issue #444)
 // =============================================================================
 //
-// The graph holds `Sarah —HAS_ROLE {title: VP}→ OldCo`. A later note says she
+// The graph holds `Sasha —HAS_ROLE {title: VP}→ OldCo`. A later note says she
 // is VP of Consulting there; #365's dedup calls it `known` (a null business
 // unit matches anything, #440). The commit appends the citation AND fills
 // `businessUnit: 'Consulting'` on the stored edge — never overwriting a value
@@ -52,9 +52,9 @@ describeWithDb('graph proposal commit: known relation fills (real Postgres)', ()
     const role = randomUUID();
     await prisma.$transaction(async (tx) => {
       await tx.kgRelation.create({
-        data: { id: role, ownerId: f.ownerId, type: 'HAS_ROLE', fromId: f.existing.sarah, toId: f.existing.oldco, props: storedProps as never, ontologyVersion: V },
+        data: { id: role, ownerId: f.ownerId, type: 'HAS_ROLE', fromId: f.existing.sasha, toId: f.existing.oldco, props: storedProps as never, ontologyVersion: V },
       });
-      await tx.kgEvidence.create({ data: { ownerId: f.ownerId, subjectKind: 'relation', subjectId: role, quote: 'Sarah is VP at OldCo' } });
+      await tx.kgEvidence.create({ data: { ownerId: f.ownerId, subjectKind: 'relation', subjectId: role, quote: 'Sasha is VP at OldCo' } });
     });
 
     const proposal = await prisma.kgProposal.create({
@@ -70,7 +70,7 @@ describeWithDb('graph proposal commit: known relation fills (real Postgres)', ()
         payload: {
           ref: 'r1',
           type: 'HAS_ROLE',
-          from: { entityId: f.existing.sarah },
+          from: { entityId: f.existing.sasha },
           to: { entityId: f.existing.oldco },
           props: { title: 'VP', businessUnit: 'Consulting' },
           validFrom: null,
@@ -81,7 +81,7 @@ describeWithDb('graph proposal commit: known relation fills (real Postgres)', ()
       },
     });
     await prisma.kgEvidence.create({
-      data: { ownerId: f.ownerId, subjectKind: 'proposal_item', subjectId: item.id, ...noteCite(f.note.id, 'Sarah Chen joined Org Lambda Robotics in March 2026.') },
+      data: { ownerId: f.ownerId, subjectKind: 'proposal_item', subjectId: item.id, ...noteCite(f.note.id, 'Sasha Example joined Org Lambda Robotics in March 2026.') },
     });
     return { f, role, proposal, item };
   }

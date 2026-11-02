@@ -16,7 +16,7 @@
 //   - An invalid file fails `shacl_violations` and writes NOTHING to any graph
 //     table or any proposal row.
 //   - A newer-major file fails `ontology_version_newer`.
-//   - An imported "Joe Smith" resolves to B's existing Joe (resolution runs).
+//   - An imported "Jonty Sample" resolves to B's existing Jonty (resolution runs).
 //   - A JSON-LD CRM export imports.
 //
 // Excluded from `npm test`; run by `npm run test:db` (CI's Smoke job). Storage
@@ -273,28 +273,28 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     });
     await prisma.userSettings.create({ data: { userId: user.id, value: { graph: { domains: { personal: true } } } } });
 
-    const sarah = await g.entity('Person', 'Sarah Chen', { aliases: ['Sarah', 'S. Chen'], props: { title: 'Staff Engineer', u_medical001: 'SECRET-ATTRIBUTE-VALUE' } });
-    const marcus = await g.entity('Person', 'Marcus Webb');
-    const partner = await g.entity('Person', 'Alex Chen');
+    const sasha = await g.entity('Person', 'Sasha Example', { aliases: ['Sasha', 'S. Example'], props: { title: 'Staff Engineer', u_medical001: 'SECRET-ATTRIBUTE-VALUE' } });
+    const maddox = await g.entity('Person', 'Maddox Sample');
+    const partner = await g.entity('Person', 'Alma Fixture');
     const kappa = await g.entity('Organization', 'Kappa', { props: { website: 'https://kappa.example.test', u_tier000001: 'gold' } });
     const sigma = await g.entity('Organization', 'Org Sigma');
     const meeting = await g.entity('Meeting', 'Pilot sync', { occurredAt: new Date('2026-04-02T15:00:00Z'), props: { dateSource: 'stated', topics: ['budget', 'hiring'] } });
     const project = await g.entity('Project', 'Q2 pilot', { props: { status: 'active', startDate: '2026-04-01' } });
 
-    await g.relation('WORKS_FOR', sarah, sigma, { valid: '[2019-01-01,2024-06-01)', precision: 'month', confidence: 0.9 });
-    await g.relation('WORKS_FOR', sarah, kappa, { valid: '[2024-06-01,)', precision: 'month' });
-    const hasRole = await g.relation('HAS_ROLE', sarah, kappa, { valid: '[2024-06-01,)', precision: 'month' });
+    await g.relation('WORKS_FOR', sasha, sigma, { valid: '[2019-01-01,2024-06-01)', precision: 'month', confidence: 0.9 });
+    await g.relation('WORKS_FOR', sasha, kappa, { valid: '[2024-06-01,)', precision: 'month' });
+    const hasRole = await g.relation('HAS_ROLE', sasha, kappa, { valid: '[2024-06-01,)', precision: 'month' });
     await prisma.kgRelation.update({ where: { id: hasRole }, data: { props: { title: 'Staff Engineer' } } });
-    await g.relation('REPORTS_TO', sarah, marcus, { valid: '[2024-01-15,)', precision: 'day' });
-    await g.relation('ATTENDED', sarah, meeting);
-    await g.relation('ATTENDED', marcus, meeting);
+    await g.relation('REPORTS_TO', sasha, maddox, { valid: '[2024-01-15,)', precision: 'day' });
+    await g.relation('ATTENDED', sasha, meeting);
+    await g.relation('ATTENDED', maddox, meeting);
     await g.relation('DISCUSSED', meeting, project);
     await g.relation('PART_OF', project, kappa);
-    await g.relation('SPOUSE_OF', sarah, partner, { valid: '[2015-06-01,)', precision: 'month' });
+    await g.relation('SPOUSE_OF', sasha, partner, { valid: '[2015-06-01,)', precision: 'month' });
 
-    await g.item('commitment', { title: 'Send the proposal', statement: 'Sarah will send the updated proposal by Friday.', ownerPersonId: sarah, counterpartyId: kappa, meetingId: meeting, dueAt: new Date('2026-04-10T00:00:00Z') });
+    await g.item('commitment', { title: 'Send the proposal', statement: 'Sasha will send the updated proposal by Friday.', ownerPersonId: sasha, counterpartyId: kappa, meetingId: meeting, dueAt: new Date('2026-04-10T00:00:00Z') });
     await g.item('claim', { statement: 'The pilot budget was cut by 20%.', subjectId: kappa, valid: '[2026-03-01,)', precision: 'month' });
-    const sensitive = await g.item('person_fact', { statement: 'SECRET-FACT-STATEMENT', subjectId: sarah, sensitivity: 'sensitive' });
+    const sensitive = await g.item('person_fact', { statement: 'SECRET-FACT-STATEMENT', subjectId: sasha, sensitivity: 'sensitive' });
     await g.evidence('item', sensitive, { quote: 'SECRET-FACT-QUOTE' });
     return { user, defs: { tier, medical } };
   }
@@ -327,7 +327,7 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
   it('reproduces owner A’s entities and relations in an empty owner B (§16 P7)', async () => {
     const { user: a } = await seedOwnerA();
     const turtle = await exportTurtle(a.id);
-    expect(turtle).toContain('Sarah Chen');
+    expect(turtle).toContain('Sasha Example');
     expect(turtle).not.toContain('SECRET-FACT-STATEMENT');
 
     const b = await createUser(prisma, EMAIL_PREFIX, 'b');
@@ -427,32 +427,32 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
   // Resolution, offers, JSON-LD
   // ---------------------------------------------------------------------------
 
-  it('an imported "Joe Smith" resolves to the owner’s existing Joe Smith', async () => {
+  it('an imported "Jonty Sample" resolves to the owner’s existing Jonty Sample', async () => {
     const b = await createUser(prisma, EMAIL_PREFIX, 'b');
-    const joe = await new GraphFixture(prisma, b.id).entity('Person', 'Joe Smith');
+    const jonty = await new GraphFixture(prisma, b.id).entity('Person', 'Jonty Sample');
 
     // Without an AI key, the match is proposed but left uncertain — never pre-checked.
     const unsure = await runFixture(b.id, 'import-valid.ttl');
     const unsureRow = (await prisma.kgProposalItem.findMany({ where: { proposalId: unsure.proposal.id, kind: 'entity' } })).find(
-      (r) => (r.payload as { label: string }).label === 'Joe Smith',
+      (r) => (r.payload as { label: string }).label === 'Jonty Sample',
     )!;
     const unsureRes = unsureRow.resolution as { ref: string | null; candidates: Array<{ entityId: string }> };
-    expect(unsureRes.candidates[0]?.entityId).toBe(joe);
+    expect(unsureRes.candidates[0]?.entityId).toBe(jonty);
     expect(unsureRow.flags).toContain('possible_duplicate');
     expect(unsureRow.decision).toBe('pending');
     await services.proposals.discard(caller(b.id), unsure.proposal.id);
 
-    // With adjudication (the owner's key), it links to the existing Joe exactly like an extracted mention.
+    // With adjudication (the owner's key), it links to the existing Jonty exactly like an extracted mention.
     const { proposal, stats } = await runFixture(b.id, 'import-valid.ttl', SAYS_SAME);
     expect(stats.failureReason).toBeNull();
     expect(stats.counts).toMatchObject({ entities: 3, relations: 2, items: 1 });
     const rows = await prisma.kgProposalItem.findMany({ where: { proposalId: proposal.id, kind: 'entity' } });
-    const joeRow = rows.find((r) => (r.payload as { label: string }).label === 'Joe Smith');
-    expect((joeRow?.resolution as { ref: string | null } | null)?.ref).toBe(joe);
+    const jontyRow = rows.find((r) => (r.payload as { label: string }).label === 'Jonty Sample');
+    expect((jontyRow?.resolution as { ref: string | null } | null)?.ref).toBe(jonty);
 
     // The annotation's body text is the evidence quote.
-    const cite = await prisma.kgEvidence.findFirst({ where: { subjectKind: 'proposal_item', subjectId: joeRow!.id } });
-    expect(cite).toMatchObject({ quote: 'Joe joined Kappa in March 2019 and owes them the deck.', sourceIri: 'https://source.example/joe' });
+    const cite = await prisma.kgEvidence.findFirst({ where: { subjectKind: 'proposal_item', subjectId: jontyRow!.id } });
+    expect(cite).toMatchObject({ quote: 'Jonty joined Kappa in March 2019 and owes them the deck.', sourceIri: 'https://source.example/jonty' });
 
     // The reified employment's range and precision win over the bare triple.
     const works = await prisma.kgProposalItem.findFirst({ where: { proposalId: proposal.id, kind: 'relation', payload: { path: ['type'], equals: 'WORKS_FOR' } } });
@@ -465,7 +465,7 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     expect(range[0].valid).toContain('2019-03-01');
     expect(range[0].valid).toContain('2024-07-01');
     // Linked, not duplicated.
-    expect(await prisma.kgEntity.count({ where: { ownerId: b.id, type: 'Person', label: 'Joe Smith' } })).toBe(1);
+    expect(await prisma.kgEntity.count({ where: { ownerId: b.id, type: 'Person', label: 'Jonty Sample' } })).toBe(1);
   }, 90_000);
 
   it('offers unknown properties; accepting creates the attribute and moves values, rejecting drops them', async () => {
@@ -482,8 +482,8 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     const def = await prisma.kgAttributeDef.findFirstOrThrow({ where: { ownerId: b.id, entityType: 'Person' } });
     expect(def).toMatchObject({ label: 'Nickname', kind: 'text' });
     expect(accepted.rowsUpdated).toBe(1);
-    const joeRow = await prisma.kgProposalItem.findFirst({ where: { proposalId: proposal.id, kind: 'entity', payload: { path: ['label'], equals: 'Joe Smith' } } });
-    expect((joeRow?.payload as { props: Record<string, unknown> }).props).toEqual({ [def.key]: 'Joey' });
+    const jontyRow = await prisma.kgProposalItem.findFirst({ where: { proposalId: proposal.id, kind: 'entity', payload: { path: ['label'], equals: 'Jonty Sample' } } });
+    expect((jontyRow?.payload as { props: Record<string, unknown> }).props).toEqual({ [def.key]: 'Jonno' });
 
     const rejected = await service.rejectOffer(caller(b.id), proposal.id, employees.offerId);
     expect(rejected).toMatchObject({ offer: { status: 'rejected' }, valuesDropped: 1 });
@@ -494,8 +494,8 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     expect(after.importPending).toEqual({});
 
     await acceptAllAndCommit(b.id, proposal.id);
-    const joe = await prisma.kgEntity.findFirstOrThrow({ where: { ownerId: b.id, label: 'Joe Smith' } });
-    expect(joe.props).toEqual({ [def.key]: 'Joey' });
+    const jonty = await prisma.kgEntity.findFirstOrThrow({ where: { ownerId: b.id, label: 'Jonty Sample' } });
+    expect(jonty.props).toEqual({ [def.key]: 'Jonno' });
   }, 90_000);
 
   it('imports a JSON-LD CRM export of people and organizations', async () => {
@@ -505,7 +505,7 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     await acceptAllAndCommit(b.id, proposal.id);
     const org = await prisma.kgEntity.findFirstOrThrow({ where: { ownerId: b.id, type: 'Organization' } });
     expect(org).toMatchObject({ label: 'Lambda Logistics', props: { website: 'https://lambda.example.test' } });
-    const priya = await prisma.kgEntity.findFirstOrThrow({ where: { ownerId: b.id, label: 'Priya Natarajan' }, include: { aliases: true } });
-    expect(priya.aliases.map((a) => a.alias)).toContain('Priya');
+    const pia = await prisma.kgEntity.findFirstOrThrow({ where: { ownerId: b.id, label: 'Pia Mockwell' }, include: { aliases: true } });
+    expect(pia.aliases.map((a) => a.alias)).toContain('Pia');
   }, 90_000);
 });
