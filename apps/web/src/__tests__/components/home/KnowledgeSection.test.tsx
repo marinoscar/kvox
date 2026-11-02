@@ -59,7 +59,7 @@ describe('KnowledgeSection', () => {
   });
 
   it('is hidden, not crashed, on a 200 whose body is not an entity list', async () => {
-    // PR #415's visual regression: a stub answering `{}` reached render as
+    // PR #415's regression: a stub answering `{}` reached render as
     // `items: undefined` and threw on `.length`, taking the whole app into the
     // root ErrorBoundary. `listGraphEntities` now refuses the shape.
     server.use(http.get('*/api/graph/entities', () => HttpResponse.json({ data: {} })));

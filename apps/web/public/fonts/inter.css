@@ -21,8 +21,7 @@
  * `/fonts/inter.css`, a byte-for-byte mirror that
  * `apps/web/scripts/sync-brand-assets.mjs` writes into `public/` (and `--check`
  * verifies), because a <link> in <head> is discovered by the preload scanner in
- * the first parse of the document and the visual-regression harness
- * (`apps/web/visual/index.html`) needs the same path. The mirror's sibling
+ * the first parse of the document. The mirror's sibling
  * `Inter-latin-variable.woff2` resolves this same relative URL.
  */
 
@@ -47,11 +46,6 @@
    * it arrives, so text is never invisible while the font loads. The
    * alternative, `block`, hides text for up to ~3s on a slow connection.
    *
-   * The harness shares this value rather than overriding it to `block` for
-   * screenshot determinism — the tests are supposed to exercise what ships.
-   * Determinism is handled on the test side instead, by
-   * `tests/visual/support/harness.ts`'s `waitForInter()`, which awaits
-   * `document.fonts.load()` before any screenshot is taken.
    */
   font-display: swap;
   /*

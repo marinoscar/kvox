@@ -10,7 +10,7 @@
 //
 //   /favicon.svg, /favicon.ico   `index.html` <link rel="icon">
 //   /icons/*.png                 the web app manifest and the service worker
-//   /fonts/inter.css + .woff2    `index.html` and the visual harness <link>
+//   /fonts/inter.css + .woff2    `index.html` <link>
 //
 // so `public/` holds a byte-for-byte MIRROR of those files, written by this
 // script and verified by `--check` (also asserted by
@@ -21,8 +21,7 @@
 //   node apps/web/scripts/sync-brand-assets.mjs
 //
 // WHY A COMMITTED MIRROR AND NOT A VITE `publicDir` OR A `prebuild` COPY. The
-// manifest, the service worker, the dev server, the vitest suites and the
-// visual harness (a second Vite config) all read `public/` as plain files; a
+// manifest, the service worker, the dev server, and the vitest suites all read `public/` as plain files; a
 // build-time copy would have to be wired into every one of them and would leave
 // a checkout without the files until the first build. A committed mirror works
 // in all of them unchanged, and the check makes it exactly as trustworthy as a

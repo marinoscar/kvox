@@ -23,8 +23,7 @@ import { AXE_OPTIONS, transcript } from './homeFixtures';
  *
  * The responsive behaviour is deliberately NOT asserted here and cannot be:
  * it is pure CSS (`Grid` `size={{ xs: 12, sm: 6, md: 4, lg: 3 }}`) and jsdom
- * performs no layout, so a column count is only observable in the Playwright
- * baselines (`tests/visual/specs/home.spec.ts`). What IS asserted is the thing
+ * performs no layout, so a column count is not observable here. What IS asserted is the thing
  * that would make that CSS wrong: a `useMediaQuery` creeping in here would add
  * a sixth coupled breakpoint gate, which is a code review question, not a test.
  */

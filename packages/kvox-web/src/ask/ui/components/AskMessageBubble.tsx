@@ -55,7 +55,7 @@ export interface AskMessageBubbleProps {
   /** Failed assistant turns: re-send the preceding question as a new turn. */
   onRetry?: () => void;
   retryDisabled?: boolean;
-  /** Expand the tool steps regardless of the default (visual baselines). */
+  /** Expand the tool steps regardless of the default (tests and screenshots). */
   stepsDefaultExpanded?: boolean;
 }
 

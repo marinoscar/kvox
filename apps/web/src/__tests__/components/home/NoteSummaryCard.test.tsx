@@ -33,8 +33,7 @@ import { AXE_OPTIONS, note } from './homeFixtures';
 /**
  * The theme is chosen the way the app itself chooses it: `ThemeContextProvider`
  * reads `theme_mode` from `localStorage` synchronously in its `useState`
- * initializer, so setting the key before `render` is the whole mechanism. The
- * visual harness does exactly this (`apps/web/visual/main.tsx`).
+ * initializer, so setting the key before `render` is the whole mechanism.
  */
 const THEME_STORAGE_KEY = 'theme_mode';
 

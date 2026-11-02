@@ -90,9 +90,8 @@ export default defineConfig({
   //
   // This only bites in DEV. The production build (Rollup's commonjs plugin) and
   // the Vitest suites (their own CJS interop) both handle the same file without
-  // help, which is precisely why the failure surfaces in the dev-server-backed
-  // visual harness and nowhere else. See `visual/vite.config.ts`, which needs
-  // the same line for the same reason.
+  // help, which is precisely why the failure surfaces in the dev server and nowhere
+  // else.
   //
   // The `@app/shared/ontology` subpath (issue #350) is the same package and
   // the same trap: compiled CommonJS (`exports.ONTOLOGY_VERSION = ...`) behind

@@ -485,8 +485,7 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         // and `disabled` disappears — and both consumers pick it up from that
         // alone: the hub swaps its "Coming soon" chip for a real
         // `CardActionArea`, and the Console rail, which skipped the row
-        // entirely, starts drawing it. Both of those move pixels, so the
-        // visual baselines were regenerated with this change.
+        // entirely, starts drawing it. Both of those change the layout.
         //
         // `permission` is UNCHANGED and was already right: `db_backup:read` is
         // the literal string `db-backup/db-backup.controller.ts` enforces on

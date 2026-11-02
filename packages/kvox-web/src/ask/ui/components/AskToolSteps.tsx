@@ -31,7 +31,7 @@ export interface AskToolStepsProps {
   running: boolean;
   /** Answer text has started arriving. */
   answerStarted: boolean;
-  /** Start expanded regardless of the default (visual baselines, a11y review). */
+  /** Start expanded regardless of the default (tests, a11y review). */
   defaultExpanded?: boolean;
 }
 

@@ -3,7 +3,7 @@
  * (issue #628).
  *
  * The package (`packages/kvox-web/src/brand/assets|fonts`) holds the only copy; the
- * manifest, the service worker, `index.html` and the visual harness need fixed
+ * manifest, the service worker, and `index.html` need fixed
  * URLs, so `scripts/sync-brand-assets.mjs` writes a byte-for-byte mirror into
  * `public/`. This is the same comparison as `npm run brand:check`, where
  * `npm run test:run` finds it: edit the package file, run
