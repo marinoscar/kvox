@@ -131,8 +131,8 @@ Package-side work in the kvox repository: #570 (PR #575), #571, #572, #573, #578
 
 Version 1 acceptance bar: the app answers both reference questions from imported meetings.
 
-1. "What are the action items from Joe?"
-2. "What meetings have we had with Jenny's boss?"
+1. "What are the action items from Jonty?"
+2. "What meetings have we had with Jarek's boss?"
 
 ## More
 

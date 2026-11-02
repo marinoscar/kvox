@@ -1176,7 +1176,7 @@ written straight to the live speaker row and to
 `transcripts.speaker_identities` (id → name), and nothing else —
 `current_version` does not move, no `transcript_versions` row is appended, no
 snapshot is queued. Renaming an already-identified speaker ("Oscar" →
-"Joe") is a correction and stays on the ordinary versioned path; a batch
+"Jonty") is a correction and stays on the ordinary versioned path; a batch
 mixing an identification with any other op — including a text edit — is one
 version as before, exactly like every other mixed batch. `rev` is never
 bumped by an identification: the version log has no record of it, so a `rev`
