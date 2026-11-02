@@ -1,5 +1,7 @@
 # @marinoscar/kvox-web
 
+## 0.1.0-next.24
+
 ## 0.1.0-next.23
 
 ### Minor Changes

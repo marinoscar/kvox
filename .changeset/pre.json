@@ -38,6 +38,7 @@
     "graph-autocommit-default-on",
     "graph-overview-landing",
     "graph-self-identity",
+    "graph-self-one-connection",
     "graph-tx-reads-one-connection",
     "kg-extract-chunking",
     "kg-multi-meeting-documents",
