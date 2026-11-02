@@ -28,7 +28,7 @@ export interface AskSelectionScope {
   entityIds: string[];
   /** Evidence ids of the selected edge or path; empty for a plain node selection. */
   evidenceIds: string[];
-  /** Human name of the selection: "Joe", "Joe and 2 more", "Joe → Product X rollout". */
+  /** Human name of the selection: "Jonty", "Jonty and 2 more", "Jonty → Product X rollout". */
   label: string;
   /** The first entity, which the Ask panel scopes its conversation to. */
   primaryId: string;

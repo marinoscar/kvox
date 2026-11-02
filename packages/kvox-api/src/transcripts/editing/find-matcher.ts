@@ -49,7 +49,7 @@
  * @stability experimental
  */
 export interface FindOptions {
-  /** Distinguish `Dana` from `dana`. Default false. */
+  /** Distinguish `Darcy` from `darcy`. Default false. */
   matchCase?: boolean;
   /** Require a word boundary on both sides of the hit. Default false. */
   wholeWord?: boolean;

@@ -204,7 +204,7 @@ export function buildPathViews(response: GraphPathsResponse, ontology: GraphOnto
   return views;
 }
 
-/** The hop in words: "Joe, involved in as stakeholder, skeptical, Product X rollout". Without `withStart` the start node is left out (it was just said). */
+/** The hop in words: "Jonty, involved in as stakeholder, skeptical, Product X rollout". Without `withStart` the start node is left out (it was just said). */
 export function hopSentence(path: PathView, hopIndex: number, withStart = true): string {
   const hop = path.hops[hopIndex];
   const from = path.nodes[hopIndex];

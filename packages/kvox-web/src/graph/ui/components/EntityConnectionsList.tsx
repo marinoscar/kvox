@@ -5,14 +5,14 @@
  *
  * `getEntityNeighborhood(id, { hops: 1, limit: 100 })`. Each edge touching the
  * seed is grouped by `(type, direction)`: an outgoing `REPORTS_TO` reads
- * "Reports to", an incoming one "Reports to Joe Rivera" — the stored direction
+ * "Reports to", an incoming one "Reports to Jonty Placeholder" — the stored direction
  * is never inverted (#370), so the label has to say which way it points.
  * A truncated slice links to the explorer, which pages with a hard cap.
  *
  * MANUAL RELATION EDITS (#586). With `canEdit` on a Person, the section offers
  * "Set manager", "Set employer" and "Add role" (`EntityRelationDialog`), and
  * each outgoing stored `REPORTS_TO` / `WORKS_FOR` / `HAS_ROLE` row a "Remove"
- * button named "Remove <group> <label>" (e.g. "Remove Reports to Mark Chen")
+ * button named "Remove <group> <label>" (e.g. "Remove Reports to Marta Sample")
  * that asks first, then retracts the relation as wrong. Either reloads the
  * list and calls `onChanged`.
  */
@@ -55,7 +55,7 @@ export const CONNECTIONS_LIMIT = 100;
 export interface EntityConnectionsListProps {
   /** The entity whose 1-hop connections to list. */
   entityId: string;
-  /** Its label (the title of an incoming group: "Reports to Joe Rivera"). */
+  /** Its label (the title of an incoming group: "Reports to Jonty Placeholder"). */
   entityLabel: string;
   /** The effective ontology, for relation labels; `null` while it loads. */
   ontology: GraphOntology | null;

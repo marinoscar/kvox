@@ -19,7 +19,7 @@
  * says which name to keep and a multi-select does not.
  *
  * Rename SUGGESTS the names already used in this transcript. The realistic
- * correction is "Speaker 3 is also Ana" — the name is almost always one
+ * correction is "Speaker 3 is also Anders" — the name is almost always one
  * already on screen, and typing it again by hand is how two spellings of one
  * person end up in the same transcript.
  *
@@ -148,9 +148,9 @@ export function SpeakerActions({
             onMergeInto(target.id);
           }}
         >
-          {/* The accessible name is the whole sentence, because "Ben" alone in
+          {/* The accessible name is the whole sentence, because "Bram" alone in
               a list gives a screen-reader user no way to know whether tapping
-              it merges into Ben or renames to Ben. */}
+              it merges into Bram or renames to Bram. */}
           <ListItemText>{`Merge ${speaker.displayName} into ${target.displayName}`}</ListItemText>
         </MenuItem>
       ))}

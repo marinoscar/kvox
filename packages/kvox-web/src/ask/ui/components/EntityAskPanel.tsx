@@ -1,5 +1,5 @@
 /**
- * `EntityAskPanel` — "Ask about Joe" on an entity page (#381, epic #348;
+ * `EntityAskPanel` — "Ask about Jonty" on an entity page (#381, epic #348;
  * spec `docs/specs/ontology.md` §21.5).
  *
  * A TRANSIENT SURFACE OVER THE PAGE, not a section of it: ≥ 600 px a
@@ -120,7 +120,7 @@ export interface EntityAskButtonProps {
 }
 
 /**
- * "Ask about Joe" for the entity header's actions slot: icon-only with the
+ * "Ask about Jonty" for the entity header's actions slot: icon-only with the
  * same accessible name on a phone (the page-level read the header itself makes
  * for Edit), so a long name keeps the header row without scrolling.
  *

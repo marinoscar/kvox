@@ -127,7 +127,7 @@
         "provider": { "id": "assemblyai", "model": "best" },
         "speakers": [
           { "id": "spk_a", "displayName": "Oscar", "talkTimeMs": 920100 },
-          { "id": "spk_b", "displayName": "Priya", "talkTimeMs": 741300 }
+          { "id": "spk_b", "displayName": "Pia", "talkTimeMs": 741300 }
         ],
         "segments": [
           {

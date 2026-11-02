@@ -1107,7 +1107,7 @@ export function parseRecordedAt(value: string, now: Date): Date {
  * then the address.
  *
  * ONE DEFINITION, used by both the batch path and the detail path, so a
- * transcript cannot be labelled "Ana" in a list and by an email address when
+ * transcript cannot be labelled "Anders" in a list and by an email address when
  * opened. The address fallback is reached only for an account that has never
  * had a name at all — see `transcriptListItemSchema.ownerName` for why that is
  * an acceptable disclosure and an empty string is not.

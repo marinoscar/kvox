@@ -78,7 +78,7 @@ interface TranscriptPlayerProps {
   speakers: readonly TranscriptSpeaker[];
   /** Speaker ids playback is restricted to. Empty means "everybody". */
   selectedSpeakerIds: readonly string[];
-  /** Clears the whole filter — the "Only: Ana" chip's delete handler. */
+  /** Clears the whole filter — the "Only: Anders" chip's delete handler. */
   onClearSpeakerFilter: () => void;
   variant: 'mini' | 'card';
 }

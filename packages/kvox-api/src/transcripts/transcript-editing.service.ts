@@ -49,7 +49,7 @@
 // writes the name to the live speaker row and to
 // `transcripts.speaker_identities`, and nothing else — no `current_version`
 // bump, no `transcript_versions` row, no snapshot. `materialize()` overlays the
-// map on every version, so history shows "Oscar" too. Renaming Oscar to Joe is
+// map on every version, so history shows "Oscar" too. Renaming Oscar to Jonty is
 // a correction and stays versioned. `editing/speaker-identity.ts` carries the
 // full argument; the two invariants this file must keep for it are:
 //
@@ -296,7 +296,7 @@ export class TranscriptEditingService {
 
         await this.afterCommit(transcript.id, saved, expanded, user);
 
-        // #405: a versioned rename ("Oscar" → "Joe"), a clear back to the
+        // #405: a versioned rename ("Oscar" → "Jonty"), a clear back to the
         // placeholder, a created, merged or deleted speaker — each changes
         // which name a speaker shows, so the graph must re-reconcile exactly
         // as it does after an identification.
@@ -1167,7 +1167,7 @@ export class TranscriptEditingService {
           // named or renamed this speaker between the routing read and this
           // lock — and because an identification leaves `rev` alone, a rev
           // check alone might not notice. Proceeding would overwrite their
-          // "Joe" with this client's "Oscar" without either of them seeing
+          // "Jonty" with this client's "Oscar" without either of them seeing
           // the other's choice.
           if (kind !== 'identification' || speaker.rev !== op.rev) {
             conflicts.push({ entity: 'speaker', id: speaker.id, current: speaker.rev });

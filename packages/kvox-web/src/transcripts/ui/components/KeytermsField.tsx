@@ -48,7 +48,7 @@ export function KeytermsField({
   suggestions = [],
   disabled = false,
   label = 'Names & terms in this recording',
-  placeholder = 'e.g. Ana Solís, Kvox, OKRs',
+  placeholder = 'e.g. Anders Testcase, Kvox, OKRs',
   helperText = HELPER_TEXT,
 }: KeytermsFieldProps) {
   const [inputValue, setInputValue] = useState('');

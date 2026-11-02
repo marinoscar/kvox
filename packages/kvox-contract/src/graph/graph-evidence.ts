@@ -23,7 +23,7 @@ import { z } from 'zod';
  * The `source_iri` of a SERVER-AUTHORED manual citation (#586): the owner,
  * stating a fact by hand on an entity page (§8's manual-edit exception). Such
  * a row has no transcript, note or import anchor; its `quote` says what was
- * set ("Set by hand: Jenny Kim reports to Mark Chen"). Readers report it as
+ * set ("Set by hand: Jarek Stubbs reports to Marta Sample"). Readers report it as
  * an evidence link of `source.kind: 'manual'`.
  *
  * Reserved: {@link evidenceInputSchema} refuses it, so no client can author a

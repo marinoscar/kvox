@@ -1,5 +1,5 @@
 /**
- * `/graph/entities/:id` — "everything about Joe" (#373, epic #347; spec §13).
+ * `/graph/entities/:id` — "everything about Jonty" (#373, epic #347; spec §13).
  *
  * ONE SCROLLING COLUMN (`maxWidth: 960`), sections in a fixed order:
  *

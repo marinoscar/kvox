@@ -1,5 +1,5 @@
 /**
- * `EntityBriefCard` — "what's the latest on Joe?" (#373 over #372's contract;
+ * `EntityBriefCard` — "what's the latest on Jonty?" (#373 over #372's contract;
  * spec §9.1–§9.2).
  *
  * =============================================================================

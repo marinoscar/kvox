@@ -4,7 +4,7 @@
  * NO REACT, NO G6. A test drives them with a plain graphology graph; the
  * palette component only renders what they return.
  *
- *   - {@link parsePaletteQuery} splits `type:Person joe` into the free text and
+ *   - {@link parsePaletteQuery} splits `type:Person jonty` into the free text and
  *     the type tokens, and says which tokens name no known type.
  *   - {@link canvasMatches} is the local fuzzy match over the labels of the
  *     nodes already on the canvas (the "On canvas" section).
@@ -73,7 +73,7 @@ export function parsePaletteQuery(raw: string, typeOptions: readonly PaletteType
 /**
  * How well `text` matches `label`, or `null` for no match. Case-insensitive; a
  * prefix of the label beats a prefix of a word beats a substring beats an
- * in-order subsequence ("jrn" finds "Joe Rivera N"). Shorter labels rank higher.
+ * in-order subsequence ("jrn" finds "Jonty Placeholder N"). Shorter labels rank higher.
  */
 export function fuzzyScore(label: string, text: string): number | null {
   const needle = text.trim().toLowerCase();

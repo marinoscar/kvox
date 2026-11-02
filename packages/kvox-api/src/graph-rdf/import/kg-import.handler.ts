@@ -24,8 +24,8 @@
 //                   file itself (`import_object_id`, `source_iri`, the file's
 //                   own annotation text or "Imported from <filename>")
 //   6. stages       every registered proposal stage, in order — #364's
-//                   resolution first, so an imported "Joe Smith" links to the
-//                   existing Joe exactly as an extracted mention would; then
+//                   resolution first, so an imported "Jonty Sample" links to the
+//                   existing Jonty exactly as an extracted mention would; then
 //                   #365's dedup/closing stages
 //   7. pre-check → `extracting → draft`
 //

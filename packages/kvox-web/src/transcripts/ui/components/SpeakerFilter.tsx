@@ -168,7 +168,7 @@ export function SpeakerFilter({
    * ⚠ MEASURED, NOT a `useMediaQuery`. This is deliberately NOT a sixth
    * coupled breakpoint gate (`common/Layout.tsx` documents five, and they move
    * together or not at all): "does this row overflow" is a question about
-   * CONTENT width — two speakers named "Ana" and "Ben" do not overflow a 360px
+   * CONTENT width — two speakers named "Anders" and "Bram" do not overflow a 360px
    * phone while six with long names overflow a tablet — and no viewport
    * threshold answers it. Reading the element is the only honest source.
    *
@@ -212,7 +212,7 @@ export function SpeakerFilter({
   /**
    * The accessible name says what the control DOES, not what it is.
    *
-   * A chip reading "Ana · 42 · 12 min" is a fine visual label and a poor
+   * A chip reading "Anders · 42 · 12 min" is a fine visual label and a poor
    * accessible one — it does not say that activating it filters playback, and
    * `aria-pressed` alone cannot supply the verb.
    */
@@ -387,7 +387,7 @@ export function SpeakerFilter({
                   edge="start"
                   checked={ticked.has(stat.speaker.id)}
                   onChange={() => onToggleMergeSelection?.(stat.speaker.id)}
-                  // Named for the OUTCOME, not the widget. "Checkbox, Ana" says
+                  // Named for the OUTCOME, not the widget. "Checkbox, Anders" says
                   // nothing about what ticking it will let you do.
                   slotProps={{
                     input: {

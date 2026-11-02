@@ -14,7 +14,7 @@
 // overlay applied — `applyIdentities`, the exact precedence `materialize()`
 // and every read use (docs/specs/transcription.md §4.6) — and a speaker still
 // on its ingest placeholder (`isUnidentified`) has no name. Reading
-// `speaker_identities` alone missed a versioned rename ("Oscar" → "Joe",
+// `speaker_identities` alone missed a versioned rename ("Oscar" → "Jonty",
 // which only writes the live row) and a name that rode along in a versioned
 // batch; a clear back to "Speaker A" retires the identity entry in the same
 // transaction, so it reads as unnamed either way.

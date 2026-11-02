@@ -283,7 +283,7 @@ function DialogBody({
             maxKeyterms={MAX_NAME_CHECK_TERMS}
             suggestions={[]}
             label="Other names & terms"
-            placeholder="e.g. Kvox, Solís"
+            placeholder="e.g. Kvox, Exámple"
             helperText="Other people, places or products mentioned in the recording. Press Enter or type a comma after each."
           />
 

@@ -1,6 +1,6 @@
 /**
  * One line in the review sheet's header saying how the proposal was steered
- * (#368; ontology.md §19): "Focused on Sarah Chen, Q2 pilot · 3 types ·
+ * (#368; ontology.md §19): "Focused on Sasha Example, Q2 pilot · 3 types ·
  * instructions", with **Edit guidance** re-opening the extract dialog in
  * re-extract mode. Renders nothing for a proposal extracted unguided.
  */

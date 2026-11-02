@@ -180,7 +180,7 @@ export const Commitment = defineEntityType({
   label: 'Commitment',
   pluralLabel: 'Commitments',
   description:
-    'A task with an owner and, optionally, a counterparty and a due date, stated or clearly implied by the source, e.g. "Sarah will send the updated proposal by Friday".',
+    'A task with an owner and, optionally, a counterparty and a due date, stated or clearly implied by the source, e.g. "Sasha will send the updated proposal by Friday".',
   disambiguation: [
     'No owner named or clearly implied means it is not a Commitment: "we should probably look into that" is a Claim at most, or nothing.',
     'Never force-fit a sentence into a Commitment because it sounds task-shaped.',
@@ -301,7 +301,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Works for',
       description:
-        'A person is employed by, or works on behalf of, an organization — the one way a person\'s employer is recorded: "Joe works for Org Beta" is Joe WORKS_FOR Org Beta (an Organization); his role and business unit there are a HAS_ROLE to the same Organization.',
+        'A person is employed by, or works on behalf of, an organization — the one way a person\'s employer is recorded: "Jonty works for Org Beta" is Jonty WORKS_FOR Org Beta (an Organization); his role and business unit there are a HAS_ROLE to the same Organization.',
       from: ['Person'],
       to: ['Organization'],
       temporal: true,
@@ -317,7 +317,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Has role',
       description:
-        'A person holds a titled role, optionally within a business unit, at an organization for a period of time: "Joe, VP of Supply Chain at Org Beta" is Joe HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.',
+        'A person holds a titled role, optionally within a business unit, at an organization for a period of time: "Jonty, VP of Supply Chain at Org Beta" is Jonty HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.',
       from: ['Person'],
       to: ['Organization'],
       temporal: true,
@@ -442,7 +442,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Involved in',
       description:
-        'A person has a stated role in a project or an opportunity, and optionally a stance toward it: "Joe is the budget approver for the Product X rollout and is skeptical of it" is Joe INVOLVED_IN Product X rollout {role: approver, stance: skeptical}.' +
+        'A person has a stated role in a project or an opportunity, and optionally a stance toward it: "Jonty is the budget approver for the Product X rollout and is skeptical of it" is Jonty INVOLVED_IN Product X rollout {role: approver, stance: skeptical}.' +
         ' Assigned tasks are Commitments with ASSIGNED_TO; attending one meeting about a project is ATTENDED + DISCUSSED, not INVOLVED_IN unless the source states a role. Set role only to the role the source states or clearly implies; if no role is stated, do not create INVOLVED_IN. Set stance only when the source states it or the person\'s position is unmistakably implied (an explicit objection, endorsement or refusal). Never infer stance from tone, a single question, or silence; when in doubt, omit it.',
       from: ['Person'],
       to: ['Project', 'Opportunity'],
@@ -666,7 +666,7 @@ export const workDomain = defineDomain({
       domain: 'work',
       label: 'Knows about',
       description:
-        'A person has expertise in a topic or product: "Maria is our expert on AI governance" is Maria KNOWS_ABOUT AI governance {level: expert}.' +
+        'A person has expertise in a topic or product: "Maren is our expert on AI governance" is Maren KNOWS_ABOUT AI governance {level: expert}.' +
         ' Hobbies and lasting private interests are not KNOWS_ABOUT. Set level only when the source states it ("expert", "hands-on", "just heard of it"); attending a meeting about a topic does not make someone know about it.',
       from: ['Person'],
       to: ['Topic', 'Product'],

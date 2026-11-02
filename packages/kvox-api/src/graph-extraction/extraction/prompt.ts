@@ -136,7 +136,7 @@ export function affiliationRule(ctx: ExtractionContext): string | null {
   if (!worksFor && !hasRole) return null;
   const sources = offeredContextText(ctx.note.contextText) !== null ? 'the Context, note or transcript' : 'the note or transcript';
   const unit = hasRole !== undefined && offeredAttributes(hasRole.type.props).some((a) => a.key === 'businessUnit');
-  const quoted = unit ? 'Joe, VP of Supply Chain at Org Beta' : 'Joe, VP at Org Beta';
+  const quoted = unit ? 'Jonty, VP of Supply Chain at Org Beta' : 'Jonty, VP at Org Beta';
   const roleProps = unit ? '{title: "VP", businessUnit: "Supply Chain"}' : '{title: "VP"}';
   const create = '(create the Organization if it is not a known entity)';
   const roleWhat = unit ? 'role and business unit' : 'role';
@@ -144,15 +144,15 @@ export function affiliationRule(ctx: ExtractionContext): string | null {
   if (worksFor && hasRole) {
     return (
       `Record each person's employer as WORKS_FOR from the person to that company's Organization ${create}, and their ${roleWhat} there as HAS_ROLE to the same Organization with ${roleHow} whenever ${sources} states them — ` +
-      `e.g. "${quoted}" is Joe WORKS_FOR Org Beta and Joe HAS_ROLE Org Beta ${roleProps}.`
+      `e.g. "${quoted}" is Jonty WORKS_FOR Org Beta and Jonty HAS_ROLE Org Beta ${roleProps}.`
     );
   }
   if (worksFor) {
-    return `Record each person's employer as WORKS_FOR from the person to that company's Organization ${create} whenever ${sources} states it — e.g. "Joe works for Org Beta" is Joe WORKS_FOR Org Beta.`;
+    return `Record each person's employer as WORKS_FOR from the person to that company's Organization ${create} whenever ${sources} states it — e.g. "Jonty works for Org Beta" is Jonty WORKS_FOR Org Beta.`;
   }
   return (
     `Record each person's ${roleWhat} at a company as HAS_ROLE from the person to that company's Organization ${create}, with ${roleHow} whenever ${sources} states them — ` +
-    `e.g. "${quoted}" is Joe HAS_ROLE Org Beta ${roleProps}.`
+    `e.g. "${quoted}" is Jonty HAS_ROLE Org Beta ${roleProps}.`
   );
 }
 
@@ -186,7 +186,7 @@ export function subjectBoundaryRule(ctx: ExtractionContext): string | null {
 }
 
 /**
- * The worked example (#665): the Joe / Company A / Product X scenario, once.
+ * The worked example (#665): the Jonty / Company A / Product X scenario, once.
  * Every piece is DERIVED from the offered schema — a type, relation or fact
  * kind the run does not offer is never named, and a property value is printed
  * only when the offered relation carries it as a choice — so a disabled domain
@@ -213,15 +213,15 @@ export function stakeholderExampleRule(ctx: ExtractionContext): string | null {
   const risk = ctx.offered.itemTypes.find((t) => t.key === 'Risk');
 
   const entities = [
-    'Person Joe',
+    'Person Jonty',
     'Organization Company A',
     ...(offeredBy ? ['Organization Org Beta'] : []),
     'Product Product X',
     'Project Product X rollout',
   ];
   const rows = [
-    ...(relation('WORKS_FOR') ? ['Joe WORKS_FOR Company A'] : []),
-    `Joe INVOLVED_IN Product X rollout${props('INVOLVED_IN', { role: 'stakeholder', stance: 'skeptical' })}`,
+    ...(relation('WORKS_FOR') ? ['Jonty WORKS_FOR Company A'] : []),
+    `Jonty INVOLVED_IN Product X rollout${props('INVOLVED_IN', { role: 'stakeholder', stance: 'skeptical' })}`,
     `Company A USES Product X${props('USES', { stage: 'piloting' })}`,
     ...(offeredBy ? ['Product X OFFERED_BY Org Beta'] : []),
     ...(relation('CONCERNS') ? ['Product X rollout CONCERNS Product X'] : []),
@@ -229,9 +229,9 @@ export function stakeholderExampleRule(ctx: ExtractionContext): string | null {
   const blocker = risk && offeredAttributes(risk.attributes).some((a) => a.key === 'riskKind' && a.options?.choices?.some((c) => c.value === 'blocker'));
   const fact = risk ? `; the fact Risk "licence budget not approved"${blocker ? ' {riskKind: blocker}' : ''} about Product X rollout` : '';
   return (
-    'Worked example: "Joe from Company A said he\'s skeptical about the Product X rollout; Company A is piloting Product X; the licence budget isn\'t approved." ' +
+    'Worked example: "Jonty from Company A said he\'s skeptical about the Product X rollout; Company A is piloting Product X; the licence budget isn\'t approved." ' +
     `proposes the entities ${entities.join(', ')}; the relations ${rows.join('; ')}${fact}. ` +
-    'Propose a stance only when the source states one, as Joe\'s "skeptical" here; a person with no stated position gets no stance.'
+    'Propose a stance only when the source states one, as Jonty\'s "skeptical" here; a person with no stated position gets no stance.'
   );
 }
 

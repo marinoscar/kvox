@@ -193,7 +193,7 @@ export class GraphReadController {
       '- A walk never continues **through** an item: an item is always a leaf.\n' +
       '- Edges touching an item are derived from the item itself (`virtual: true`); a stored ' +
       'relation always has an id of its own.\n' +
-      '- **`as_of`** evaluates every relation and item at that instant — "who did Joe report to ' +
+      '- **`as_of`** evaluates every relation and item at that instant — "who did Jonty report to ' +
       'in January 2024" — with ranges half-open `[from, to)`.\n' +
       '- **`types`** keeps only those entity types / item kinds; ' +
       '**`relationTypes`** walks only along those edge types. Unknown keys are a **400**.\n' +
@@ -264,7 +264,7 @@ export class GraphReadController {
     summary: 'Paths between two entities',
     description:
       'The top `k` evidence-weighted paths from one node to another, with the graph slice they ' +
-      'cover: "how is Joe connected to the Product X rollout?".\n\n' +
+      'cover: "how is Jonty connected to the Product X rollout?".\n\n' +
       '- A path has at most **`maxHops`** edges and passes only through entities: an item ' +
       '(commitment, decision, claim, person fact) can be an endpoint, never a stop on the way.\n' +
       '- **Score** = the mean of `log(1 + evidenceCount)` over the path\'s edges, discounted for ' +
