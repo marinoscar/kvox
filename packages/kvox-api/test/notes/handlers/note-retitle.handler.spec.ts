@@ -39,7 +39,7 @@ const JOB_ID = 'job-1';
 const noteRow = (overrides: Record<string, unknown> = {}) => ({
   id: NOTE_ID,
   ownerId: OWNER_ID,
-  body: 'Ana: we ship on Friday.',
+  body: 'Anders: we ship on Friday.',
   status: 'ready',
   titleSource: 'template',
   deletedAt: null,

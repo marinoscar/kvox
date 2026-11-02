@@ -77,7 +77,7 @@ function version(overrides: Partial<NoteVersion> = {}): NoteVersion {
     version: 1,
     kind: 'edit',
     summary: null,
-    author: { id: 'u1', name: 'Ana' },
+    author: { id: 'u1', name: 'Anders' },
     generationId: null,
     restoredFromVersion: null,
     createdAt: '2026-10-26T10:00:00.000Z',

@@ -66,9 +66,9 @@ describe('classifyRename', () => {
     ).toBe('noop');
   });
 
-  it('is versioned: correcting an already-identified speaker (Oscar -> Joe)', () => {
+  it('is versioned: correcting an already-identified speaker (Oscar -> Jonty)', () => {
     expect(
-      classifyRename({ label: 'A', displayName: 'Oscar' }, { displayName: 'Joe' }),
+      classifyRename({ label: 'A', displayName: 'Oscar' }, { displayName: 'Jonty' }),
     ).toBe('versioned');
   });
 
@@ -109,17 +109,17 @@ describe('isIdentificationBatch', () => {
     ).toBe(false);
   });
 
-  it('is false for [A -> Oscar, A -> Joe]: the second op corrects the first\'s own identification', () => {
+  it('is false for [A -> Oscar, A -> Jonty]: the second op corrects the first\'s own identification', () => {
     // Classified IN BATCH ORDER — the second op sees the name the first one
     // gave, exactly as the reducers would.
-    expect(isIdentificationBatch(twoSpeakers, [rename('A', 'Oscar'), rename('A', 'Joe')])).toBe(
+    expect(isIdentificationBatch(twoSpeakers, [rename('A', 'Oscar'), rename('A', 'Jonty')])).toBe(
       false,
     );
   });
 
   it('is true when every op is an identification or a no-op', () => {
     expect(
-      isIdentificationBatch(twoSpeakers, [rename('A', 'Oscar'), rename('B', 'Dana')]),
+      isIdentificationBatch(twoSpeakers, [rename('A', 'Oscar'), rename('B', 'Darcy')]),
     ).toBe(true);
   });
 
@@ -189,9 +189,9 @@ describe('parseSpeakerIdentities', () => {
   });
 
   it('keeps a well-formed entry, untrimmed', () => {
-    expect(parseSpeakerIdentities({ A: 'Oscar', B: ' Dana ' })).toEqual({
+    expect(parseSpeakerIdentities({ A: 'Oscar', B: ' Darcy ' })).toEqual({
       A: 'Oscar',
-      B: ' Dana ',
+      B: ' Darcy ',
     });
   });
 });
@@ -206,18 +206,18 @@ describe('identitiesFingerprint', () => {
   });
 
   it('is stable regardless of key insertion order', () => {
-    expect(identitiesFingerprint({ A: 'Oscar', B: 'Dana' })).toBe(
-      identitiesFingerprint({ B: 'Dana', A: 'Oscar' }),
+    expect(identitiesFingerprint({ A: 'Oscar', B: 'Darcy' })).toBe(
+      identitiesFingerprint({ B: 'Darcy', A: 'Oscar' }),
     );
   });
 
   it('changes when a name changes', () => {
-    expect(identitiesFingerprint({ A: 'Oscar' })).not.toBe(identitiesFingerprint({ A: 'Joe' }));
+    expect(identitiesFingerprint({ A: 'Oscar' })).not.toBe(identitiesFingerprint({ A: 'Jonty' }));
   });
 
   it('changes when the set of identified speakers changes', () => {
     expect(identitiesFingerprint({ A: 'Oscar' })).not.toBe(
-      identitiesFingerprint({ A: 'Oscar', B: 'Dana' }),
+      identitiesFingerprint({ A: 'Oscar', B: 'Darcy' }),
     );
   });
 });

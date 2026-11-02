@@ -130,7 +130,7 @@ describe('speakersWithChangedNames (#405)', () => {
   it('names a renamed speaker, including a rename back to the placeholder', () => {
     const before = twoLines();
     const renamed = applyOps(before, [
-      { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' },
+      { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Jonty' },
     ]).state;
 
     expect(speakersWithChangedNames(diffState(before, renamed))).toEqual(['A']);
@@ -163,7 +163,7 @@ describe('speakerNameChanges (#405)', () => {
     const live = [
       { id: 'A', displayName: 'Oscar' },
       { id: 'B', displayName: 'Speaker B' },
-      { id: 'C', displayName: 'Dana' },
+      { id: 'C', displayName: 'Darcy' },
     ];
     const restored = [
       { id: 'A', displayName: 'Speaker A' },

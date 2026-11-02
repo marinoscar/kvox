@@ -300,16 +300,16 @@ describe('progress formatting', () => {
 
 describe('keyterms (#327)', () => {
   it('splits on commas and newlines, trimming and dropping empties', () => {
-    expect(splitKeytermInput(' Ana ,\n\nBeto  Ruiz\r\nCarla,, ')).toEqual([
-      'Ana',
-      'Beto Ruiz',
-      'Carla',
+    expect(splitKeytermInput(' Anders ,\n\nBriar  Dummyson\r\nCalla,, ')).toEqual([
+      'Anders',
+      'Briar Dummyson',
+      'Calla',
     ]);
   });
 
   it('appends, keeping the first spelling of a case-insensitive duplicate', () => {
-    expect(addKeyterms(['Ana'], ['ANA', 'Beto', 'beto'], 200)).toEqual({
-      terms: ['Ana', 'Beto'],
+    expect(addKeyterms(['Anders'], ['ANDERS', 'Briar', 'briar'], 200)).toEqual({
+      terms: ['Anders', 'Briar'],
       error: null,
     });
   });

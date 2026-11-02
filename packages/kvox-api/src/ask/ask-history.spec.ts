@@ -12,10 +12,10 @@ const chars = (text: string) => text.length;
 
 describe('selectHistory (#378)', () => {
   it('replays complete turns oldest first with citation markers stripped', () => {
-    const history = selectHistory([u('Who is Sarah?'), a('Sarah[^ent1] leads Atlas.[^ev2]')], 10);
+    const history = selectHistory([u('Who is Sasha?'), a('Sasha[^ent1] leads Atlas.[^ev2]')], 10);
     expect(history).toEqual([
-      { role: 'user', content: 'Who is Sarah?' },
-      { role: 'assistant', content: 'Sarah leads Atlas.' },
+      { role: 'user', content: 'Who is Sasha?' },
+      { role: 'assistant', content: 'Sasha leads Atlas.' },
     ]);
   });
 

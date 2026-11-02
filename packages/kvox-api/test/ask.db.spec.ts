@@ -140,7 +140,7 @@ describe('Ask (real PostgreSQL, owner-only defaults)', () => {
     const older = await conversations.create(owner, { title: 'Older' });
     const newer = await conversations.create(owner, { title: 'Newer' });
     await db.prisma.askMessage.create({ data: { conversationId: older.id, role: 'user', content: 'Who runs Kappa?', status: 'complete' } });
-    await db.prisma.askMessage.create({ data: { conversationId: older.id, role: 'assistant', content: 'Sarah runs Kappa.[^ent1]', status: 'complete' } });
+    await db.prisma.askMessage.create({ data: { conversationId: older.id, role: 'assistant', content: 'Sasha runs Kappa.[^ent1]', status: 'complete' } });
     await db.prisma.askMessage.create({ data: { conversationId: newer.id, role: 'user', content: 'Still working?', status: 'complete' } });
     await db.prisma.askMessage.create({ data: { conversationId: newer.id, role: 'assistant', status: 'streaming' } });
     await db.prisma.askConversation.update({ where: { id: newer.id }, data: { updatedAt: new Date(Date.now() + 5_000) } });
@@ -150,7 +150,7 @@ describe('Ask (real PostgreSQL, owner-only defaults)', () => {
     expect(page.nextCursor).not.toBeNull();
 
     const next = await conversations.list(owner, { limit: 1, cursor: page.nextCursor ?? undefined });
-    expect(next.items.map((c) => [c.title, c.running, c.lastMessagePreview])).toEqual([['Older', false, 'Sarah runs Kappa.']]);
+    expect(next.items.map((c) => [c.title, c.running, c.lastMessagePreview])).toEqual([['Older', false, 'Sasha runs Kappa.']]);
     expect(next.nextCursor).toBeNull();
 
     const detail = await conversations.get(owner, older.id, {});

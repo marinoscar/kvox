@@ -36,9 +36,9 @@ describe('groupProposalItems', () => {
       proposalItem({ id: 'x-rejected', flags: ['previously_rejected'], decision: 'pending' }),
     ];
     const people = groupProposalItems(items).find((group) => group.key === 'Person');
-    expect(people?.known.map((item) => item.id)).toEqual([ITEM.ana]);
+    expect(people?.known.map((item) => item.id)).toEqual([ITEM.anders]);
     expect(people?.rejectedBefore.map((item) => item.id)).toEqual(['x-rejected']);
-    expect(people?.rows.map((item) => item.id)).toEqual([ITEM.sarah, ITEM.tom]);
+    expect(people?.rows.map((item) => item.id)).toEqual([ITEM.sasha, ITEM.tobias]);
   });
 
   it('keeps a known relation that adds props in the reviewed rows, not the disclosure (#444)', () => {
@@ -49,7 +49,7 @@ describe('groupProposalItems', () => {
       groupKey: 'relations',
       flags: ['known'],
       fills: { businessUnit: 'Consulting' },
-      display: { title: 'Ana → has role → Kappa', subtitle: 'Has role · VP · adds Business unit: Consulting' },
+      display: { title: 'Anders → has role → Kappa', subtitle: 'Has role · VP · adds Business unit: Consulting' },
     });
     const empty = proposalItem({ id: 'k-empty', kind: 'relation', groupKey: 'relations', flags: ['known'], fills: {} });
     const relations = groupProposalItems([plain, filling, empty]).find((group) => group.key === 'relations');
@@ -82,16 +82,16 @@ describe('decisions', () => {
 
   it('bulk targets every non-known row', () => {
     const people = groupProposalItems(draftItems()).find((group) => group.key === 'Person')!;
-    expect(bulkTargetIds(people)).toEqual([ITEM.sarah, ITEM.tom]);
+    expect(bulkTargetIds(people)).toEqual([ITEM.sasha, ITEM.tobias]);
   });
 });
 
 describe('blockingEndpoints', () => {
   it('names a pending or rejected endpoint row', () => {
     const items = draftItems();
-    const tomWorksFor = items.find((item) => item.id === ITEM.tomWorksFor)!;
-    expect(blockingEndpoints(tomWorksFor, items)).toEqual([
-      { field: 'from', ref: 'e2', label: 'Tom', itemId: ITEM.tom },
+    const tobiasWorksFor = items.find((item) => item.id === ITEM.tobiasWorksFor)!;
+    expect(blockingEndpoints(tobiasWorksFor, items)).toEqual([
+      { field: 'from', ref: 'e2', label: 'Tobias', itemId: ITEM.tobias },
     ]);
     const worksFor = items.find((item) => item.id === ITEM.worksFor)!;
     expect(blockingEndpoints(worksFor, items)).toEqual([]);

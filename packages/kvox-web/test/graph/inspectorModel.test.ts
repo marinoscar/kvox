@@ -18,15 +18,15 @@ import {
   decodeSelection,
   encodeSelection,
 } from '../../src/graph/ui/components/explorer/inspector/useInspectorUrlState.js';
-import { KAPPA_ID, ANA_ID, ATLAS_COMMITMENT_ID, JOE_ID, Q3_MEETING_ID, expandFixture, gid } from './graphData.js';
+import { KAPPA_ID, ANDERS_ID, ATLAS_COMMITMENT_ID, JONTY_ID, Q3_MEETING_ID, expandFixture, gid } from './graphData.js';
 
 /** The inspector's pure model (GIC-11, #672): no React, no canvas. */
 
-function joeState(): ExplorerState {
+function jontyState(): ExplorerState {
   const state = createExplorerState();
-  const slice = expandFixture({ nodeIds: [JOE_ID], cap: 300 })!;
+  const slice = expandFixture({ nodeIds: [JONTY_ID], cap: 300 })!;
   mergeSlice(state, slice);
-  state.seedIds = [JOE_ID];
+  state.seedIds = [JONTY_ID];
   return state;
 }
 
@@ -41,18 +41,18 @@ function nodeOf(state: ExplorerState, id: string): NodeSelection {
 
 describe('tabs', () => {
   it('gives an entity five tabs with Ask, four without, an item three and an edge two', () => {
-    const state = joeState();
-    const joe = nodeOf(state, JOE_ID);
-    expect(tabsFor(joe, true)).toEqual(['overview', 'evidence', 'connections', 'timeline', 'ask']);
-    expect(tabsFor(joe, false)).toEqual(['overview', 'evidence', 'connections', 'timeline']);
+    const state = jontyState();
+    const jonty = nodeOf(state, JONTY_ID);
+    expect(tabsFor(jonty, true)).toEqual(['overview', 'evidence', 'connections', 'timeline', 'ask']);
+    expect(tabsFor(jonty, false)).toEqual(['overview', 'evidence', 'connections', 'timeline']);
     expect(tabsFor(nodeOf(state, ATLAS_COMMITMENT_ID), true)).toEqual(['overview', 'evidence', 'connections']);
     const edge = buildSelection({ selected: { kind: 'edge', id: gid(411) }, state, ontology: null, typeLabel: label, pinned })!;
     expect(tabsFor(edge, true)).toEqual(['overview', 'evidence']);
   });
 
   it('opens a node on Overview and an edge on Evidence', () => {
-    const state = joeState();
-    expect(defaultTabFor(nodeOf(state, JOE_ID))).toBe('overview');
+    const state = jontyState();
+    expect(defaultTabFor(nodeOf(state, JONTY_ID))).toBe('overview');
     expect(
       defaultTabFor(buildSelection({ selected: { kind: 'edge', id: gid(411) }, state, ontology: null, typeLabel: label, pinned })!),
     ).toBe('evidence');
@@ -73,7 +73,7 @@ describe('what the Evidence tab may ask about', () => {
   });
 
   it('asks about a real edge by its id and about a derived edge by its item', () => {
-    const state = joeState();
+    const state = jontyState();
     const real = buildSelection({ selected: { kind: 'edge', id: gid(411) }, state, ontology: null, typeLabel: label, pinned });
     expect(real).toMatchObject({ evidenceSubject: { kind: 'relation', id: gid(411) } });
     const derived = buildSelection({
@@ -87,15 +87,15 @@ describe('what the Evidence tab may ask about', () => {
   });
 
   it('has no evidence subject for an edge that touches a person fact', () => {
-    const state = joeState();
+    const state = jontyState();
     const factId = gid(77);
     const slice: GraphSlice = {
-      seedIds: [JOE_ID],
+      seedIds: [JONTY_ID],
       asOf: '2026-09-26T00:00:00.000Z',
       nodes: [{ id: factId, nodeKind: 'item', type: 'person_fact', label: 'Likes sailing', depth: 1, degree: 1, status: null, occurredAt: null }],
       edges: [
-        { id: `virt:${factId}:ABOUT`, type: 'ABOUT', source: factId, target: JOE_ID, valid: null, confidence: null, virtual: true },
-        { id: gid(78), type: 'ABOUT', source: factId, target: JOE_ID, valid: null, confidence: 0.5, virtual: false },
+        { id: `virt:${factId}:ABOUT`, type: 'ABOUT', source: factId, target: JONTY_ID, valid: null, confidence: null, virtual: true },
+        { id: gid(78), type: 'ABOUT', source: factId, target: JONTY_ID, valid: null, confidence: 0.5, virtual: false },
       ],
       truncated: false,
       cap: 300,
@@ -129,14 +129,14 @@ describe('what the Evidence tab may ask about', () => {
 
 describe('buildSelection', () => {
   it('carries the node facts the header shows', () => {
-    const state = joeState();
-    const joe = nodeOf(state, JOE_ID);
-    expect(joe).toMatchObject({ label: 'Joe Rivera', entityType: 'Person', isSeed: true, expanded: false, pinned: false });
+    const state = jontyState();
+    const jonty = nodeOf(state, JONTY_ID);
+    expect(jonty).toMatchObject({ label: 'Jonty Placeholder', entityType: 'Person', isSeed: true, expanded: false, pinned: false });
     expect(nodeOf(state, KAPPA_ID).isSeed).toBe(false);
   });
 
   it('is null for a node or an edge that left the canvas, and for the line to a stub', () => {
-    const state = joeState();
+    const state = jontyState();
     expect(buildSelection({ selected: { kind: 'node', id: 'gone' }, state, ontology: null, typeLabel: label, pinned })).toBeNull();
     expect(buildSelection({ selected: { kind: 'edge', id: 'gone' }, state, ontology: null, typeLabel: label, pinned })).toBeNull();
     expect(buildSelection({ selected: null, state, ontology: null, typeLabel: label, pinned })).toBeNull();
@@ -145,17 +145,17 @@ describe('buildSelection', () => {
   it('turns an INVOLVED_IN edge into role and stance chips', () => {
     const state = createExplorerState();
     mergeSlice(state, {
-      seedIds: [JOE_ID],
+      seedIds: [JONTY_ID],
       asOf: '2026-09-26T00:00:00.000Z',
       nodes: [
-        { id: JOE_ID, nodeKind: 'entity', type: 'Person', label: 'Joe', depth: 0, degree: 1, status: null, occurredAt: null },
+        { id: JONTY_ID, nodeKind: 'entity', type: 'Person', label: 'Jonty', depth: 0, degree: 1, status: null, occurredAt: null },
         { id: ATLAS_COMMITMENT_ID, nodeKind: 'entity', type: 'Project', label: 'Product X rollout', depth: 1, degree: 1, status: null, occurredAt: null },
       ],
       edges: [
         {
           id: gid(500),
           type: 'INVOLVED_IN',
-          source: JOE_ID,
+          source: JONTY_ID,
           target: ATLAS_COMMITMENT_ID,
           valid: null,
           confidence: 0.8,
@@ -174,8 +174,8 @@ describe('buildSelection', () => {
 
 describe('connectionGroups', () => {
   it('groups the neighbours on the canvas by relation type, biggest first, with the API totals', () => {
-    const state = joeState();
-    const groups = connectionGroups(state.graph, JOE_ID, null, { ATTENDED: 9, WORKS_FOR: 1 });
+    const state = jontyState();
+    const groups = connectionGroups(state.graph, JONTY_ID, null, { ATTENDED: 9, WORKS_FOR: 1 });
     expect(groups.map((g) => g.relationType)).toEqual(['ATTENDED', 'ASSIGNED_TO', 'REPORTS_TO', 'WORKS_FOR']);
     const attended = groups[0]!;
     expect(attended.items.map((i) => i.label).sort()).toEqual(['Q3 planning', 'Weekly sync']);
@@ -184,12 +184,12 @@ describe('connectionGroups', () => {
   });
 
   it('says which end the edge leaves, and ignores "+N more" stubs', () => {
-    const state = joeState();
-    const incoming = connectionGroups(state.graph, JOE_ID, null).find((g) => g.relationType === 'ASSIGNED_TO')!;
+    const state = jontyState();
+    const incoming = connectionGroups(state.graph, JONTY_ID, null).find((g) => g.relationType === 'ASSIGNED_TO')!;
     expect(incoming.items[0]).toMatchObject({ direction: 'in', label: 'Ship the Atlas beta' });
-    state.graph.addNode('stub:x', { ...state.graph.getNodeAttributes(JOE_ID), isStub: true, label: '+3 more' });
-    state.graph.addDirectedEdgeWithKey('stubedge:x', JOE_ID, 'stub:x', { ...state.graph.getEdgeAttributes(gid(410)), relationType: '__more' });
-    expect(connectionGroups(state.graph, JOE_ID, null).some((g) => g.relationType === '__more')).toBe(false);
+    state.graph.addNode('stub:x', { ...state.graph.getNodeAttributes(JONTY_ID), isStub: true, label: '+3 more' });
+    state.graph.addDirectedEdgeWithKey('stubedge:x', JONTY_ID, 'stub:x', { ...state.graph.getEdgeAttributes(gid(410)), relationType: '__more' });
+    expect(connectionGroups(state.graph, JONTY_ID, null).some((g) => g.relationType === '__more')).toBe(false);
   });
 });
 
@@ -221,31 +221,31 @@ describe('expandMenuModel', () => {
 
 describe('summariseSelection', () => {
   it('counts by type and names the neighbours two or more of the nodes share', () => {
-    const state = joeState();
-    // Ana and Kappa meet at Joe (Joe -> Ana, Joe -> Kappa) and at the Q3 meeting is only Joe's.
-    mergeSlice(state, expandFixture({ nodeIds: [ANA_ID], cap: 300 })!);
-    const summary = summariseSelection(state, new Set([ANA_ID, KAPPA_ID]));
-    expect(summary.ids.sort()).toEqual([KAPPA_ID, ANA_ID].sort());
+    const state = jontyState();
+    // Anders and Kappa meet at Jonty (Jonty -> Anders, Jonty -> Kappa) and at the Q3 meeting is only Jonty's.
+    mergeSlice(state, expandFixture({ nodeIds: [ANDERS_ID], cap: 300 })!);
+    const summary = summariseSelection(state, new Set([ANDERS_ID, KAPPA_ID]));
+    expect(summary.ids.sort()).toEqual([KAPPA_ID, ANDERS_ID].sort());
     expect(summary.byType).toEqual([
       { type: 'Organization', count: 1 },
       { type: 'Person', count: 1 },
     ]);
-    expect(summary.shared.map((s) => s.label)).toContain('Joe Rivera');
+    expect(summary.shared.map((s) => s.label)).toContain('Jonty Placeholder');
     expect(summary.shared.every((s) => s.count >= 2)).toBe(true);
     expect(summary.seedCount).toBe(0);
   });
 
   it('ignores nodes that left the canvas, and counts seeds', () => {
-    const state = joeState();
-    const summary = summariseSelection(state, new Set([JOE_ID, Q3_MEETING_ID, 'gone']));
-    expect(summary.ids.sort()).toEqual([JOE_ID, Q3_MEETING_ID].sort());
+    const state = jontyState();
+    const summary = summariseSelection(state, new Set([JONTY_ID, Q3_MEETING_ID, 'gone']));
+    expect(summary.ids.sort()).toEqual([JONTY_ID, Q3_MEETING_ID].sort());
     expect(summary.seedCount).toBe(1);
   });
 });
 
 describe('the selection in the URL', () => {
   it('round-trips a node and an edge, including a derived edge id with colons', () => {
-    expect(decodeSelection(encodeSelection({ kind: 'node', id: JOE_ID }))).toEqual({ kind: 'node', id: JOE_ID });
+    expect(decodeSelection(encodeSelection({ kind: 'node', id: JONTY_ID }))).toEqual({ kind: 'node', id: JONTY_ID });
     const derived = `virt:${ATLAS_COMMITMENT_ID}:ASSIGNED_TO`;
     expect(encodeSelection({ kind: 'edge', id: derived })).toBe(`e:${derived}`);
     expect(decodeSelection(`e:${derived}`)).toEqual({ kind: 'edge', id: derived });

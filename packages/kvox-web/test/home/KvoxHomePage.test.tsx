@@ -50,7 +50,7 @@ describe('KvoxHomePage in a host with no API behind it', () => {
   it('renders the greeting from the host viewer and the tagline it is given', async () => {
     const host = homeHost();
     renderWithKvoxHost(<KvoxHomePage tagline="From voice to knowledge." />, host);
-    expect(await screen.findByRole('heading', { level: 1, name: 'Hi, Ana' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Hi, Anders' })).toBeInTheDocument();
     expect(screen.getByText('From voice to knowledge.')).toBeInTheDocument();
   });
 
@@ -85,7 +85,7 @@ describe('KvoxHomePage in a host with no API behind it', () => {
   });
 
   it('does not draw a step the viewer lacks the permission for', async () => {
-    const host = homeHost({ viewer: { userId: 'u1', permissions: ['notes:read'], displayName: 'Ana' }, graphEnabled: true });
+    const host = homeHost({ viewer: { userId: 'u1', permissions: ['notes:read'], displayName: 'Anders' }, graphEnabled: true });
     renderWithKvoxHost(<KvoxHomePage />, host);
     const journey = await screen.findByRole('region', { name: 'Start here' });
     expect(within(journey).queryByRole('group', { name: 'Write a note' })).not.toBeInTheDocument();
@@ -182,14 +182,14 @@ describe('KvoxHomePage in a host with no API behind it', () => {
       homeHost(),
     );
     await loaded();
-    const hero = screen.getByRole('region', { name: /Hi, Ana/ });
+    const hero = screen.getByRole('region', { name: /Hi, Anders/ });
     const buttons = within(hero).getAllByRole('button').map((b) => b.textContent);
     expect(buttons.indexOf('Host action')).toBeGreaterThanOrEqual(0);
     expect(buttons.indexOf('Host action')).toBeLessThan(buttons.indexOf('New note'));
   });
 
   it('offers New note only to a viewer who can write notes', async () => {
-    const host = homeHost({ viewer: { userId: 'u1', permissions: ['notes:read'], displayName: 'Ana' } });
+    const host = homeHost({ viewer: { userId: 'u1', permissions: ['notes:read'], displayName: 'Anders' } });
     renderWithKvoxHost(<KvoxHomePage />, host);
     await loaded();
     expect(screen.queryByRole('button', { name: 'New note' })).not.toBeInTheDocument();

@@ -10,7 +10,7 @@ import type { GraphCanvasProps } from '../../src/graph/ui/components/explorer/Gr
 import type { GraphConnectResponse } from '../../src/graph/headless/clients/graph.js';
 import { GraphExplorerPage } from '../../src/graph/ui/pages/GraphExplorerPage.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
-import { KAPPA_ID, ANA_ID, JOE_ID, expandFixture, gid, type ExpandFixtureRequest } from './graphData.js';
+import { KAPPA_ID, ANDERS_ID, JONTY_ID, expandFixture, gid, type ExpandFixtureRequest } from './graphData.js';
 import { HttpResponse, http, server } from './msw-compat.js';
 import { mockTouchInput } from './shellMedia.js';
 import { graphReader } from './graphTestUsers.js';
@@ -55,8 +55,8 @@ vi.mock('../../src/graph/ui/components/explorer/GraphCanvas.js', () => ({
             {String(props.graph.getNodeAttribute(id, 'label'))}
           </button>
         ))}
-        <button type="button" onClick={() => props.onLasso?.([...props.visibleIds].filter((id) => id !== JOE_ID))}>
-          lasso all but Joe
+        <button type="button" onClick={() => props.onLasso?.([...props.visibleIds].filter((id) => id !== JONTY_ID))}>
+          lasso all but Jonty
         </button>
         <button type="button" onClick={props.onStageClick}>
           stage
@@ -74,14 +74,14 @@ let connectBodies: unknown[];
 let expandBodies: ExpandFixtureRequest[];
 
 function connectAnswer(over: Partial<GraphConnectResponse> = {}): GraphConnectResponse {
-  const slice = expandFixture({ nodeIds: [JOE_ID], cap: 300 })!;
+  const slice = expandFixture({ nodeIds: [JONTY_ID], cap: 300 })!;
   return {
     inputs: [
-      { kind: 'entity', id: ANA_ID, title: 'Ana Diaz', entityIds: [ANA_ID, KAPPA_ID] },
-      { kind: 'entity', id: JOE_ID, title: 'Joe Rivera', entityIds: [JOE_ID, KAPPA_ID] },
+      { kind: 'entity', id: ANDERS_ID, title: 'Anders Placeholder', entityIds: [ANDERS_ID, KAPPA_ID] },
+      { kind: 'entity', id: JONTY_ID, title: 'Jonty Placeholder', entityIds: [JONTY_ID, KAPPA_ID] },
     ],
-    shared: [{ entityId: KAPPA_ID, inputIds: [ANA_ID, JOE_ID], mentionCount: 3 }],
-    paths: [{ fromInput: ANA_ID, toInput: JOE_ID, nodeIds: [ANA_ID, KAPPA_ID, JOE_ID], edgeIds: ['e1', 'e2'], score: 0.8 }],
+    shared: [{ entityId: KAPPA_ID, inputIds: [ANDERS_ID, JONTY_ID], mentionCount: 3 }],
+    paths: [{ fromInput: ANDERS_ID, toInput: JONTY_ID, nodeIds: [ANDERS_ID, KAPPA_ID, JONTY_ID], edgeIds: ['e1', 'e2'], score: 0.8 }],
     slice,
     truncated: false,
     ...over,
@@ -121,7 +121,7 @@ function LocationProbe() {
 
 const currentUrl = () => new URL(screen.getByTestId('location').textContent ?? '/', 'http://x');
 
-function renderExplorer(route = `/graph/explore?seed=${JOE_ID}`) {
+function renderExplorer(route = `/graph/explore?seed=${JONTY_ID}`) {
   return render(
     <>
       <Routes>
@@ -151,16 +151,16 @@ describe('multi-select', () => {
     expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'true');
     // A plain click on a node would have opened it; a shift-click only marks.
     expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-selected', 'false');
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
     await user.keyboard('{/Shift}');
     expect(screen.getByText('2 selected')).toBeInTheDocument();
     expect(await screen.findByRole('group', { name: 'Selection' })).toBeInTheDocument();
 
     // Shift-click again removes it.
     await user.keyboard('{Shift>}');
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
     await user.keyboard('{/Shift}');
-    expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toHaveAttribute('data-marked', 'false');
+    expect(within(canvas).getByRole('button', { name: 'Anders Placeholder' })).toHaveAttribute('data-marked', 'false');
     expect(screen.getByText('1 selected')).toBeInTheDocument();
   });
 
@@ -168,10 +168,10 @@ describe('multi-select', () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
-    await user.click(within(canvas).getByRole('button', { name: 'lasso all but Joe' }));
+    await user.click(within(canvas).getByRole('button', { name: 'lasso all but Jonty' }));
     expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'true');
-    expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toHaveAttribute('data-marked', 'true');
-    expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toHaveAttribute('data-marked', 'false');
+    expect(within(canvas).getByRole('button', { name: 'Anders Placeholder' })).toHaveAttribute('data-marked', 'true');
+    expect(within(canvas).getByRole('button', { name: 'Jonty Placeholder' })).toHaveAttribute('data-marked', 'false');
   });
 
   it('offers the Select tool to a pointer; on, a drag on the stage lassos', async () => {
@@ -192,7 +192,7 @@ describe('multi-select', () => {
     await user.click(screen.getByRole('button', { name: 'Select' }));
     expect(canvas).toHaveAttribute('data-select-tool', 'false');
     await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
     expect(screen.getByText('2 selected')).toBeInTheDocument();
   });
 
@@ -232,8 +232,8 @@ describe('Find connections', () => {
   async function markTwo(user: ReturnType<typeof userEvent.setup>) {
     const canvas = await canvasReady();
     await user.click(screen.getByRole('button', { name: 'Select' }));
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
-    await user.click(within(canvas).getByRole('button', { name: 'Joe Rivera' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Jonty Placeholder' }));
     return canvas;
   }
 
@@ -247,12 +247,12 @@ describe('Find connections', () => {
 
     const results = await within(inspector).findByRole('region', { name: 'What connects these' });
     expect(connectBodies).toHaveLength(1);
-    expect((connectBodies[0] as { entityIds: string[] }).entityIds.sort()).toEqual([ANA_ID, JOE_ID].sort());
+    expect((connectBodies[0] as { entityIds: string[] }).entityIds.sort()).toEqual([ANDERS_ID, JONTY_ID].sort());
     expect(within(results).getByRole('heading', { name: '1 organization in common' })).toBeInTheDocument();
     const shared = within(results).getByRole('region', { name: 'Shared by these' });
     expect(within(shared).getByRole('button', { name: /Org Kappa, .*in 2 of 2/ })).toBeInTheDocument();
     const bridges = within(results).getByRole('region', { name: 'Bridges between them' });
-    expect(within(bridges).getByText('Ana Diaz and Joe Rivera')).toBeInTheDocument();
+    expect(within(bridges).getByText('Anders Placeholder and Jonty Placeholder')).toBeInTheDocument();
     // The shared entity is ringed on the canvas.
     expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'true');
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
@@ -263,7 +263,7 @@ describe('Find connections', () => {
     renderExplorer();
     const canvas = await canvasReady();
     await user.click(screen.getByRole('button', { name: 'Select' }));
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
     // One mark shows no Selection view at all: nothing to ask about.
     expect(screen.queryByRole('button', { name: 'Find connections' })).not.toBeInTheDocument();
   });
@@ -311,9 +311,9 @@ describe('?connectNotes=', () => {
 
     expect(connectBodies[0]).toEqual({ noteIds: [N1, N2] });
     // Shared first, then each input's strongest.
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe([KAPPA_ID, ANA_ID, JOE_ID].join(',')));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe([KAPPA_ID, ANDERS_ID, JONTY_ID].join(',')));
     expect(currentUrl().searchParams.get('connectNotes')).toBe(NOTES);
-    expect(expandBodies[0].nodeIds).toEqual([KAPPA_ID, ANA_ID, JOE_ID]);
+    expect(expandBodies[0].nodeIds).toEqual([KAPPA_ID, ANDERS_ID, JONTY_ID]);
     expect(await screen.findByRole('region', { name: 'What connects these' })).toBeInTheDocument();
     await waitFor(() =>
       expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'true'),
@@ -321,11 +321,11 @@ describe('?connectNotes=', () => {
   });
 
   it('keeps the seeds the URL already names (a reload), and still rings the shared entities', async () => {
-    renderExplorer(`/graph/explore?connectNotes=${NOTES}&seed=${JOE_ID}`);
+    renderExplorer(`/graph/explore?connectNotes=${NOTES}&seed=${JONTY_ID}`);
     await canvasReady();
     await screen.findByRole('region', { name: 'What connects these' });
-    expect(currentUrl().searchParams.get('seed')).toBe(JOE_ID);
-    expect(expandBodies[0].nodeIds).toEqual([JOE_ID]);
+    expect(currentUrl().searchParams.get('seed')).toBe(JONTY_ID);
+    expect(expandBodies[0].nodeIds).toEqual([JONTY_ID]);
   });
 
   it('does not fall back to the recently viewed entities', async () => {
@@ -341,7 +341,7 @@ describe('?connectNotes=', () => {
     useConnect(() =>
       HttpResponse.json({
         data: connectAnswer({
-          inputs: [{ kind: 'note', id: N1, title: 'Alone', entityIds: [JOE_ID, ANA_ID] }],
+          inputs: [{ kind: 'note', id: N1, title: 'Alone', entityIds: [JONTY_ID, ANDERS_ID] }],
           shared: [],
           paths: [],
         }),
@@ -350,7 +350,7 @@ describe('?connectNotes=', () => {
     renderExplorer(`/graph/explore?connectNotes=${N1}`);
     await canvasReady();
     expect(connectBodies[0]).toEqual({ noteIds: [N1] });
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe([JOE_ID, ANA_ID].join(',')));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe([JONTY_ID, ANDERS_ID].join(',')));
   });
 
   it('says so when the notes touch nothing in the graph', async () => {

@@ -47,15 +47,15 @@ describe('RevertDialog', () => {
 
   it('lists what must be kept on a conflict and offers a partial revert', async () => {
     proposalMock.revertConflicts = [
-      { kind: 'entity', id: 'f0000000-0000-4000-8000-000000000001', label: 'Sarah Chen', why: 'edited_since' },
-      { kind: 'relation', id: 'f0000000-0000-4000-8000-000000000002', label: 'Sarah → Lambda', why: 'referenced_since' },
+      { kind: 'entity', id: 'f0000000-0000-4000-8000-000000000001', label: 'Sasha Example', why: 'edited_since' },
+      { kind: 'relation', id: 'f0000000-0000-4000-8000-000000000002', label: 'Sasha → Lambda', why: 'referenced_since' },
     ];
     const user = userEvent.setup();
     const { onReverted, baseElement } = renderDialog();
     await user.click(screen.getByRole('button', { name: 'Revert' }));
     const dialog = await screen.findByRole('dialog', { name: 'Revert this proposal?' });
-    expect(await within(dialog).findByText('Sarah Chen — edited since')).toBeInTheDocument();
-    expect(within(dialog).getByText('Sarah → Lambda — used by something added since')).toBeInTheDocument();
+    expect(await within(dialog).findByText('Sasha Example — edited since')).toBeInTheDocument();
+    expect(within(dialog).getByText('Sasha → Lambda — used by something added since')).toBeInTheDocument();
     expect(onReverted).not.toHaveBeenCalled();
     expect(await axe(baseElement, AXE_OPTIONS)).toHaveNoViolations();
 

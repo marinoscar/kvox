@@ -10,7 +10,7 @@ import { useTextSelection } from '../../src/graph/ui/hooks/useTextSelection.js';
 import type { SelectionResolution } from '../../src/graph/headless/utils/selection.js';
 import { render } from './helpers.js';
 
-const MARKDOWN = 'Met with **Sarah** Chen about the pilot.';
+const MARKDOWN = 'Met with **Sasha** Example about the pilot.';
 
 function Probe({ resolve, enabled = true }: { resolve: (range: Range, c: HTMLElement) => SelectionResolution; enabled?: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -19,13 +19,13 @@ function Probe({ resolve, enabled = true }: { resolve: (range: Range, c: HTMLEle
     <div>
       <div ref={ref} data-testid="container">
         <p>
-          Met with <strong>Sarah</strong> Chen about the pilot.
+          Met with <strong>Sasha</strong> Example about the pilot.
         </p>
         <p data-segment-id="s1" data-segment-rev="3">
-          Tom will check with legal.
+          Tobias will check with legal.
         </p>
         <p data-segment-id="s2" data-segment-rev="1">
-          Ana owns the plan.
+          Anders owns the plan.
         </p>
       </div>
       <p data-testid="outside">Outside text entirely.</p>
@@ -41,7 +41,7 @@ const noteResolver = (range: Range, container: HTMLElement) =>
 const segmentResolver = (range: Range, container: HTMLElement) =>
   resolveSegmentSelection(range, container, {
     transcriptId: 't1',
-    segmentText: (id) => (id === 's1' ? 'Tom will check with legal.' : id === 's2' ? 'Ana owns the plan.' : undefined),
+    segmentText: (id) => (id === 's1' ? 'Tobias will check with legal.' : id === 's2' ? 'Anders owns the plan.' : undefined),
   });
 
 function select(startNode: Node, startOffset: number, endNode: Node, endOffset: number) {
@@ -82,16 +82,16 @@ describe('useTextSelection', () => {
     render(<Probe resolve={noteResolver} />);
     const p = screen.getByTestId('container').querySelector('p')!;
     const strong = p.querySelector('strong')!;
-    const after = textNode(p, 1); // " Chen about the pilot."
-    act(() => select(textNode(strong), 0, after, ' Chen'.length));
+    const after = textNode(p, 1); // " Example about the pilot."
+    act(() => select(textNode(strong), 0, after, ' Example'.length));
     const value = JSON.parse(screen.getByTestId('selection').textContent!);
-    expect(value.quote).toBe('Sarah** Chen');
+    expect(value.quote).toBe('Sasha** Example');
     expect(value.source).toEqual({
       kind: 'note',
       noteId: 'n1',
       noteVersion: 3,
-      charStart: MARKDOWN.indexOf('Sarah'),
-      charEnd: MARKDOWN.indexOf('Sarah') + 'Sarah** Chen'.length,
+      charStart: MARKDOWN.indexOf('Sasha'),
+      charEnd: MARKDOWN.indexOf('Sasha') + 'Sasha** Example'.length,
     });
   });
 
@@ -104,7 +104,7 @@ describe('useTextSelection', () => {
     const value = JSON.parse(screen.getByTestId('selection').textContent!);
     expect(value).toEqual({
       quote: 'check with',
-      source: { kind: 'segment', transcriptId: 't1', segmentId: 's1', segmentRev: 3, charStart: 9, charEnd: 19 },
+      source: { kind: 'segment', transcriptId: 't1', segmentId: 's1', segmentRev: 3, charStart: 12, charEnd: 22 },
     });
   });
 
@@ -122,7 +122,7 @@ describe('useTextSelection', () => {
     render(<Probe resolve={segmentResolver} />);
     const line = screen.getByTestId('container').querySelector('[data-segment-id="s2"]')!;
     const text = textNode(line);
-    act(() => select(text, text.data.indexOf('Ana'), text, text.data.indexOf('Ana') + 3));
+    act(() => select(text, text.data.indexOf('Anders'), text, text.data.indexOf('Anders') + 3));
     expect(screen.getByTestId('selection')).not.toHaveTextContent('none');
     act(() => {
       fireEvent.keyDown(document, { key: 'Escape' });

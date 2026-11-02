@@ -18,7 +18,7 @@ export const IDS = {
   seg3: '0d000000-0000-4000-8000-000000000003',
   spkA: '0e000000-0000-4000-8000-00000000000a',
   spkB: '0e000000-0000-4000-8000-00000000000b',
-  sarah: '0f000000-0000-4000-8000-000000000001',
+  sasha: '0f000000-0000-4000-8000-000000000001',
   lambda: '0f000000-0000-4000-8000-000000000002',
   pilot: '0f000000-0000-4000-8000-000000000003',
   meeting: '0f000000-0000-4000-8000-000000000009',
@@ -33,14 +33,14 @@ export function known(id: string, type: string, label: string, extra: Partial<Kn
 }
 
 export const SEGMENT_TEXT = {
-  s1: "Hi everyone, I'm Sarah Chen, VP of Operations at Org Lambda Robotics.",
-  s2: "Thanks Sarah. We decided to go with Postgres for the pilot.",
+  s1: "Hi everyone, I'm Sasha Example, VP of Operations at Org Lambda Robotics.",
+  s2: "Thanks Sasha. We decided to go with Postgres for the pilot.",
   s3: "I'll send the updated proposal by Friday.",
 };
 
 export const NOTE_BODY =
-  '# Pilot kickoff\n\nSarah Chen (Org Lambda Robotics) sponsors the pick-path pilot.\n\n' +
-  '- Decision: use Postgres.\n- Sarah will send the updated proposal by Friday.';
+  '# Pilot kickoff\n\nSasha Example (Org Lambda Robotics) sponsors the pick-path pilot.\n\n' +
+  '- Decision: use Postgres.\n- Sasha will send the updated proposal by Friday.';
 
 export function makeInput(overrides: Partial<ExtractionInput> = {}): ExtractionInput {
   return {
@@ -64,14 +64,14 @@ export function makeInput(overrides: Partial<ExtractionInput> = {}): ExtractionI
       { id: IDS.seg3, rev: 1, startMs: 723_000, endMs: 726_000, speakerId: IDS.spkA, text: SEGMENT_TEXT.s3 },
     ],
     speakers: [
-      { id: IDS.spkA, label: 'A', displayName: 'Sarah Chen', personEntityId: IDS.sarah },
+      { id: IDS.spkA, label: 'A', displayName: 'Sasha Example', personEntityId: IDS.sasha },
       { id: IDS.spkB, label: 'B', displayName: null, personEntityId: null },
     ],
     effectiveSchema: schemaFor(),
     guidance: null,
     knownEntityCandidates: {
       pinned: [],
-      speakerPersons: [known(IDS.sarah, 'Person', 'Sarah Chen', { aliases: ['Sarah', 'S. Chen'], orgLabel: 'Org Lambda Robotics' })],
+      speakerPersons: [known(IDS.sasha, 'Person', 'Sasha Example', { aliases: ['Sasha', 'S. Example'], orgLabel: 'Org Lambda Robotics' })],
       organizations: [known(IDS.lambda, 'Organization', 'Org Lambda Robotics', { aliases: ['NWR'] })],
       contextPool: [known(IDS.pilot, 'Project', 'Pick-path pilot', { aliases: ['pilot'] })],
       recentlyMentioned: [],
@@ -101,10 +101,10 @@ export function goodAnswer(): RawAnswer {
       {
         ref: 'k1',
         type: 'Person',
-        label: 'Sarah Chen',
-        aliases: ['Sarah'],
+        label: 'Sasha Example',
+        aliases: ['Sasha'],
         props: {},
-        evidence: [{ source: 's1', quote: "I'm Sarah Chen, VP of Operations" }],
+        evidence: [{ source: 's1', quote: "I'm Sasha Example, VP of Operations" }],
       },
       {
         ref: 'e1',
@@ -131,7 +131,7 @@ export function goodAnswer(): RawAnswer {
       {
         kind: 'commitment',
         title: 'Send updated proposal',
-        statement: 'Sarah will send the updated proposal by Friday.',
+        statement: 'Sasha will send the updated proposal by Friday.',
         subject: 'e1',
         owner: 'k1',
         counterparty: null,

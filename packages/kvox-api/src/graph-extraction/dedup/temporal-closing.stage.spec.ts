@@ -7,7 +7,7 @@ import type { ExistingItemRow } from './item-candidates.service.js';
 import { TemporalClosingStage } from './temporal-closing.stage.js';
 
 const SCHEMA = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
-const JOE = 'aaaaaaaa-0000-4000-8000-000000000001';
+const JONTY = 'aaaaaaaa-0000-4000-8000-000000000001';
 const KAPPA = 'aaaaaaaa-0000-4000-8000-000000000002';
 const SIGMA = 'aaaaaaaa-0000-4000-8000-000000000003';
 const JANE = 'aaaaaaaa-0000-4000-8000-000000000004';
@@ -17,14 +17,14 @@ const EDGE2 = 'cccccccc-0000-4000-8000-000000000002';
 const COMMIT_1 = 'dddddddd-0000-4000-8000-000000000001';
 const COMMIT_2 = 'dddddddd-0000-4000-8000-000000000002';
 
-const LABELS: Record<string, string> = { [JOE]: 'Joe', [KAPPA]: 'Kappa', [SIGMA]: 'Org Sigma', [JANE]: 'Jane', [WILL]: 'Will' };
+const LABELS: Record<string, string> = { [JONTY]: 'Jonty', [KAPPA]: 'Kappa', [SIGMA]: 'Org Sigma', [JANE]: 'Jane', [WILL]: 'Will' };
 
 function edge(over: Partial<TemporalEdge> & { from?: string; to?: string | null; prec?: 'year' | 'month' | 'day' }): TemporalEdge {
   const { from = '2019', to = null, prec = 'year', ...rest } = over;
   return {
     id: EDGE,
     type: 'WORKS_FOR',
-    fromId: JOE,
+    fromId: JONTY,
     toId: KAPPA,
     props: {},
     valid: rangeFromPrecision(from, to, prec, { openEnded: to === null }).range,
@@ -50,7 +50,7 @@ function rel(over: Record<string, unknown> = {}): Record<string, unknown> {
 
 function build(edges: TemporalEdge[], commitments: ExistingItemRow[] = [], schema: unknown = SCHEMA) {
   const db = new FakeProposalDb();
-  db.add('entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(JOE) });
+  db.add('entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(JONTY) });
   db.add('entity', entityPayload('e9', 'Person', 'Someone new'), { resolution: linked(null) });
   const graph = {
     liveEdges: jest.fn(async (_o: string, type: string) => edges.filter((e) => e.type === type)),
@@ -68,7 +68,7 @@ function commitment(id: string, over: Partial<ExistingItemRow>): ExistingItemRow
     id,
     kind: 'commitment',
     title: null,
-    statement: 'Joe sends the draft contract.',
+    statement: 'Jonty sends the draft contract.',
     status: 'open',
     occurredAt: null,
     dueAt: null,
@@ -87,7 +87,7 @@ describe('temporal-closing stage', () => {
     const engineer = edge({ type: 'HAS_ROLE', props: { title: 'Engineer' } });
     const { db, stage } = build([engineer]);
     const r = db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: KAPPA }, props: { title: 'Staff Engineer' } }));
-    db.cite(r, 'Joe was promoted to Staff Engineer in March');
+    db.cite(r, 'Jonty was promoted to Staff Engineer in March');
     const ctx = db.ctx();
     await stage.run(ctx);
 
@@ -97,7 +97,7 @@ describe('temporal-closing stage', () => {
     expect(closings[0].payload).toEqual({
       relationId: EDGE,
       relationType: 'HAS_ROLE',
-      fromLabel: 'Joe',
+      fromLabel: 'Jonty',
       toLabel: 'Kappa',
       roleTitle: 'Engineer',
       previousValid: { from: '2019-01-01', to: null, precision: 'year' },
@@ -108,7 +108,7 @@ describe('temporal-closing stage', () => {
     });
     // The closing cites copies of the new fact's evidence.
     expect(db.evidence.filter((e) => e.subjectId === closings[0].id).map((e) => e.quote)).toEqual([
-      'Joe was promoted to Staff Engineer in March',
+      'Jonty was promoted to Staff Engineer in March',
     ]);
     expect(db.byRef('r1').flags).toEqual([]); // the new edge itself is not blocked
     expect(ctx.stats).toMatchObject({ closings: 1, overlaps: 0 });
@@ -148,8 +148,8 @@ describe('temporal-closing stage', () => {
     const { db, stage } = build(
       [edge({})],
       [
-        commitment(COMMIT_1, { ownerPersonId: JOE, title: 'Send the contract' }),
-        commitment(COMMIT_2, { counterpartyId: JOE }),
+        commitment(COMMIT_1, { ownerPersonId: JONTY, title: 'Send the contract' }),
+        commitment(COMMIT_2, { counterpartyId: JONTY }),
       ],
     );
     db.add('relation', rel());
@@ -159,13 +159,13 @@ describe('temporal-closing stage', () => {
     expect(closing.flags).toEqual(['closing_affects_commitments']);
     expect(closing.payload.affectedCommitments).toEqual([
       { itemId: COMMIT_1, title: 'Send the contract', role: 'owner' },
-      { itemId: COMMIT_2, title: 'Joe sends the draft contract.', role: 'counterparty' },
+      { itemId: COMMIT_2, title: 'Jonty sends the draft contract.', role: 'counterparty' },
     ]);
     expect(ctx.stats).toMatchObject({ affectedCommitments: 2 });
   });
 
   it('a HAS_ROLE closing never lists commitments', async () => {
-    const { db, stage } = build([edge({ type: 'HAS_ROLE', props: { title: 'Engineer' } })], [commitment(COMMIT_1, { ownerPersonId: JOE })]);
+    const { db, stage } = build([edge({ type: 'HAS_ROLE', props: { title: 'Engineer' } })], [commitment(COMMIT_1, { ownerPersonId: JONTY })]);
     db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: KAPPA }, props: { title: 'Lead' } }));
     await stage.run(db.ctx());
     expect(db.closings()[0].payload.affectedCommitments).toEqual([]);
@@ -278,11 +278,11 @@ describe('temporal-closing stage', () => {
   it('is idempotent: a re-run replaces its own closing rows', async () => {
     const { db, stage } = build([edge({})]);
     const r = db.add('relation', rel());
-    db.cite(r, 'Joe moved to Org Sigma');
+    db.cite(r, 'Jonty moved to Org Sigma');
     await stage.run(db.ctx());
     await stage.run(db.ctx());
     expect(db.closings()).toHaveLength(1);
-    expect(db.evidence.filter((e) => e.quote === 'Joe moved to Org Sigma')).toHaveLength(2); // the relation's + one copy
+    expect(db.evidence.filter((e) => e.quote === 'Jonty moved to Org Sigma')).toHaveLength(2); // the relation's + one copy
   });
 
   it('two new facts closing the same edge propose it once', async () => {

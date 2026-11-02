@@ -16,8 +16,8 @@ import type { TranscriptSpeaker } from '../../src/transcripts/headless/clients/t
  */
 
 const SPEAKERS: TranscriptSpeaker[] = [
-  { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
-  { id: 'sp2', label: 'B', displayName: 'Ben', colorIndex: 1, rev: 1 },
+  { id: 'sp1', label: 'A', displayName: 'Anders', colorIndex: 0, rev: 1 },
+  { id: 'sp2', label: 'B', displayName: 'Bram', colorIndex: 1, rev: 1 },
 ];
 
 function renderActions(overrides: Partial<Parameters<typeof SpeakerActions>[0]> = {}) {
@@ -50,7 +50,7 @@ describe('SpeakerActions — the rename path, after #220’s form extraction', (
 
     await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
 
-    expect(screen.getByRole('combobox', { name: 'Speaker name' })).toHaveValue('Ana');
+    expect(screen.getByRole('combobox', { name: 'Speaker name' })).toHaveValue('Anders');
   });
 
   it('states the same all-lines scope the segment menu’s rename now states too', async () => {
@@ -71,10 +71,10 @@ describe('SpeakerActions — the rename path, after #220’s form extraction', (
     await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
     const field = screen.getByRole('combobox', { name: 'Speaker name' });
     await user.clear(field);
-    await user.type(field, '  Ben Olsen  ');
+    await user.type(field, '  Bram Fixture  ');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(onRename).toHaveBeenCalledWith('Ben Olsen');
+    expect(onRename).toHaveBeenCalledWith('Bram Fixture');
     expect(onClose).toHaveBeenCalled();
   });
 

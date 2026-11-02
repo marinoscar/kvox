@@ -54,10 +54,10 @@ const TEMPLATE_FIELDS = {
 };
 
 /** The one source both runs generate from, word for word. */
-const SOURCE_TEXT = '**Ana** · 00:00\n\nWe should ship on Friday.\n\n**Bo** · 00:07\n\nAgreed.';
+const SOURCE_TEXT = '**Anders** · 00:00\n\nWe should ship on Friday.\n\n**Bo** · 00:07\n\nAgreed.';
 
 /** The optional Context both runs carry, word for word. */
-const CONTEXT_TEXT = 'Attendees: Ana, Bo. Project: Kestrel.';
+const CONTEXT_TEXT = 'Attendees: Anders, Bo. Project: Kestrel.';
 
 interface Recorded {
   systemPrompt: string;

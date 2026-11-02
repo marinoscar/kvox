@@ -4,7 +4,7 @@ import { renderHook } from './helpers.js';
 import { http, HttpResponse } from './msw-compat.js';
 
 import { server } from './msw-compat.js';
-import { JOE_ID, SPEAKER_A_ID, SPEAKER_B_ID, briefFixture, mockProposalDetail } from './graphData.js';
+import { JONTY_ID, SPEAKER_A_ID, SPEAKER_B_ID, briefFixture, mockProposalDetail } from './graphData.js';
 import { useGraphProposal } from '../../src/graph/headless/hooks/useGraphProposal.js';
 import { useGraphBrief } from '../../src/graph/headless/hooks/useGraphBrief.js';
 import { useGraphEntities } from '../../src/graph/headless/hooks/useGraphEntities.js';
@@ -40,7 +40,7 @@ describe('useGraphBrief', () => {
         });
       }),
     );
-    const { result } = renderHook(() => useGraphBrief(JOE_ID, { pollIntervalMs: 30 }));
+    const { result } = renderHook(() => useGraphBrief(JONTY_ID, { pollIntervalMs: 30 }));
 
     await waitFor(() => expect(result.current.data?.digestPending).toBe(false), { timeout: 2000 });
     expect(result.current.isPolling).toBe(false);
@@ -58,7 +58,7 @@ describe('useGraphBrief', () => {
         HttpResponse.json({ data: briefFixture({ digestPending: true, digestStale: true }) }),
       ),
     );
-    const { result } = renderHook(() => useGraphBrief(JOE_ID, { pollIntervalMs: 20, pollMaxMs: 60 }));
+    const { result } = renderHook(() => useGraphBrief(JONTY_ID, { pollIntervalMs: 20, pollMaxMs: 60 }));
 
     await waitFor(() => expect(result.current.data).not.toBeNull());
     await waitFor(() => expect(result.current.isPolling).toBe(false), { timeout: 2000 });
@@ -89,8 +89,8 @@ describe('useGraphTranscriptPeople', () => {
         HttpResponse.json({
           data: {
             items: [
-              { id: 'p1', type: 'Person', label: 'Ana', aliases: [], mentionCount: 1, lastSeenAt: null, speakerIds: [SPEAKER_A_ID] },
-              { id: 'p2', type: 'Person', label: 'Ben', aliases: [], mentionCount: 1, lastSeenAt: null, speakerIds: [SPEAKER_B_ID, SPEAKER_A_ID] },
+              { id: 'p1', type: 'Person', label: 'Anders', aliases: [], mentionCount: 1, lastSeenAt: null, speakerIds: [SPEAKER_A_ID] },
+              { id: 'p2', type: 'Person', label: 'Bram', aliases: [], mentionCount: 1, lastSeenAt: null, speakerIds: [SPEAKER_B_ID, SPEAKER_A_ID] },
             ],
             nextCursor: null,
           },
@@ -137,7 +137,7 @@ describe('useGraphMentions / useGraphEntity', () => {
         });
       }),
     );
-    const { result } = renderHook(() => useGraphMentions(JOE_ID));
+    const { result } = renderHook(() => useGraphMentions(JONTY_ID));
     await waitFor(() => expect(result.current.data).toHaveLength(1));
     await act(async () => {
       await result.current.loadMore();

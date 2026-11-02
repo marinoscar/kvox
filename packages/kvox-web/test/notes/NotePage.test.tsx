@@ -1243,7 +1243,7 @@ describe('NotePage — regenerating', () => {
       status: 'ready',
       body: 'The first attempt.',
       currentVersion: 2,
-      contextText: 'Ana and Ben were there.',
+      contextText: 'Anders and Bram were there.',
     });
     renderNote();
     await screen.findByRole('button', { name: 'Regenerate' });
@@ -1414,7 +1414,7 @@ describe('NotePage — the generation context panel', () => {
       status: 'ready',
       body: 'Done.',
       currentVersion: 1,
-      contextText: 'Ana and Ben were there. The budget line is the point.',
+      contextText: 'Anders and Bram were there. The budget line is the point.',
     });
   });
 
@@ -1443,7 +1443,7 @@ describe('NotePage — the generation context panel', () => {
     );
 
     expect(
-      screen.getByText(/Ana and Ben were there\. The budget line is the point\./),
+      screen.getByText(/Anders and Bram were there\. The budget line is the point\./),
     ).toBeInTheDocument();
   });
 
@@ -1509,7 +1509,7 @@ describe('NotePage — the full context dialog (issue #308)', () => {
       sourceVersion: 1,
       sourceRedacted: false,
       systemPrompt: 'You write meeting notes.',
-      userContent: 'Ana and Ben discussed the budget.',
+      userContent: 'Anders and Bram discussed the budget.',
       promptTokens: 500,
       completionTokens: 200,
     };

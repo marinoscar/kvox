@@ -40,7 +40,7 @@ function note(overrides: Partial<Note> = {}): Note {
     templateId: 'tpl-1',
     templateName: 'Meeting minutes',
     sourceName: null,
-    contextText: 'Ana and Ben were there.',
+    contextText: 'Anders and Bram were there.',
     currentGenerationId: 'gen-1',
     failureReason: null,
     createdAt: '2024-03-12T10:00:00.000Z',
@@ -136,7 +136,7 @@ describe('RegenerateNoteDialog — what it opens on', () => {
     renderDialog();
 
     expect(screen.getByLabelText('Template')).toHaveTextContent('Meeting minutes');
-    expect(screen.getByLabelText('Context')).toHaveValue('Ana and Ben were there.');
+    expect(screen.getByLabelText('Context')).toHaveValue('Anders and Bram were there.');
     // The model's LABEL, not its vendor id.
     expect(screen.getByLabelText('Model')).toHaveTextContent('GPT-4o mini');
   });
@@ -219,10 +219,10 @@ describe('RegenerateNoteDialog — the body it confirms with', () => {
 
     const box = screen.getByLabelText('Context');
     await user.clear(box);
-    await user.type(box, '  Only Ana this time.  ');
+    await user.type(box, '  Only Anders this time.  ');
     await confirm(user);
 
-    expect(onConfirm).toHaveBeenCalledWith({ contextText: 'Only Ana this time.' });
+    expect(onConfirm).toHaveBeenCalledWith({ contextText: 'Only Anders this time.' });
   });
 
   it('stops the context at the API’s own ceiling rather than letting it 400', () => {

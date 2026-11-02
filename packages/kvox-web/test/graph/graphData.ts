@@ -11,7 +11,7 @@
  * output for the default domains, computed from `@marinoscar/kvox-contract/ontology`, so
  * forms render exactly what `GET /api/graph/ontology` would send.
  *
- * Contents: 12 entities (Joe Rivera is the rich one — a promotion, a
+ * Contents: 12 entities (Jonty Placeholder is the rich one — a promotion, a
  * superseded decision, a sensitive fact), evidence for a segment, a note, an
  * edited segment and an unavailable source.
  */
@@ -94,18 +94,18 @@ export function mockAttributeDef(overrides: Partial<AttributeDef> = {}): Attribu
 // Entities
 // ---------------------------------------------------------------------------
 
-export const JOE_ID = gid(1);
-export const ANA_ID = gid(2);
-export const BEN_ID = gid(3);
+export const JONTY_ID = gid(1);
+export const ANDERS_ID = gid(2);
+export const BRAM_ID = gid(3);
 export const KAPPA_ID = gid(4);
 export const SIGMA_ID = gid(5);
 export const ATLAS_ID = gid(6);
 export const Q3_MEETING_ID = gid(7);
 export const SYNC_MEETING_ID = gid(8);
-export const CARLA_ID = gid(9);
+export const CALLA_ID = gid(9);
 export const OMEGA_ID = gid(10);
 export const BEACON_ID = gid(11);
-export const DANA_ID = gid(12);
+export const DARCY_ID = gid(12);
 
 export const TRANSCRIPT_ID = gid(900);
 export const SEGMENT_ID = gid(901);
@@ -114,14 +114,14 @@ export const SPEAKER_A_ID = gid(801);
 export const SPEAKER_B_ID = gid(802);
 
 export const graphEntitySummaries: GraphEntitySummary[] = [
-  { id: JOE_ID, type: 'Person', label: 'Joe Rivera', aliases: ['Joseph Rivera', 'Joe R.'], mentionCount: 14, lastSeenAt: '2026-09-20T15:00:00.000Z' },
+  { id: JONTY_ID, type: 'Person', label: 'Jonty Placeholder', aliases: ['Juno Placeholder', 'Jonty R.'], mentionCount: 14, lastSeenAt: '2026-09-20T15:00:00.000Z' },
   { id: KAPPA_ID, type: 'Organization', label: 'Org Kappa', aliases: ['Kappa'], mentionCount: 22, lastSeenAt: '2026-09-20T15:00:00.000Z' },
-  { id: ANA_ID, type: 'Person', label: 'Ana Diaz', aliases: [], mentionCount: 9, lastSeenAt: '2026-09-18T10:00:00.000Z' },
+  { id: ANDERS_ID, type: 'Person', label: 'Anders Placeholder', aliases: [], mentionCount: 9, lastSeenAt: '2026-09-18T10:00:00.000Z' },
   { id: SIGMA_ID, type: 'Organization', label: 'Org Sigma', aliases: ['Org Sigma Corporation'], mentionCount: 4, lastSeenAt: '2026-09-02T09:00:00.000Z' },
-  { id: BEN_ID, type: 'Person', label: 'Ben Okafor', aliases: [], mentionCount: 6, lastSeenAt: '2026-08-30T09:00:00.000Z' },
+  { id: BRAM_ID, type: 'Person', label: 'Bram Example', aliases: [], mentionCount: 6, lastSeenAt: '2026-08-30T09:00:00.000Z' },
   { id: OMEGA_ID, type: 'Organization', label: 'Org Omega', aliases: [], mentionCount: 2, lastSeenAt: null },
-  { id: CARLA_ID, type: 'Person', label: 'Carla Mendes', aliases: ['Carla'], mentionCount: 3, lastSeenAt: '2026-07-11T09:00:00.000Z' },
-  { id: DANA_ID, type: 'Person', label: 'Dana Li', aliases: [], mentionCount: 1, lastSeenAt: null },
+  { id: CALLA_ID, type: 'Person', label: 'Calla Demo', aliases: ['Calla'], mentionCount: 3, lastSeenAt: '2026-07-11T09:00:00.000Z' },
+  { id: DARCY_ID, type: 'Person', label: 'Darcy Placeholder', aliases: [], mentionCount: 1, lastSeenAt: null },
   { id: ATLAS_ID, type: 'Project', label: 'Project Atlas', aliases: ['Atlas'], mentionCount: 11, lastSeenAt: '2026-09-20T15:00:00.000Z' },
   { id: BEACON_ID, type: 'Project', label: 'Project Beacon', aliases: [], mentionCount: 2, lastSeenAt: '2026-06-01T09:00:00.000Z' },
   { id: Q3_MEETING_ID, type: 'Meeting', label: 'Q3 planning', aliases: [], mentionCount: 1, lastSeenAt: '2026-09-20T15:00:00.000Z' },
@@ -204,7 +204,7 @@ export const evidenceFixtures: EvidenceLink[] = [
     id: EV_NOTE,
     subjectKind: 'relation',
     subjectId: gid(401),
-    quote: 'Joe now leads the platform group.',
+    quote: 'Jonty now leads the platform group.',
     createdAt: '2026-09-20T16:00:00.000Z',
     source: {
       kind: 'note',
@@ -244,7 +244,7 @@ export const evidenceFixtures: EvidenceLink[] = [
     id: EV_EDITED,
     subjectKind: 'item',
     subjectId: gid(303),
-    quote: 'Ana will review the hiring plan.',
+    quote: 'Anders will review the hiring plan.',
     createdAt: '2026-09-13T16:00:00.000Z',
     source: {
       kind: 'segment',
@@ -293,7 +293,7 @@ export const edgeEvidenceFixtures: EvidenceLink[] = [
     id: EV_EDGE_NOTE,
     subjectKind: 'relation',
     subjectId: gid(411),
-    quote: 'Joe now reports to Ana.',
+    quote: 'Jonty now reports to Anders.',
     createdAt: '2026-09-02T10:00:00.000Z',
     source: {
       kind: 'note',
@@ -312,7 +312,7 @@ export const edgeEvidenceFixtures: EvidenceLink[] = [
     id: EV_EDGE_GONE,
     subjectKind: 'relation',
     subjectId: gid(411),
-    quote: 'Ana is taking over the platform group.',
+    quote: 'Anders is taking over the platform group.',
     createdAt: '2026-08-30T10:00:00.000Z',
     source: {
       kind: 'segment',
@@ -335,13 +335,13 @@ export const edgeEvidenceFixtures: EvidenceLink[] = [
 // Brief (#372)
 // ---------------------------------------------------------------------------
 
-const joeRef = { id: JOE_ID, label: 'Joe Rivera', type: 'Person' };
-const anaRef = { id: ANA_ID, label: 'Ana Diaz', type: 'Person' };
+const jontyRef = { id: JONTY_ID, label: 'Jonty Placeholder', type: 'Person' };
+const andersRef = { id: ANDERS_ID, label: 'Anders Placeholder', type: 'Person' };
 const kappaRef = { id: KAPPA_ID, label: 'Org Kappa', type: 'Organization' };
 
 export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief {
   return {
-    entity: joeRef,
+    entity: jontyRef,
     window: {
       since: '2026-09-01T00:00:00.000Z',
       sinceSource: 'last_viewed',
@@ -350,7 +350,7 @@ export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief 
     },
     digest: {
       statements: [
-        { text: 'Joe was promoted to VP Engineering in September.', evidenceIds: [EV_NOTE] },
+        { text: 'Jonty was promoted to VP Engineering in September.', evidenceIds: [EV_NOTE] },
         { text: 'He committed to ship the Atlas beta by the end of October.', evidenceIds: [EV_SEGMENT, EV_EDITED] },
       ],
       coversUntil: '2026-09-20T15:00:00.000Z',
@@ -366,13 +366,13 @@ export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief 
           itemId: gid(301),
           kind: 'commitment',
           title: 'Ship the Atlas beta',
-          statement: 'Joe will ship the Atlas beta by the end of October.',
+          statement: 'Jonty will ship the Atlas beta by the end of October.',
           occurredAt: '2026-09-20T15:00:00.000Z',
           precision: 'day',
           status: 'open',
           dueAt: '2026-10-31T00:00:00.000Z',
-          ownerPerson: joeRef,
-          counterparty: anaRef,
+          ownerPerson: jontyRef,
+          counterparty: andersRef,
           superseded: false,
           evidenceIds: [EV_SEGMENT],
         },
@@ -413,13 +413,13 @@ export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief 
             itemId: gid(301),
             kind: 'commitment',
             title: 'Ship the Atlas beta',
-            statement: 'Joe will ship the Atlas beta by the end of October.',
+            statement: 'Jonty will ship the Atlas beta by the end of October.',
             occurredAt: '2026-09-20T15:00:00.000Z',
             precision: 'day',
             status: 'open',
             dueAt: '2026-10-31T00:00:00.000Z',
-            ownerPerson: joeRef,
-            counterparty: anaRef,
+            ownerPerson: jontyRef,
+            counterparty: andersRef,
             superseded: false,
             evidenceIds: [EV_SEGMENT],
           },
@@ -428,14 +428,14 @@ export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief 
           {
             itemId: gid(320),
             kind: 'commitment',
-            title: 'Send Joe the hiring plan',
-            statement: 'Ana will send Joe the hiring plan.',
+            title: 'Send Jonty the hiring plan',
+            statement: 'Anders will send Jonty the hiring plan.',
             occurredAt: '2026-09-13T15:00:00.000Z',
             precision: 'day',
             status: 'open',
             dueAt: null,
-            ownerPerson: anaRef,
-            counterparty: joeRef,
+            ownerPerson: andersRef,
+            counterparty: jontyRef,
             superseded: false,
             evidenceIds: [EV_EDITED],
           },
@@ -446,7 +446,7 @@ export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief 
           itemId: gid(330),
           kind: 'claim',
           title: null,
-          statement: 'Joe thinks the beta date is at risk if hiring slips.',
+          statement: 'Jonty thinks the beta date is at risk if hiring slips.',
           occurredAt: '2026-09-20T15:00:00.000Z',
           precision: 'day',
           status: null,
@@ -464,7 +464,7 @@ export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief 
           change: 'ended',
           at: '2026-09-01T00:00:00.000Z',
           precision: 'month',
-          person: joeRef,
+          person: jontyRef,
           other: kappaRef,
           title: 'Director of Engineering',
           evidenceIds: [EV_NOTE],
@@ -475,7 +475,7 @@ export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief 
           change: 'started',
           at: '2026-09-01T00:00:00.000Z',
           precision: 'month',
-          person: joeRef,
+          person: jontyRef,
           other: kappaRef,
           title: 'VP Engineering',
           evidenceIds: [EV_NOTE],
@@ -497,7 +497,7 @@ export function briefFixture(overrides: Partial<EntityBrief> = {}): EntityBrief 
         kind: 'note',
         id: NOTE_ID,
         title: 'Q3 planning — decisions',
-        snippetHtml: '<mark>Joe</mark> now leads the platform group',
+        snippetHtml: '<mark>Jonty</mark> now leads the platform group',
         startMs: null,
         score: 0.61,
         inGraph: false,
@@ -527,12 +527,12 @@ export function neighborhoodFixture(overrides: Partial<GraphSlice> = {}): GraphS
     };
   };
   return {
-    seedIds: [JOE_ID],
+    seedIds: [JONTY_ID],
     asOf: '2026-09-26T00:00:00.000Z',
     nodes: [
-      node(JOE_ID, 0),
+      node(JONTY_ID, 0),
       node(KAPPA_ID, 1),
-      node(ANA_ID, 1),
+      node(ANDERS_ID, 1),
       node(Q3_MEETING_ID, 1),
       node(SYNC_MEETING_ID, 1),
       {
@@ -547,11 +547,11 @@ export function neighborhoodFixture(overrides: Partial<GraphSlice> = {}): GraphS
       },
     ],
     edges: [
-      { id: gid(410), type: 'WORKS_FOR', source: JOE_ID, target: KAPPA_ID, valid: null, confidence: 0.94, virtual: false },
-      { id: gid(411), type: 'REPORTS_TO', source: JOE_ID, target: ANA_ID, valid: { from: '2026-09-01T00:00:00.000Z', to: null, precision: 'month' }, confidence: 0.9, virtual: false },
-      { id: gid(412), type: 'ATTENDED', source: JOE_ID, target: Q3_MEETING_ID, valid: null, confidence: null, virtual: false },
-      { id: gid(413), type: 'ATTENDED', source: JOE_ID, target: SYNC_MEETING_ID, valid: null, confidence: null, virtual: false },
-      { id: `virt:${gid(301)}:ASSIGNED_TO`, type: 'ASSIGNED_TO', source: gid(301), target: JOE_ID, valid: null, confidence: null, virtual: true },
+      { id: gid(410), type: 'WORKS_FOR', source: JONTY_ID, target: KAPPA_ID, valid: null, confidence: 0.94, virtual: false },
+      { id: gid(411), type: 'REPORTS_TO', source: JONTY_ID, target: ANDERS_ID, valid: { from: '2026-09-01T00:00:00.000Z', to: null, precision: 'month' }, confidence: 0.9, virtual: false },
+      { id: gid(412), type: 'ATTENDED', source: JONTY_ID, target: Q3_MEETING_ID, valid: null, confidence: null, virtual: false },
+      { id: gid(413), type: 'ATTENDED', source: JONTY_ID, target: SYNC_MEETING_ID, valid: null, confidence: null, virtual: false },
+      { id: `virt:${gid(301)}:ASSIGNED_TO`, type: 'ASSIGNED_TO', source: gid(301), target: JONTY_ID, valid: null, confidence: null, virtual: true },
     ],
     truncated: false,
     cap: 100,
@@ -563,7 +563,7 @@ export function neighborhoodFixture(overrides: Partial<GraphSlice> = {}): GraphS
 // Timeline (#370)
 // ---------------------------------------------------------------------------
 
-export const SENSITIVE_FACT_STATEMENT = 'Joe is recovering from knee surgery.';
+export const SENSITIVE_FACT_STATEMENT = 'Jonty is recovering from knee surgery.';
 
 export function timelineFixture(includeSensitive = false): TimelineEvent[] {
   const events: TimelineEvent[] = [
@@ -576,11 +576,11 @@ export function timelineFixture(includeSensitive = false): TimelineEvent[] {
         id: gid(301),
         kind: 'commitment',
         title: 'Ship the Atlas beta',
-        statement: 'Joe will ship the Atlas beta by the end of October.',
+        statement: 'Jonty will ship the Atlas beta by the end of October.',
         status: 'open',
         dueAt: '2026-10-31T00:00:00.000Z',
-        ownerPerson: joeRef,
-        counterparty: anaRef,
+        ownerPerson: jontyRef,
+        counterparty: andersRef,
         sensitivity: null,
         superseded: false,
         supersededById: null,
@@ -705,17 +705,17 @@ export const PROPOSAL_NOTE_ID = 'n1';
 export const PROPOSAL_TRANSCRIPT_ID = 't1';
 const FIXED = '2026-09-20T10:00:00.000Z';
 
-export const EXISTING_SARAH_ID = 'b0000000-0000-4000-8000-000000000001';
-export const EXISTING_TOM_ID = 'b0000000-0000-4000-8000-000000000002';
-export const EXISTING_ANA_ID = 'b0000000-0000-4000-8000-000000000003';
+export const EXISTING_SASHA_ID = 'b0000000-0000-4000-8000-000000000001';
+export const EXISTING_TOBIAS_ID = 'b0000000-0000-4000-8000-000000000002';
+export const EXISTING_ANDERS_ID = 'b0000000-0000-4000-8000-000000000003';
 
 export const ITEM = {
-  sarah: 'c0000000-0000-4000-8000-000000000001',
-  tom: 'c0000000-0000-4000-8000-000000000002',
+  sasha: 'c0000000-0000-4000-8000-000000000001',
+  tobias: 'c0000000-0000-4000-8000-000000000002',
   lambda: 'c0000000-0000-4000-8000-000000000003',
   atlas: 'c0000000-0000-4000-8000-000000000004',
   meeting: 'c0000000-0000-4000-8000-000000000005',
-  ana: 'c0000000-0000-4000-8000-000000000006',
+  anders: 'c0000000-0000-4000-8000-000000000006',
   theta: 'c0000000-0000-4000-8000-000000000007',
   decision: 'c0000000-0000-4000-8000-000000000008',
   commitment: 'c0000000-0000-4000-8000-000000000009',
@@ -723,7 +723,7 @@ export const ITEM = {
   personFact: 'c0000000-0000-4000-8000-00000000000b',
   other: 'c0000000-0000-4000-8000-00000000000c',
   worksFor: 'c0000000-0000-4000-8000-00000000000d',
-  tomWorksFor: 'c0000000-0000-4000-8000-00000000000e',
+  tobiasWorksFor: 'c0000000-0000-4000-8000-00000000000e',
   closing: 'c0000000-0000-4000-8000-00000000000f',
 } as const;
 
@@ -743,7 +743,7 @@ export function segmentEvidence(overrides: Partial<ProposalEvidence> = {}): Prop
     noteVersion: null,
     charStart: null,
     charEnd: null,
-    quote: 'Sarah from Lambda will lead the Atlas migration.',
+    quote: 'Sasha from Lambda will lead the Atlas migration.',
     speakerName: 'Oscar',
     stale: false,
     ...overrides,
@@ -848,48 +848,48 @@ export function draftItems(): ProposalItem[] {
   evidenceSeq = 0;
   return [
     proposalItem({
-      id: ITEM.sarah,
-      payload: entityPayload('e1', 'Person', 'Sarah Chen', { title: 'Head of Platform' }),
-      display: { title: 'Sarah Chen', subtitle: 'Person' },
+      id: ITEM.sasha,
+      payload: entityPayload('e1', 'Person', 'Sasha Example', { title: 'Head of Platform' }),
+      display: { title: 'Sasha Example', subtitle: 'Person' },
       resolution: resolution({
-        ref: EXISTING_SARAH_ID,
+        ref: EXISTING_SASHA_ID,
         score: 0.94,
         source: 'alias',
         candidates: [
-          { entityId: EXISTING_SARAH_ID, label: 'Sarah Chen', type: 'Person', score: 0.94, signals: ['alias'] },
+          { entityId: EXISTING_SASHA_ID, label: 'Sasha Example', type: 'Person', score: 0.94, signals: ['alias'] },
         ],
-        refLabel: 'Sarah Chen',
+        refLabel: 'Sasha Example',
       }),
       evidence: [segmentEvidence({ startMs: 65_000 })],
     }),
     proposalItem({
-      id: ITEM.tom,
+      id: ITEM.tobias,
       decision: 'pending',
       prechecked: false,
-      payload: entityPayload('e2', 'Person', 'Tom'),
-      display: { title: 'Tom', subtitle: 'Person' },
+      payload: entityPayload('e2', 'Person', 'Tobias'),
+      display: { title: 'Tobias', subtitle: 'Person' },
       flags: ['possible_duplicate'],
       resolution: resolution({
         candidates: [
-          { entityId: EXISTING_TOM_ID, label: 'Tom Baker', type: 'Person', score: 0.71, signals: ['trigram'] },
+          { entityId: EXISTING_TOBIAS_ID, label: 'Tobias Dummyson', type: 'Person', score: 0.71, signals: ['trigram'] },
         ],
-        refLabel: 'Tom Baker',
+        refLabel: 'Tobias Dummyson',
       }),
       evidence: [
         segmentEvidence({
           segmentId: 'seg-7',
           startMs: 130_000,
-          quote: 'Tom said he would check with legal.',
+          quote: 'Tobias said he would check with legal.',
           stale: true,
         }),
       ],
     }),
     proposalItem({
-      id: ITEM.ana,
-      payload: entityPayload('k1', 'Person', 'Ana Ruiz'),
-      display: { title: 'Ana Ruiz', subtitle: 'Person' },
+      id: ITEM.anders,
+      payload: entityPayload('k1', 'Person', 'Anders Stubbs'),
+      display: { title: 'Anders Stubbs', subtitle: 'Person' },
       flags: ['known'],
-      resolution: resolution({ ref: EXISTING_ANA_ID, score: 1, source: 'speaker', refLabel: 'Ana Ruiz' }),
+      resolution: resolution({ ref: EXISTING_ANDERS_ID, score: 1, source: 'speaker', refLabel: 'Anders Stubbs' }),
     }),
     proposalItem({
       id: ITEM.lambda,
@@ -931,13 +931,13 @@ export function draftItems(): ProposalItem[] {
       id: ITEM.commitment,
       kind: 'item',
       groupKey: 'Commitment',
-      payload: itemPayload('i2', 'commitment', 'Write the rollback plan', 'Sarah will write the rollback plan.', {
+      payload: itemPayload('i2', 'commitment', 'Write the rollback plan', 'Sasha will write the rollback plan.', {
         owner: { ref: 'e1' },
         meeting: { ref: 'meeting' },
         status: 'open',
         dueAt: '2026-10-01',
       }),
-      display: { title: 'Write the rollback plan', subtitle: 'Commitment · Sarah Chen · due 1 Oct 2026' },
+      display: { title: 'Write the rollback plan', subtitle: 'Commitment · Sasha Example · due 1 Oct 2026' },
     }),
     proposalItem({
       id: ITEM.claim,
@@ -955,11 +955,11 @@ export function draftItems(): ProposalItem[] {
       decision: 'pending',
       prechecked: false,
       flags: ['sensitive'],
-      payload: itemPayload('i4', 'person_fact', 'On medical leave', 'Sarah is on medical leave until May.', {
+      payload: itemPayload('i4', 'person_fact', 'On medical leave', 'Sasha is on medical leave until May.', {
         subject: { ref: 'e1' },
         sensitivity: 'sensitive',
       }),
-      display: { title: 'On medical leave', subtitle: 'Person fact · Sarah Chen' },
+      display: { title: 'On medical leave', subtitle: 'Person fact · Sasha Example' },
     }),
     proposalItem({
       id: ITEM.other,
@@ -983,10 +983,10 @@ export function draftItems(): ProposalItem[] {
         precision: 'month',
         props: {},
       },
-      display: { title: 'Sarah Chen → works for → Org Lambda Robotics', subtitle: 'since Jan 2026' },
+      display: { title: 'Sasha Example → works for → Org Lambda Robotics', subtitle: 'since Jan 2026' },
     }),
     proposalItem({
-      id: ITEM.tomWorksFor,
+      id: ITEM.tobiasWorksFor,
       kind: 'relation',
       groupKey: 'relations',
       decision: 'pending',
@@ -1001,7 +1001,7 @@ export function draftItems(): ProposalItem[] {
         precision: 'unknown',
         props: {},
       },
-      display: { title: 'Tom → works for → Org Lambda Robotics', subtitle: null },
+      display: { title: 'Tobias → works for → Org Lambda Robotics', subtitle: null },
     }),
     proposalItem({
       id: ITEM.closing,
@@ -1011,7 +1011,7 @@ export function draftItems(): ProposalItem[] {
       prechecked: false,
       flags: ['closing_affects_commitments'],
       payload: { relationId: 'b1000000-0000-4000-8000-000000000001', validTo: '2026-09-18' },
-      display: { title: 'Closes: Sarah Chen → works for → Kappa', subtitle: 'ended Sep 2026' },
+      display: { title: 'Closes: Sasha Example → works for → Kappa', subtitle: 'ended Sep 2026' },
     }),
   ];
 }
@@ -1081,8 +1081,8 @@ export function mockProposalDetail(
 }
 
 export const mockEntitySearchResults: GraphEntitySearchResult[] = [
-  { id: EXISTING_TOM_ID, type: 'Person', label: 'Tom Baker', aliases: ['Tommy'] },
-  { id: EXISTING_SARAH_ID, type: 'Person', label: 'Sarah Chen', aliases: [] },
+  { id: EXISTING_TOBIAS_ID, type: 'Person', label: 'Tobias Dummyson', aliases: ['Toby'] },
+  { id: EXISTING_SASHA_ID, type: 'Person', label: 'Sasha Example', aliases: [] },
 ];
 
 export interface RecordedGraphRequest {
@@ -1196,14 +1196,14 @@ export function proposalSummaryRow(
 // ---------------------------------------------------------------------------
 // Explorer (#374) — a small, fixed graph `POST /api/graph/explore/expand`
 // walks one hop over, honouring `types`, `relationTypes`, `as_of` and `cap`
-// the way #370's service does. Joe's manager CHANGES on 2026-09-01: Ben
-// before, Ana after — the `as_of` fixture the explorer tests read.
+// the way #370's service does. Jonty's manager CHANGES on 2026-09-01: Bram
+// before, Anders after — the `as_of` fixture the explorer tests read.
 // ---------------------------------------------------------------------------
 
 export const ATLAS_COMMITMENT_ID = gid(301);
 export const Q3_DECISION_ID = gid(302);
 export const EXPLORER_DEFAULT_AS_OF = '2026-09-26';
-/** The day Joe's REPORTS_TO moved from Ben to Ana. */
+/** The day Jonty's REPORTS_TO moved from Bram to Anders. */
 export const MANAGER_CHANGE_DATE = '2026-09-01';
 
 interface ExplorerFixtureNode {
@@ -1241,18 +1241,18 @@ const edge = (
 ): GraphEdge => ({ id: gid(n), type, source, target, valid, confidence: 0.9, virtual: false });
 
 export const explorerFixtureEdges: GraphEdge[] = [
-  edge(410, 'WORKS_FOR', JOE_ID, KAPPA_ID),
-  edge(411, 'REPORTS_TO', JOE_ID, ANA_ID, { from: '2026-09-01T00:00:00.000Z', to: null, precision: 'month' }),
-  edge(414, 'REPORTS_TO', JOE_ID, BEN_ID, { from: '2026-03-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z', precision: 'month' }),
-  edge(412, 'ATTENDED', JOE_ID, Q3_MEETING_ID),
-  edge(413, 'ATTENDED', JOE_ID, SYNC_MEETING_ID),
-  { id: `virt:${ATLAS_COMMITMENT_ID}:ASSIGNED_TO`, type: 'ASSIGNED_TO', source: ATLAS_COMMITMENT_ID, target: JOE_ID, valid: null, confidence: null, virtual: true },
-  edge(415, 'WORKS_FOR', ANA_ID, KAPPA_ID),
-  edge(416, 'ATTENDED', ANA_ID, Q3_MEETING_ID),
-  edge(417, 'WORKS_FOR', BEN_ID, SIGMA_ID),
-  edge(418, 'WORKS_FOR', CARLA_ID, OMEGA_ID),
-  edge(419, 'ATTENDED', CARLA_ID, SYNC_MEETING_ID),
-  edge(420, 'WORKS_FOR', DANA_ID, KAPPA_ID),
+  edge(410, 'WORKS_FOR', JONTY_ID, KAPPA_ID),
+  edge(411, 'REPORTS_TO', JONTY_ID, ANDERS_ID, { from: '2026-09-01T00:00:00.000Z', to: null, precision: 'month' }),
+  edge(414, 'REPORTS_TO', JONTY_ID, BRAM_ID, { from: '2026-03-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z', precision: 'month' }),
+  edge(412, 'ATTENDED', JONTY_ID, Q3_MEETING_ID),
+  edge(413, 'ATTENDED', JONTY_ID, SYNC_MEETING_ID),
+  { id: `virt:${ATLAS_COMMITMENT_ID}:ASSIGNED_TO`, type: 'ASSIGNED_TO', source: ATLAS_COMMITMENT_ID, target: JONTY_ID, valid: null, confidence: null, virtual: true },
+  edge(415, 'WORKS_FOR', ANDERS_ID, KAPPA_ID),
+  edge(416, 'ATTENDED', ANDERS_ID, Q3_MEETING_ID),
+  edge(417, 'WORKS_FOR', BRAM_ID, SIGMA_ID),
+  edge(418, 'WORKS_FOR', CALLA_ID, OMEGA_ID),
+  edge(419, 'ATTENDED', CALLA_ID, SYNC_MEETING_ID),
+  edge(420, 'WORKS_FOR', DARCY_ID, KAPPA_ID),
   edge(421, 'PART_OF', ATLAS_ID, KAPPA_ID),
   edge(422, 'PART_OF', BEACON_ID, SIGMA_ID),
   { id: `virt:${Q3_DECISION_ID}:DECIDED_IN`, type: 'DECIDED_IN', source: Q3_DECISION_ID, target: Q3_MEETING_ID, valid: null, confidence: null, virtual: true },
@@ -1377,18 +1377,18 @@ export const OVERVIEW_COMPUTED_AT = '2026-09-20T15:00:00.000Z';
 /** Positioned nodes: three clusters around the fixture's entities, plus one isolated person. */
 export const overviewNodes: GraphOverviewNode[] = [
   { id: KAPPA_ID, label: 'Org Kappa', type: 'Organization', x: -400, y: 120, clusterId: 0, degree: 5 },
-  { id: JOE_ID, label: 'Joe Rivera', type: 'Person', x: -330, y: 60, clusterId: 0, degree: 5 },
+  { id: JONTY_ID, label: 'Jonty Placeholder', type: 'Person', x: -330, y: 60, clusterId: 0, degree: 5 },
   { id: ATLAS_ID, label: 'Project Atlas', type: 'Project', x: -470, y: 40, clusterId: 0, degree: 3 },
-  { id: BEN_ID, label: 'Ben Okafor', type: 'Person', x: -350, y: 210, clusterId: 0, degree: 2 },
-  { id: DANA_ID, label: 'Dana Li', type: 'Person', x: -460, y: 200, clusterId: 0, degree: 1 },
+  { id: BRAM_ID, label: 'Bram Example', type: 'Person', x: -350, y: 210, clusterId: 0, degree: 2 },
+  { id: DARCY_ID, label: 'Darcy Placeholder', type: 'Person', x: -460, y: 200, clusterId: 0, degree: 1 },
   { id: Q3_MEETING_ID, label: 'Q3 planning', type: 'Meeting', x: -300, y: 160, clusterId: 0, degree: 2 },
   { id: SIGMA_ID, label: 'Org Sigma', type: 'Organization', x: 380, y: -150, clusterId: 1, degree: 3 },
-  { id: ANA_ID, label: 'Ana Diaz', type: 'Person', x: 440, y: -90, clusterId: 1, degree: 3 },
-  { id: CARLA_ID, label: 'Carla Mendes', type: 'Person', x: 320, y: -210, clusterId: 1, degree: 2 },
+  { id: ANDERS_ID, label: 'Anders Placeholder', type: 'Person', x: 440, y: -90, clusterId: 1, degree: 3 },
+  { id: CALLA_ID, label: 'Calla Demo', type: 'Person', x: 320, y: -210, clusterId: 1, degree: 2 },
   { id: SYNC_MEETING_ID, label: 'Weekly sync', type: 'Meeting', x: 450, y: -220, clusterId: 1, degree: 2 },
   { id: OMEGA_ID, label: 'Org Omega', type: 'Organization', x: 150, y: 420, clusterId: 2, degree: 1 },
   { id: BEACON_ID, label: 'Project Beacon', type: 'Project', x: 210, y: 470, clusterId: 2, degree: 1 },
-  { id: LONE_ID, label: 'Lee Park', type: 'Person', x: 700, y: 600, clusterId: -1, degree: 0 },
+  { id: LONE_ID, label: 'Linnea Placeholder', type: 'Person', x: 700, y: 600, clusterId: -1, degree: 0 },
 ];
 
 function sampleOf(clusterId: number) {
@@ -1428,16 +1428,16 @@ export function overviewFixture(overrides: Partial<GraphOverview> = {}): GraphOv
 
 /** Live relations among the overview's nodes, for `edges=true` (#768). */
 export const overviewEdges: NonNullable<GraphOverview['edges']> = [
-  { id: gid(5001), source: JOE_ID, target: KAPPA_ID, type: 'WORKS_FOR' },
-  { id: gid(5002), source: BEN_ID, target: KAPPA_ID, type: 'WORKS_FOR' },
-  { id: gid(5003), source: JOE_ID, target: ATLAS_ID, type: 'WORKS_ON' },
-  { id: gid(5004), source: ANA_ID, target: SIGMA_ID, type: 'WORKS_FOR' },
-  { id: gid(5005), source: CARLA_ID, target: SIGMA_ID, type: 'WORKS_FOR' },
-  { id: gid(5006), source: JOE_ID, target: ANA_ID, type: 'KNOWS' },
+  { id: gid(5001), source: JONTY_ID, target: KAPPA_ID, type: 'WORKS_FOR' },
+  { id: gid(5002), source: BRAM_ID, target: KAPPA_ID, type: 'WORKS_FOR' },
+  { id: gid(5003), source: JONTY_ID, target: ATLAS_ID, type: 'WORKS_ON' },
+  { id: gid(5004), source: ANDERS_ID, target: SIGMA_ID, type: 'WORKS_FOR' },
+  { id: gid(5005), source: CALLA_ID, target: SIGMA_ID, type: 'WORKS_FOR' },
+  { id: gid(5006), source: JONTY_ID, target: ANDERS_ID, type: 'KNOWS' },
 ];
 
 /** The entities the full-view fixture treats as having evidence inside ANY time window (#768). */
-export const OVERVIEW_RECENT_IDS: readonly string[] = [JOE_ID, ANA_ID, KAPPA_ID];
+export const OVERVIEW_RECENT_IDS: readonly string[] = [JONTY_ID, ANDERS_ID, KAPPA_ID];
 
 /**
  * What `GET /api/graph/overview` answers for the full view (#768): `from`/`to`
@@ -1482,8 +1482,8 @@ export const RISK_ID = gid(90);
 
 /** A ready answer with every section filled, over the overview fixture's clusters. */
 export function insightsFixture(overrides: Partial<GraphInsights> = {}): GraphInsights {
-  const joe = { id: JOE_ID, label: 'Joe Rivera', type: 'Person' };
-  const ana = { id: ANA_ID, label: 'Ana Diaz', type: 'Person' };
+  const jonty = { id: JONTY_ID, label: 'Jonty Placeholder', type: 'Person' };
+  const anders = { id: ANDERS_ID, label: 'Anders Placeholder', type: 'Person' };
   const overview = overviewFixture();
   return {
     window: { key: '30d', days: 30, from: '2026-09-22T00:00:00.000Z', previousFrom: '2026-08-23T00:00:00.000Z' },
@@ -1499,24 +1499,24 @@ export function insightsFixture(overrides: Partial<GraphInsights> = {}): GraphIn
       .map((c) => ({ clusterId: c.id, label: c.label, labelEntityId: c.labelEntityId, size: c.size, typeCounts: c.typeCounts, memberSample: c.memberSample })),
     connectors: [
       {
-        entity: joe,
+        entity: jonty,
         score: 0.42,
         clusters: [
           { id: 0, label: 'Org Kappa' },
           { id: 1, label: 'Org Sigma' },
         ],
-        reason: 'Joe Rivera connects the Org Kappa group and the Org Sigma group.',
+        reason: 'Jonty Placeholder connects the Org Kappa group and the Org Sigma group.',
       },
     ],
-    rising: [{ entity: ana, count: 5, previous: 1, reason: 'Came up in 5 conversations in the last 30 days, up from 1 before.' }],
+    rising: [{ entity: anders, count: 5, previous: 1, reason: 'Came up in 5 conversations in the last 30 days, up from 1 before.' }],
     fadingTies: [
       {
-        from: joe,
-        to: ana,
+        from: jonty,
+        to: anders,
         relationTypes: ['KNOWS'],
         lastEvidenceAt: '2026-05-01T00:00:00.000Z',
         evidenceBefore: 4,
-        reason: "You haven't discussed Joe Rivera with Ana Diaz since May 1, 2026.",
+        reason: "You haven't discussed Jonty Placeholder with Anders Placeholder since May 1, 2026.",
       },
     ],
     openRisks: [

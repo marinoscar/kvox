@@ -20,7 +20,7 @@ function pair(n: number): ItemAdjudicationPair {
       ownerLabel: null,
       quotes: ['we moved the pilot to Q2', 'second', 'a third quote that is dropped'],
     },
-    existing: { title: 'Pilot timing', statement: 'The pilot is in Q1.', occurredAt: '2026-01-10', dueAt: null, status: 'active', ownerLabel: 'Sarah' },
+    existing: { title: 'Pilot timing', statement: 'The pilot is in Q1.', occurredAt: '2026-01-10', dueAt: null, status: 'active', ownerLabel: 'Sasha' },
   };
 }
 
@@ -48,7 +48,7 @@ describe('item adjudication prompt', () => {
     expect(user).toContain(`${ITEM_ADJUDICATION_HEADINGS.pair} p1 (claim)`);
     expect(user).toContain('Statement: The pilot moved to Q2.');
     expect(user).toContain('Statement: The pilot is in Q1.');
-    expect(user).toContain('status active; owner Sarah');
+    expect(user).toContain('status active; owner Sasha');
     expect(user).toContain('"second"');
     expect(user).not.toContain('a third quote');
   });

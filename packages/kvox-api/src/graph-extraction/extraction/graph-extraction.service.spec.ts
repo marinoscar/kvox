@@ -201,9 +201,9 @@ describe('GraphExtractionService.request (#363)', () => {
 
     it('pins that are not live entities of yours, named', async () => {
       const { service, prisma } = harness();
-      prisma.kgEntity.findMany.mockResolvedValueOnce([{ id: IDS.sarah }]);
+      prisma.kgEntity.findMany.mockResolvedValueOnce([{ id: IDS.sasha }]);
       const error = await rejection(
-        service.request(USER, IDS.note, { userGuidance: { pinnedEntityIds: [IDS.sarah, IDS.pilot], instructions: '' } }),
+        service.request(USER, IDS.note, { userGuidance: { pinnedEntityIds: [IDS.sasha, IDS.pilot], instructions: '' } }),
       );
       expect(bodyOf(error).details).toEqual({ invalidPinnedIds: [IDS.pilot] });
       expect(prisma.kgEntity.findMany).toHaveBeenCalledWith(

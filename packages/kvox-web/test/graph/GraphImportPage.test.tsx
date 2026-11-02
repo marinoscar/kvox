@@ -28,7 +28,7 @@ const OFFER: GraphImportOffer = {
   label: 'Nickname',
   count: 2,
   subjectTypes: ['Person'],
-  sampleValues: ['Joey', 'Mo'],
+  sampleValues: ['Jonno', 'Mo'],
   suggestedKind: 'text',
   status: 'offered',
 };
@@ -48,7 +48,7 @@ function importEvidence(): ProposalEvidence {
     charEnd: null,
     quote: 'Imported from contacts.ttl',
     importObjectId: 'f0000000-0000-4000-8000-000000000001',
-    sourceIri: 'https://source.example/joe',
+    sourceIri: 'https://source.example/jonty',
     speakerName: null,
     stale: false,
   };
@@ -134,7 +134,7 @@ describe('GraphImportPage', () => {
         violationCount: 2,
         violations: [
           { focusNode: 'https://source.example/nobody', path: 'http://www.w3.org/ns/prov#wasDerivedFrom', message: 'Less than 1 values', severity: 'Violation' },
-          { focusNode: 'https://source.example/ana', path: 'https://x.app/ns#WORKS_FOR', message: 'The value is not a node of an allowed type', severity: 'Violation' },
+          { focusNode: 'https://source.example/anders', path: 'https://x.app/ns#WORKS_FOR', message: 'The value is not a node of an allowed type', severity: 'Violation' },
         ],
       },
     });
@@ -171,13 +171,13 @@ describe('GraphImportPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Unknown properties' })).toBeInTheDocument();
     expect(screen.getByText('https://crm.example/ns#nickname')).toBeInTheDocument();
-    expect(screen.getByText(/“Joey”, “Mo”/)).toBeInTheDocument();
+    expect(screen.getByText(/“Jonno”, “Mo”/)).toBeInTheDocument();
     expect(screen.getByText(/1 sensitive fact was left out/)).toBeInTheDocument();
 
     // The sheet, inline: its header and rows (read for PROPOSAL_ID), no close button, no "what the AI saw".
     const sheet = await screen.findByRole('region', { name: 'Graph proposal' });
     expect(within(sheet).queryByRole('button', { name: 'Close graph proposal' })).not.toBeInTheDocument();
-    expect(await within(sheet).findByText('Sarah Chen')).toBeInTheDocument();
+    expect(await within(sheet).findByText('Sasha Example')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Send to graph/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Accept' }));

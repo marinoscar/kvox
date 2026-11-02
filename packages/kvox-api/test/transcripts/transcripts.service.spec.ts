@@ -111,16 +111,16 @@ describe('TranscriptsService', () => {
       // path once per row.
       user: {
         findUnique: jest.fn().mockResolvedValue({
-          displayName: 'Ana Rivera',
+          displayName: 'Anders Sample',
           providerDisplayName: null,
-          email: 'ana@example.test',
+          email: 'anders@example.test',
         }),
         findMany: jest.fn().mockResolvedValue([
           {
             id: USER.id,
-            displayName: 'Ana Rivera',
+            displayName: 'Anders Sample',
             providerDisplayName: null,
-            email: 'ana@example.test',
+            email: 'anders@example.test',
           },
         ]),
       },

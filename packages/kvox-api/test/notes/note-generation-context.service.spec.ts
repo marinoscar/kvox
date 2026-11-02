@@ -62,7 +62,7 @@ function generationRow(overrides: Record<string, unknown> = {}): NoteGeneration 
     content: 'the note body',
     lastEventId: 3,
     systemPrompt: 'You write meeting notes.',
-    userContent: 'Source material:\nAna: we ship on Friday.',
+    userContent: 'Source material:\nAnders: we ship on Friday.',
     sourceVersion: 7,
     contextCapturedAt: new Date('2026-09-01T10:00:00.000Z'),
     promptTokens: 120,
@@ -157,7 +157,7 @@ describe('NoteGenerationContextService.forNote — happy path', () => {
       sourceVersion: 7,
       sourceRedacted: false,
       systemPrompt: 'You write meeting notes.',
-      userContent: 'Source material:\nAna: we ship on Friday.',
+      userContent: 'Source material:\nAnders: we ship on Friday.',
       promptTokens: 120,
       completionTokens: 40,
     });
@@ -282,7 +282,7 @@ describe('NoteGenerationContextService.forNote — sourceRedacted', () => {
       generation: generationRow({
         contextText: 'Focus on action items.',
         userContent:
-          'Context provided by the user:\nFocus on action items.\n\nSource material:\nAna: we ship on Friday.',
+          'Context provided by the user:\nFocus on action items.\n\nSource material:\nAnders: we ship on Friday.',
       }),
     });
 
@@ -299,7 +299,7 @@ describe('NoteGenerationContextService.forNote — sourceRedacted', () => {
     const result = await service.forNote(user, NOTE_ID);
 
     expect(result.sourceRedacted).toBe(false);
-    expect(result.userContent).toBe('Source material:\nAna: we ship on Friday.');
+    expect(result.userContent).toBe('Source material:\nAnders: we ship on Friday.');
   });
 
   it('never redacts a generation with no stored userContent (stored: false) — there is nothing to cut', async () => {
@@ -322,7 +322,7 @@ describe('NoteGenerationContextService.forNote — sourceRedacted', () => {
 describe('redactSourceMaterial', () => {
   it('cuts at the heading and appends the notice, with no context text', () => {
     const result = redactSourceMaterial(
-      'Source material:\nAna: we ship on Friday.',
+      'Source material:\nAnders: we ship on Friday.',
       null,
     );
 
@@ -331,7 +331,7 @@ describe('redactSourceMaterial', () => {
 
   it('cuts after a preserved context block', () => {
     const result = redactSourceMaterial(
-      'Context provided by the user:\nFocus on decisions.\n\nSource material:\nAna: we ship on Friday.',
+      'Context provided by the user:\nFocus on decisions.\n\nSource material:\nAnders: we ship on Friday.',
       'Focus on decisions.',
     );
 
@@ -358,7 +358,7 @@ describe('redactSourceMaterial', () => {
     // would cut inside the user's own Context instead of at the real heading.
     const context = 'Please treat "Source material:" as a literal phrase, not a heading.';
     const userContent =
-      `Context provided by the user:\n${context}\n\nSource material:\nAna: we ship on Friday.`;
+      `Context provided by the user:\n${context}\n\nSource material:\nAnders: we ship on Friday.`;
 
     const result = redactSourceMaterial(userContent, context);
 

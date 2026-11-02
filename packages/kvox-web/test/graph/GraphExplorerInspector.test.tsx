@@ -13,10 +13,10 @@ import { GraphExplorerPage, type GraphExplorerPageSlots } from '../../src/graph/
 import { setViewportWidth } from '../../src/core/testing/index.js';
 import {
   KAPPA_ID,
-  ANA_ID,
+  ANDERS_ID,
   EV_EDGE_GONE,
   EV_EDGE_NOTE,
-  JOE_ID,
+  JONTY_ID,
   NOTE_ID,
   entityDetail,
   expandFixture,
@@ -127,7 +127,7 @@ function currentUrl(): URL {
 }
 
 function renderExplorer(options: { route?: string; slots?: GraphExplorerPageSlots; graphEnabled?: boolean } = {}) {
-  const { route = `/graph/explore?seed=${JOE_ID}`, slots, graphEnabled } = options;
+  const { route = `/graph/explore?seed=${JONTY_ID}`, slots, graphEnabled } = options;
   const ui: ReactElement = (
     <>
       <Routes>
@@ -202,9 +202,9 @@ describe('the Evidence tab of an edge', () => {
     const cards = await within(panel).findAllByRole('article');
     expect(cards).toHaveLength(2);
     expect(cards[0]).toHaveAccessibleName(/^Org changes, /);
-    expect(within(cards[0]!).getByText('“Joe now reports to Ana.”')).toBeInTheDocument();
+    expect(within(cards[0]!).getByText('“Jonty now reports to Anders.”')).toBeInTheDocument();
     // The second source is gone: the quote stays, the link does not.
-    expect(within(cards[1]!).getByText('“Ana is taking over the platform group.”')).toBeInTheDocument();
+    expect(within(cards[1]!).getByText('“Anders is taking over the platform group.”')).toBeInTheDocument();
     expect(within(cards[1]!).getByText('Source unavailable')).toBeInTheDocument();
     expect(within(cards[1]!).queryByRole('link', { name: /Open at source/ })).not.toBeInTheDocument();
   });
@@ -245,13 +245,13 @@ describe('the Evidence tab of an edge', () => {
   });
 
   it('restores a selection from the URL once the graph has arrived, and drops one that is not on it', async () => {
-    renderExplorer({ route: `/graph/explore?seed=${JOE_ID}&sel=n:${KAPPA_ID}&tab=timeline` });
+    renderExplorer({ route: `/graph/explore?seed=${JONTY_ID}&sel=n:${KAPPA_ID}&tab=timeline` });
     const panel = await screen.findByRole('group', { name: 'Org Kappa' });
     expect(within(panel).getByRole('tab', { name: 'Timeline', selected: true })).toBeInTheDocument();
   });
 
   it('forgets a selection the graph does not contain', async () => {
-    renderExplorer({ route: `/graph/explore?seed=${JOE_ID}&sel=n:${gid(9999)}&tab=evidence` });
+    renderExplorer({ route: `/graph/explore?seed=${JONTY_ID}&sel=n:${gid(9999)}&tab=evidence` });
     await canvasReady();
     await waitFor(() => expect(currentUrl().searchParams.get('sel')).toBeNull());
     expect(currentUrl().searchParams.get('tab')).toBeNull();
@@ -406,7 +406,7 @@ describe('the Evidence tab of an entity', () => {
           ],
           edges: [
             ...slice.edges,
-            { id: `virt:${factId}:ABOUT`, type: 'ABOUT', source: factId, target: JOE_ID, valid: null, confidence: null, virtual: true },
+            { id: `virt:${factId}:ABOUT`, type: 'ABOUT', source: factId, target: JONTY_ID, valid: null, confidence: null, virtual: true },
           ],
         },
       });
@@ -465,9 +465,9 @@ describe('Expand by type', () => {
     await user.click(within(menu).getByRole('menuitem', { name: 'Part of (1)' }));
     await waitFor(() => expect(expandBodies.at(-1)).toMatchObject({ nodeIds: [KAPPA_ID], relationTypes: ['PART_OF'] }));
     expect(expandBodies.at(-1)?.types).toBeUndefined();
-    // Only that relation's neighbour arrived: Atlas, not Dana (who WORKS_FOR Kappa).
+    // Only that relation's neighbour arrived: Atlas, not Darcy (who WORKS_FOR Kappa).
     expect(await within(canvas).findByRole('button', { name: 'Project Atlas' })).toBeInTheDocument();
-    expect(within(canvas).queryByRole('button', { name: 'Dana Li' })).not.toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'Darcy Placeholder' })).not.toBeInTheDocument();
   });
 
   it('Expand by entity type asks for that type only', async () => {
@@ -479,7 +479,7 @@ describe('Expand by type', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'Person (3)' }));
     await waitFor(() => expect(expandBodies.at(-1)).toMatchObject({ nodeIds: [KAPPA_ID], types: ['Person'] }));
     expect(expandBodies.at(-1)?.relationTypes).toBeUndefined();
-    expect(await within(canvas).findByRole('button', { name: 'Dana Li' })).toBeInTheDocument();
+    expect(await within(canvas).findByRole('button', { name: 'Darcy Placeholder' })).toBeInTheDocument();
     expect(within(canvas).queryByRole('button', { name: 'Project Atlas' })).not.toBeInTheDocument();
   });
 
@@ -501,7 +501,7 @@ describe('Expand by type', () => {
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
     await user.click(await within(canvas).findByRole('button', { name: /^\+\d+ more Person$/ }));
-    await waitFor(() => expect(expandBodies.at(-1)).toMatchObject({ nodeIds: [JOE_ID], types: ['Person'] }));
+    await waitFor(() => expect(expandBodies.at(-1)).toMatchObject({ nodeIds: [JONTY_ID], types: ['Person'] }));
     expect(expandBodies.at(-1)?.relationTypes).toBeUndefined();
   });
 });
@@ -510,7 +510,7 @@ describe('the Connections and Timeline tabs', () => {
   it('groups the neighbours on the canvas by relation, and "Show on canvas" rings the group', async () => {
     const user = userEvent.setup();
     renderExplorer();
-    const { canvas, panel } = await openNode(user, 'Joe Rivera');
+    const { canvas, panel } = await openNode(user, 'Jonty Placeholder');
     await user.click(within(panel).getByRole('tab', { name: 'Connections' }));
     const attended = within(panel).getByRole('region', { name: 'Attended' });
     expect(within(attended).getByRole('button', { name: /^Q3 planning, Meeting, outgoing/ })).toBeInTheDocument();
@@ -552,7 +552,7 @@ describe('the Connections and Timeline tabs', () => {
     );
     const user = userEvent.setup();
     renderExplorer();
-    const { panel } = await openNode(user, 'Joe Rivera');
+    const { panel } = await openNode(user, 'Jonty Placeholder');
     await user.click(within(panel).getByRole('tab', { name: 'Timeline' }));
     expect(await within(panel).findByText('Meeting: Q3 planning')).toBeInTheDocument();
     expect(within(panel).getByText(/2 quotes/)).toBeInTheDocument();
@@ -583,7 +583,7 @@ describe('the Connections and Timeline tabs', () => {
     );
     const user = userEvent.setup();
     renderExplorer();
-    const { panel } = await openNode(user, 'Joe Rivera');
+    const { panel } = await openNode(user, 'Jonty Placeholder');
     await user.click(within(panel).getByRole('tab', { name: 'Timeline' }));
     await user.click(await within(panel).findByRole('button', { name: /Show the month of .* in the graph/ }));
     await waitFor(() => expect(currentUrl().searchParams.get('from')).toBe('2026-03-01'));
@@ -605,7 +605,7 @@ describe('the node header and the Overview tab', () => {
     );
     const user = userEvent.setup();
     renderExplorer();
-    const { panel } = await openNode(user, 'Joe Rivera');
+    const { panel } = await openNode(user, 'Jonty Placeholder');
     expect(await within(panel).findByText('Also known as One, Two, Three +2')).toBeInTheDocument();
     expect(within(panel).getByText(/First seen .* · Last seen .* · 14 mentions/)).toBeInTheDocument();
     expect(within(panel).getByText('Person')).toBeInTheDocument();
@@ -625,7 +625,7 @@ describe('the node header and the Overview tab', () => {
     );
     const user = userEvent.setup();
     renderExplorer();
-    const { panel } = await openNode(user, 'Joe Rivera');
+    const { panel } = await openNode(user, 'Jonty Placeholder');
     // 20:00Z on 1 Mar is already 2 Mar in Tokyo; UTC would have said 1 Mar.
     expect(await within(panel).findByText(/First seen Mar 2, 2026 · Last seen Sep 21, 2026/)).toBeInTheDocument();
   });
@@ -637,7 +637,7 @@ describe('the node header and the Overview tab', () => {
         searches.push(new URL(request.url).search);
         return HttpResponse.json({
           data: {
-            entity: { id: JOE_ID, label: 'Joe Rivera', type: 'Person' },
+            entity: { id: JONTY_ID, label: 'Jonty Placeholder', type: 'Person' },
             window: { since: null, sinceSource: 'default', asOf: '2026-09-26T00:00:00.000Z', lastViewedAt: null },
             digest: null,
             digestStale: false,
@@ -657,7 +657,7 @@ describe('the node header and the Overview tab', () => {
     );
     const user = userEvent.setup();
     renderExplorer();
-    const { panel } = await openNode(user, 'Joe Rivera');
+    const { panel } = await openNode(user, 'Jonty Placeholder');
     expect(await within(panel).findByRole('heading', { name: 'Brief' })).toBeInTheDocument();
     expect(searches).toEqual(['?markViewed=false']);
   });
@@ -671,7 +671,7 @@ describe('the Ask tab', () => {
   it('exists only when the host passes the slot', async () => {
     const user = userEvent.setup();
     renderExplorer();
-    const { panel } = await openNode(user, 'Joe Rivera');
+    const { panel } = await openNode(user, 'Jonty Placeholder');
     expect(within(panel).getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'Overview',
       'Evidence',
@@ -684,20 +684,20 @@ describe('the Ask tab', () => {
   it('renders the host panel through the slot, for an entity', async () => {
     const user = userEvent.setup();
     renderExplorer({ slots: { AskPanel } });
-    const { panel } = await openNode(user, 'Joe Rivera');
+    const { panel } = await openNode(user, 'Jonty Placeholder');
     await user.click(within(panel).getByRole('tab', { name: 'Ask' }));
     expect(AskPanel).toHaveBeenCalledWith(
-      expect.objectContaining({ entityId: JOE_ID, entityLabel: 'Joe Rivera', entityType: 'Person', open: false }),
+      expect.objectContaining({ entityId: JONTY_ID, entityLabel: 'Jonty Placeholder', entityType: 'Person', open: false }),
       undefined,
     );
-    await user.click(within(panel).getByRole('button', { name: 'Ask about Joe Rivera' }));
-    expect(await screen.findByTestId('ask-panel')).toHaveTextContent('Ask panel for Joe Rivera');
+    await user.click(within(panel).getByRole('button', { name: 'Ask about Jonty Placeholder' }));
+    expect(await screen.findByTestId('ask-panel')).toHaveTextContent('Ask panel for Jonty Placeholder');
   });
 
   it('the Ask action opens the Ask tab', async () => {
     const user = userEvent.setup();
     renderExplorer({ slots: { AskPanel } });
-    const { panel } = await openNode(user, 'Joe Rivera');
+    const { panel } = await openNode(user, 'Jonty Placeholder');
     await user.click(within(panel).getByRole('button', { name: 'Ask' }));
     expect(within(panel).getByRole('tab', { name: 'Ask', selected: true })).toBeInTheDocument();
   });
@@ -705,7 +705,7 @@ describe('the Ask tab', () => {
   it('is hidden while connected knowledge is off, whatever the slot', async () => {
     const user = userEvent.setup();
     renderExplorer({ slots: { AskPanel }, graphEnabled: false });
-    const { panel } = await openNode(user, 'Joe Rivera');
+    const { panel } = await openNode(user, 'Jonty Placeholder');
     expect(within(panel).queryByRole('tab', { name: 'Ask' })).not.toBeInTheDocument();
   });
 
@@ -725,7 +725,7 @@ describe('the Selection view', () => {
     const canvas = await canvasReady();
     await user.click(screen.getByRole('button', { name: 'Select' }));
     await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
     const group = await screen.findByRole('group', { name: 'Selection' });
     return { canvas, group };
   }
@@ -744,7 +744,7 @@ describe('the Selection view', () => {
     const user = userEvent.setup();
     const { group } = await markTwo(user);
     await user.click(within(group).getByRole('button', { name: 'Expand all' }));
-    await waitFor(() => expect(expandBodies.map((b) => b.nodeIds).slice(-2)).toEqual([[KAPPA_ID], [ANA_ID]]));
+    await waitFor(() => expect(expandBodies.map((b) => b.nodeIds).slice(-2)).toEqual([[KAPPA_ID], [ANDERS_ID]]));
     act(() => setViewportWidth(1024));
   });
 
@@ -753,7 +753,7 @@ describe('the Selection view', () => {
     const { canvas, group } = await markTwo(user);
     await user.click(within(group).getByRole('button', { name: 'Hide' }));
     await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Org Kappa' })).not.toBeInTheDocument());
-    expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'Anders Placeholder' })).not.toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('group', { name: 'Selection' })).not.toBeInTheDocument());
     act(() => setViewportWidth(1024));
   });
@@ -854,7 +854,7 @@ describe('the inspector on a roomy window', () => {
   it('follows the ARIA tabs pattern and is axe clean on a node and on an edge', async () => {
     const user = userEvent.setup();
     const { container } = renderExplorer();
-    const { canvas, panel } = await openNode(user, 'Joe Rivera');
+    const { canvas, panel } = await openNode(user, 'Jonty Placeholder');
     const list = within(panel).getByRole('tablist');
     const selected = within(list).getByRole('tab', { selected: true });
     const tabpanel = within(panel).getByRole('tabpanel');

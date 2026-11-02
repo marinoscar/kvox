@@ -249,7 +249,7 @@ export const MARKDOWN_BODY = [
   '',
   '| Step | Owner |',
   '| ---- | ----- |',
-  '| 1    | Ana   |',
+  '| 1    | Anders   |',
   '',
 ].join('\n');
 

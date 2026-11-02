@@ -15,13 +15,13 @@ import { NoteInputError as AiInputError } from '../../../src/notes/generation/ai
 import { MarkdownTranscriptExporter, TranscriptExporterRegistry } from '../../../src/transcripts/index.js';
 import { NoteSourceService, readExtractedObjectId } from '../../../src/notes/generation/note-source.service.js';
 
-const CORRECTED = 'Ana Rivera confirmed the Kestrel launch date.';
-const AI_ORIGINAL = 'Anna River confirmed the Kestrel lunch date.';
+const CORRECTED = 'Anders Sample confirmed the Kestrel launch date.';
+const AI_ORIGINAL = 'Annika Example confirmed the Kestrel lunch date.';
 
 /** The state `materialize()` returns — the corrected one, by construction. */
 const correctedState = {
   speakers: [
-    { id: 'spk-1', label: 'A', displayName: 'Ana Rivera', colorIndex: 0, rev: 4 },
+    { id: 'spk-1', label: 'A', displayName: 'Anders Sample', colorIndex: 0, rev: 4 },
   ],
   segments: [
     {
@@ -114,7 +114,7 @@ describe('NoteSourceService', () => {
     it('renders the corrected speaker name, not the diarization letter', async () => {
       const resolved = await service.resolve(transcriptSelector);
 
-      expect(resolved.text).toContain('Ana Rivera');
+      expect(resolved.text).toContain('Anders Sample');
     });
 
     it('is deterministic — two renders of the same transcript are byte-identical', async () => {

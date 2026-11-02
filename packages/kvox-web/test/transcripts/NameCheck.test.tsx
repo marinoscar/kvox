@@ -31,7 +31,7 @@ import type { TranscriptSpeaker } from '../../src/transcripts/headless/clients/t
 const SPEAKERS: TranscriptSpeaker[] = [
   { id: '11111111-1111-4111-8111-111111111111', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
   { id: '22222222-2222-4222-8222-222222222222', label: 'B', displayName: 'Speaker B', colorIndex: 1, rev: 1 },
-  { id: '33333333-3333-4333-8333-333333333333', label: 'C', displayName: 'Ana Solís', colorIndex: 2, rev: 1 },
+  { id: '33333333-3333-4333-8333-333333333333', label: 'C', displayName: 'Anders Testcase', colorIndex: 2, rev: 1 },
 ];
 
 /**
@@ -161,7 +161,7 @@ describe('NameCheckDialog', () => {
     renderDialog();
 
     expect(await screen.findByRole('checkbox', { name: 'Oscar' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Ana Solís' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Anders Testcase' })).toBeChecked();
     // A generic label is never offered — the server would drop it anyway.
     expect(screen.queryByRole('checkbox', { name: 'Speaker B' })).not.toBeInTheDocument();
 
@@ -187,7 +187,7 @@ describe('NameCheckDialog', () => {
     const { onOpenResults, onClose } = renderDialog();
     await screen.findByText(/≈ 1 request/);
 
-    await user.click(screen.getByRole('checkbox', { name: 'Ana Solís' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Anders Testcase' }));
     await user.type(screen.getByRole('combobox', { name: 'Other names & terms' }), 'Kvox{Enter}');
     await user.click(screen.getByRole('radio', { name: /Thorough/ }));
     await user.click(screen.getByRole('button', { name: 'Check names' }));
@@ -202,7 +202,7 @@ describe('NameCheckDialog', () => {
   it('pre-selects only the speaker it was opened for', async () => {
     renderDialog({ initialSpeakerIds: [SPEAKERS[2].id] });
 
-    expect(await screen.findByRole('checkbox', { name: 'Ana Solís' })).toBeChecked();
+    expect(await screen.findByRole('checkbox', { name: 'Anders Testcase' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Oscar' })).not.toBeChecked();
   });
 
@@ -268,9 +268,9 @@ describe('NameSuggestionsPanel', () => {
     }),
     suggestion('b1111111-0000-4000-8000-000000000003', {
       segmentId: 's3',
-      original: 'Anna Soles',
-      replacement: 'Ana Solís',
-      preview: 'ask Anna Soles',
+      original: 'Annika Fixture',
+      replacement: 'Anders Testcase',
+      preview: 'ask Annika Fixture',
     }),
     suggestion('b1111111-0000-4000-8000-000000000004', {
       segmentId: 's4',
@@ -310,7 +310,7 @@ describe('NameSuggestionsPanel', () => {
     expect(groups.map((group) => [group.original, group.replacement, group.suggestions.length]))
       .toEqual([
         ['Skar', 'Oscar', 3],
-        ['Anna Soles', 'Ana Solís', 1],
+        ['Annika Fixture', 'Anders Testcase', 1],
       ]);
     // The stale row is in the group but never in what a group Accept sends.
     expect(groups[0].acceptableIds).toEqual([SUGGESTIONS[0].id, SUGGESTIONS[1].id]);
@@ -321,7 +321,7 @@ describe('NameSuggestionsPanel', () => {
 
     expect(screen.getByRole('region', { name: 'Name suggestions' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Skar → Oscar ×3/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Anna Soles → Ana Solís ×1/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Annika Fixture → Anders Testcase ×1/ })).toBeInTheDocument();
   });
 
   it('"Accept all" on a group accepts exactly that group’s acceptable ids', async () => {
@@ -338,7 +338,7 @@ describe('NameSuggestionsPanel', () => {
     const { onReject } = renderPanel();
 
     await user.click(
-      screen.getByRole('button', { name: 'Reject all "Anna Soles" → "Ana Solís"' }),
+      screen.getByRole('button', { name: 'Reject all "Annika Fixture" → "Anders Testcase"' }),
     );
 
     expect(onReject).toHaveBeenCalledWith([SUGGESTIONS[2].id]);

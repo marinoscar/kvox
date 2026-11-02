@@ -235,7 +235,7 @@ describe('describeNameCheckError', () => {
 
 describe('readTerms', () => {
   it('keeps only non-blank strings', () => {
-    expect(readTerms(['Oscar', '', '  ', 42, null, 'Ana'])).toEqual(['Oscar', 'Ana']);
+    expect(readTerms(['Oscar', '', '  ', 42, null, 'Anders'])).toEqual(['Oscar', 'Anders']);
   });
 
   it('returns [] for anything that is not an array', () => {

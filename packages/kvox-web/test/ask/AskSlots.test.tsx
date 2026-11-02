@@ -13,7 +13,7 @@ import { AskEntityButtonSlot, AskEntityPanelSlot, kvoxAskRoutes } from '../../sr
 
 const PANEL_PROPS = {
   entityId: 'e1',
-  entityLabel: 'Joe Rivera',
+  entityLabel: 'Jonty Placeholder',
   entityType: 'Person',
   open: true,
   onClose: vi.fn(),
@@ -23,16 +23,16 @@ const PANEL_PROPS = {
 
 describe('AskEntityButtonSlot', () => {
   it('draws the action for a viewer with graph:read when connected knowledge is on', () => {
-    render(<AskEntityButtonSlot entityId="e1" entityLabel="Joe Rivera" onClick={vi.fn()} />, {
+    render(<AskEntityButtonSlot entityId="e1" entityLabel="Jonty Placeholder" onClick={vi.fn()} />, {
       wrapperOptions: { user: graphReader },
     });
-    expect(screen.getByRole('button', { name: 'Ask about Joe Rivera' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ask about Jonty Placeholder' })).toBeInTheDocument();
   });
 
   it('draws nothing when connected knowledge is off or unknown', () => {
     for (const graphEnabled of [false, undefined]) {
       const { container, unmount } = render(
-        <AskEntityButtonSlot entityId="e1" entityLabel="Joe Rivera" onClick={vi.fn()} />,
+        <AskEntityButtonSlot entityId="e1" entityLabel="Jonty Placeholder" onClick={vi.fn()} />,
         { wrapperOptions: { user: graphReader }, hostOptions: { features: { graphEnabled } } },
       );
       expect(container).toBeEmptyDOMElement();
@@ -42,7 +42,7 @@ describe('AskEntityButtonSlot', () => {
 
   it('draws nothing without graph:read', () => {
     const { container } = render(
-      <AskEntityButtonSlot entityId="e1" entityLabel="Joe Rivera" onClick={vi.fn()} />,
+      <AskEntityButtonSlot entityId="e1" entityLabel="Jonty Placeholder" onClick={vi.fn()} />,
       { wrapperOptions: { user: noGraphUser } },
     );
     expect(container).toBeEmptyDOMElement();
@@ -52,7 +52,7 @@ describe('AskEntityButtonSlot', () => {
 describe('AskEntityPanelSlot', () => {
   it('draws the panel for a viewer with graph:read when connected knowledge is on', async () => {
     render(<AskEntityPanelSlot {...PANEL_PROPS} />, { wrapperOptions: { user: graphReader } });
-    expect(await screen.findByRole('dialog', { name: 'Ask about Joe Rivera' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Ask about Jonty Placeholder' })).toBeInTheDocument();
   });
 
   it('draws nothing, and reads no configuration, when it is off or the viewer lacks graph:read', () => {

@@ -19,8 +19,8 @@ import type { TranscriptSegment, TranscriptSpeaker } from '../../src/transcripts
  */
 
 const SPEAKERS: TranscriptSpeaker[] = [
-  { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
-  { id: 'sp2', label: 'B', displayName: 'Ben', colorIndex: 1, rev: 1 },
+  { id: 'sp1', label: 'A', displayName: 'Anders', colorIndex: 0, rev: 1 },
+  { id: 'sp2', label: 'B', displayName: 'Bram', colorIndex: 1, rev: 1 },
 ];
 
 const SEGMENT: TranscriptSegment = {
@@ -101,20 +101,20 @@ describe('SegmentActions — root menu wording (#220)', () => {
   it('leads with the all-lines rename, naming the speaker and the blast radius', () => {
     renderActions({ speakerSegmentCount: 6 });
 
-    expect(menuItemFor('Rename Ana')).toHaveTextContent('Applies to all 6 lines they speak');
+    expect(menuItemFor('Rename Anders')).toHaveTextContent('Applies to all 6 lines they speak');
   });
 
   it('falls back to countless wording rather than "all 1 lines"', () => {
     renderActions({ speakerSegmentCount: 1 });
 
-    expect(menuItemFor('Rename Ana')).toHaveTextContent('Applies to every line they speak');
+    expect(menuItemFor('Rename Anders')).toHaveTextContent('Applies to every line they speak');
   });
 
   it('falls back to the same countless wording when no count could be resolved at all', () => {
     // A "0" here would understate the blast radius rather than describe it.
     renderActions({ speakerSegmentCount: 0 });
 
-    expect(menuItemFor('Rename Ana')).toHaveTextContent('Applies to every line they speak');
+    expect(menuItemFor('Rename Anders')).toHaveTextContent('Applies to every line they speak');
   });
 
   it('scopes the per-line item to "This line only"', () => {
@@ -129,7 +129,7 @@ describe('SegmentActions — root menu wording (#220)', () => {
     renderActions();
 
     const items = screen.getAllByRole('menuitem');
-    const renameIndex = items.indexOf(menuItemFor('Rename Ana'));
+    const renameIndex = items.indexOf(menuItemFor('Rename Anders'));
     const moveIndex = items.indexOf(menuItemFor('Move this line to another speaker'));
 
     expect(renameIndex).toBeGreaterThanOrEqual(0);
@@ -150,16 +150,16 @@ describe('SegmentActions — the all-lines rename view', () => {
     const user = userEvent.setup();
     renderActions();
 
-    await user.click(menuItemFor('Rename Ana'));
+    await user.click(menuItemFor('Rename Anders'));
 
-    expect(screen.getByRole('combobox', { name: 'Speaker name' })).toHaveValue('Ana');
+    expect(screen.getByRole('combobox', { name: 'Speaker name' })).toHaveValue('Anders');
   });
 
   it('issues the all-lines rename — the regression this issue exists to guard', async () => {
     const user = userEvent.setup();
     const { onRenameSpeaker, onSetSpeaker, onCreateSpeaker, onClose } = renderActions();
 
-    await user.click(menuItemFor('Rename Ana'));
+    await user.click(menuItemFor('Rename Anders'));
     const field = screen.getByRole('combobox', { name: 'Speaker name' });
     await user.clear(field);
     await user.type(field, 'Justin');
@@ -178,10 +178,10 @@ describe('SegmentActions — the all-lines rename view', () => {
     const user = userEvent.setup();
     const { onClose } = renderActions();
 
-    await user.click(menuItemFor('Rename Ana'));
+    await user.click(menuItemFor('Rename Anders'));
     await user.click(screen.getByRole('menuitem', { name: 'Back' }));
 
-    expect(menuItemFor('Rename Ana')).toBeInTheDocument();
+    expect(menuItemFor('Rename Anders')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -189,7 +189,7 @@ describe('SegmentActions — the all-lines rename view', () => {
     const user = userEvent.setup();
     const { onClose, onRenameSpeaker } = renderActions();
 
-    await user.click(menuItemFor('Rename Ana'));
+    await user.click(menuItemFor('Rename Anders'));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(onClose).toHaveBeenCalled();
@@ -203,7 +203,7 @@ describe('SegmentActions — the per-line picker (mechanism unchanged by #220)',
     const { onSetSpeaker, onRenameSpeaker, onClose } = renderActions();
 
     await user.click(menuItemFor('Move this line to another speaker'));
-    await user.click(screen.getByRole('menuitem', { name: 'Ben' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Bram' }));
 
     expect(onSetSpeaker).toHaveBeenCalledWith('sp2');
     expect(onRenameSpeaker).not.toHaveBeenCalled();
@@ -244,14 +244,14 @@ describe('SegmentActions — reopening', () => {
     };
     const { rerender } = render(<SegmentActions open {...baseProps} />);
 
-    fireEvent.click(menuItemFor('Rename Ana'));
+    fireEvent.click(menuItemFor('Rename Anders'));
     expect(screen.getByRole('combobox', { name: 'Speaker name' })).toBeInTheDocument();
 
     rerender(<SegmentActions open={false} {...baseProps} />);
     rerender(<SegmentActions open {...baseProps} />);
 
     expect(screen.queryByRole('combobox', { name: 'Speaker name' })).not.toBeInTheDocument();
-    expect(menuItemFor('Rename Ana')).toBeInTheDocument();
+    expect(menuItemFor('Rename Anders')).toBeInTheDocument();
   });
 });
 
@@ -264,7 +264,7 @@ describe('SegmentActions — two presentations, one body', () => {
     expect(document.querySelector('.MuiDrawer-root')).not.toBeNull();
     expect(document.querySelector('.MuiPopover-root')).toBeNull();
 
-    await user.click(menuItemFor('Rename Ana'));
+    await user.click(menuItemFor('Rename Anders'));
     const field = screen.getByRole('combobox', { name: 'Speaker name' });
     await user.clear(field);
     await user.type(field, 'Justin');
@@ -281,7 +281,7 @@ describe('SegmentActions — two presentations, one body', () => {
     expect(document.querySelector('.MuiPopover-root')).not.toBeNull();
     expect(document.querySelector('.MuiDrawer-root')).toBeNull();
 
-    await user.click(menuItemFor('Rename Ana'));
+    await user.click(menuItemFor('Rename Anders'));
     const field = screen.getByRole('combobox', { name: 'Speaker name' });
     await user.clear(field);
     await user.type(field, 'Justin');

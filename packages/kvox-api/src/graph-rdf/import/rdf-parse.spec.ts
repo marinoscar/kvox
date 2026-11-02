@@ -11,7 +11,7 @@ const stream = (text: string) => Readable.from([Buffer.from(text, 'utf8')]);
 
 const TTL = `@prefix kv: <${NS}> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-<https://s.example/joe> a kv:Person ; rdfs:label "Joe"@en ; kv:x 42 .`;
+<https://s.example/jonty> a kv:Person ; rdfs:label "Jonty"@en ; kv:x 42 .`;
 
 async function failure(p: Promise<unknown>): Promise<RdfParseError> {
   try {
@@ -28,11 +28,11 @@ describe('parseRdf', () => {
     const quads = await parseRdf(stream(TTL), 'turtle', OPTS);
     expect(quads).toHaveLength(3);
     expect(quads[0]).toEqual({
-      s: { termType: 'NamedNode', value: 'https://s.example/joe' },
+      s: { termType: 'NamedNode', value: 'https://s.example/jonty' },
       p: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
       o: { termType: 'NamedNode', value: `${NS}Person` },
     });
-    expect(quads[1].o).toEqual({ termType: 'Literal', value: 'Joe', datatype: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#langString', language: 'en' });
+    expect(quads[1].o).toEqual({ termType: 'Literal', value: 'Jonty', datatype: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#langString', language: 'en' });
     expect(quads[2].o).toEqual({ termType: 'Literal', value: '42', datatype: 'http://www.w3.org/2001/XMLSchema#integer' });
   });
 
@@ -44,14 +44,14 @@ describe('parseRdf', () => {
   });
 
   it('parses JSON-LD with an inline context', async () => {
-    const doc = { '@context': { kv: NS, label: 'http://www.w3.org/2000/01/rdf-schema#label' }, '@id': 'https://s.example/joe', '@type': 'kv:Person', label: 'Joe' };
+    const doc = { '@context': { kv: NS, label: 'http://www.w3.org/2000/01/rdf-schema#label' }, '@id': 'https://s.example/jonty', '@type': 'kv:Person', label: 'Jonty' };
     const quads = await parseRdf(stream(JSON.stringify(doc)), 'jsonld', OPTS);
     expect(quads).toHaveLength(2);
     expect(quads.some((q) => q.o.value === `${NS}Person`)).toBe(true);
   });
 
   it('refuses a remote JSON-LD context — never fetched', async () => {
-    const doc = { '@context': 'https://evil.example/context.jsonld', '@id': 'https://s.example/joe', name: 'Joe' };
+    const doc = { '@context': 'https://evil.example/context.jsonld', '@id': 'https://s.example/jonty', name: 'Jonty' };
     const error = await failure(parseRdf(stream(JSON.stringify(doc)), 'jsonld', OPTS));
     expect(error.reason).toBe('parse_error');
     expect(error.message).toMatch(/remote JSON-LD context/);

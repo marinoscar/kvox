@@ -95,7 +95,7 @@ describe('a packaged component renders its day in the display zone', () => {
   const merges: EntityMergeRow[] = [
     {
       mergeId: '00000000-0000-4000-8000-000000000001',
-      mergedEntity: { id: '00000000-0000-4000-8000-000000000002', label: 'Ana Diaz', type: 'Person' },
+      mergedEntity: { id: '00000000-0000-4000-8000-000000000002', label: 'Anders Placeholder', type: 'Person' },
       // 20:00 UTC on 20 Oct: 05:00 on the 21st in Tokyo, 13:00 on the 20th in LA.
       createdAt: '2026-10-20T20:00:00.000Z',
       reversedAt: null,

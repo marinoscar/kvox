@@ -450,7 +450,7 @@ describe('TranscriptEditingService', () => {
       expect(tx.transcriptSpeaker.updateMany).not.toHaveBeenCalled();
     });
 
-    it('records renaming an already-identified speaker (Oscar -> Joe) as a version, not an identification', async () => {
+    it('records renaming an already-identified speaker (Oscar -> Jonty) as a version, not an identification', async () => {
       const identified = [
         { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
         speakerRows[1],
@@ -463,15 +463,15 @@ describe('TranscriptEditingService', () => {
         TRANSCRIPT_ID,
         {
           baseVersion: 3,
-          clientBatchId: 'oscar-to-joe',
-          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' }],
+          clientBatchId: 'oscar-to-jonty',
+          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Jonty' }],
         } as never,
         USER,
       );
 
       expect(versionCreate).toHaveBeenCalled();
       expect(recordedOps()).toEqual([
-        { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' },
+        { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Jonty' },
       ]);
       expect(tx.transcriptSpeaker.updateMany).not.toHaveBeenCalled();
 
@@ -503,8 +503,8 @@ describe('TranscriptEditingService', () => {
         TRANSCRIPT_ID,
         {
           baseVersion: 3,
-          clientBatchId: 'oscar-to-joe-throws',
-          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' }],
+          clientBatchId: 'oscar-to-jonty-throws',
+          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Jonty' }],
         } as never,
         USER,
       );
@@ -517,8 +517,8 @@ describe('TranscriptEditingService', () => {
         TRANSCRIPT_ID,
         {
           baseVersion: 3,
-          clientBatchId: 'create-dana',
-          ops: [{ op: OP_TYPES.CREATE_SPEAKER, displayName: 'Dana' }],
+          clientBatchId: 'create-darcy',
+          ops: [{ op: OP_TYPES.CREATE_SPEAKER, displayName: 'Darcy' }],
         } as never,
         USER,
       );
@@ -615,14 +615,14 @@ describe('TranscriptEditingService', () => {
       {
         baseVersion: 3,
         clientBatchId: 'batch-0003',
-        ops: [{ op: OP_TYPES.CREATE_SPEAKER, displayName: 'Dana' }],
+        ops: [{ op: OP_TYPES.CREATE_SPEAKER, displayName: 'Darcy' }],
       } as never,
       USER,
     );
 
     expect(recordedOps()[0]).toMatchObject({
       op: OP_TYPES.CREATE_SPEAKER,
-      displayName: 'Dana',
+      displayName: 'Darcy',
       // Two existing speakers at 0 and 1.
       colorIndex: 2,
     });

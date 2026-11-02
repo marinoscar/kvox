@@ -68,7 +68,7 @@ const mockApply = vi.mocked(applyOperations);
 
 const SPEAKERS: TranscriptSpeaker[] = [
   { id: 'sp1', label: 'A', displayName: 'Speaker A', colorIndex: 0, rev: 1 },
-  { id: 'sp2', label: 'B', displayName: 'Ana', colorIndex: 1, rev: 1 },
+  { id: 'sp2', label: 'B', displayName: 'Anders', colorIndex: 1, rev: 1 },
 ];
 
 const SEGMENTS: TranscriptSegment[] = Array.from({ length: 4 }, (_, index) => ({
@@ -257,7 +257,7 @@ describe('TranscriptPage — the post-rename name-check nudge', () => {
     await user.click(screen.getByRole('button', { name: 'Check' }));
     const dialog = await screen.findByRole('dialog', { name: 'Fix names with AI' });
     expect(await within(dialog).findByRole('checkbox', { name: 'Oscar' })).toBeChecked();
-    expect(within(dialog).getByRole('checkbox', { name: 'Ana' })).not.toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: 'Anders' })).not.toBeChecked();
   });
 
   it('does not offer it for a generic label like "Speaker B"', async () => {
@@ -273,7 +273,7 @@ describe('TranscriptPage — the post-rename name-check nudge', () => {
     renderPage();
     await screen.findByRole('region', { name: 'Transcript' });
 
-    await renameSpeakerTo(user, 'Ana', 'Speaker B');
+    await renameSpeakerTo(user, 'Anders', 'Speaker B');
 
     await waitFor(() => expect(mockApply).toHaveBeenCalled());
     // Give a (wrongly) mounted prompt the chance to read the AI config.

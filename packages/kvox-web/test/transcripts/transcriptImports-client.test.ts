@@ -33,7 +33,7 @@ const IMPORTED = {
   recordedAt: '2026-01-01T00:00:00.000Z',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
-  speakers: [{ id: 'sp1', label: null, displayName: 'Ana', colorIndex: 0, rev: 1 }],
+  speakers: [{ id: 'sp1', label: null, displayName: 'Anders', colorIndex: 0, rev: 1 }],
   provider: 'import',
   remoteDeletedAt: null,
   submittedAt: null,

@@ -118,7 +118,7 @@ export const ALL_HOME_PERMISSIONS = [
 export function homeHost(options: HomeHostOptions = {}): FakeKvoxWebHost {
   return createFakeKvoxWebHost({
     viewer: options.viewer === undefined
-      ? { userId: 'u1', permissions: ALL_HOME_PERMISSIONS, displayName: 'Ana Ruiz' }
+      ? { userId: 'u1', permissions: ALL_HOME_PERMISSIONS, displayName: 'Anders Stubbs' }
       : options.viewer,
     features: { graphEnabled: options.graphEnabled ?? false },
     routes: {

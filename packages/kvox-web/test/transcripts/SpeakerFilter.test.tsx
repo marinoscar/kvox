@@ -71,9 +71,9 @@ beforeEach(() => {
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
 const SPEAKERS: TranscriptSpeaker[] = [
-  { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
-  { id: 'sp2', label: 'B', displayName: 'Ben', colorIndex: 1, rev: 1 },
-  { id: 'sp3', label: 'C', displayName: 'Carolina Fernández', colorIndex: 2, rev: 1 },
+  { id: 'sp1', label: 'A', displayName: 'Anders', colorIndex: 0, rev: 1 },
+  { id: 'sp2', label: 'B', displayName: 'Bram', colorIndex: 1, rev: 1 },
+  { id: 'sp3', label: 'C', displayName: 'Camille Exámple', colorIndex: 2, rev: 1 },
 ];
 
 const SEGMENTS: TranscriptSegment[] = Array.from({ length: 6 }, (_, index) => ({
@@ -139,7 +139,7 @@ describe('SpeakerFilter — the chip row’s scroll affordance (#112)', () => {
     geometry = OVERFLOWS;
     renderChips();
 
-    for (const name of ['Play only Ana', 'Play only Ben', 'Play only Carolina Fernández']) {
+    for (const name of ['Play only Anders', 'Play only Bram', 'Play only Camille Exámple']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
     }
   });
@@ -148,8 +148,8 @@ describe('SpeakerFilter — the chip row’s scroll affordance (#112)', () => {
     geometry = OVERFLOWS;
     renderChips(['sp1']);
 
-    expect(screen.getByRole('button', { name: 'Stop playing only Ana' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Play only Ben' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop playing only Anders' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play only Bram' })).toBeInTheDocument();
   });
 
   it('keeps the editable row’s action-sheet names', () => {
@@ -166,7 +166,7 @@ describe('SpeakerFilter — the chip row’s scroll affordance (#112)', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Actions for Ana' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actions for Anders' })).toBeInTheDocument();
   });
 
   it('still toggles the speaker when a chip under the fade is activated', async () => {
@@ -183,7 +183,7 @@ describe('SpeakerFilter — the chip row’s scroll affordance (#112)', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Play only Carolina Fernández' }));
+    await user.click(screen.getByRole('button', { name: 'Play only Camille Exámple' }));
 
     expect(onToggleSpeaker).toHaveBeenCalledWith('sp3');
   });
@@ -219,12 +219,12 @@ describe('SpeakerFilter — the panel variant is untouched by #112', () => {
     expect(screen.getByRole('list', { name: 'Speakers' })).not.toHaveAttribute(
       'data-can-scroll-right',
     );
-    expect(screen.getByRole('button', { name: 'Play only Ana' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play only Anders' })).toBeInTheDocument();
   });
 });
 
 describe('SpeakerFilter — person links to the knowledge graph (#373)', () => {
-  const ENTITY_IDS = { sp1: 'entity-ana' };
+  const ENTITY_IDS = { sp1: 'entity-anders' };
 
   function renderWith(variant: 'chips' | 'panel', onOpen = vi.fn(), editable = false) {
     return {
@@ -251,20 +251,20 @@ describe('SpeakerFilter — person links to the knowledge graph (#373)', () => {
       const user = userEvent.setup();
       const { onOpen, container } = renderWith(variant);
 
-      const link = screen.getByRole('button', { name: "Open Ana's page" });
-      expect(screen.queryByRole('button', { name: "Open Ben's page" })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Open Carolina/ })).not.toBeInTheDocument();
+      const link = screen.getByRole('button', { name: "Open Anders's page" });
+      expect(screen.queryByRole('button', { name: "Open Bram's page" })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Open Camille/ })).not.toBeInTheDocument();
 
       await user.click(link);
-      expect(onOpen).toHaveBeenCalledWith('entity-ana');
+      expect(onOpen).toHaveBeenCalledWith('entity-anders');
       expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
     },
   );
 
   it('keeps the actions button beside the link in the editable panel', () => {
     renderWith('panel', vi.fn(), true);
-    expect(screen.getByRole('button', { name: "Open Ana's page" })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Actions for Ana' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: "Open Anders's page" })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actions for Anders' })).toBeInTheDocument();
   });
 
   it('renders no link without the callback, even with a map', () => {
@@ -278,6 +278,6 @@ describe('SpeakerFilter — person links to the knowledge graph (#373)', () => {
         speakerEntityIds={ENTITY_IDS}
       />,
     );
-    expect(screen.queryByRole('button', { name: "Open Ana's page" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "Open Anders's page" })).not.toBeInTheDocument();
   });
 });

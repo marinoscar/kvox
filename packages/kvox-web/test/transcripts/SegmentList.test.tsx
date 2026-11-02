@@ -80,8 +80,8 @@ beforeEach(() => {
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
 const SPEAKERS: TranscriptSpeaker[] = [
-  { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
-  { id: 'sp2', label: 'B', displayName: 'Ben', colorIndex: 1, rev: 1 },
+  { id: 'sp1', label: 'A', displayName: 'Anders', colorIndex: 0, rev: 1 },
+  { id: 'sp2', label: 'B', displayName: 'Bram', colorIndex: 1, rev: 1 },
 ];
 
 function makeSegments(count: number): TranscriptSegment[] {
@@ -166,8 +166,8 @@ describe('SegmentList — content', () => {
   it('renders each speaker’s name beside their text', () => {
     renderList();
 
-    expect(screen.getAllByText('Ana').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Ben').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Anders').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Bram').length).toBeGreaterThan(0);
     expect(screen.getByText('Line number 0')).toBeInTheDocument();
   });
 
@@ -331,10 +331,10 @@ describe('SegmentList — per-line playback (#108)', () => {
     renderList({ onPlaySegment: vi.fn() });
 
     expect(
-      screen.getByRole('button', { name: 'Play this line, Ana at 0:00' }),
+      screen.getByRole('button', { name: 'Play this line, Anders at 0:00' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Play this line, Ben at 0:05' }),
+      screen.getByRole('button', { name: 'Play this line, Bram at 0:05' }),
     ).toBeInTheDocument();
   });
 
@@ -355,7 +355,7 @@ describe('SegmentList — per-line playback (#108)', () => {
     // Exactly one row at a time, and every other row is unpressed.
     expect(screen.queryAllByRole('button', { name: 'Pause this line' })).toHaveLength(1);
     expect(
-      screen.getByRole('button', { name: 'Play this line, Ana at 0:00' }),
+      screen.getByRole('button', { name: 'Play this line, Anders at 0:00' }),
     ).toHaveAttribute('aria-pressed', 'false');
   });
 
@@ -366,7 +366,7 @@ describe('SegmentList — per-line playback (#108)', () => {
 
     expect(screen.queryByRole('button', { name: 'Pause this line' })).toBeNull();
     expect(
-      screen.getByRole('button', { name: 'Play this line, Ben at 0:05' }),
+      screen.getByRole('button', { name: 'Play this line, Bram at 0:05' }),
     ).toBeInTheDocument();
   });
 
@@ -376,7 +376,7 @@ describe('SegmentList — per-line playback (#108)', () => {
     const segments = makeSegments(50);
     renderList({ onPlaySegment }, segments);
 
-    await user.click(screen.getByRole('button', { name: 'Play this line, Ben at 0:05' }));
+    await user.click(screen.getByRole('button', { name: 'Play this line, Bram at 0:05' }));
 
     expect(onPlaySegment).toHaveBeenCalledWith(segments[1]);
   });
@@ -399,7 +399,7 @@ describe('SegmentList — per-line playback (#108)', () => {
     // wants. See the component header for the keyboard case.
     renderList({ onPlaySegment: vi.fn(), currentSegmentIndex: 5 });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Play this line, Ana at 0:00' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play this line, Anders at 0:00' }));
 
     expect(screen.queryByRole('button', { name: 'Jump to current' })).toBeNull();
   });
@@ -425,7 +425,7 @@ describe('SegmentList — the speaker name control (#220)', () => {
 
     expect(
       screen.getByRole('button', {
-        name: 'Rename Ana or merge, applies to every line they speak',
+        name: 'Rename Anders or merge, applies to every line they speak',
       }),
     ).toBeInTheDocument();
   });
@@ -437,13 +437,13 @@ describe('SegmentList — the speaker name control (#220)', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: 'Rename Ben or merge, applies to every line they speak',
+        name: 'Rename Bram or merge, applies to every line they speak',
       }),
     );
 
     expect(onOpenSpeakerActions).toHaveBeenCalledTimes(1);
     const [speakerId, anchor] = onOpenSpeakerActions.mock.calls[0];
-    // s1 is Ben's line (odd index) — asserting the SPEAKER id here, not the
+    // s1 is Bram's line (odd index) — asserting the SPEAKER id here, not the
     // segment id, is the whole point: the #220 defect was exactly this scope
     // getting confused one layer up, in `SegmentActions`.
     expect(speakerId).toBe('sp2');
@@ -456,9 +456,9 @@ describe('SegmentList — the speaker name control (#220)', () => {
     renderList();
 
     expect(
-      screen.queryByRole('button', { name: /Rename Ana or merge/ }),
+      screen.queryByRole('button', { name: /Rename Anders or merge/ }),
     ).not.toBeInTheDocument();
-    const name = screen.getAllByText('Ana')[0];
+    const name = screen.getAllByText('Anders')[0];
     expect(name).not.toHaveAttribute('role', 'button');
     expect(name).not.toHaveAttribute('tabindex');
   });
@@ -470,7 +470,7 @@ describe('SegmentList — the speaker name control (#220)', () => {
     renderList({ editable: true }, makeSegments(2));
 
     expect(
-      screen.queryByRole('button', { name: /Rename Ana or merge/ }),
+      screen.queryByRole('button', { name: /Rename Anders or merge/ }),
     ).not.toBeInTheDocument();
   });
 });

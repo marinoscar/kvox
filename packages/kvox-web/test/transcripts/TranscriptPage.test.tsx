@@ -59,8 +59,8 @@ const mockRetry = vi.mocked(retryTranscript);
 const mockUpdate = vi.mocked(updateTranscript);
 
 const SPEAKERS: TranscriptSpeaker[] = [
-  { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
-  { id: 'sp2', label: 'B', displayName: 'Ben', colorIndex: 1, rev: 1 },
+  { id: 'sp1', label: 'A', displayName: 'Anders', colorIndex: 0, rev: 1 },
+  { id: 'sp2', label: 'B', displayName: 'Bram', colorIndex: 1, rev: 1 },
 ];
 
 function detail(overrides: Partial<TranscriptDetail> = {}): TranscriptDetail {
@@ -308,12 +308,12 @@ describe('TranscriptPage — read mode', () => {
   });
 
   it('offers "Play only this speaker" as the speaker control’s accessible name', async () => {
-    // The chip's visible label ("Ana · 6 · 24 sec") is a fine summary and says
+    // The chip's visible label ("Anders · 6 · 24 sec") is a fine summary and says
     // nothing about what activating it does.
     renderPage();
 
     expect(
-      await screen.findByRole('button', { name: 'Play only Ana' }),
+      await screen.findByRole('button', { name: 'Play only Anders' }),
     ).toBeInTheDocument();
   });
 
@@ -321,21 +321,21 @@ describe('TranscriptPage — read mode', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: 'Play only Ana' }));
+    await user.click(await screen.findByRole('button', { name: 'Play only Anders' }));
 
-    expect(await screen.findByText('Only: Ana')).toBeInTheDocument();
+    expect(await screen.findByText('Only: Anders')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Clear speaker filter' }));
-    expect(screen.queryByText('Only: Ana')).not.toBeInTheDocument();
+    expect(screen.queryByText('Only: Anders')).not.toBeInTheDocument();
   });
 
   it('flips the speaker control’s name once it is active', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: 'Play only Ana' }));
+    await user.click(await screen.findByRole('button', { name: 'Play only Anders' }));
 
     expect(
-      await screen.findByRole('button', { name: 'Stop playing only Ana' }),
+      await screen.findByRole('button', { name: 'Stop playing only Anders' }),
     ).toBeInTheDocument();
   });
 
@@ -689,7 +689,7 @@ describe('TranscriptPage — the segment list', () => {
     await screen.findByText('Weekly standup');
 
     const play = await screen.findByRole('button', {
-      name: 'Play this line, Ben at 0:05',
+      name: 'Play this line, Bram at 0:05',
     });
 
     // The element is created by `new Audio()` and never attached to the
@@ -831,15 +831,15 @@ describe('TranscriptPage — the evidence deep link (#373)', () => {
 describe('TranscriptPage — the speaker people slot (#373)', () => {
   it('draws an "Open the person\'s page" button for each speaker the slot names', async () => {
     const open = vi.fn();
-    const useSpeakerPeople = vi.fn(() => ({ entityIds: { sp1: 'person-ana' }, open }));
+    const useSpeakerPeople = vi.fn(() => ({ entityIds: { sp1: 'person-anders' }, open }));
     render(<TranscriptPage slots={{ useSpeakerPeople }} />, {
       wrapperOptions: { user: mockAdminUser, route: '/transcripts/t1' },
     });
 
-    const links = await screen.findAllByRole('button', { name: "Open Ana's page" });
-    expect(screen.queryByRole('button', { name: "Open Ben's page" })).not.toBeInTheDocument();
+    const links = await screen.findAllByRole('button', { name: "Open Anders's page" });
+    expect(screen.queryByRole('button', { name: "Open Bram's page" })).not.toBeInTheDocument();
     fireEvent.click(links[0]!);
-    expect(open).toHaveBeenCalledWith('person-ana');
+    expect(open).toHaveBeenCalledWith('person-anders');
     expect(useSpeakerPeople).toHaveBeenCalledWith('t1', true);
   });
 

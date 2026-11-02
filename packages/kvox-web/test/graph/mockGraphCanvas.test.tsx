@@ -5,7 +5,7 @@ import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from './msw-compat.js';
 import { server } from './msw-compat.js';
 import { render } from './helpers.js';
-import { JOE_ID, neighborhoodFixture } from './graphData.js';
+import { JONTY_ID, neighborhoodFixture } from './graphData.js';
 import { graphWriter } from './graphTestUsers.js';
 import { NeighborhoodWidget } from '../../src/graph/ui/components/NeighborhoodWidget.js';
 import { mockGraphCanvas } from '../../src/graph/testing/index.js';
@@ -32,10 +32,10 @@ function renderWidget() {
     <Routes>
       <Route
         path="/graph/entities/:id"
-        element={<NeighborhoodWidget entityId={JOE_ID} entityLabel="Joe Rivera" />}
+        element={<NeighborhoodWidget entityId={JONTY_ID} entityLabel="Jonty Placeholder" />}
       />
     </Routes>,
-    { wrapperOptions: { route: `/graph/entities/${JOE_ID}`, user: graphWriter } },
+    { wrapperOptions: { route: `/graph/entities/${JONTY_ID}`, user: graphWriter } },
   );
 }
 

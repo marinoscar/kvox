@@ -15,11 +15,11 @@ function pair(n: number, type = 'Person'): AdjudicationPair {
   return {
     pairId: `p${n}`,
     type,
-    mention: { label: `Sarah ${n}`, aliases: ['S.'], props: { title: 'CTO' }, quotes: ['Sarah said hi'] },
+    mention: { label: `Sasha ${n}`, aliases: ['S.'], props: { title: 'CTO' }, quotes: ['Sasha said hi'] },
     candidate: {
       entityId: `aaaaaaa${n % 10}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
-      label: 'Sarah Chen',
-      aliases: ['Sarah Chen', 'Sally'],
+      label: 'Sasha Example',
+      aliases: ['Sasha Example', 'Sabby'],
       props: {},
       quotes: ['x'.repeat(400)],
       neighbourhood: ['WORKS_FOR → Org Lambda Robotics (2019–)'],
@@ -124,8 +124,8 @@ describe('AdjudicationService.adjudicateItems (#365)', () => {
       pairId: `p${n}`,
       kind: 'commitment',
       subjectType: 'Project',
-      proposed: { title: 'Ship', statement: 'Sarah ships the migration by May.', occurredAt: null, dueAt: '2026-05-01', ownerLabel: 'Sarah', quotes: [] },
-      existing: { title: 'Ship', statement: 'Sarah ships the migration.', occurredAt: null, dueAt: '2026-04-01', status: 'open', ownerLabel: 'Sarah' },
+      proposed: { title: 'Ship', statement: 'Sasha ships the migration by May.', occurredAt: null, dueAt: '2026-05-01', ownerLabel: 'Sasha', quotes: [] },
+      existing: { title: 'Ship', statement: 'Sasha ships the migration.', occurredAt: null, dueAt: '2026-04-01', status: 'open', ownerLabel: 'Sasha' },
     };
   }
 
@@ -165,8 +165,8 @@ describe('the adjudication prompt', () => {
     const content = buildAdjudicationUserContent([pair(1)]);
     const h = ADJUDICATION_PROMPT_HEADINGS;
     expect(content).toContain(`${h.pair} p1 (Person)`);
-    expect(content).toContain(`${h.mention} Sarah 1`);
-    expect(content).toContain(`${h.candidate} aaaaaaa1: Sarah Chen`);
+    expect(content).toContain(`${h.mention} Sasha 1`);
+    expect(content).toContain(`${h.candidate} aaaaaaa1: Sasha Example`);
     expect(content).toContain(h.neighbourhood);
     expect(content).toContain('WORKS_FOR → Org Lambda Robotics (2019–)');
     const longQuote = content.split('\n').find((l) => l.startsWith('  - "x'))!;

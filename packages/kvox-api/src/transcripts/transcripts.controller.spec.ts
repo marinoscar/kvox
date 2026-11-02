@@ -71,7 +71,7 @@ describe('transcriptETag', () => {
   });
 
   it('changes when the identities change, at the same version', () => {
-    expect(transcriptETag(3, { A: 'Oscar' })).not.toBe(transcriptETag(3, { A: 'Joe' }));
+    expect(transcriptETag(3, { A: 'Oscar' })).not.toBe(transcriptETag(3, { A: 'Jonty' }));
   });
 });
 
@@ -177,7 +177,7 @@ describe('matchesETag', () => {
   });
 
   it('does not match a different fingerprint at the same version', () => {
-    expect(matchesETag(transcriptETag(3, { A: 'Oscar' }), transcriptETag(3, { A: 'Joe' }))).toBe(
+    expect(matchesETag(transcriptETag(3, { A: 'Oscar' }), transcriptETag(3, { A: 'Jonty' }))).toBe(
       false,
     );
   });

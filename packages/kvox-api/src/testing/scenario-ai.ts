@@ -205,14 +205,14 @@ function readExtractionPrompt(user: string): ExtractionPromptView {
   if (knownAt >= 0) {
     for (const row of rows.slice(knownAt + 1)) {
       if (row.trim() === '' || row.startsWith('#')) break;
-      // `k1 | Person | Joe Park | aka: Joe | Org`
+      // `k1 | Person | Jonty Mockwell | aka: Jonty | Org`
       const [alias, , label] = row.split(' | ');
       if (alias && label && /^k\d+$/.test(alias.trim())) known.set(norm(label), alias.trim());
     }
   }
   const lines: ExtractionPromptView['lines'] = [];
   for (const row of rows) {
-    // `s3 [00:00:08] Speaker C: Yes, I will ...` or `s3 [00:00:08] Joe Park: Yes, ...`
+    // `s3 [00:00:08] Speaker C: Yes, I will ...` or `s3 [00:00:08] Jonty Mockwell: Yes, ...`
     const match = /^(s\d+) \[[0-9:]+\] ([^:]*): (.*)$/.exec(row);
     if (match) lines.push({ alias: match[1], text: match[3] });
   }
@@ -289,7 +289,7 @@ function extractionAnswer(user: string, meetings: readonly KvoxScenarioMeeting[]
 // kg_adjudication, entity_digest
 // -----------------------------------------------------------------------------
 
-/** `## Pair p1 (Person)` / `Mention: Joe Park` / `Candidate 0f000000: Joe Park`. */
+/** `## Pair p1 (Person)` / `Mention: Jonty Mockwell` / `Candidate 0f000000: Jonty Mockwell`. */
 function adjudicationAnswer(user: string): Record<string, unknown> {
   const verdicts: Array<Record<string, unknown>> = [];
   let pairId: string | null = null;
@@ -447,8 +447,8 @@ function bossMeetingsPlan(name: string, steps: ToolStep[]): KvoxScenarioAskMove 
 
 /**
  * The scenario model's next Ask move for the conversation so far: one of the
- * two reference-question plans ("What are the action items from Joe?", "What
- * meetings have we had with Jenny's boss?"), or a "could not find" answer.
+ * two reference-question plans ("What are the action items from Jonty?", "What
+ * meetings have we had with Jarek's boss?"), or a "could not find" answer.
  * Pure; a host's HTTP-level mock can call it with the request's messages.
  *
  * @param messages - The chat request's messages.

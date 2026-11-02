@@ -62,12 +62,12 @@ describe('toPlatformInput', () => {
     const messages: KvoxChatMessage[] = [
       { role: 'system', content: 'You answer from the graph.' },
       { role: 'system', content: 'Today is Monday.' },
-      { role: 'user', content: 'Who is Sarah?' },
+      { role: 'user', content: 'Who is Sasha?' },
     ];
 
     expect(toPlatformInput(messages)).toEqual({
       instructions: 'You answer from the graph.\n\nToday is Monday.',
-      input: [{ type: 'message', role: 'user', content: [{ type: 'text', text: 'Who is Sarah?' }] }],
+      input: [{ type: 'message', role: 'user', content: [{ type: 'text', text: 'Who is Sasha?' }] }],
     });
   });
 

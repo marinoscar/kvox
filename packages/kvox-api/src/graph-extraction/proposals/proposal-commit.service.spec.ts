@@ -21,9 +21,9 @@ function items(): Row[] {
   return [
     // Deliberately out of commit order: the commit must still go entities → relations → items → closings.
     { ...base, id: id(5), kind: 'closing', decision: 'accept', sortOrder: 0, payload: { relationId: OLD, relationType: 'WORKS_FOR', closeAt: '2026-03-01', precision: 'month', closedByRef: 'r1' } },
-    { ...base, id: id(4), kind: 'item', decision: 'accept', sortOrder: 1, payload: { ref: 'i1', kind: 'claim', title: 'Joined', statement: 'Sarah joined Kappa.', subject: { ref: 'e1' }, owner: null, counterparty: null, meeting: null, status: null, occurredAt: null, dueAt: null, sensitivity: null, statementHash: 'x', props: {}, ...temporalNone } },
+    { ...base, id: id(4), kind: 'item', decision: 'accept', sortOrder: 1, payload: { ref: 'i1', kind: 'claim', title: 'Joined', statement: 'Sasha joined Kappa.', subject: { ref: 'e1' }, owner: null, counterparty: null, meeting: null, status: null, occurredAt: null, dueAt: null, sensitivity: null, statementHash: 'x', props: {}, ...temporalNone } },
     { ...base, id: id(3), kind: 'relation', decision: 'accept', sortOrder: 2, payload: { ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { ref: 'e2' }, props: {}, validFrom: '2026-03-01', validTo: null, precision: 'month' } },
-    { ...base, id: id(1), kind: 'entity', decision: 'accept', sortOrder: 3, payload: { ref: 'e1', type: 'Person', label: 'Sarah Chen', aliases: ['Sarah'], props: {}, occurredAt: null } },
+    { ...base, id: id(1), kind: 'entity', decision: 'accept', sortOrder: 3, payload: { ref: 'e1', type: 'Person', label: 'Sasha Example', aliases: ['Sasha'], props: {}, occurredAt: null } },
     { ...base, id: id(2), kind: 'entity', decision: 'accept', sortOrder: 4, payload: { ref: 'e2', type: 'Organization', label: 'KAPPA Inc', aliases: [], props: {}, occurredAt: null }, resolution: { ref: KAPPA, score: 0.95, source: 'alias', candidates: [], adjudication: null } },
     { ...base, id: id(6), kind: 'entity', decision: 'pending', sortOrder: 5, payload: { ref: 'e3', type: 'Project', label: 'Pilot' } },
   ];
@@ -97,7 +97,7 @@ describe('ProposalCommitService', () => {
     const outcome = await service.commitIn(tx as never, OWNER, P, schema);
 
     expect(calls).toEqual([
-      'entity:Sarah Chen',
+      'entity:Sasha Example',
       `evidence:entity:${KAPPA}`,
       'relation:WORKS_FOR',
       'item:claim',
@@ -183,7 +183,7 @@ describe('ProposalCommitService', () => {
 
   describe('a known relation (#444)', () => {
     const LIVE_ROLE = '0f000000-0000-4000-8000-000000000031';
-    const SARAH = '0f000000-0000-4000-8000-000000000032';
+    const SASHA = '0f000000-0000-4000-8000-000000000032';
     const known = (props: Row): Row[] => {
       const base = { origin: 'ai', editedPayload: null, resolution: null, mergeIntoId: null, distinctFrom: [], flags: ['known'], committedRefId: null };
       return [
@@ -196,7 +196,7 @@ describe('ProposalCommitService', () => {
           payload: {
             ref: 'r9',
             type: 'HAS_ROLE',
-            from: { entityId: SARAH },
+            from: { entityId: SASHA },
             to: { entityId: KAPPA },
             props,
             ...temporalNone,
@@ -205,7 +205,7 @@ describe('ProposalCommitService', () => {
         },
       ];
     };
-    const liveEntities = [{ id: KAPPA, type: 'Organization' }, { id: SARAH, type: 'Person' }];
+    const liveEntities = [{ id: KAPPA, type: 'Organization' }, { id: SASHA, type: 'Person' }];
 
     it('fills a prop the stored edge lacks, and logs exactly that fill', async () => {
       const { service, tx, write, calls } = setup(known({ title: 'VP', businessUnit: 'Consulting' }), { liveEntities });

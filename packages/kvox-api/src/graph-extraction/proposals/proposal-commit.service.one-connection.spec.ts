@@ -61,7 +61,7 @@ function onePool() {
         {
           id: ITEM, kind: 'entity', origin: 'ai', decision: 'accept', editedPayload: null, resolution: null, mergeIntoId: null,
           distinctFrom: [], flags: [], committedRefId: null, sortOrder: 0,
-          payload: { ref: 'e1', type: 'Person', label: 'Sarah Chen', aliases: [], props: {}, occurredAt: null },
+          payload: { ref: 'e1', type: 'Person', label: 'Sasha Example', aliases: [], props: {}, occurredAt: null },
         },
       ]),
       update: jest.fn(async () => ({})),

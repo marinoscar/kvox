@@ -13,9 +13,9 @@ import { mockGraphAiConfig } from '../graph/graphData.js';
 import {
   CONV_ATLAS_ID,
   CONV_EMPTY_ID,
-  CONV_JOE_ID,
+  CONV_JONTY_ID,
   EV_SEGMENT,
-  JOE_ID,
+  JONTY_ID,
   TRANSCRIPT_ID,
   askMessage,
   askMock,
@@ -133,7 +133,7 @@ describe('AskPage — a new conversation', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Ask' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Ask about your meetings' })).toBeInTheDocument();
     const suggestions = screen.getByRole('list', { name: 'Suggested questions' });
-    expect(await within(suggestions).findByRole('button', { name: "What's the latest on Joe Rivera?" })).toBeInTheDocument();
+    expect(await within(suggestions).findByRole('button', { name: "What's the latest on Jonty Placeholder?" })).toBeInTheDocument();
     expect(within(suggestions).getByRole('button', { name: 'What did I commit to this week?' })).toBeInTheDocument();
     expect(within(suggestions).getByRole('button', { name: 'Which decisions changed last month?' })).toBeInTheDocument();
     expect(within(suggestions).getAllByRole('button')).toHaveLength(5);
@@ -144,18 +144,18 @@ describe('AskPage — a new conversation', () => {
   it('asks a suggested question: creates, posts, then replaces the URL — both messages on screen at once', async () => {
     const user = userEvent.setup({ delay: null });
     renderAsk('/ask');
-    await user.click(await screen.findByRole('button', { name: "What's the latest on Joe Rivera?" }));
+    await user.click(await screen.findByRole('button', { name: "What's the latest on Jonty Placeholder?" }));
 
     await waitFor(() => expect(location()).toMatch(/^\/ask\/[0-9a-f-]{36}$/));
     const created = askMock.requests.find((r) => r.method === 'POST' && r.path === '/ask/conversations');
     expect(created?.body).toEqual({});
-    expect(postBodies()).toEqual([{ content: "What's the latest on Joe Rivera?" }]);
+    expect(postBodies()).toEqual([{ content: "What's the latest on Jonty Placeholder?" }]);
 
     const thread = await screen.findByRole('region', { name: 'Conversation' });
-    expect(within(thread).getByText("What's the latest on Joe Rivera?")).toBeInTheDocument();
+    expect(within(thread).getByText("What's the latest on Jonty Placeholder?")).toBeInTheDocument();
     expect(within(thread).getByText('Thinking…')).toBeInTheDocument();
     await waitFor(() => expect(streams).toHaveLength(1));
-    expect(screen.getByRole('heading', { level: 1, name: "What's the latest on Joe Rivera?" })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: "What's the latest on Jonty Placeholder?" })).toBeInTheDocument();
   });
 
   it('keeps the typed text on a refused first question, and reuses the conversation it created', async () => {
@@ -190,7 +190,7 @@ describe('AskPage — a completed, cited answer', () => {
     // Evidence → a numbered EvidenceChip (title resolved through /graph/evidence).
     expect(await within(thread).findByRole('button', { name: 'Source 1: Q3 planning call' })).toBeInTheDocument();
     // Entity → its page.
-    expect(within(thread).getByRole('link', { name: 'Open Joe Rivera' })).toHaveAttribute('href', `/graph/entities/${JOE_ID}`);
+    expect(within(thread).getByRole('link', { name: 'Open Jonty Placeholder' })).toHaveAttribute('href', `/graph/entities/${JONTY_ID}`);
     // Document → the transcript at the cited moment.
     expect(within(thread).getByRole('link', { name: 'Play Q3 planning call from 12:34' })).toHaveAttribute(
       'href',
@@ -220,7 +220,7 @@ describe('AskPage — a completed, cited answer', () => {
   it('opens the entity page from an entity chip', async () => {
     const user = userEvent.setup({ delay: null });
     renderAsk(`/ask/${CONV_ATLAS_ID}`);
-    await user.click(await screen.findByRole('link', { name: 'Open Joe Rivera' }));
+    await user.click(await screen.findByRole('link', { name: 'Open Jonty Placeholder' }));
     expect(await screen.findByText('Entity page')).toBeInTheDocument();
   });
 
@@ -264,43 +264,43 @@ describe('AskPage — asking and streaming', () => {
   it('sends with Enter, shows steps while working, streams text and ends with chips', async () => {
     const user = userEvent.setup({ delay: null });
     renderAsk(`/ask/${CONV_EMPTY_ID}`);
-    await user.type(await enabledComposer(), 'What did Joe say?{Enter}');
+    await user.type(await enabledComposer(), 'What did Jonty say?{Enter}');
 
     const thread = screen.getByRole('region', { name: 'Conversation' });
-    expect(await within(thread).findByText('What did Joe say?')).toBeInTheDocument();
+    expect(await within(thread).findByText('What did Jonty say?')).toBeInTheDocument();
     expect(composer()).toHaveValue('');
-    expect(postBodies()).toEqual([{ content: 'What did Joe say?' }]);
+    expect(postBodies()).toEqual([{ content: 'What did Jonty say?' }]);
     await waitFor(() => expect(streams).toHaveLength(1));
     // Send is disabled while the turn runs.
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
 
     const { handlers } = streams[0];
-    act(() => handlers.onStep({ ...askToolCall(0, { summary: 'Looked up Joe Rivera (Person)', resultCount: 1 }), arguments: {}, durationMs: 0 }));
-    const stepsToggle = within(thread).getByRole('button', { name: /Looked up Joe Rivera \(Person\)/ });
+    act(() => handlers.onStep({ ...askToolCall(0, { summary: 'Looked up Jonty Placeholder (Person)', resultCount: 1 }), arguments: {}, durationMs: 0 }));
+    const stepsToggle = within(thread).getByRole('button', { name: /Looked up Jonty Placeholder \(Person\)/ });
     expect(stepsToggle).toHaveAttribute('aria-expanded', 'true');
     expect(within(thread).getAllByText('Looking things up…').length).toBeGreaterThan(0);
 
-    act(() => handlers.onContent('Joe committed to the launch [^ev'));
+    act(() => handlers.onContent('Jonty committed to the launch [^ev'));
     const answer = within(thread).getAllByTestId('ask-answer').at(-1)!;
     expect(answer).toHaveAttribute('aria-busy', 'true');
-    expect(answer).toHaveTextContent('Joe committed to the launch');
+    expect(answer).toHaveTextContent('Jonty committed to the launch');
     expect(answer).not.toHaveTextContent('[^');
     // Once the answer starts, the steps fold away.
-    expect(within(thread).getByRole('button', { name: /Looked up Joe Rivera/ })).toHaveAttribute('aria-expanded', 'false');
+    expect(within(thread).getByRole('button', { name: /Looked up Jonty Placeholder/ })).toHaveAttribute('aria-expanded', 'false');
 
     act(() => {
-      handlers.onContent('Joe committed to the launch [^ev1] [^ent1].');
+      handlers.onContent('Jonty committed to the launch [^ev1] [^ent1].');
       handlers.onDone({
         citations: [
           { marker: 'ev1', kind: 'evidence', id: EV_SEGMENT, via: null, valid: true, label: null, documentKind: null, startMs: null },
-          { marker: 'ent1', kind: 'entity', id: JOE_ID, via: null, valid: true, label: 'Joe Rivera', documentKind: null, startMs: null },
+          { marker: 'ent1', kind: 'entity', id: JONTY_ID, via: null, valid: true, label: 'Jonty Placeholder', documentKind: null, startMs: null },
         ],
         finishReason: 'stop',
       });
     });
     expect(answer).toHaveAttribute('aria-busy', 'false');
     expect(await within(answer).findByRole('button', { name: 'Source 1: Q3 planning call' })).toBeInTheDocument();
-    expect(within(answer).getByRole('link', { name: 'Open Joe Rivera' })).toBeInTheDocument();
+    expect(within(answer).getByRole('link', { name: 'Open Jonty Placeholder' })).toBeInTheDocument();
   });
 
   it('does not send on Shift+Enter, and counts characters from 3,500', async () => {
@@ -430,11 +430,11 @@ describe('AskPage — the conversation list', () => {
   it('lists conversations with scope chips, highlights the open one, and pages', async () => {
     askMock.pageSize = 2;
     const user = userEvent.setup({ delay: null });
-    renderAsk(`/ask/${CONV_JOE_ID}`);
+    renderAsk(`/ask/${CONV_JONTY_ID}`);
     const list = await conversationList();
-    const current = await within(list).findByRole('link', { name: /What did Joe promise us\?/ });
+    const current = await within(list).findByRole('link', { name: /What did Jonty promise us\?/ });
     expect(current).toHaveAttribute('aria-current', 'page');
-    expect(within(current).getByText('Joe Rivera')).toBeInTheDocument();
+    expect(within(current).getByText('Jonty Placeholder')).toBeInTheDocument();
     expect(within(list).getAllByRole('link')).toHaveLength(2);
 
     await user.click(within(list).getByRole('button', { name: 'Load more' }));
@@ -543,9 +543,9 @@ describe('AskPage — gates and states', () => {
 
     await user.click(screen.getByRole('button', { name: 'Conversations' }));
     const list = await screen.findByRole('navigation', { name: 'Conversations' });
-    const row = await within(list).findByRole('link', { name: /What did Joe promise us\?/ });
+    const row = await within(list).findByRole('link', { name: /What did Jonty promise us\?/ });
     await user.click(row);
-    await waitFor(() => expect(location()).toBe(`/ask/${CONV_JOE_ID}`));
+    await waitFor(() => expect(location()).toBe(`/ask/${CONV_JONTY_ID}`));
     await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Conversations' })).not.toBeInTheDocument());
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });

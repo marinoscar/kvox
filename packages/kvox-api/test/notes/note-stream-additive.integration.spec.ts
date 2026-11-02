@@ -35,7 +35,7 @@ const NOTE_ID = 'note-1';
 const CHUNKS = [
   `# Kestrel weekly\n\n${'Overview text. '.repeat(30)}`,
   `\n\n## Decisions\n\n${'We ship on Friday. '.repeat(30)}`,
-  `\n\n## Action items\n\n${'Ana to confirm the date. '.repeat(30)}`,
+  `\n\n## Action items\n\n${'Anders to confirm the date. '.repeat(30)}`,
 ];
 
 const FULL_TEXT = CHUNKS.join('');
@@ -60,7 +60,7 @@ function freshDb(): Db {
       status: 'pending',
       templateId: 'template-1',
       templateNameSnapshot: 'Meeting notes',
-      contextText: 'Attendees: Ana, Bo.',
+      contextText: 'Attendees: Anders, Bo.',
       sourceType: 'transcript',
       sourceTranscriptId: 'transcript-1',
       sourceNoteId: null,
@@ -208,7 +208,7 @@ function harness(db: Db): { handler: NoteGenerateHandler; prisma: Record<string,
     generations,
     {
       resolve: jest.fn().mockResolvedValue({
-        text: '**Ana** · 00:00\n\nWe should ship on Friday.',
+        text: '**Anders** · 00:00\n\nWe should ship on Friday.',
         describe: 'transcript transcript-1 at version 7',
         sourceVersion: 7,
       }),

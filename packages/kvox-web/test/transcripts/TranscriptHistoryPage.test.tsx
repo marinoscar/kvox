@@ -47,7 +47,7 @@ const mockRestore = vi.mocked(restoreTranscriptVersion);
 const mockGetTranscript = vi.mocked(getTranscript);
 
 const SPEAKERS: TranscriptSpeaker[] = [
-  { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
+  { id: 'sp1', label: 'A', displayName: 'Anders', colorIndex: 0, rev: 1 },
 ];
 
 const SEGMENTS: TranscriptSegment[] = [
@@ -74,7 +74,7 @@ function version(
     version: number,
     kind: 'edit',
     summary: 'Edited 1 segment',
-    author: { id: 'u1', name: 'Ana Ruiz', email: 'ana@example.com' },
+    author: { id: 'u1', name: 'Anders Stubbs', email: 'anders@example.com' },
     restoredFromVersion: null,
     hasSnapshot: false,
     opCount: 1,
@@ -138,11 +138,11 @@ beforeEach(() => {
       version(4, { createdAt: '2026-09-14T10:00:00.000Z' }),
       version(3, {
         createdAt: '2026-09-14T09:55:00.000Z',
-        summary: 'Merged Speaker 3 into Ana',
+        summary: 'Merged Speaker 3 into Anders',
       }),
       version(2, {
         createdAt: '2026-09-13T09:00:00.000Z',
-        author: { id: 'u2', name: 'Ben Olsen', email: null },
+        author: { id: 'u2', name: 'Bram Fixture', email: null },
       }),
       version(1, {
         kind: 'ai_original',
@@ -180,8 +180,8 @@ describe('TranscriptHistoryPage — the list', () => {
     // v4 and v3 are one sitting; v2 is another author's day; v1 stands alone.
     const sessions = await screen.findAllByRole('heading', { level: 2 });
     expect(sessions.map((heading) => heading.textContent)).toEqual([
-      'Ana Ruiz',
-      'Ben Olsen',
+      'Anders Stubbs',
+      'Bram Fixture',
       'The transcription service',
     ]);
   });
@@ -190,7 +190,7 @@ describe('TranscriptHistoryPage — the list', () => {
     renderPage();
 
     expect(
-      await screen.findByText('Edited 1 segment · Merged Speaker 3 into Ana'),
+      await screen.findByText('Edited 1 segment · Merged Speaker 3 into Anders'),
     ).toBeInTheDocument();
   });
 

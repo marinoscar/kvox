@@ -25,7 +25,7 @@ const CITATIONS: AskCitation[] = [
   citation({ marker: 'ev2', kind: 'evidence', id: 'evidence-b' }),
   // An item marker resolved to the SAME evidence row as ev1.
   citation({ marker: 'itm3', kind: 'evidence', id: 'evidence-a', via: { kind: 'item', id: 'item-3' } }),
-  citation({ marker: 'ent1', kind: 'entity', id: 'entity-joe', label: 'Joe Rivera' }),
+  citation({ marker: 'ent1', kind: 'entity', id: 'entity-jonty', label: 'Jonty Placeholder' }),
   citation({ marker: 'doc1', kind: 'document', id: 't-1', label: 'Sync', documentKind: 'transcript', startMs: 5000 }),
   citation({ marker: 'ev9', kind: 'evidence', id: null, valid: false }),
 ];
@@ -52,11 +52,11 @@ function flatten(tree: Node): Node[] {
 
 describe('remarkAskCitations — the tree transform', () => {
   it('maps each valid marker to a citation node carrying its kind, id and label', () => {
-    const out = flatten(transform(paragraph({ type: 'text', value: 'Joe [^ent1] said so [^ev1] in [^doc1].' })));
+    const out = flatten(transform(paragraph({ type: 'text', value: 'Jonty [^ent1] said so [^ev1] in [^doc1].' })));
     expect(out.map((n) => n.type)).toEqual(['text', 'askCitation', 'text', 'askCitation', 'text', 'askCitation', 'text']);
     expect(out[1].data).toEqual({
       hName: 'span',
-      hProperties: { dataAskCitation: 'entity', dataAskId: 'entity-joe', dataAskMarker: 'ent1', dataAskLabel: 'Joe Rivera' },
+      hProperties: { dataAskCitation: 'entity', dataAskId: 'entity-jonty', dataAskMarker: 'ent1', dataAskLabel: 'Jonty Placeholder' },
     });
     expect(out[3].data?.hProperties).toMatchObject({ dataAskCitation: 'evidence', dataAskId: 'evidence-a', dataAskNumber: 1 });
     expect(out[5].data?.hProperties).toMatchObject({
@@ -119,10 +119,10 @@ describe('remarkAskCitations — rendered through MarkdownView', () => {
   it('renders chips for valid markers, drops invalid ones, and leaves code spans alone', () => {
     render(
       <MarkdownView remarkPlugins={[[remarkAskCitations, { citations: CITATIONS }]]} components={components}>
-        {'Ships in October [^ev1] with **Joe** [^ent1]; cut [^ev9].\n\nLiteral: `[^ev1]`'}
+        {'Ships in October [^ev1] with **Jonty** [^ent1]; cut [^ev9].\n\nLiteral: `[^ev1]`'}
       </MarkdownView>,
     );
-    expect(screen.getAllByTestId('cite').map((el) => el.textContent)).toEqual(['evidence:1', 'entity:Joe Rivera']);
+    expect(screen.getAllByTestId('cite').map((el) => el.textContent)).toEqual(['evidence:1', 'entity:Jonty Placeholder']);
     expect(screen.queryByText(/\[\^ev9\]/)).not.toBeInTheDocument();
     expect(screen.getByText('[^ev1]', { selector: 'code' })).toBeInTheDocument();
   });

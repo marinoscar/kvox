@@ -6,7 +6,7 @@ const ID = '00000000-0000-4000-8000-00000000000a';
 const detail = {
   id: ID,
   type: 'Person',
-  label: 'Ana',
+  label: 'Anders',
   props: {},
   aliases: [],
   occurredAt: null,

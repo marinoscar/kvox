@@ -14,7 +14,7 @@ import {
   NO_ACTIVE_TEXT,
   NO_THEMES_TEXT,
 } from '../../src/graph/ui/components/explorer/start/ExplorerStartHere.js';
-import { ANA_ID, graphEntitySummaries, overviewFixture, overviewStates } from './graphData.js';
+import { ANDERS_ID, graphEntitySummaries, overviewFixture, overviewStates } from './graphData.js';
 import { graphReader } from './graphTestUsers.js';
 import { render } from './helpers.js';
 import { HttpResponse, http, server } from './msw-compat.js';
@@ -99,8 +99,8 @@ describe('ExplorerStartHere', () => {
     const user = userEvent.setup();
     const { onChooseEntity } = renderStart();
     const people = await screen.findByRole('region', { name: 'Person' });
-    await user.click(within(people).getByRole('button', { name: 'Ana Diaz' }));
-    expect(onChooseEntity).toHaveBeenCalledWith(ANA_ID);
+    await user.click(within(people).getByRole('button', { name: 'Anders Placeholder' }));
+    expect(onChooseEntity).toHaveBeenCalledWith(ANDERS_ID);
   });
 
   it('opens the palette from the search button', async () => {

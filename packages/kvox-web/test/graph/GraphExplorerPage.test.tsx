@@ -23,11 +23,11 @@ import {
 } from '../../src/graph/ui/pages/GraphExplorerPage.js';
 import {
   KAPPA_ID,
-  ANA_ID,
-  BEN_ID,
+  ANDERS_ID,
+  BRAM_ID,
   SIGMA_ID,
   OMEGA_ID,
-  JOE_ID,
+  JONTY_ID,
   expandFixture,
   gid,
   graphEntitySummaries,
@@ -165,7 +165,7 @@ function currentUrl(): URL {
   return new URL(screen.getByTestId('location').textContent ?? '/', 'http://x');
 }
 
-function renderExplorer(route = `/graph/explore?seed=${JOE_ID}`) {
+function renderExplorer(route = `/graph/explore?seed=${JONTY_ID}`) {
   return render(
     <>
       <Routes>
@@ -197,10 +197,10 @@ describe('GraphExplorerPage — seeding', () => {
   it('seeds from ?seed= and shows the slice with a node count', async () => {
     renderExplorer();
     const canvas = await canvasReady();
-    expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
-    expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toBeInTheDocument();
-    expect(bodies[0]).toEqual({ nodeIds: [JOE_ID], cap: 300 });
-    const count = expandFixture({ nodeIds: [JOE_ID], cap: 300 })!.nodes.length;
+    expect(within(canvas).getByRole('button', { name: 'Jonty Placeholder' })).toBeInTheDocument();
+    expect(within(canvas).getByRole('button', { name: 'Anders Placeholder' })).toBeInTheDocument();
+    expect(bodies[0]).toEqual({ nodeIds: [JONTY_ID], cap: 300 });
+    const count = expandFixture({ nodeIds: [JONTY_ID], cap: 300 })!.nodes.length;
     expect(screen.getByLabelText(`${count} of 300 nodes`)).toHaveTextContent(`${count} / 300`);
     expect(
       screen.getByRole('application', { name: `Graph explorer, ${count} nodes. Press L for list view.` }),
@@ -249,9 +249,9 @@ describe('GraphExplorerPage — seeding', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
 
     const active = await screen.findByRole('region', { name: 'Person' });
-    await user.click(within(active).getByRole('button', { name: 'Ana Diaz' }));
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(ANA_ID));
-    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ANA_ID]));
+    await user.click(within(active).getByRole('button', { name: 'Anders Placeholder' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(ANDERS_ID));
+    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ANDERS_ID]));
   });
 
   it('asks the API for the most-mentioned people of the last 30 days', async () => {
@@ -314,7 +314,7 @@ describe('GraphExplorerPage — seeding', () => {
     await user.click(screen.getByRole('button', { name: 'Start here' }));
     expect(await screen.findByRole('heading', { name: 'Where do you want to start?' })).toBeInTheDocument();
     expect(currentUrl().searchParams.get('start')).toBe('1');
-    expect(currentUrl().searchParams.get('seed')).toBe(JOE_ID);
+    expect(currentUrl().searchParams.get('seed')).toBe(JONTY_ID);
     expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();
   });
 
@@ -324,22 +324,22 @@ describe('GraphExplorerPage — seeding', () => {
       return HttpResponse.json({ data: expandFixture(body) });
     });
     setExplorerHandoff({
-      seedIds: [JOE_ID, BEN_ID],
+      seedIds: [JONTY_ID, BRAM_ID],
       title: 'Engineering cluster',
       nodes: [
-        { id: JOE_ID, label: 'Joe Rivera', type: 'Person', x: 10, y: 10, degree: 6 },
-        { id: BEN_ID, label: 'Ben Okafor', type: 'Person', x: -10, y: 5, degree: 2 },
+        { id: JONTY_ID, label: 'Jonty Placeholder', type: 'Person', x: 10, y: 10, degree: 6 },
+        { id: BRAM_ID, label: 'Bram Example', type: 'Person', x: -10, y: 5, degree: 2 },
       ],
     });
     renderExplorer('/graph/explore?cluster=c-7');
 
     const canvas = await screen.findByTestId('fake-canvas');
-    expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(within(canvas).getByRole('button', { name: 'Jonty Placeholder' })).toBeInTheDocument();
     expect(within(canvas).queryByRole('button', { name: 'Org Kappa' })).not.toBeInTheDocument();
     expect(screen.getByText('Engineering cluster')).toBeInTheDocument();
 
     await within(canvas).findByRole('button', { name: 'Org Kappa' });
-    expect(bodies).toEqual([{ nodeIds: [JOE_ID, BEN_ID], cap: 300 }]);
+    expect(bodies).toEqual([{ nodeIds: [JONTY_ID, BRAM_ID], cap: 300 }]);
   });
 
   it('falls back to Start here with a hint when ?cluster= has no hand-off (a reload)', async () => {
@@ -420,7 +420,7 @@ describe('GraphExplorerPage — the full view (#768)', () => {
     const canvas = await canvasReady();
     await user.click(await waitFor(() => chip('Organizations (3)')));
     await waitFor(() => expect(currentUrl().searchParams.get('types')).toBe('Organization'));
-    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument());
+    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Jonty Placeholder' })).not.toBeInTheDocument());
     expect(within(canvas).getByRole('button', { name: 'Org Sigma' })).toBeInTheDocument();
     expect(overviewRequests.at(-1)!.searchParams.get('types')).toBe('Organization');
     // Counts are not type-filtered.
@@ -444,7 +444,7 @@ describe('GraphExplorerPage — the full view (#768)', () => {
     expect(overviewRequests.at(-1)!.searchParams.get('edges')).toBe('true');
     // Only what has evidence in the window stays: filtered, not dimmed.
     await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Org Sigma' })).not.toBeInTheDocument());
-    expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(within(canvas).getByRole('button', { name: 'Jonty Placeholder' })).toBeInTheDocument();
     expect(canvas.getAttribute('data-dimmed')).toBe('');
     // The counts follow the window.
     await waitFor(() => expect(chip('People (2)')).toBeInTheDocument());
@@ -466,7 +466,7 @@ describe('GraphExplorerPage — the full view (#768)', () => {
     await user.click(screen.getByRole('button', { name: 'Full graph' }));
     await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBeNull());
     canvas = await screen.findByTestId('fake-canvas');
-    expect(await within(canvas).findByRole('button', { name: 'Lee Park' })).toBeInTheDocument();
+    expect(await within(canvas).findByRole('button', { name: 'Linnea Placeholder' })).toBeInTheDocument();
     expect(canvas).toHaveAttribute('data-layout', 'static');
     expect(screen.queryByRole('button', { name: 'Full graph' })).not.toBeInTheDocument();
   });
@@ -481,7 +481,7 @@ describe('GraphExplorerPage — the full view (#768)', () => {
 
   it('keeps the filters when it goes back to the full graph', async () => {
     const user = userEvent.setup();
-    renderExplorer(`/graph/explore?seed=${JOE_ID}&types=Person,Organization`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}&types=Person,Organization`);
     await screen.findByTestId('fake-canvas');
     await user.click(await screen.findByRole('button', { name: 'Full graph' }));
     await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBeNull());
@@ -558,12 +558,12 @@ describe('GraphExplorerPage — selection and the inspector', () => {
 
     await user.click(within(panel).getByRole('button', { name: 'Expand' }));
     await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([KAPPA_ID]));
-    expect(await within(canvas).findByRole('button', { name: 'Dana Li' })).toBeInTheDocument();
+    expect(await within(canvas).findByRole('button', { name: 'Darcy Placeholder' })).toBeInTheDocument();
 
     await user.click(within(panel).getByRole('button', { name: 'Focus' }));
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(`${JOE_ID},${KAPPA_ID}`));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(`${JONTY_ID},${KAPPA_ID}`));
     // Writing the new seed list to the URL does not reload the graph.
-    expect(within(canvas).getByRole('button', { name: 'Dana Li' })).toBeInTheDocument();
+    expect(within(canvas).getByRole('button', { name: 'Darcy Placeholder' })).toBeInTheDocument();
     // A seed can no longer be hidden.
     expect(within(panel).queryByRole('button', { name: 'Hide' })).not.toBeInTheDocument();
 
@@ -576,18 +576,18 @@ describe('GraphExplorerPage — selection and the inspector', () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
-    const panel = await screen.findByRole('group', { name: 'Ana Diaz' });
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
+    const panel = await screen.findByRole('group', { name: 'Anders Placeholder' });
     await user.click(within(panel).getByRole('button', { name: 'Hide' }));
-    expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Ana Diaz' })).not.toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'Anders Placeholder' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Anders Placeholder' })).not.toBeInTheDocument();
   });
 
   it('expands on double-click', async () => {
     renderExplorer();
     const canvas = await canvasReady();
-    fireEvent.doubleClick(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
-    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ANA_ID]));
+    fireEvent.doubleClick(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
+    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ANDERS_ID]));
   });
 
   it('shows an edge with its validity and confidence, and opens on its Evidence tab', async () => {
@@ -596,15 +596,15 @@ describe('GraphExplorerPage — selection and the inspector', () => {
     const canvas = await canvasReady();
     await user.click(within(canvas).getByRole('button', { name: `edge ${gid(411)}` }));
     const panel = await screen.findByRole('group', { name: 'Reports to' });
-    expect(within(panel).getByText('Joe Rivera → Ana Diaz')).toBeInTheDocument();
+    expect(within(panel).getByText('Jonty Placeholder → Anders Placeholder')).toBeInTheDocument();
     expect(within(panel).getByText('Since Sep 2026')).toBeInTheDocument();
     expect(within(panel).getByText('Confidence 90%')).toBeInTheDocument();
     // An edge opens on Evidence (GIC-11); the entity page is one tab away.
     expect(within(panel).getByRole('tab', { name: 'Evidence', selected: true })).toBeInTheDocument();
     await user.click(within(panel).getByRole('tab', { name: 'Overview' }));
-    expect(within(panel).getByRole('link', { name: "Open Joe Rivera's page" })).toHaveAttribute(
+    expect(within(panel).getByRole('link', { name: "Open Jonty Placeholder's page" })).toHaveAttribute(
       'href',
-      `/graph/entities/${JOE_ID}`,
+      `/graph/entities/${JONTY_ID}`,
     );
   });
 
@@ -650,14 +650,14 @@ describe('GraphExplorerPage — selection and the inspector', () => {
 
 describe('GraphExplorerPage — the 300-node cap', () => {
   it('warns, names the cap, and disables Expand', async () => {
-    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) }));
+    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JONTY_ID, 400) }));
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
-    await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    await within(canvas).findByRole('button', { name: 'Jonty Placeholder' });
 
     // An open shows the best 30 neighbours and one "+N more" stub, not the cap's worth;
-    // the stub is not a node, so the count is Joe plus 30 and there is no warning yet.
+    // the stub is not a node, so the count is Jonty plus 30 and there is no warning yet.
     expect(await screen.findByLabelText('31 of 300 nodes')).toBeInTheDocument();
     expect(screen.queryByText(CAP_WARNING_TEXT)).not.toBeInTheDocument();
 
@@ -671,8 +671,8 @@ describe('GraphExplorerPage — the 300-node cap', () => {
     expect(await screen.findByText(CAP_WARNING_TEXT)).toBeInTheDocument();
     expect(screen.getByLabelText('300 of 300 nodes')).toBeInTheDocument();
 
-    await user.click(within(canvas).getByRole('button', { name: 'Joe Rivera' }));
-    const panel = await screen.findByRole('group', { name: 'Joe Rivera' });
+    await user.click(within(canvas).getByRole('button', { name: 'Jonty Placeholder' }));
+    const panel = await screen.findByRole('group', { name: 'Jonty Placeholder' });
     expect(within(panel).getByRole('button', { name: 'Expand again' })).toBeDisabled();
 
     // Dismissible.
@@ -703,8 +703,8 @@ describe('GraphExplorerPage — filters and time', () => {
     expect(currentUrl().searchParams.get('types')).toBe('Organization');
     expect(typeChip('Organizations', true)).toBeInTheDocument();
     // The Person seed is filtered like any node; KAPPA, fetched from it, stays.
-    expect(within(canvas).queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument();
-    expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'Jonty Placeholder' })).not.toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'Anders Placeholder' })).not.toBeInTheDocument();
     expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toBeInTheDocument();
 
     await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
@@ -715,9 +715,9 @@ describe('GraphExplorerPage — filters and time', () => {
     // Deselecting the last chip means "all" again: the parameter goes and the seed comes back.
     await user.click(typeChip('Organizations', true));
     await waitFor(() => expect(currentUrl().searchParams.get('types')).toBeNull());
-    expect(await within(canvas).findByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(await within(canvas).findByRole('button', { name: 'Jonty Placeholder' })).toBeInTheDocument();
     const last = bodies[bodies.length - 1];
-    expect(last.nodeIds).toContain(JOE_ID);
+    expect(last.nodeIds).toContain(JONTY_ID);
     expect(last.types).toBeUndefined();
   });
 
@@ -748,30 +748,30 @@ describe('GraphExplorerPage — filters and time', () => {
 
   it('Products only with a Person seed: the canvas is empty and says so, and Clear filters brings it back', async () => {
     const user = userEvent.setup();
-    renderExplorer(`/graph/explore?seed=${JOE_ID}&types=Product`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}&types=Product`);
     expect(await screen.findByText('No Products in your graph yet')).toBeInTheDocument();
     expect(bodies[0].types).toEqual(['Product']);
     // Nothing on the canvas — the Person seed included — and no spinner.
     expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Jonty Placeholder' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Loading the graph')).not.toBeInTheDocument();
     expect(typeChip('Products', true)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Clear filters' }));
     await waitFor(() => expect(currentUrl().searchParams.get('types')).toBeNull());
     const canvas = await screen.findByTestId('fake-canvas');
-    expect(await within(canvas).findByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(await within(canvas).findByRole('button', { name: 'Jonty Placeholder' })).toBeInTheDocument();
     expect(screen.queryByText('No Products in your graph yet')).not.toBeInTheDocument();
   });
 
   it('several selected types that match nothing read "Nothing matches these filters"', async () => {
-    renderExplorer(`/graph/explore?seed=${JOE_ID}&types=Product,Topic`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}&types=Product,Topic`);
     expect(await screen.findByText('Nothing matches these filters')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
   });
 
   it('sends ?types= with the very first request', async () => {
-    renderExplorer(`/graph/explore?seed=${JOE_ID}&types=Person,Organization`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}&types=Person,Organization`);
     const canvas = await canvasReady();
     expect(bodies[0].types).toEqual(['Person', 'Organization']);
     expect(within(canvas).queryByRole('button', { name: 'Q3 planning' })).not.toBeInTheDocument();
@@ -786,7 +786,7 @@ describe('GraphExplorerPage — filters and time', () => {
     expect(currentUrl().searchParams.get('types')).toBe('Project,Product,Opportunity,commitment,decision,risk');
     expect(currentUrl().searchParams.get('relTypes')).toBeNull();
     await waitFor(() =>
-      expect(within(canvas).queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument(),
+      expect(within(canvas).queryByRole('button', { name: 'Jonty Placeholder' })).not.toBeInTheDocument(),
     );
     expect(screen.getByRole('button', { name: 'Relations' })).toBeInTheDocument();
 
@@ -811,16 +811,16 @@ describe('GraphExplorerPage — filters and time', () => {
     expect(bodies[1].relationTypes).toContain('WORKS_FOR');
   });
 
-  it('?asOf= refetches the graph as of that date — the manager was Ben, not Ana', async () => {
-    renderExplorer(`/graph/explore?seed=${JOE_ID}&asOf=2026-06-01`);
+  it('?asOf= refetches the graph as of that date — the manager was Bram, not Anders', async () => {
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}&asOf=2026-06-01`);
     const canvas = await screen.findByTestId('fake-canvas');
-    await within(canvas).findByRole('button', { name: 'Ben Okafor' });
-    expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument();
+    await within(canvas).findByRole('button', { name: 'Bram Example' });
+    expect(within(canvas).queryByRole('button', { name: 'Anders Placeholder' })).not.toBeInTheDocument();
     expect(bodies[0].as_of).toBe('2026-06-01');
   });
 
   it('has ONE time control, in the list view too: no as-of slider and no time bar (#768)', async () => {
-    renderExplorer(`/graph/explore?seed=${JOE_ID}&view=list`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}&view=list`);
     expect(await screen.findByRole('button', { name: 'Time: All time' })).toBeInTheDocument();
     expect(screen.queryByRole('slider', { name: 'Show the graph as of' })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Time bar' })).not.toBeInTheDocument();
@@ -843,22 +843,22 @@ describe('GraphExplorerPage — filters and time', () => {
       );
 
     it('?from=&to= shows the graph as of the range end and FILTERS out what has no evidence in it (the seed stays)', async () => {
-      server.use(activity({ [JOE_ID]: [{ start: '2026-03-01', count: 2 }], [ANA_ID]: [{ start: '2026-01-01', count: 1 }] }));
-      renderExplorer(`/graph/explore?seed=${JOE_ID}&from=2026-03-01&to=2026-04-01`);
+      server.use(activity({ [JONTY_ID]: [{ start: '2026-03-01', count: 2 }], [ANDERS_ID]: [{ start: '2026-01-01', count: 1 }] }));
+      renderExplorer(`/graph/explore?seed=${JONTY_ID}&from=2026-03-01&to=2026-04-01`);
       const canvas = await canvasReady().catch(() => screen.findByTestId('fake-canvas'));
       // The range end is the as_of of the expand request.
       expect(bodies[0].as_of).toBe('2026-04-01');
-      // Ana (January only) and Kappa (no evidence) leave the canvas; Joe is active, and the seed anyway.
+      // Anders (January only) and Kappa (no evidence) leave the canvas; Jonty is active, and the seed anyway.
       await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Org Kappa' })).not.toBeInTheDocument());
-      expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument();
-      expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
+      expect(within(canvas).queryByRole('button', { name: 'Anders Placeholder' })).not.toBeInTheDocument();
+      expect(within(canvas).getByRole('button', { name: 'Jonty Placeholder' })).toBeInTheDocument();
       // Filtered, never dimmed.
       expect(canvas.getAttribute('data-dimmed')).toBe('');
       expect(screen.getByRole('button', { name: /^Time: 1 Mar 2026 – 31 Mar 2026$/ })).toBeInTheDocument();
     });
 
     it('a preset writes ?from= and ?to= (ending tomorrow, so no as_of) and All time removes them', async () => {
-      server.use(activity({ [JOE_ID]: [{ start: '2026-03-01', count: 2 }] }));
+      server.use(activity({ [JONTY_ID]: [{ start: '2026-03-01', count: 2 }] }));
       const user = userEvent.setup();
       renderExplorer();
       await canvasReady();
@@ -893,7 +893,7 @@ describe('GraphExplorerPage — filters and time', () => {
     });
 
     it('ignores a hand-edited range that is not two ordered dates', async () => {
-      renderExplorer(`/graph/explore?seed=${JOE_ID}&from=2026-05-01&to=2026-01-01`);
+      renderExplorer(`/graph/explore?seed=${JONTY_ID}&from=2026-05-01&to=2026-01-01`);
       await canvasReady();
       expect(bodies[0].as_of).toBeUndefined();
       expect(screen.getByRole('button', { name: 'Time: All time' })).toBeInTheDocument();
@@ -904,10 +904,10 @@ describe('GraphExplorerPage — filters and time', () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
     await user.click(await screen.findByRole('button', { name: 'Hide' }));
     await user.click(screen.getByRole('button', { name: 'Reset' }));
-    await within(canvas).findByRole('button', { name: 'Ana Diaz' });
+    await within(canvas).findByRole('button', { name: 'Anders Placeholder' });
     expect(bodies).toHaveLength(2);
     await user.click(screen.getByRole('button', { name: 'Fit' }));
     expect(mocks.controls.fit).toHaveBeenCalled();
@@ -928,28 +928,28 @@ describe('GraphExplorerPage — keyboard and the list view', () => {
     expect(mocks.controls.zoomOut).toHaveBeenCalledTimes(1);
     expect(mocks.controls.fit).toHaveBeenCalledTimes(1);
 
-    // Joe has the most connections, so ArrowRight lands on him first.
+    // Jonty has the most connections, so ArrowRight lands on him first.
     fireEvent.keyDown(app, { key: 'ArrowRight' });
     const live = document.querySelector('[aria-live="polite"]')!;
-    expect(live.textContent).toMatch(/^Joe Rivera, Person, \d+ connections$/);
-    expect(screen.getByRole('group', { name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(live.textContent).toMatch(/^Jonty Placeholder, Person, \d+ connections$/);
+    expect(screen.getByRole('group', { name: 'Jonty Placeholder' })).toBeInTheDocument();
 
     fireEvent.keyDown(app, { key: 'ArrowLeft' });
-    expect(live.textContent).not.toMatch(/^Joe Rivera/);
+    expect(live.textContent).not.toMatch(/^Jonty Placeholder/);
     fireEvent.keyDown(app, { key: 'ArrowRight' });
-    expect(live.textContent).toMatch(/^Joe Rivera/);
+    expect(live.textContent).toMatch(/^Jonty Placeholder/);
 
     fireEvent.keyDown(app, { key: 'Enter' });
-    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([JOE_ID]));
+    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([JONTY_ID]));
     expect(bodies).toHaveLength(2);
 
     fireEvent.keyDown(app, { key: 'Escape' });
-    expect(screen.queryByRole('group', { name: 'Joe Rivera' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Jonty Placeholder' })).not.toBeInTheDocument();
 
     fireEvent.keyDown(app, { key: 'ArrowRight' });
     fireEvent.keyDown(app, { key: 'o' });
     expect(await screen.findByRole('heading', { name: 'Entity page' })).toBeInTheDocument();
-    expect(currentUrl().pathname).toBe(`/graph/entities/${JOE_ID}`);
+    expect(currentUrl().pathname).toBe(`/graph/entities/${JONTY_ID}`);
   });
 
   it('L switches to the list view, which has every action and no axe violations', async () => {
@@ -964,14 +964,14 @@ describe('GraphExplorerPage — keyboard and the list view', () => {
     expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();
     const list = screen.getByRole('region', { name: 'Graph as a list' });
     const people = within(list).getByRole('list', { name: /People|Person/ });
-    expect(within(people).getAllByRole('listitem')[0]).toHaveTextContent('Joe Rivera');
+    expect(within(people).getAllByRole('listitem')[0]).toHaveTextContent('Jonty Placeholder');
     expect(within(people).getAllByRole('listitem')[0]).toHaveTextContent('Starting point');
     expect(screen.getByRole('button', { name: 'List view', pressed: true })).toBeInTheDocument();
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
 
-    await user.click(within(list).getByRole('button', { name: 'Expand Ana Diaz' }));
-    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ANA_ID]));
+    await user.click(within(list).getByRole('button', { name: 'Expand Anders Placeholder' }));
+    await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ANDERS_ID]));
     await user.click(within(list).getByRole('button', { name: 'Hide Q3 planning' }));
     expect(within(list).queryByText('Q3 planning')).not.toBeInTheDocument();
     expect(within(list).getByRole('link', { name: "Open Org Kappa's page" })).toHaveAttribute(
@@ -985,13 +985,13 @@ describe('GraphExplorerPage — keyboard and the list view', () => {
   });
 
   it('opens straight into ?view=list', async () => {
-    renderExplorer(`/graph/explore?seed=${JOE_ID}&view=list`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}&view=list`);
     const list = await screen.findByRole('region', { name: 'Graph as a list' });
     expect(await within(list).findByText('Org Kappa')).toBeInTheDocument();
   });
 
   it('uses the static layout for ?layout=static', async () => {
-    renderExplorer(`/graph/explore?seed=${JOE_ID}&layout=static`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}&layout=static`);
     expect(await screen.findByTestId('fake-canvas')).toHaveAttribute('data-layout', 'static');
   });
 });
@@ -1006,7 +1006,7 @@ describe('GraphExplorerPage — layout menu (#668)', () => {
     // A 45-node hand-off opens in Force; a later one-seed ego view must open concentric again.
     useExpand((body) =>
       HttpResponse.json({
-        data: body.nodeIds.includes(ANA_ID)
+        data: body.nodeIds.includes(ANDERS_ID)
           ? expandFixture(body)
           : { seedIds: body.nodeIds, asOf: '2026-09-26T00:00:00.000Z', nodes: [], edges: [], truncated: false, cap: 300 },
       }),
@@ -1024,17 +1024,17 @@ describe('GraphExplorerPage — layout menu (#668)', () => {
     renderExplorer('/graph/explore?cluster=3');
     await waitFor(() => expect(screen.getByTestId('fake-canvas')).toHaveAttribute('data-layout', 'forceatlas'));
 
-    // Back to the whole graph (static), then focus on Ana: a small ego view, concentric this time.
+    // Back to the whole graph (static), then focus on Anders: a small ego view, concentric this time.
     await user.click(await screen.findByRole('button', { name: 'Full graph' }));
     await waitFor(() => expect(screen.getByTestId('fake-canvas')).toHaveAttribute('data-layout', 'static'));
-    await user.dblClick(await within(screen.getByTestId('fake-canvas')).findByRole('button', { name: 'Ana Diaz' }));
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(ANA_ID));
+    await user.dblClick(await within(screen.getByTestId('fake-canvas')).findByRole('button', { name: 'Anders Placeholder' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(ANDERS_ID));
     await waitFor(() => expect(screen.getByTestId('fake-canvas')).toHaveAttribute('data-layout', 'concentric'));
   });
 
   it('uses Force for ?layout=force and writes the choice from the menu to the URL', async () => {
     const user = userEvent.setup();
-    renderExplorer(`/graph/explore?seed=${JOE_ID}&layout=force`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}&layout=force`);
     expect(await screen.findByTestId('fake-canvas')).toHaveAttribute('data-layout', 'forceatlas');
 
     await user.click(screen.getByRole('button', { name: 'Layout' }));
@@ -1045,7 +1045,7 @@ describe('GraphExplorerPage — layout menu (#668)', () => {
 
   it('"Re-layout all" and "Unpin all" reach the canvas', async () => {
     const user = userEvent.setup();
-    renderExplorer(`/graph/explore?seed=${JOE_ID}&layout=force`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}&layout=force`);
     await screen.findByTestId('fake-canvas');
     mocks.controls.relayoutAll.mockClear();
 
@@ -1083,14 +1083,14 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     expect(document.querySelector('[aria-live="polite"]')!.textContent).toMatch(/Org Kappa.*Tap again/);
 
     // A different node moves the preview and still opens nothing.
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
-    expect(canvas).toHaveAttribute('data-preview', ANA_ID);
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
+    expect(canvas).toHaveAttribute('data-preview', ANDERS_ID);
     expect(screen.queryByRole('region', { name: 'Inspector' })).not.toBeInTheDocument();
 
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
     const sheet = await screen.findByRole('region', { name: 'Inspector' });
     expect(sheet).toHaveAttribute('data-snap', 'peek');
-    expect(within(sheet).getByRole('heading', { name: 'Ana Diaz' })).toBeInTheDocument();
+    expect(within(sheet).getByRole('heading', { name: 'Anders Placeholder' })).toBeInTheDocument();
     expect(canvas).toHaveAttribute('data-preview', '');
   });
 
@@ -1127,9 +1127,9 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     await user.click(screen.getByRole('button', { name: 'Select' }));
     expect(screen.getByRole('button', { name: 'Select', pressed: true })).toBeInTheDocument();
     await user.click(within(canvas).getByRole('button', { name: 'Org Kappa' }));
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
     expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'true');
-    expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toHaveAttribute('data-marked', 'true');
+    expect(within(canvas).getByRole('button', { name: 'Anders Placeholder' })).toHaveAttribute('data-marked', 'true');
     expect(canvas).toHaveAttribute('data-preview', '');
     expect(screen.getByText('2 selected')).toBeInTheDocument();
     // Two marked nodes open the inspector on the Selection view (GIC-11), not on either node.
@@ -1137,7 +1137,7 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     expect(within(inspector).getByRole('group', { name: 'Selection' })).toBeInTheDocument();
     expect(within(inspector).getByRole('heading', { name: '2 nodes selected' })).toBeInTheDocument();
 
-    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
     expect(screen.getByText('1 selected')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Inspector' })).not.toBeInTheDocument());
   });
@@ -1146,9 +1146,9 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
-    fireEvent.contextMenu(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    fireEvent.contextMenu(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
 
-    const menu = await screen.findByRole('menu', { name: 'Actions for Ana Diaz' });
+    const menu = await screen.findByRole('menu', { name: 'Actions for Anders Placeholder' });
     for (const name of ['Open details', 'Expand', 'Pin', 'Hide', 'Make seed']) {
       expect(within(menu).getByRole('menuitem', { name })).toBeInTheDocument();
     }
@@ -1157,19 +1157,19 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     expect(mocks.controls.togglePin).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
 
-    fireEvent.contextMenu(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    fireEvent.contextMenu(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
     expect(await screen.findByRole('menuitem', { name: 'Unpin' })).toBeInTheDocument();
     await user.click(screen.getByRole('menuitem', { name: 'Open details' }));
-    expect(await screen.findByRole('group', { name: 'Ana Diaz' })).toBeInTheDocument();
+    expect(await screen.findByRole('group', { name: 'Anders Placeholder' })).toBeInTheDocument();
   });
 
   it('the context menu hides a node', async () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
-    fireEvent.contextMenu(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    fireEvent.contextMenu(within(canvas).getByRole('button', { name: 'Anders Placeholder' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Hide' }));
-    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument());
+    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Anders Placeholder' })).not.toBeInTheDocument());
   });
 
   it('has no axe violations on a phone with the sheet open', async () => {
@@ -1197,11 +1197,11 @@ async function expandStubTimes(user: ReturnType<typeof userEvent.setup>, canvas:
 describe('GraphExplorerPage — responsive budgets (GIC-08)', () => {
   it('a coarse pointer caps the graph at 120 nodes, asks for 120 and names it in the CapWarning', async () => {
     mockTouchInput();
-    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) }));
+    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JONTY_ID, 400) }));
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
-    await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    await within(canvas).findByRole('button', { name: 'Jonty Placeholder' });
     // The DOI truncation reads the budget's cap (120), not a hardcoded 300.
     expect(await screen.findByLabelText('31 of 120 nodes')).toBeInTheDocument();
     expect(bodies[0]?.cap).toBe(120);
@@ -1215,32 +1215,32 @@ describe('GraphExplorerPage — responsive budgets (GIC-08)', () => {
 
   it('a compact window caps at 120 even with a mouse', async () => {
     act(() => setViewportWidth(390));
-    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) }));
+    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JONTY_ID, 400) }));
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
-    await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    await within(canvas).findByRole('button', { name: 'Jonty Placeholder' });
     expect(bodies[0]?.cap).toBe(120);
     await expandStubTimes(user, canvas, 4, 120);
     expect(await screen.findByText(/^Showing 120 nodes/)).toBeInTheDocument();
   });
 
   it('keeps 300 on a roomy window with a precise pointer', async () => {
-    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) }));
+    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JONTY_ID, 400) }));
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
-    await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    await within(canvas).findByRole('button', { name: 'Jonty Placeholder' });
     expect(await screen.findByLabelText('31 of 300 nodes')).toBeInTheDocument();
     expect(bodies[0]?.cap).toBe(300);
     expect(canvas).toHaveAttribute('data-pixel-ratio-cap', '');
   });
 
   it('offers the list as the default on a phone when the graph has over 120 nodes, and view=graph overrides it', async () => {
-    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 200) }));
+    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JONTY_ID, 200) }));
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
-    await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    await within(canvas).findByRole('button', { name: 'Jonty Placeholder' });
     // 31 nodes, then three stub expansions: 121 real nodes, one over the compact budget.
     await expandStubTimes(user, canvas, 3, 300);
 
@@ -1342,13 +1342,13 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     const canvas = await canvasReady();
     await user.keyboard('/');
     const input = await searchInput();
-    await user.type(input, 'ana');
-    const option = await screen.findByRole('option', { name: /Ana Diaz/ });
-    expect(within(screen.getByRole('group', { name: 'On canvas' })).getByRole('option', { name: /Ana Diaz/ })).toBe(option);
+    await user.type(input, 'anders');
+    const option = await screen.findByRole('option', { name: /Anders Placeholder/ });
+    expect(within(screen.getByRole('group', { name: 'On canvas' })).getByRole('option', { name: /Anders Placeholder/ })).toBe(option);
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(mocks.controls.focusNode).toHaveBeenCalledWith(ANA_ID));
+    await waitFor(() => expect(mocks.controls.focusNode).toHaveBeenCalledWith(ANDERS_ID));
     await waitFor(() =>
-      expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toHaveAttribute('data-selected', 'true'),
+      expect(within(canvas).getByRole('button', { name: 'Anders Placeholder' })).toHaveAttribute('data-selected', 'true'),
     );
   });
 
@@ -1361,7 +1361,7 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     const group = await screen.findByRole('group', { name: 'In your graph' });
     expect(within(group).getByRole('option', { name: /Org Sigma/ })).toBeInTheDocument();
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(`${JOE_ID},${SIGMA_ID}`));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(`${JONTY_ID},${SIGMA_ID}`));
     await waitFor(() => expect(screen.queryByRole('combobox', { name: PALETTE_LABEL })).not.toBeInTheDocument());
     await canvasReady();
 
@@ -1395,9 +1395,9 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     await user.type(await searchInput(), 'type:Organization a');
     const canvasGroup = await screen.findByRole('group', { name: 'On canvas' });
     expect(within(canvasGroup).getByRole('option', { name: /Org Kappa/ })).toBeInTheDocument();
-    expect(within(canvasGroup).queryByRole('option', { name: /Ana Diaz/ })).not.toBeInTheDocument();
+    expect(within(canvasGroup).queryByRole('option', { name: /Anders Placeholder/ })).not.toBeInTheDocument();
     const graphGroup = await screen.findByRole('group', { name: 'In your graph' });
-    expect(within(graphGroup).queryByRole('option', { name: /Ana Diaz/ })).not.toBeInTheDocument();
+    expect(within(graphGroup).queryByRole('option', { name: /Anders Placeholder/ })).not.toBeInTheDocument();
     expect(within(graphGroup).getByRole('option', { name: /Org Sigma/ })).toBeInTheDocument();
   });
 
@@ -1472,14 +1472,14 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
 });
 
 describe('GraphExplorerPage — minimap (GIC-09)', () => {
-  const big = () => useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) }));
+  const big = () => useExpand(() => HttpResponse.json({ data: manyNodesSlice(JONTY_ID, 400) }));
 
   it('is on by itself on an expanded window above 150 nodes, and is aria-hidden', async () => {
     big();
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
-    await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    await within(canvas).findByRole('button', { name: 'Jonty Placeholder' });
     // An open shows 31 nodes; each expansion of the "+N more" stub adds 30.
     await screen.findByLabelText('31 of 300 nodes');
     expect(screen.queryByTestId('explorer-minimap')).not.toBeInTheDocument();

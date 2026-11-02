@@ -8,7 +8,7 @@ import { NeighborsTool } from './neighbors.tool.js';
 // =============================================================================
 
 const KAPPA = uid(1);
-const SARAH = uid(2);
+const SASHA = uid(2);
 const COMMIT = uid(3);
 const FACT_PERSONAL = uid(4);
 const FACT_BUSINESS = uid(5);
@@ -30,16 +30,16 @@ const slice = {
   asOf: '2026-09-26T12:00:00.000Z',
   nodes: [
     node(KAPPA, 'entity', 'Organization', 'Kappa', 0),
-    node(SARAH, 'entity', 'Person', 'Sarah', 1),
+    node(SASHA, 'entity', 'Person', 'Sasha', 1),
     node(COMMIT, 'item', 'commitment', 'Send the contract', 1),
     node(FACT_PERSONAL, 'item', 'person_fact', 'Has two kids', 1),
     node(FACT_BUSINESS, 'item', 'person_fact', 'Speaks at conferences', 1),
   ],
   edges: [
-    { id: REL, type: 'WORKS_AT', source: SARAH, target: KAPPA, valid: { from: '2019-03-01T00:00:00.000Z', to: null, precision: 'month' }, confidence: null, virtual: false },
+    { id: REL, type: 'WORKS_AT', source: SASHA, target: KAPPA, valid: { from: '2019-03-01T00:00:00.000Z', to: null, precision: 'month' }, confidence: null, virtual: false },
     { id: `virt:${COMMIT}:OWES`, type: 'OWES', source: COMMIT, target: KAPPA, valid: null, confidence: null, virtual: true },
-    { id: `virt:${FACT_PERSONAL}:ABOUT`, type: 'ABOUT', source: FACT_PERSONAL, target: SARAH, valid: null, confidence: null, virtual: true },
-    { id: `virt:${FACT_BUSINESS}:ABOUT`, type: 'ABOUT', source: FACT_BUSINESS, target: SARAH, valid: { from: '2020-01-01T00:00:00.000Z', to: '2021-01-01T00:00:00.000Z', precision: 'day' }, confidence: null, virtual: true },
+    { id: `virt:${FACT_PERSONAL}:ABOUT`, type: 'ABOUT', source: FACT_PERSONAL, target: SASHA, valid: null, confidence: null, virtual: true },
+    { id: `virt:${FACT_BUSINESS}:ABOUT`, type: 'ABOUT', source: FACT_BUSINESS, target: SASHA, valid: { from: '2020-01-01T00:00:00.000Z', to: '2021-01-01T00:00:00.000Z', precision: 'day' }, confidence: null, virtual: true },
   ],
   truncated: true,
   cap: 25,
@@ -101,7 +101,7 @@ describe('NeighborsTool', () => {
       asOf: '2026-09-26',
       nodes: [
         { ref: 'ent1', kind: 'entity', type: 'Organization', label: 'Kappa', depth: 0 },
-        { ref: 'ent2', kind: 'entity', type: 'Person', label: 'Sarah', depth: 1 },
+        { ref: 'ent2', kind: 'entity', type: 'Person', label: 'Sasha', depth: 1 },
         { ref: 'itm1', kind: 'item', type: 'commitment', label: 'Send the contract', depth: 1 },
         { ref: 'itm2', kind: 'item', type: 'person_fact', label: 'Speaks at conferences', depth: 1 },
       ],
@@ -119,21 +119,21 @@ describe('NeighborsTool', () => {
   });
 
   it('drops personal-domain entities and relations (#383) without the opt-in, keeps them with it', async () => {
-    const MAYA = uid(20);
+    const MERCER = uid(20);
     const RUNNING = uid(21);
     const personalSlice = {
       ...slice,
-      seedIds: [SARAH],
+      seedIds: [SASHA],
       nodes: [
-        node(SARAH, 'entity', 'Person', 'Sarah', 0),
-        node(MAYA, 'entity', 'Person', 'Maya', 1),
+        node(SASHA, 'entity', 'Person', 'Sasha', 0),
+        node(MERCER, 'entity', 'Person', 'Mercer', 1),
         node(RUNNING, 'entity', 'Interest', 'Marathon running', 1),
         node(KAPPA, 'entity', 'Organization', 'Kappa', 1),
       ],
       edges: [
-        { id: uid(22), type: 'SPOUSE_OF', source: SARAH, target: MAYA, valid: null, confidence: null, virtual: false },
-        { id: uid(23), type: 'INTERESTED_IN', source: SARAH, target: RUNNING, valid: null, confidence: null, virtual: false },
-        { id: REL, type: 'WORKS_FOR', source: SARAH, target: KAPPA, valid: null, confidence: null, virtual: false },
+        { id: uid(22), type: 'SPOUSE_OF', source: SASHA, target: MERCER, valid: null, confidence: null, virtual: false },
+        { id: uid(23), type: 'INTERESTED_IN', source: SASHA, target: RUNNING, valid: null, confidence: null, virtual: false },
+        { id: REL, type: 'WORKS_FOR', source: SASHA, target: KAPPA, valid: null, confidence: null, virtual: false },
       ],
     };
     const neighborhood = { neighborhood: jest.fn(async () => personalSlice) };
@@ -141,16 +141,16 @@ describe('NeighborsTool', () => {
     const tool = new NeighborsTool(neighborhood as never, prisma as never);
 
     const ctx = makeCtx();
-    const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SARAH, 'Sarah') }));
+    const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SASHA, 'Sasha') }));
     const text = JSON.stringify(res.data);
     expect(text).not.toContain('Marathon running');
     expect(text).not.toContain('SPOUSE_OF');
     expect(text).not.toContain('INTERESTED_IN');
-    // Maya is a core Person: still a node, but the spouse edge that linked her is gone.
+    // Mercer is a core Person: still a node, but the spouse edge that linked her is gone.
     expect((res.data as { edges: Array<{ type: string }> }).edges.map((e) => e.type)).toEqual(['WORKS_FOR']);
 
     const allowed = makeCtx({ personalFactsAllowed: true });
-    const withOptIn = await tool.run(allowed, tool.input.parse({ entity: seedEntity(allowed, SARAH, 'Sarah') }));
+    const withOptIn = await tool.run(allowed, tool.input.parse({ entity: seedEntity(allowed, SASHA, 'Sasha') }));
     expect(JSON.stringify(withOptIn.data)).toContain('SPOUSE_OF');
     expect(JSON.stringify(withOptIn.data)).toContain('Marathon running');
   });

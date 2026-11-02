@@ -74,7 +74,7 @@ export const graphHandlers = [
             row.aliases.some((alias) => alias.toLowerCase().includes(q)),
         )
         .slice(0, limit);
-      // #367's re-link search fixtures (Tom Baker, Sarah Chen) answer here too,
+      // #367's re-link search fixtures (Tobias Dummyson, Sasha Example) answer here too,
       // so the proposal sheet and the entity pages share one list handler.
       const searchHits = mockEntitySearchResults
         .filter(

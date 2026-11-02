@@ -4,20 +4,20 @@ describe('buildEntityProfileText', () => {
   it('renders every line in the documented order', () => {
     expect(
       buildEntityProfileText(
-        { type: 'Person', label: 'Sarah Chen', aliases: ['Sarah Chen', 'S. Chen', 'sarah'] },
+        { type: 'Person', label: 'Sasha Example', aliases: ['Sasha Example', 'S. Example', 'sasha'] },
         {
           orgLabels: ['Org Lambda Robotics', 'org lambda robotics'],
           roleTitles: ['CTO'],
-          coMentioned: ['Joe', 'Pilot', 'Sarah Chen', 'Kappa', 'Bob', 'Q2 plan', 'Extra'],
+          coMentioned: ['Jonty', 'Pilot', 'Sasha Example', 'Kappa', 'Bob', 'Q2 plan', 'Extra'],
         },
       ),
     ).toBe(
       [
-        'Person: Sarah Chen',
-        'Also known as: S. Chen, sarah',
+        'Person: Sasha Example',
+        'Also known as: S. Example, sasha',
         'Organization: Org Lambda Robotics',
         'Role: CTO',
-        'Often mentioned with: Joe, Pilot, Kappa, Bob, Q2 plan',
+        'Often mentioned with: Jonty, Pilot, Kappa, Bob, Q2 plan',
       ].join('\n'),
     );
   });
@@ -30,8 +30,8 @@ describe('buildEntityProfileText', () => {
 describe('buildItemProfileText', () => {
   it('renders kind, title, statement and subject', () => {
     expect(
-      buildItemProfileText({ kind: 'commitment', title: 'Send the deck', statement: 'Sarah will send the deck.', subjectLabel: 'Sarah Chen' }),
-    ).toBe('commitment: Send the deck\nSarah will send the deck.\nAbout: Sarah Chen');
+      buildItemProfileText({ kind: 'commitment', title: 'Send the deck', statement: 'Sasha will send the deck.', subjectLabel: 'Sasha Example' }),
+    ).toBe('commitment: Send the deck\nSasha will send the deck.\nAbout: Sasha Example');
   });
 
   it('falls back to the statement for a missing title and drops a missing subject', () => {

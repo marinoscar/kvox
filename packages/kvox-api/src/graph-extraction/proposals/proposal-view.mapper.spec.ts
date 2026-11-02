@@ -18,12 +18,12 @@ import {
 } from './proposal-view.mapper.js';
 
 const schema = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
-const SARAH = '0f000000-0000-4000-8000-000000000001';
+const SASHA = '0f000000-0000-4000-8000-000000000001';
 
 function lookups(extra: Partial<ViewLookups> = {}): ViewLookups {
   return {
     schema,
-    entityLabels: new Map([[SARAH, 'Sarah Chen']]),
+    entityLabels: new Map([[SASHA, 'Sasha Example']]),
     segments: new Map(),
     noteVersions: new Map(),
     prechecked: new Set(),
@@ -94,11 +94,11 @@ describe('proposal view mapper', () => {
     it('relation: endpoints by ref and by entity id, the lower-cased relation label, the period', () => {
       const d = displayOf(
         'relation',
-        { type: 'WORKS_FOR', from: { entityId: SARAH }, to: { ref: 'e2' }, validFrom: '2019-01-01', validTo: null, precision: 'year' },
+        { type: 'WORKS_FOR', from: { entityId: SASHA }, to: { ref: 'e2' }, validFrom: '2019-01-01', validTo: null, precision: 'year' },
         refs,
         lookups(),
       );
-      expect(d).toEqual({ title: 'Sarah Chen → works for → Org Lambda Robotics', subtitle: 'Works for · since 2019' });
+      expect(d).toEqual({ title: 'Sasha Example → works for → Org Lambda Robotics', subtitle: 'Works for · since 2019' });
     });
 
     it('relation: a HAS_ROLE subtitle carries the role and, when stated, the business unit (#440)', () => {
@@ -106,7 +106,7 @@ describe('proposal view mapper', () => {
         'relation',
         {
           type: 'HAS_ROLE',
-          from: { entityId: SARAH },
+          from: { entityId: SASHA },
           to: { ref: 'e2' },
           props: { title: 'VP', businessUnit: 'Supply Chain' },
           validFrom: null,
@@ -122,11 +122,11 @@ describe('proposal view mapper', () => {
     it('commitment: owner and due date', () => {
       const d = displayOf(
         'item',
-        { kind: 'commitment', title: 'Send the deck', owner: { entityId: SARAH }, dueAt: '2026-03-10', precision: 'unknown' },
+        { kind: 'commitment', title: 'Send the deck', owner: { entityId: SASHA }, dueAt: '2026-03-10', precision: 'unknown' },
         refs,
         lookups(),
       );
-      expect(d).toEqual({ title: 'Send the deck', subtitle: 'Commitment · Sarah Chen · due Mar 10, 2026' });
+      expect(d).toEqual({ title: 'Send the deck', subtitle: 'Commitment · Sasha Example · due Mar 10, 2026' });
     });
 
     it("closing: #365's 'Closes: …' copy", () => {
@@ -134,19 +134,19 @@ describe('proposal view mapper', () => {
         'closing',
         {
           relationType: 'HAS_ROLE',
-          fromLabel: 'Sarah Chen',
+          fromLabel: 'Sasha Example',
           toLabel: 'Org Lambda Robotics',
           roleTitle: 'Director',
           previousValid: { from: '2019-01-01', to: null, precision: 'year' },
           closeAt: '2026-03-01',
           precision: 'month',
-          affectedCommitments: [{ itemId: SARAH, title: 'x', role: 'owner' }],
+          affectedCommitments: [{ itemId: SASHA, title: 'x', role: 'owner' }],
         },
         refs,
         lookups(),
       );
       expect(d).toEqual({
-        title: 'Closes: Sarah Chen has role Org Lambda Robotics, as Director, 2019 → Mar 2026',
+        title: 'Closes: Sasha Example has role Org Lambda Robotics, as Director, 2019 → Mar 2026',
         subtitle: 'Affects 1 open commitment',
       });
     });
@@ -156,7 +156,7 @@ describe('proposal view mapper', () => {
         'closing',
         {
           relationType: 'HAS_ROLE',
-          fromLabel: 'Joe',
+          fromLabel: 'Jonty',
           toLabel: 'Org Beta',
           roleTitle: 'VP',
           roleBusinessUnit: 'Supply Chain',
@@ -168,7 +168,7 @@ describe('proposal view mapper', () => {
         refs,
         lookups(),
       );
-      expect(d.title).toBe('Closes: Joe has role Org Beta, as VP, Supply Chain, 2019 → Mar 2026');
+      expect(d.title).toBe('Closes: Jonty has role Org Beta, as VP, Supply Chain, 2019 → Mar 2026');
     });
   });
 
@@ -191,8 +191,8 @@ describe('proposal view mapper', () => {
     const note = { ...base, noteId: 'n', noteVersion: 3 };
 
     it('segment: fresh at its rev, stale at another rev or once the segment is gone', () => {
-      const l = lookups({ segments: new Map([['s', { rev: 2, speakerName: 'Sarah Chen' }]]) });
-      expect(evidenceViewOf(seg, l)).toEqual(expect.objectContaining({ source: 'segment', stale: false, speakerName: 'Sarah Chen' }));
+      const l = lookups({ segments: new Map([['s', { rev: 2, speakerName: 'Sasha Example' }]]) });
+      expect(evidenceViewOf(seg, l)).toEqual(expect.objectContaining({ source: 'segment', stale: false, speakerName: 'Sasha Example' }));
       expect(evidenceViewOf({ ...seg, segmentRev: 1 }, l).stale).toBe(true);
       expect(evidenceViewOf({ ...seg, segmentId: null }, l)).toEqual(expect.objectContaining({ source: 'segment', stale: true }));
     });
@@ -213,9 +213,9 @@ describe('proposal view mapper', () => {
     });
 
     it('import (#387): cited to the file, never stale, carrying its object and IRI', () => {
-      const imported = { ...base, charStart: null, charEnd: null, quote: 'Imported from a.ttl', importObjectId: 'f1', sourceIri: 'https://s.example/joe' };
+      const imported = { ...base, charStart: null, charEnd: null, quote: 'Imported from a.ttl', importObjectId: 'f1', sourceIri: 'https://s.example/jonty' };
       expect(evidenceViewOf(imported, lookups({}))).toEqual(
-        expect.objectContaining({ source: 'import', stale: false, importObjectId: 'f1', sourceIri: 'https://s.example/joe', speakerName: null }),
+        expect.objectContaining({ source: 'import', stale: false, importObjectId: 'f1', sourceIri: 'https://s.example/jonty', speakerName: null }),
       );
       expect(evidenceViewOf(note, lookups({ noteVersions: new Map([['n', 3]]) }))).toEqual(
         expect.objectContaining({ importObjectId: null, sourceIri: null }),
@@ -227,7 +227,7 @@ describe('proposal view mapper', () => {
     const rows = [
       row({ id: 'r1', kind: 'relation', decision: 'accept', payload: { type: 'WORKS_FOR', from: { ref: 'e1' }, to: { ref: 'e2' } } }),
       row({ id: 'e2', decision: 'reject', payload: { ref: 'e2', type: 'Organization', label: 'Lambda' } }),
-      row({ id: 'e1', decision: 'edit', payload: { ref: 'e1', type: 'Person', label: 'Sara' }, editedPayload: { ref: 'e1', type: 'Person', label: 'Sarah' } }),
+      row({ id: 'e1', decision: 'edit', payload: { ref: 'e1', type: 'Person', label: 'Sasa' }, editedPayload: { ref: 'e1', type: 'Person', label: 'Sasha' } }),
       row({ id: 'c1', kind: 'closing', payload: {} }),
       row({ id: 'k1', kind: 'item', decision: 'merge_into', flags: ['known'], payload: { kind: 'claim', title: 'Known' } }),
     ];
@@ -240,9 +240,9 @@ describe('proposal view mapper', () => {
     });
 
     it('effective payload is the edit; ref labels come from it', () => {
-      expect(refLabelsOf(rows).get('e1')).toBe('Sarah');
+      expect(refLabelsOf(rows).get('e1')).toBe('Sasha');
       const view = itemViewOf(rows[2], [], refLabelsOf(rows), lookups({ prechecked: new Set(['e1']) }));
-      expect(view.effectivePayload.label).toBe('Sarah');
+      expect(view.effectivePayload.label).toBe('Sasha');
       expect(view.prechecked).toBe(true);
     });
 
@@ -255,12 +255,12 @@ describe('proposal view mapper', () => {
 
     it('resolution carries the label of its ref or merge target', () => {
       const view = itemViewOf(
-        row({ resolution: { ref: SARAH, score: 0.9, source: 'alias', candidates: [], adjudication: null }, payload: { ref: 'e9', type: 'Person', label: 'S' } }),
+        row({ resolution: { ref: SASHA, score: 0.9, source: 'alias', candidates: [], adjudication: null }, payload: { ref: 'e9', type: 'Person', label: 'S' } }),
         [],
         new Map(),
         lookups(),
       );
-      expect(view.resolution?.refLabel).toBe('Sarah Chen');
+      expect(view.resolution?.refLabel).toBe('Sasha Example');
     });
 
     describe('a known relation that adds props (#444)', () => {
@@ -273,7 +273,7 @@ describe('proposal view mapper', () => {
           payload: {
             ref: 'r1',
             type: 'HAS_ROLE',
-            from: { entityId: SARAH },
+            from: { entityId: SASHA },
             to: { entityId: KAPPA },
             props,
             validFrom: null,

@@ -28,7 +28,7 @@ function build(options: { entities: Array<{ id: string }>; outcomes: (m: Mention
   };
   const prisma = {
     kgEntity: {
-      findMany: jest.fn(async () => options.entities.map((e) => ({ type: 'Person', label: 'Sarah', embeddingHash: null, ...e }))),
+      findMany: jest.fn(async () => options.entities.map((e) => ({ type: 'Person', label: 'Sasha', embeddingHash: null, ...e }))),
       update: jest.fn(),
       updateMany: jest.fn(),
     },

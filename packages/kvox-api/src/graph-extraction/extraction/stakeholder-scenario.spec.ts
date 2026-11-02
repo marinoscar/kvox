@@ -5,7 +5,7 @@ import { validateExtraction, type ProposedRow, type ValidationResult } from './v
 
 // =============================================================================
 // The reference scenario of the Graph Insight Canvas epic (#661, story #665):
-// "Joe from Company A said he's skeptical about the Product X rollout; Company A
+// "Jonty from Company A said he's skeptical about the Product X rollout; Company A
 // is piloting Product X; the licence budget isn't approved."
 //
 // A STUBBED model answers (no provider call); the REAL prompt, output schema
@@ -19,13 +19,13 @@ import { validateExtraction, type ProposedRow, type ValidationResult } from './v
 const NOTE_BODY = [
   '# Product X rollout call',
   '',
-  "Joe from Company A said he's skeptical about the Product X rollout.",
+  "Jonty from Company A said he's skeptical about the Product X rollout.",
   'Company A is piloting Product X.',
   "The licence budget isn't approved.",
   'Product X is offered by Org Beta.',
   'The rollout concerns Product X and licensing cost.',
-  'Nadia from Company A joined for the last ten minutes and only took notes.',
-  'Ilse Brandvold is the executive sponsor and said she will not sign off the second wave.',
+  'Nell from Company A joined for the last ten minutes and only took notes.',
+  'Ilka Stubbs is the executive sponsor and said she will not sign off the second wave.',
   'Northgate Partners is the integration partner of Org Beta.',
 ].join('\n');
 
@@ -87,16 +87,16 @@ function referenceAnswer() {
   return {
     meeting: { topics: [] },
     entities: [
-      entity('e1', 'Person', 'Joe', 'Joe from Company A'),
-      entity('e2', 'Organization', 'Company A', 'Joe from Company A'),
+      entity('e1', 'Person', 'Jonty', 'Jonty from Company A'),
+      entity('e2', 'Organization', 'Company A', 'Jonty from Company A'),
       entity('e3', 'Organization', 'Org Beta', 'offered by Org Beta'),
       entity('e4', 'Product', 'Product X', 'piloting Product X'),
       entity('e5', 'Project', 'Product X rollout', 'skeptical about the Product X rollout'),
       entity('e6', 'Topic', 'licensing cost', 'licensing cost'),
     ],
     relations: [
-      relation('WORKS_FOR', 'e1', 'e2', 'Joe from Company A'),
-      relation('INVOLVED_IN', 'e1', 'e5', "Joe from Company A said he's skeptical about the Product X rollout", {
+      relation('WORKS_FOR', 'e1', 'e2', 'Jonty from Company A'),
+      relation('INVOLVED_IN', 'e1', 'e5', "Jonty from Company A said he's skeptical about the Product X rollout", {
         role: 'stakeholder',
         stance: 'skeptical',
       }),
@@ -143,19 +143,19 @@ function view(rows: ProposedRow[]) {
   });
 }
 
-describe('the Joe / Company A / Product X reference scenario (#665)', () => {
+describe('the Jonty / Company A / Product X reference scenario (#665)', () => {
   it('proposes exactly the expected rows from the stubbed model answer', () => {
     const result = ok(validateExtraction(referenceAnswer(), noteOnlyContext()));
     expect(result.stats.dropped).toEqual({ uncited: 0, invalid: 0, unknownType: 0, dangling: 0 });
     expect(view(result.rows).filter((v) => !v.startsWith('entity Meeting'))).toEqual([
-      'entity Person Joe',
+      'entity Person Jonty',
       'entity Organization Company A',
       'entity Organization Org Beta',
       'entity Product Product X',
       'entity Project Product X rollout',
       'entity Topic licensing cost',
-      'relation Joe WORKS_FOR Company A',
-      'relation Joe INVOLVED_IN Product X rollout {role=stakeholder,stance=skeptical}',
+      'relation Jonty WORKS_FOR Company A',
+      'relation Jonty INVOLVED_IN Product X rollout {role=stakeholder,stance=skeptical}',
       'relation Company A USES Product X {stage=piloting}',
       'relation Product X OFFERED_BY Org Beta',
       'relation Product X rollout CONCERNS Product X',
@@ -173,15 +173,15 @@ describe('the Joe / Company A / Product X reference scenario (#665)', () => {
 
   it('variant: a resistant sponsor keeps the sponsor role and the resistant stance', () => {
     const answer = referenceAnswer();
-    answer.entities.push(entity('e7', 'Person', 'Ilse Brandvold', 'Ilse Brandvold'));
+    answer.entities.push(entity('e7', 'Person', 'Ilka Stubbs', 'Ilka Stubbs'));
     answer.relations.push(
-      relation('INVOLVED_IN', 'e7', 'e5', 'Ilse Brandvold is the executive sponsor and said she will not sign off the second wave', {
+      relation('INVOLVED_IN', 'e7', 'e5', 'Ilka Stubbs is the executive sponsor and said she will not sign off the second wave', {
         role: 'sponsor',
         stance: 'resistant',
       }),
     );
     const rows = view(ok(validateExtraction(answer, noteOnlyContext())).rows);
-    expect(rows).toContain('relation Ilse Brandvold INVOLVED_IN Product X rollout {role=sponsor,stance=resistant}');
+    expect(rows).toContain('relation Ilka Stubbs INVOLVED_IN Product X rollout {role=sponsor,stance=resistant}');
   });
 
   it('variant: a vendor partner is a symmetric Organization pair, recorded once', () => {
@@ -195,20 +195,20 @@ describe('the Joe / Company A / Product X reference scenario (#665)', () => {
   describe('negative: no stance language, no stance', () => {
     it('a person who only attended is proposed without INVOLVED_IN or a stance when the model omits them', () => {
       const answer = referenceAnswer();
-      answer.entities.push(entity('e7', 'Person', 'Nadia', 'Nadia from Company A'));
-      answer.relations.push(relation('WORKS_FOR', 'e7', 'e2', 'Nadia from Company A'));
+      answer.entities.push(entity('e7', 'Person', 'Nell', 'Nell from Company A'));
+      answer.relations.push(relation('WORKS_FOR', 'e7', 'e2', 'Nell from Company A'));
       const rows = view(ok(validateExtraction(answer, noteOnlyContext())).rows);
-      expect(rows).toContain('entity Person Nadia');
-      expect(rows.filter((r) => r.includes('Nadia') && r.includes('INVOLVED_IN'))).toEqual([]);
-      expect(rows.filter((r) => r.includes('stance')).length).toBe(1); // Joe's only
+      expect(rows).toContain('entity Person Nell');
+      expect(rows.filter((r) => r.includes('Nell') && r.includes('INVOLVED_IN'))).toEqual([]);
+      expect(rows.filter((r) => r.includes('stance')).length).toBe(1); // Jonty's only
     });
 
     it('an INVOLVED_IN with no role is dropped: the relation needs a stated role', () => {
       const answer = referenceAnswer();
-      answer.entities.push(entity('e7', 'Person', 'Nadia', 'Nadia from Company A'));
-      answer.relations.push(relation('INVOLVED_IN', 'e7', 'e5', 'Nadia from Company A joined', { stance: 'neutral' }));
+      answer.entities.push(entity('e7', 'Person', 'Nell', 'Nell from Company A'));
+      answer.relations.push(relation('INVOLVED_IN', 'e7', 'e5', 'Nell from Company A joined', { stance: 'neutral' }));
       const result = ok(validateExtraction(answer, noteOnlyContext()));
-      expect(view(result.rows).some((r) => r.includes('Nadia') && r.includes('INVOLVED_IN'))).toBe(false);
+      expect(view(result.rows).some((r) => r.includes('Nell') && r.includes('INVOLVED_IN'))).toBe(false);
       expect(result.stats.dropped.invalid).toBeGreaterThanOrEqual(1);
     });
 
@@ -254,7 +254,7 @@ describe('the Joe / Company A / Product X reference scenario (#665)', () => {
       });
       const rows = view(result.rows);
       expect(rows.some((r) => r.includes(' OFFERED_BY '))).toBe(false);
-      expect(rows.some((r) => r.includes('Joe CONCERNS'))).toBe(false);
+      expect(rows.some((r) => r.includes('Jonty CONCERNS'))).toBe(false);
       expect(result.stats.dropped.invalid).toBe(2);
     });
 

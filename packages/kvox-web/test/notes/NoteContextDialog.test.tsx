@@ -50,7 +50,7 @@ function context(overrides: Partial<NoteGenerationContext> = {}): NoteGeneration
     sourceVersion: 7,
     sourceRedacted: false,
     systemPrompt: 'You write meeting notes.\nBe brief.',
-    userContent: 'Ana and Ben discussed the budget.',
+    userContent: 'Anders and Bram discussed the budget.',
     promptTokens: 500,
     completionTokens: 200,
     ...overrides,
@@ -106,7 +106,7 @@ describe('NoteContextDialog — the three tabs', () => {
     // `aria-labelledby` resolves to the SAME tab text as the `<pre>`'s own
     // `aria-label`, so a label lookup here would match both.
     expect(screen.getByRole('tabpanel')).toHaveTextContent(
-      'You write meeting notes. Be brief. --- Ana and Ben discussed the budget.',
+      'You write meeting notes. Be brief. --- Anders and Bram discussed the budget.',
     );
 
     await user.click(screen.getByRole('tab', { name: 'Instructions' }));
@@ -114,7 +114,7 @@ describe('NoteContextDialog — the three tabs', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Context & source' }));
     expect(screen.getByRole('tabpanel')).toHaveTextContent(
-      'Ana and Ben discussed the budget.',
+      'Anders and Bram discussed the budget.',
     );
   });
 });

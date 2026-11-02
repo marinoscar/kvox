@@ -8,7 +8,7 @@ import { ListCommitmentsTool } from './list-commitments.tool.js';
 // test/ask/ask-tools.db.spec.ts.
 // =============================================================================
 
-const SARAH = uid(1);
+const SASHA = uid(1);
 const KAPPA = uid(2);
 const C1 = uid(3);
 const C2 = uid(4);
@@ -27,7 +27,7 @@ function build(rows?: object[]) {
             status: 'open',
             dueAt: new Date('2026-10-01T00:00:00Z'),
             occurredAt: new Date('2026-09-10T00:00:00Z'),
-            ownerPerson: party(SARAH, 'Sarah'),
+            ownerPerson: party(SASHA, 'Sasha'),
             counterparty: party(KAPPA, 'Kappa'),
           },
           {
@@ -37,7 +37,7 @@ function build(rows?: object[]) {
             status: 'open',
             dueAt: null,
             occurredAt: null,
-            ownerPerson: party(uid(9), 'Old Sarah', { reviewStatus: 'merged', mergedIntoId: SARAH }),
+            ownerPerson: party(uid(9), 'Old Sasha', { reviewStatus: 'merged', mergedIntoId: SASHA }),
             counterparty: null,
           },
         ],
@@ -72,13 +72,13 @@ describe('ListCommitmentsTool', () => {
   });
 
   it.each([
-    ['owned_by', { ownerPersonId: SARAH }],
-    ['owed_to', { counterpartyId: SARAH }],
-    ['any', { OR: [{ ownerPersonId: SARAH }, { counterpartyId: SARAH }] }],
+    ['owned_by', { ownerPersonId: SASHA }],
+    ['owed_to', { counterpartyId: SASHA }],
+    ['any', { OR: [{ ownerPersonId: SASHA }, { counterpartyId: SASHA }] }],
   ])('direction %s', async (direction, clause) => {
     const { tool, prisma } = build();
     const ctx = makeCtx();
-    const h = seedEntity(ctx, SARAH, 'Sarah');
+    const h = seedEntity(ctx, SASHA, 'Sasha');
     await tool.run(ctx, tool.input.parse({ entity: h, direction, status: 'any', dueBefore: '2026-10-01', limit: 5 }));
     const where = (prisma.kgItem.findMany.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0].where;
     expect(where).toMatchObject(clause);
@@ -99,7 +99,7 @@ describe('ListCommitmentsTool', () => {
         statement: 'Send the signed contract',
         status: 'open',
         due: '2026-10-01',
-        owner: { ref: 'ent1', label: 'Sarah' },
+        owner: { ref: 'ent1', label: 'Sasha' },
         counterparty: { ref: 'ent2', label: 'Kappa' },
         madeOn: '2026-09-10',
         evidence: ['ev1', 'ev2'],

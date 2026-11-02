@@ -7,7 +7,7 @@ import 'vitest-axe/extend-expect';
 import { EntityConnectionsList, groupConnections } from '../../src/graph/ui/components/EntityConnectionsList.js';
 import type { GraphSlice } from '../../src/graph/headless/clients/graph.js';
 import { server } from './msw-compat.js';
-import { KAPPA_ID, JOE_ID, graphOntologyFixture, neighborhoodFixture } from './graphData.js';
+import { KAPPA_ID, JONTY_ID, graphOntologyFixture, neighborhoodFixture } from './graphData.js';
 import { render } from './helpers.js';
 
 /** #442: an edge's own props (HAS_ROLE's role and business unit) on its connection row. */
@@ -23,7 +23,7 @@ function withRole(props: Record<string, unknown>): GraphSlice {
       {
         id: '00000000-0000-4000-8000-000000000499',
         type: 'HAS_ROLE',
-        source: JOE_ID,
+        source: JONTY_ID,
         target: KAPPA_ID,
         valid: null,
         confidence: 0.9,
@@ -39,7 +39,7 @@ function useSlice(slice: GraphSlice) {
 }
 
 function renderList() {
-  return render(<EntityConnectionsList entityId={JOE_ID} entityLabel="Joe Rivera" ontology={graphOntologyFixture} />);
+  return render(<EntityConnectionsList entityId={JONTY_ID} entityLabel="Jonty Placeholder" ontology={graphOntologyFixture} />);
 }
 
 async function roleGroup() {
@@ -83,7 +83,7 @@ describe('EntityConnectionsList — relation props', () => {
   it('keeps two roles at one organization as two rows', () => {
     const slice = withRole({ title: 'Managing Director' });
     slice.edges.push({ ...slice.edges.at(-1)!, id: 'second-role', props: { title: 'Board member' } });
-    const group = groupConnections(slice, JOE_ID, 'Joe Rivera', graphOntologyFixture).find((g) => g.title === 'Has role')!;
+    const group = groupConnections(slice, JONTY_ID, 'Jonty Placeholder', graphOntologyFixture).find((g) => g.title === 'Has role')!;
     expect(group.entries.map((entry) => entry.props.map((p) => p.value).join(' · '))).toEqual([
       'Managing Director',
       'Board member',

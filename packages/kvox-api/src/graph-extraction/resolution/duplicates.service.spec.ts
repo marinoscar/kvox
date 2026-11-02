@@ -100,7 +100,7 @@ describe('DuplicatesService.list', () => {
 
   it('maps open resolution proposal items and merges them with a name pair', async () => {
     const { service } = harness({
-      entities: [ent(A, 'Person', 'Avery'), ent(B, 'Person', 'Avery Example'), ent(C, 'Person', 'Sara Chen'), ent(D, 'Person', 'S. Chen')],
+      entities: [ent(A, 'Person', 'Avery'), ent(B, 'Person', 'Avery Example'), ent(C, 'Person', 'Sasa Example'), ent(D, 'Person', 'S. Example')],
       items: [
         { id: 'i1', payload: { existingEntityId: B }, resolution: { ref: A, score: 0.9, candidates: [] }, mergeIntoId: null },
         { id: 'i2', payload: { existingEntityId: C }, resolution: { ref: null, score: null, candidates: [{ entityId: D, score: 0.66 }] }, mergeIntoId: null },
@@ -110,19 +110,19 @@ describe('DuplicatesService.list', () => {
     const { pairs } = await service.list(user, { limit: 50 });
     const avery = pairs.find((p) => p.a.id === A)!;
     expect(avery).toMatchObject({ source: 'resolution_proposal', proposalItemId: 'i1', reasons: ['name_contained', 'resolution_proposal'], score: 0.95 });
-    const sara = pairs.find((p) => p.a.id === C)!;
-    expect(sara).toMatchObject({ source: 'resolution_proposal', proposalItemId: 'i2', reasons: ['resolution_proposal'], score: 0.7 });
+    const sasa = pairs.find((p) => p.a.id === C)!;
+    expect(sasa).toMatchObject({ source: 'resolution_proposal', proposalItemId: 'i2', reasons: ['resolution_proposal'], score: 0.7 });
     expect(pairs).toHaveLength(2);
   });
 
   it('filters by type, sorts best first and applies the limit', async () => {
     const { service, tx } = harness({
-      entities: [ent(A, 'Person', 'Avery'), ent(B, 'Person', 'Avery Example'), ent(C, 'Person', 'Sara Chen'), ent(D, 'Person', 'Sara Chen Jr')],
+      entities: [ent(A, 'Person', 'Avery'), ent(B, 'Person', 'Avery Example'), ent(C, 'Person', 'Sasa Example'), ent(D, 'Person', 'Sasa Example Jr')],
       trigram: [{ a_id: C, b_id: D, sim: 0.98 }],
     });
     const out = await service.list(user, { type: 'Person', limit: 1 });
     expect(out.pairs).toHaveLength(1);
-    expect(out.pairs[0].a.label).toBe('Sara Chen');
+    expect(out.pairs[0].a.label).toBe('Sasa Example');
     expect(out.pairs[0].score).toBeGreaterThanOrEqual(0.8);
     expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
   });

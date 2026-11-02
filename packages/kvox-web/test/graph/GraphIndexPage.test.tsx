@@ -92,8 +92,8 @@ describe('GraphIndexPage', () => {
     const { container } = renderIndex();
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Entities' })).toBeInTheDocument();
-    const joe = await screen.findByRole('link', { name: /Joe Rivera/ });
-    expect(joe).toHaveAttribute('href', `/graph/entities/${graphEntitySummaries[0].id}`);
+    const jonty = await screen.findByRole('link', { name: /Jonty Placeholder/ });
+    expect(jonty).toHaveAttribute('href', `/graph/entities/${graphEntitySummaries[0].id}`);
     expect(screen.getByRole('link', { name: /Org Kappa/ })).toBeInTheDocument();
     // Projects and Meetings are not selected by default.
     expect(screen.queryByRole('link', { name: /Project Atlas/ })).not.toBeInTheDocument();
@@ -127,18 +127,18 @@ describe('GraphIndexPage', () => {
   it('reads the selection from the URL', async () => {
     renderIndex('/graph/entities?type=Project');
     expect(await screen.findByRole('link', { name: /Project Atlas/ })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Joe Rivera/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Jonty Placeholder/ })).not.toBeInTheDocument();
   });
 
   it('debounces the search box into one request and hides Load more for a search', async () => {
     const user = userEvent.setup();
     renderIndex();
-    await screen.findByRole('link', { name: /Joe Rivera/ });
+    await screen.findByRole('link', { name: /Jonty Placeholder/ });
 
     await user.type(screen.getByRole('textbox', { name: 'Search people and organizations' }), 'kappa');
 
     expect(await screen.findByRole('link', { name: /Org Kappa/ })).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole('link', { name: /Joe Rivera/ })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('link', { name: /Jonty Placeholder/ })).not.toBeInTheDocument());
     const queries = listRequests.map((url) => url.searchParams.get('q')).filter(Boolean);
     expect(queries).toEqual(['kappa']);
     expect(screen.getByTestId('location')).toHaveTextContent('q=kappa');
@@ -164,13 +164,13 @@ describe('GraphIndexPage', () => {
     );
     renderIndex();
 
-    await screen.findByRole('link', { name: /Joe Rivera/ });
-    expect(screen.queryByRole('link', { name: /Ana Diaz/ })).not.toBeInTheDocument();
+    await screen.findByRole('link', { name: /Jonty Placeholder/ });
+    expect(screen.queryByRole('link', { name: /Anders Placeholder/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Load more' }));
 
-    expect(await screen.findByRole('link', { name: /Ana Diaz/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Joe Rivera/ })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /Anders Placeholder/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Jonty Placeholder/ })).toBeInTheDocument();
     expect(listRequests.at(-1)?.searchParams.get('cursor')).toBe('page-2');
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
   });
@@ -200,7 +200,7 @@ describe('GraphIndexPage', () => {
     expect(await screen.findByText('Graph is down')).toBeInTheDocument();
     fail = false;
     await user.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(await screen.findByRole('link', { name: /Joe Rivera/ })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /Jonty Placeholder/ })).toBeInTheDocument();
   });
 
   it('redirects home without graph:read', async () => {
@@ -213,7 +213,7 @@ describe('GraphIndexPage', () => {
     const user = userEvent.setup();
     setViewportWidth(390);
     renderIndex();
-    await screen.findByRole('link', { name: /Joe Rivera/ });
+    await screen.findByRole('link', { name: /Jonty Placeholder/ });
 
     expect(screen.queryByRole('link', { name: 'Explore' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'More knowledge views' }));
@@ -225,7 +225,7 @@ describe('GraphIndexPage', () => {
     const user = userEvent.setup();
     server.use(http.get('*/api/graph/exports', () => HttpResponse.json({ data: { exports: [] } })));
     renderIndex();
-    await screen.findByRole('link', { name: /Joe Rivera/ });
+    await screen.findByRole('link', { name: /Jonty Placeholder/ });
 
     await user.click(screen.getByRole('button', { name: 'More knowledge actions' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Export graph…' }));
@@ -248,7 +248,7 @@ describe('GraphIndexPage', () => {
       }),
     );
     renderIndex('/graph/entities', graphWriter);
-    await screen.findByRole('link', { name: /Joe Rivera/ });
+    await screen.findByRole('link', { name: /Jonty Placeholder/ });
 
     const imports = await screen.findByRole('list', { name: 'Recent imports' });
     const row = within(imports).getByRole('link', { name: /contacts\.ttl/ });
@@ -263,7 +263,7 @@ describe('GraphIndexPage', () => {
   it('shows no imports section when there are none, or the answer is unreadable', async () => {
     server.use(http.get('*/api/graph/proposals', () => HttpResponse.json({ data: {} })));
     renderIndex('/graph/entities', graphWriter);
-    await screen.findByRole('link', { name: /Joe Rivera/ });
+    await screen.findByRole('link', { name: /Jonty Placeholder/ });
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Recent imports' })).not.toBeInTheDocument());
     expect(screen.getByRole('heading', { level: 1, name: 'Entities' })).toBeInTheDocument();
   });
@@ -271,7 +271,7 @@ describe('GraphIndexPage', () => {
   it('has no "Import graph…" and no imports section for a reader', async () => {
     const user = userEvent.setup();
     renderIndex();
-    await screen.findByRole('link', { name: /Joe Rivera/ });
+    await screen.findByRole('link', { name: /Jonty Placeholder/ });
     await user.click(screen.getByRole('button', { name: 'More knowledge actions' }));
     expect(await screen.findByRole('menuitem', { name: 'Export graph…' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Import graph…' })).not.toBeInTheDocument();
@@ -282,7 +282,7 @@ describe('GraphIndexPage', () => {
     const user = userEvent.setup();
     setViewportWidth(390);
     renderIndex();
-    await screen.findByRole('link', { name: /Joe Rivera/ });
+    await screen.findByRole('link', { name: /Jonty Placeholder/ });
     await user.click(screen.getByRole('button', { name: 'More knowledge views' }));
     expect(await screen.findByRole('menuitem', { name: 'Export graph…' })).toBeInTheDocument();
   });

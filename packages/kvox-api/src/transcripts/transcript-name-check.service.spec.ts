@@ -52,12 +52,12 @@ describe('resolveTerms', () => {
   it('dedups case-insensitively, first spelling wins, across speakers/terms/keyterms', () => {
     const out = resolveTerms({
       speakers,
-      terms: ['oscar', 'Ana'],
-      providerOptions: { keyterms: ['ANA'] },
+      terms: ['oscar', 'Anders'],
+      providerOptions: { keyterms: ['ANDERS'] },
     });
-    // Speaker "Oscar" first, then "Ana" from terms (not re-added by keyterms).
+    // Speaker "Oscar" first, then "Anders" from terms (not re-added by keyterms).
     expect(out.filter((n) => n.toLowerCase() === 'oscar')).toHaveLength(1);
-    expect(out.filter((n) => n.toLowerCase() === 'ana')).toHaveLength(1);
+    expect(out.filter((n) => n.toLowerCase() === 'anders')).toHaveLength(1);
   });
 
   it('merges upload keyterms in', () => {

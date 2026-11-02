@@ -20,7 +20,7 @@ import {
   writePathRequest,
 } from '../../src/graph/ui/components/explorer/paths/pathModel.js';
 import { topQuote } from '../../src/graph/ui/components/explorer/paths/useHopQuotes.js';
-import { KAPPA_ID, JOE_ID } from './graphData.js';
+import { KAPPA_ID, JONTY_ID } from './graphData.js';
 import { PRODUCT_X_ID, EDGE_INVOLVED, EDGE_USES, EDGE_WORKS_FOR, pathEvidence, pathsResponse, pathsSlice } from './pathsData.js';
 
 describe('pathStrength', () => {
@@ -38,7 +38,7 @@ describe('buildPathViews', () => {
 
   it('reads each path in walking order with role, stage and stance chips', () => {
     expect(views).toHaveLength(2);
-    expect(views[0].nodes.map((n) => n.label)).toEqual(['Joe Rivera', 'Product X rollout']);
+    expect(views[0].nodes.map((n) => n.label)).toEqual(['Jonty Placeholder', 'Product X rollout']);
     expect(views[0].strength).toBe('strong');
     expect(views[0].hops[0]).toMatchObject({ edgeId: EDGE_INVOLVED, chips: ['Stakeholder', 'skeptical'], evidenceCount: 5, reversed: false });
     expect(views[1].strength).toBe('moderate');
@@ -51,31 +51,31 @@ describe('buildPathViews', () => {
     const response = pathsResponse();
     const fact = { id: 'f1', nodeKind: 'item' as const, type: 'person_fact', label: 'A fact', depth: 1, degree: 1, status: null, occurredAt: null };
     response.slice.nodes.push(fact);
-    response.slice.edges.push({ id: 'virt:f1:ABOUT', type: 'ABOUT', source: 'f1', target: JOE_ID, valid: null, confidence: null, virtual: true });
-    response.paths = [{ nodeIds: ['f1', JOE_ID], edgeIds: ['virt:f1:ABOUT'], hops: 1, score: 0.7 }];
+    response.slice.edges.push({ id: 'virt:f1:ABOUT', type: 'ABOUT', source: 'f1', target: JONTY_ID, valid: null, confidence: null, virtual: true });
+    response.paths = [{ nodeIds: ['f1', JONTY_ID], edgeIds: ['virt:f1:ABOUT'], hops: 1, score: 0.7 }];
     expect(buildPathViews(response, null)[0].hops[0].evidenceSubject).toBeNull();
   });
 
   it('marks a hop walked against its stored direction', () => {
-    const response = pathsResponse({ paths: [{ nodeIds: [PRODUCT_X_ID, JOE_ID], edgeIds: [EDGE_INVOLVED], hops: 1, score: 1.8 }] });
+    const response = pathsResponse({ paths: [{ nodeIds: [PRODUCT_X_ID, JONTY_ID], edgeIds: [EDGE_INVOLVED], hops: 1, score: 1.8 }] });
     expect(buildPathViews(response, null)[0].hops[0].reversed).toBe(true);
   });
 
   it('drops a path that names a node or edge the slice lacks', () => {
-    const response = pathsResponse({ paths: [{ nodeIds: [JOE_ID, gid9()], edgeIds: [EDGE_INVOLVED], hops: 1, score: 1 }] });
+    const response = pathsResponse({ paths: [{ nodeIds: [JONTY_ID, gid9()], edgeIds: [EDGE_INVOLVED], hops: 1, score: 1 }] });
     expect(buildPathViews(response, null)).toEqual([]);
   });
 
   it('reads the path as a sentence for a screen reader', () => {
-    expect(hopSentence(views[0], 0)).toBe('Joe Rivera, involved in as stakeholder, skeptical, Product X rollout');
+    expect(hopSentence(views[0], 0)).toBe('Jonty Placeholder, involved in as stakeholder, skeptical, Product X rollout');
     expect(describePath(views[1])).toBe(
-      'Path 2, moderate evidence, 2 hops: Joe Rivera, works for, Org Kappa, uses, pilot, Product X rollout',
+      'Path 2, moderate evidence, 2 hops: Jonty Placeholder, works for, Org Kappa, uses, pilot, Product X rollout',
     );
   });
 
   it('lists the ids to highlight', () => {
     const ids = pathIds(views[1]);
-    expect([...ids.nodeIds].sort()).toEqual([KAPPA_ID, PRODUCT_X_ID, JOE_ID].sort());
+    expect([...ids.nodeIds].sort()).toEqual([KAPPA_ID, PRODUCT_X_ID, JONTY_ID].sort());
     expect([...ids.edgeIds].sort()).toEqual([EDGE_USES, EDGE_WORKS_FOR].sort());
   });
 });
@@ -87,9 +87,9 @@ function gid9(): string {
 describe('the URL', () => {
   it('round-trips pathFrom and pathTo, leaving defaults out', () => {
     const params = new URLSearchParams('seed=x');
-    writePathRequest(params, { from: JOE_ID, to: PRODUCT_X_ID, maxHops: DEFAULT_PATH_HOPS, relationTypes: [] });
-    expect(params.toString()).toBe(`seed=x&pathFrom=${JOE_ID}&pathTo=${PRODUCT_X_ID}`);
-    expect(readPathRequest(params)).toEqual({ from: JOE_ID, to: PRODUCT_X_ID, maxHops: 4, relationTypes: [] });
+    writePathRequest(params, { from: JONTY_ID, to: PRODUCT_X_ID, maxHops: DEFAULT_PATH_HOPS, relationTypes: [] });
+    expect(params.toString()).toBe(`seed=x&pathFrom=${JONTY_ID}&pathTo=${PRODUCT_X_ID}`);
+    expect(readPathRequest(params)).toEqual({ from: JONTY_ID, to: PRODUCT_X_ID, maxHops: 4, relationTypes: [] });
 
     writePathRequest(params, { maxHops: 2, relationTypes: ['USES', 'WORKS_FOR'] });
     expect(readPathRequest(params)).toMatchObject({ maxHops: 2, relationTypes: ['USES', 'WORKS_FOR'] });
@@ -138,13 +138,13 @@ describe('path reducers', () => {
 
   it('lights the path and dims everything else', () => {
     const state = loaded();
-    const ctx = context(state, { pathNodeIds: new Set([JOE_ID, PRODUCT_X_ID]), pathEdgeIds: new Set([EDGE_INVOLVED]) });
+    const ctx = context(state, { pathNodeIds: new Set([JONTY_ID, PRODUCT_X_ID]), pathEdgeIds: new Set([EDGE_INVOLVED]) });
     const node = buildNodeReducer(ctx);
     const edge = buildEdgeReducer(ctx);
 
-    const joe = node(JOE_ID, nodeData(state, JOE_ID));
-    expect(joe.highlighted).toBe(true);
-    expect(joe.forceLabel).toBe(true);
+    const jonty = node(JONTY_ID, nodeData(state, JONTY_ID));
+    expect(jonty.highlighted).toBe(true);
+    expect(jonty.forceLabel).toBe(true);
     const kappa = node(KAPPA_ID, nodeData(state, KAPPA_ID));
     expect(kappa.label).toBe('');
     expect(kappa.color).not.toBe(state.graph.getNodeAttribute(KAPPA_ID, 'color'));
@@ -160,7 +160,7 @@ describe('path reducers', () => {
     const state = loaded();
     const plain = buildNodeReducer(context(state, { pathNodeIds: new Set(), pathEdgeIds: new Set() }));
     expect(plain(KAPPA_ID, nodeData(state, KAPPA_ID)).label).toBe(state.graph.getNodeAttribute(KAPPA_ID, 'label'));
-    const focused = buildNodeReducer(context(state, { focusId: KAPPA_ID, pathNodeIds: new Set([JOE_ID]) }));
+    const focused = buildNodeReducer(context(state, { focusId: KAPPA_ID, pathNodeIds: new Set([JONTY_ID]) }));
     expect(focused(KAPPA_ID, nodeData(state, KAPPA_ID)).forceLabel).toBe(true);
   });
 });

@@ -335,11 +335,11 @@ describe('NewTranscriptPage — names & terms (#327)', () => {
     const user = await openDetails();
     const input = await screen.findByLabelText(FIELD);
 
-    await user.type(input, 'Ana Solís{Enter}');
+    await user.type(input, 'Anders Testcase{Enter}');
     await user.type(input, 'Kvox,');
-    await user.type(input, 'ana solís{Enter}');
+    await user.type(input, 'anders testcase{Enter}');
 
-    expect(chipLabels()).toEqual(['Ana Solís', 'Kvox']);
+    expect(chipLabels()).toEqual(['Anders Testcase', 'Kvox']);
   });
 
   it('splits a pasted comma/newline list into chips', async () => {
@@ -347,9 +347,9 @@ describe('NewTranscriptPage — names & terms (#327)', () => {
     const input = await screen.findByLabelText(FIELD);
 
     await user.click(input);
-    await user.paste('Ana, Beto\nCarla,  ana ');
+    await user.paste('Anders, Beto\nCalla,  anders ');
 
-    expect(chipLabels()).toEqual(['Ana', 'Beto', 'Carla']);
+    expect(chipLabels()).toEqual(['Anders', 'Beto', 'Calla']);
   });
 
   it('refuses a term of more than six words with an inline error', async () => {
@@ -382,9 +382,9 @@ describe('NewTranscriptPage — names & terms (#327)', () => {
     const input = await screen.findByLabelText(FIELD);
 
     await user.click(input);
-    await user.paste('Ana, Beto, Carla');
+    await user.paste('Anders, Beto, Calla');
 
-    expect(chipLabels()).toEqual(['Ana', 'Beto']);
+    expect(chipLabels()).toEqual(['Anders', 'Beto']);
     expect(screen.getByText(/At most 2 names and terms/)).toBeInTheDocument();
   });
 
@@ -392,12 +392,12 @@ describe('NewTranscriptPage — names & terms (#327)', () => {
     const user = await openDetails();
     const input = await screen.findByLabelText(FIELD);
 
-    await user.type(input, 'Ana Solís{Enter}Kvox{Enter}');
+    await user.type(input, 'Anders Testcase{Enter}Kvox{Enter}');
     await user.click(screen.getByRole('button', { name: 'Start upload' }));
 
     await waitFor(() =>
       expect(mockCreate).toHaveBeenCalledWith(
-        expect.anything(), expect.objectContaining({ keyterms: ['Ana Solís', 'Kvox'] }),
+        expect.anything(), expect.objectContaining({ keyterms: ['Anders Testcase', 'Kvox'] }),
       ),
     );
   });

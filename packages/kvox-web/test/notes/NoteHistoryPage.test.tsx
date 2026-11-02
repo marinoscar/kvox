@@ -46,7 +46,7 @@ function respondWith(items: Record<string, unknown>[], nextCursor: string | null
 
 beforeEach(() => {
   respondWith([
-    version({ version: 2, kind: 'edit', summary: 'Fixed the numbers', author: { id: 'u1', name: 'Ana Ruiz' } }),
+    version({ version: 2, kind: 'edit', summary: 'Fixed the numbers', author: { id: 'u1', name: 'Anders Stubbs' } }),
     version(),
   ]);
 });
@@ -77,7 +77,7 @@ describe('NoteHistoryPage', () => {
     renderPage();
 
     expect(await screen.findByText(/^AI ·/)).toBeInTheDocument();
-    expect(screen.getByText(/Ana Ruiz ·/)).toBeInTheDocument();
+    expect(screen.getByText(/Anders Stubbs ·/)).toBeInTheDocument();
   });
 
   it('marks which version is current', async () => {
@@ -268,8 +268,8 @@ describe('NoteHistoryPage — restoring', () => {
         // The API's own shape: a NEW version, three, whose body is version 1's.
         respondWith(
           [
-            version({ version: 3, kind: 'restore', restoredFromVersion: 1, author: { id: 'u1', name: 'Ana Ruiz' } }),
-            version({ version: 2, kind: 'edit', author: { id: 'u1', name: 'Ana Ruiz' } }),
+            version({ version: 3, kind: 'restore', restoredFromVersion: 1, author: { id: 'u1', name: 'Anders Stubbs' } }),
+            version({ version: 2, kind: 'edit', author: { id: 'u1', name: 'Anders Stubbs' } }),
             version(),
           ],
           null,

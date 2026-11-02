@@ -9,7 +9,7 @@ import { ExtractDialog } from '../../src/graph/ui/components/guide/ExtractDialog
 import { forgetEntityLabels, rememberEntityLabel } from '../../src/graph/headless/utils/guidance.js';
 import { invalidateGraphOntology } from '../../src/graph/headless/hooks/useGraphOntology.js';
 import {
-  EXISTING_SARAH_ID,
+  EXISTING_SASHA_ID,
   mockExtractEstimate,
   mockGraphAiConfig,
   proposalMock,
@@ -149,24 +149,24 @@ describe('ExtractDialog — request body', () => {
   });
 
   it('pre-fills from the latest guidance, expanded, and keeps it on re-extract', async () => {
-    rememberEntityLabel(EXISTING_SARAH_ID, 'Sarah Chen');
+    rememberEntityLabel(EXISTING_SASHA_ID, 'Sasha Example');
     const user = userEvent.setup();
     const { onStarted } = renderDialog({
       mode: 're-extract',
       pendingDecisions: 3,
-      initialGuidance: { pinnedEntityIds: [EXISTING_SARAH_ID], instructions: 'Sam is our CTO' },
+      initialGuidance: { pinnedEntityIds: [EXISTING_SASHA_ID], instructions: 'Sam is our CTO' },
     });
     expect(screen.getByRole('heading', { name: 'Extract again' })).toBeInTheDocument();
     expect(
       screen.getByText("You've decided 3 rows on the current draft. A new draft replaces it once it's ready."),
     ).toBeInTheDocument();
     expect(await screen.findByRole('textbox', { name: 'Instructions' })).toHaveValue('Sam is our CTO');
-    expect(screen.getByRole('button', { name: /Sarah Chen/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sasha Example/ })).toBeInTheDocument();
     await estimated();
     await user.click(screen.getByRole('button', { name: 'Extract again' }));
     await waitFor(() => expect(onStarted).toHaveBeenCalled());
     expect(extractBody()).toEqual({
-      userGuidance: { pinnedEntityIds: [EXISTING_SARAH_ID], instructions: 'Sam is our CTO' },
+      userGuidance: { pinnedEntityIds: [EXISTING_SASHA_ID], instructions: 'Sam is our CTO' },
     });
   });
 });
@@ -199,25 +199,25 @@ describe('ExtractDialog — refusals', () => {
   });
 
   it('400 unknown types and invalid pins are highlighted in the panel', async () => {
-    rememberEntityLabel(EXISTING_SARAH_ID, 'Sarah Chen');
+    rememberEntityLabel(EXISTING_SASHA_ID, 'Sasha Example');
     server.use(
       http.post(`${API}/graph/notes/:noteId/extract`, () =>
         HttpResponse.json(
           {
             statusCode: 400,
             message: 'Invalid guidance',
-            details: { unknownTypes: ['Claim'], invalidPinnedIds: [EXISTING_SARAH_ID] },
+            details: { unknownTypes: ['Claim'], invalidPinnedIds: [EXISTING_SASHA_ID] },
           },
           { status: 400 },
         ),
       ),
     );
     const user = userEvent.setup();
-    renderDialog({ initialGuidance: { pinnedEntityIds: [EXISTING_SARAH_ID], instructions: '' } });
+    renderDialog({ initialGuidance: { pinnedEntityIds: [EXISTING_SASHA_ID], instructions: '' } });
     await estimated();
     await user.click(screen.getByRole('button', { name: 'Extract' }));
     expect(await screen.findByText(/Some of your guidance no longer matches your graph/)).toBeInTheDocument();
-    expect(screen.getByText('Sarah Chen (no longer in your graph)')).toBeInTheDocument();
+    expect(screen.getByText('Sasha Example (no longer in your graph)')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Claim' }).className).toMatch(/colorError/);
   });
 

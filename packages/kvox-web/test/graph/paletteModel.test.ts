@@ -30,44 +30,44 @@ function graphOf(nodes: { id: string; label: string; type: string; stub?: boolea
 
 describe('parsePaletteQuery', () => {
   it('splits type tokens from the free text, by key or label, ignoring case', () => {
-    expect(parsePaletteQuery('type:Person joe', TYPES)).toEqual({ text: 'joe', types: ['Person'], unknownTypes: [] });
+    expect(parsePaletteQuery('type:Person jonty', TYPES)).toEqual({ text: 'jonty', types: ['Person'], unknownTypes: [] });
     expect(parsePaletteQuery('productx TYPE:products', TYPES)).toEqual({ text: 'productx', types: ['Product'], unknownTypes: [] });
-    expect(parsePaletteQuery('type:People type:Person joe rivera', TYPES).types).toEqual(['Person']);
+    expect(parsePaletteQuery('type:People type:Person jonty placeholder', TYPES).types).toEqual(['Person']);
     expect(parsePaletteQuery('type:commitment', TYPES).types).toEqual(['commitment']);
   });
 
   it('reports a token that names no type, and ignores a bare "type:"', () => {
-    expect(parsePaletteQuery('type:Spaceship joe', TYPES)).toEqual({ text: 'joe', types: [], unknownTypes: ['Spaceship'] });
-    expect(parsePaletteQuery('type: joe', TYPES)).toEqual({ text: 'joe', types: [], unknownTypes: [] });
+    expect(parsePaletteQuery('type:Spaceship jonty', TYPES)).toEqual({ text: 'jonty', types: [], unknownTypes: ['Spaceship'] });
+    expect(parsePaletteQuery('type: jonty', TYPES)).toEqual({ text: 'jonty', types: [], unknownTypes: [] });
     expect(parsePaletteQuery('   ', TYPES)).toEqual({ text: '', types: [], unknownTypes: [] });
   });
 });
 
 describe('fuzzyScore', () => {
   it('ranks prefix over word start over substring over subsequence, and rejects the rest', () => {
-    const prefix = fuzzyScore('Joe Rivera', 'joe')!;
-    const word = fuzzyScore('Big Joe', 'joe')!;
-    const sub = fuzzyScore('Bojoe', 'joe')!;
-    const subsequence = fuzzyScore('Jane Orla Ellis', 'joe')!;
+    const prefix = fuzzyScore('Jonty Placeholder', 'jonty')!;
+    const word = fuzzyScore('Big Jonty', 'jonty')!;
+    const sub = fuzzyScore('Bojonty', 'jonty')!;
+    const subsequence = fuzzyScore('Jade Orla Nilsen Tay', 'jonty')!;
     expect(prefix).toBeGreaterThan(word);
     expect(word).toBeGreaterThan(sub);
     expect(sub).toBeGreaterThan(subsequence);
-    expect(fuzzyScore('Ana Diaz', 'joe')).toBeNull();
+    expect(fuzzyScore('Anders Placeholder', 'jonty')).toBeNull();
     expect(fuzzyScore('Anything', '')).toBe(0);
   });
 });
 
 describe('canvasMatches', () => {
   const { graph, ids } = graphOf([
-    { id: 'a', label: 'Joe Rivera', type: 'Person' },
+    { id: 'a', label: 'Jonty Placeholder', type: 'Person' },
     { id: 'b', label: 'Product X rollout', type: 'Project' },
     { id: 'c', label: 'Product X', type: 'Product' },
     { id: 'd', label: '+3 more', type: 'Person', stub: true },
-    { id: 'e', label: 'Joel Park', type: 'Person' },
+    { id: 'e', label: 'Jontyn Sample', type: 'Person' },
   ]);
 
   it('matches loaded labels best first, and never a stub', () => {
-    const found = canvasMatches(graph, ids, parsePaletteQuery('joe', TYPES));
+    const found = canvasMatches(graph, ids, parsePaletteQuery('jonty', TYPES));
     // Both are prefix matches; the shorter label wins the tie.
     expect(found.map((m) => m.id)).toEqual(['e', 'a']);
     expect(canvasMatches(graph, ids, parsePaletteQuery('more', TYPES))).toEqual([]);
@@ -80,7 +80,7 @@ describe('canvasMatches', () => {
 
   it('returns nothing for an empty query, and only visible nodes', () => {
     expect(canvasMatches(graph, ids, parsePaletteQuery('', TYPES))).toEqual([]);
-    expect(canvasMatches(graph, new Set(['b']), parsePaletteQuery('joe', TYPES))).toEqual([]);
+    expect(canvasMatches(graph, new Set(['b']), parsePaletteQuery('jonty', TYPES))).toEqual([]);
   });
 
   it('honours the limit', () => {

@@ -30,7 +30,7 @@ const ACTIVITY: GraphActivityResponse = {
     { start: '2026-03-01', total: 1, byType: { Project: 1 } },
   ],
   byEntity: {
-    joe: [
+    jonty: [
       { start: '2025-06-01', count: 1 },
       { start: '2026-02-01', count: 2 },
     ],
@@ -96,7 +96,7 @@ describe('TimeBar histogram', () => {
   it('overlays the selected nodes as a line and not otherwise', () => {
     const { rerender } = render(<Harness />);
     expect(screen.queryByTestId('timebar-overlay')).not.toBeInTheDocument();
-    rerender(<Harness selectedIds={['joe']} />);
+    rerender(<Harness selectedIds={['jonty']} />);
     expect(screen.getByTestId('timebar-overlay')).toBeInTheDocument();
     expect(screen.getByTestId('timebar-status')).toHaveTextContent('line: selected');
     // A node with no activity draws no line.
@@ -338,7 +338,7 @@ describe('TimeBar window classes', () => {
   });
 
   it('is accessible', async () => {
-    const { container } = render(<Harness initial={{ from: '2026-02-01', to: '2026-04-01' }} selectedIds={['joe']} />);
+    const { container } = render(<Harness initial={{ from: '2026-02-01', to: '2026-04-01' }} selectedIds={['jonty']} />);
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 

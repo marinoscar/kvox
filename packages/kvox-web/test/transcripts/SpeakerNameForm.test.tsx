@@ -18,8 +18,8 @@ function renderForm(overrides: Partial<Parameters<typeof SpeakerNameForm>[0]> = 
   const onSave = vi.fn();
   const result = render(
     <SpeakerNameForm
-      initialName="Ana"
-      nameSuggestions={['Ana', 'Ben', 'Carolina']}
+      initialName="Anders"
+      nameSuggestions={['Anders', 'Bram', 'Camille']}
       onCancel={onCancel}
       onSave={onSave}
       {...overrides}
@@ -32,9 +32,9 @@ const field = () => screen.getByRole('combobox', { name: 'Speaker name' });
 
 describe('SpeakerNameForm', () => {
   it('opens seeded with the current name', () => {
-    renderForm({ initialName: 'Ana' });
+    renderForm({ initialName: 'Anders' });
 
-    expect(field()).toHaveValue('Ana');
+    expect(field()).toHaveValue('Anders');
   });
 
   it('disables Save while the draft is empty', async () => {
@@ -69,13 +69,13 @@ describe('SpeakerNameForm', () => {
 
   it('excludes the current name from its own suggestions', async () => {
     const user = userEvent.setup();
-    renderForm({ initialName: 'Ana', nameSuggestions: ['Ana', 'Ben', 'Carolina'] });
+    renderForm({ initialName: 'Anders', nameSuggestions: ['Anders', 'Bram', 'Camille'] });
 
     await user.click(field());
 
-    expect(screen.getByRole('option', { name: 'Ben' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Carolina' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Ana' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Bram' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Camille' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Anders' })).not.toBeInTheDocument();
   });
 
   it('states the rename’s scope out loud, in the default wording', () => {

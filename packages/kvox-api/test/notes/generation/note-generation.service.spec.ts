@@ -335,7 +335,7 @@ describe('recordContext()', () => {
 
     await service.recordContext('gen-1', {
       systemPrompt: 'You write meeting notes.',
-      userContent: 'Source material:\nAna: we ship on Friday.',
+      userContent: 'Source material:\nAnders: we ship on Friday.',
       sourceVersion: 7,
     });
 
@@ -344,7 +344,7 @@ describe('recordContext()', () => {
 
     expect(call.where).toEqual({ id: 'gen-1' });
     expect(call.data.systemPrompt).toBe('You write meeting notes.');
-    expect(call.data.userContent).toBe('Source material:\nAna: we ship on Friday.');
+    expect(call.data.userContent).toBe('Source material:\nAnders: we ship on Friday.');
     expect(call.data.sourceVersion).toBe(7);
     expect(call.data.contextCapturedAt).toBeInstanceOf(Date);
     expect(call.data.contextCapturedAt.getTime()).toBeGreaterThanOrEqual(before);

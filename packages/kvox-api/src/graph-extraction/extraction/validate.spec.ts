@@ -48,14 +48,14 @@ describe('validateExtraction (#363)', () => {
 
     it('locates a quote in the segment and records offsets within the segment text', () => {
       const result = ok(validateExtraction(goodAnswer(), makeContext()));
-      const sarah = byRef(result.rows, 'k1')!;
-      const ev = sarah.evidence[0];
+      const sasha = byRef(result.rows, 'k1')!;
+      const ev = sasha.evidence[0];
       expect(ev).toEqual(
         expect.objectContaining({ source: 'segment', segmentId: IDS.seg1, segmentRev: 3, transcriptId: IDS.transcript, startMs: 0, endMs: 5000 }),
       );
       if (ev.source !== 'segment') throw new Error('segment evidence expected');
-      expect(SEGMENT_TEXT.s1.slice(ev.charStart!, ev.charEnd!)).toBe("I'm Sarah Chen, VP of Operations");
-      expect(ev.quote).toBe("I'm Sarah Chen, VP of Operations");
+      expect(SEGMENT_TEXT.s1.slice(ev.charStart!, ev.charEnd!)).toBe("I'm Sasha Example, VP of Operations");
+      expect(ev.quote).toBe("I'm Sasha Example, VP of Operations");
     });
 
     it('locates a quote case- and whitespace-insensitively, quoting the source text', () => {
@@ -94,7 +94,7 @@ describe('validateExtraction (#363)', () => {
     });
 
     describe('the Context (`C`, #440)', () => {
-      const CONTEXT = 'Avery – OAC, Consulting, Managing Director. Sarah is our exec sponsor.';
+      const CONTEXT = 'Avery – OAC, Consulting, Managing Director. Sasha is our exec sponsor.';
       const avery = () => ({
         ref: 'e2',
         type: 'Person',
@@ -136,13 +136,13 @@ describe('validateExtraction (#363)', () => {
         e.evidence = [
           { source: 'C', quote: 'OAC, Consulting' },
           { source: ' C ', quote: 'OAC, Consulting' },
-          { source: 'C', quote: 'Sarah is our exec sponsor' },
+          { source: 'C', quote: 'Sasha is our exec sponsor' },
         ];
         answer.entities.push(e);
         const result = ok(validateExtraction(answer, withContext(CONTEXT)));
         expect(byRef(result.rows, 'e2')!.evidence.map((ev) => ev.quote)).toEqual([
           'OAC, Consulting',
-          'Sarah is our exec sponsor',
+          'Sasha is our exec sponsor',
         ]);
       });
 
@@ -282,11 +282,11 @@ describe('validateExtraction (#363)', () => {
   describe('rows', () => {
     it('a re-stated known entity links to it, flagged model_claimed_match, and endpoints point at the entity', () => {
       const result = ok(validateExtraction(goodAnswer(), makeContext()));
-      const sarah = byRef(result.rows, 'k1')!;
-      expect(sarah.flags).toContain('model_claimed_match');
-      expect(sarah.resolution).toEqual({ ref: IDS.sarah, score: null, source: 'model', candidates: [], adjudication: null });
+      const sasha = byRef(result.rows, 'k1')!;
+      expect(sasha.flags).toContain('model_claimed_match');
+      expect(sasha.resolution).toEqual({ ref: IDS.sasha, score: null, source: 'model', candidates: [], adjudication: null });
       const rel = result.rows.find((r) => r.kind === 'relation')!;
-      expect(rel.payload).toEqual(expect.objectContaining({ from: { entityId: IDS.sarah }, to: { entityId: IDS.lambda } }));
+      expect(rel.payload).toEqual(expect.objectContaining({ from: { entityId: IDS.sasha }, to: { entityId: IDS.lambda } }));
     });
 
     it('items carry the #355 statement hash, and commitments/decisions the meeting', () => {
@@ -294,9 +294,9 @@ describe('validateExtraction (#363)', () => {
       const commitment = result.rows.find((r) => r.kind === 'item' && r.payload.kind === 'commitment')!;
       expect(commitment.payload).toEqual(
         expect.objectContaining({
-          statementHash: statementHash('commitment', 'Sarah will send the updated proposal by Friday.'),
+          statementHash: statementHash('commitment', 'Sasha will send the updated proposal by Friday.'),
           meeting: { ref: 'meeting' },
-          owner: { entityId: IDS.sarah },
+          owner: { entityId: IDS.sasha },
           subject: { ref: 'e1' },
           status: 'open',
           dueAt: '2026-03-06',
@@ -308,8 +308,8 @@ describe('validateExtraction (#363)', () => {
       const answer = goodAnswer();
       const base = { ...answer.items[1], kind: 'person_fact', subject: 'k1', props: {}, evidence: answer.items[0].evidence };
       answer.items = [
-        { ...base, title: 'Runs', statement: 'Sarah runs marathons.', sensitivity: null },
-        { ...base, title: 'Health', statement: 'Sarah is recovering from surgery.', sensitivity: 'sensitive' },
+        { ...base, title: 'Runs', statement: 'Sasha runs marathons.', sensitivity: null },
+        { ...base, title: 'Health', statement: 'Sasha is recovering from surgery.', sensitivity: 'sensitive' },
       ];
       const result = ok(validateExtraction(answer, makeContext()));
       const [runs, health] = result.rows.filter((r) => r.kind === 'item');
@@ -340,9 +340,9 @@ describe('addDeterministicRows (#363)', () => {
     expect(meeting.evidence[0]).toEqual(expect.objectContaining({ segmentId: IDS.seg1, charStart: null }));
 
     const attended = result.rows.filter((r) => r.kind === 'relation' && r.payload.type === 'ATTENDED');
-    // Speaker A is identified (Sarah); speaker B is not.
+    // Speaker A is identified (Sasha); speaker B is not.
     expect(attended).toHaveLength(1);
-    expect(attended[0].payload).toEqual(expect.objectContaining({ from: { entityId: IDS.sarah }, to: { ref: 'meeting' } }));
+    expect(attended[0].payload).toEqual(expect.objectContaining({ from: { entityId: IDS.sasha }, to: { ref: 'meeting' } }));
     expect(attended[0].evidence[0]).toEqual(expect.objectContaining({ segmentId: IDS.seg1 }));
     expect(result.stats.proposed.entities).toBe(3);
     expect(result.stats.proposed.relations).toBe(2);
@@ -360,10 +360,10 @@ describe('addDeterministicRows (#363)', () => {
   });
 
   it('links a named but unlinked speaker to a proposed Person with that name', () => {
-    const input = { speakers: [{ id: IDS.spkA, label: 'A', displayName: 'Tomás Aguilar', personEntityId: null }] };
+    const input = { speakers: [{ id: IDS.spkA, label: 'A', displayName: 'Tobín Dummyson', personEntityId: null }] };
     const ctx = makeContext(input);
     const answer = goodAnswer();
-    answer.entities.push({ ref: 'e2', type: 'Person', label: 'Tomás Aguilar', aliases: [], props: {}, evidence: [{ source: 's1', quote: 'Hi everyone' }] });
+    answer.entities.push({ ref: 'e2', type: 'Person', label: 'Tobín Dummyson', aliases: [], props: {}, evidence: [{ source: 's1', quote: 'Hi everyone' }] });
     const result = addDeterministicRows(ctx, ok(validateExtraction(answer, ctx)));
     const attended = result.rows.filter((r) => r.kind === 'relation' && r.payload.type === 'ATTENDED');
     expect(attended.map((r) => (r.payload as { from: unknown }).from)).toEqual([{ ref: 'e2' }]);

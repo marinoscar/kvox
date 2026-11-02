@@ -101,7 +101,7 @@ export interface AskConformanceOptions {
 const USER = '11111111-1111-4111-8111-111111111111';
 const ENTITY = '55555555-5555-4555-8555-555555555555';
 const QUESTION = 'What is going on with Kappa?';
-const ANSWER = 'Kappa is a client of yours and signed the renewal in August. It is led by Sarah Chen.';
+const ANSWER = 'Kappa is a client of yours and signed the renewal in August. It is led by Sasha Example.';
 
 /** Graph services that write, which the Ask slice must never reference in code. */
 const WRITE_SERVICES = [

@@ -13,7 +13,7 @@ import {
   type ExplorerState,
 } from '../../src/graph/ui/components/explorer/explorerModel.js';
 import { nodeTypeOptions, relationTypeOptions } from '../../src/graph/headless/utils/explorerFilters.js';
-import { JOE_ID, expandFixture, graphOntologyFixture } from './graphData.js';
+import { JONTY_ID, expandFixture, graphOntologyFixture } from './graphData.js';
 import { render } from './helpers.js';
 
 /**
@@ -31,8 +31,8 @@ const ALL_KEYS = NODE_TYPES.map((t) => t.key);
 
 function loaded(hidden: string[] = []): ExplorerState {
   const state = createExplorerState();
-  const slice = expandFixture({ nodeIds: [JOE_ID], cap: 300 })!;
-  state.seedIds = [JOE_ID];
+  const slice = expandFixture({ nodeIds: [JONTY_ID], cap: 300 })!;
+  state.seedIds = [JONTY_ID];
   mergeSlice(state, slice);
   state.hiddenTypes = new Set(hidden);
   return state;
@@ -195,10 +195,10 @@ describe('useLegendTypeFilter — the `types` URL parameter', () => {
 
   it('keeps the other search parameters', async () => {
     const user = userEvent.setup();
-    render(<Harness state={loaded()} />, { wrapperOptions: { route: `/graph/explore?seed=${JOE_ID}&asOf=2026-06-01` } });
+    render(<Harness state={loaded()} />, { wrapperOptions: { route: `/graph/explore?seed=${JONTY_ID}&asOf=2026-06-01` } });
     await user.click(screen.getByRole('button', { name: 'Meetings' }));
     const params = new URLSearchParams(search()!);
-    expect(params.get('seed')).toBe(JOE_ID);
+    expect(params.get('seed')).toBe(JONTY_ID);
     expect(params.get('asOf')).toBe('2026-06-01');
     expect(params.get('types')).toBe('Meeting');
   });
