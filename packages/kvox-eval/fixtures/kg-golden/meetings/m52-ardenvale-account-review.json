@@ -13,7 +13,7 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Ardenvale Logistics account review\n\n**Date:** August 18\n**Attendees:** Odalys Brandt, Kestrel Munroe, Wilhelmina Ostby\n\n## Summary\n\nThe account team reviewed the relationship with Ardenvale Logistics, a mid-sized freight customer that has been with the company for four years. Volumes are steady and the last quarter closed on target, but the review spent most of its time on things that could go wrong with the account.\n\n## Account health\n\nArdenvale Logistics uses the booking platform for about nine hundred shipments a month, and the usage trend is flat. Customer satisfaction scores from the last survey were average. Odalys pointed out that the customer has not asked for any new features this year, which can mean either contentment or disengagement.\n\n## Risks and problems\n\n- Ardenvale Logistics may not renew its contract if the delivery delays continue, and the renewal decision is due before the end of the year. Kestrel said two of their senior managers have mentioned the delays in recent calls.\n- Invoices to Ardenvale Logistics have been rejected twice for a missing purchase order number, which delays payment and irritates their accounts team.\n- Their procurement contact is leaving in October, and the replacement is unknown. Wilhelmina noted that this person has been the main sponsor of the account.\n\n## Background\n\nThe contract covers booking, tracking and monthly reporting. Ardenvale Logistics also has a small warehouse integration that is run by a separate team. Pricing was last revised two years ago and no change is planned.\n\n## Next steps\n\nThe summary goes to the regional director, and the account team will review the account again in September.\n"
+    "body": "# Ardenvale Logistics account review\n\n**Date:** August 18\n**Attendees:** Odette Dummyson, Kellan Placeholder, Wynn Placeholder\n\n## Summary\n\nThe account team reviewed the relationship with Ardenvale Logistics, a mid-sized freight customer that has been with the company for four years. Volumes are steady and the last quarter closed on target, but the review spent most of its time on things that could go wrong with the account.\n\n## Account health\n\nArdenvale Logistics uses the booking platform for about nine hundred shipments a month, and the usage trend is flat. Customer satisfaction scores from the last survey were average. Odette pointed out that the customer has not asked for any new features this year, which can mean either contentment or disengagement.\n\n## Risks and problems\n\n- Ardenvale Logistics may not renew its contract if the delivery delays continue, and the renewal decision is due before the end of the year. Kestrel said two of their senior managers have mentioned the delays in recent calls.\n- Invoices to Ardenvale Logistics have been rejected twice for a missing purchase order number, which delays payment and irritates their accounts team.\n- Their procurement contact is leaving in October, and the replacement is unknown. Wynn noted that this person has been the main sponsor of the account.\n\n## Background\n\nThe contract covers booking, tracking and monthly reporting. Ardenvale Logistics also has a small warehouse integration that is run by a separate team. Pricing was last revised two years ago and no change is planned.\n\n## Next steps\n\nThe summary goes to the regional director, and the account team will review the account again in September.\n"
   },
   "knownEntities": [],
   "knownRelations": [],
@@ -34,44 +34,44 @@
         ]
       },
       {
-        "key": "odalys",
+        "key": "odette",
         "type": "Person",
-        "label": "Odalys Brandt",
+        "label": "Odette Dummyson",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Odalys Brandt, Kestrel Munroe, Wilhelmina Ostby"
+            "quote": "Odette Dummyson, Kellan Placeholder, Wynn Placeholder"
           }
         ]
       },
       {
         "key": "kestrel",
         "type": "Person",
-        "label": "Kestrel Munroe",
+        "label": "Kellan Placeholder",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Odalys Brandt, Kestrel Munroe, Wilhelmina Ostby"
+            "quote": "Odette Dummyson, Kellan Placeholder, Wynn Placeholder"
           }
         ]
       },
       {
-        "key": "wilhelmina",
+        "key": "wynn",
         "type": "Person",
-        "label": "Wilhelmina Ostby",
+        "label": "Wynn Placeholder",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Odalys Brandt, Kestrel Munroe, Wilhelmina Ostby"
+            "quote": "Odette Dummyson, Kellan Placeholder, Wynn Placeholder"
           }
         ]
       },

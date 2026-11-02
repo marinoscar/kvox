@@ -1,39 +1,39 @@
 {
   "id": "m19",
-  "title": "Solvane integration kickoff with Ravi",
+  "title": "Solvane integration kickoff with Rafferty",
   "tags": [
     "client",
     "relative-date",
     "resolution-trap"
   ],
   "recordedAt": "2026-05-14T10:00:00Z",
-  "contextText": "Ravi's first project meeting at Solvane; integrating the SCADA historian.",
+  "contextText": "Rafferty's first project meeting at Solvane; integrating the SCADA historian.",
   "hasTranscript": true,
   "speakers": [
     {
       "id": "m19-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m19-spk-b",
       "label": "B",
-      "displayName": "Ravi Menon"
+      "displayName": "Rafferty Fixture"
     },
     {
       "id": "m19-spk-c",
       "label": "C",
-      "displayName": "Grace Holloway"
+      "displayName": "Garnet Dummyson"
     },
     {
       "id": "m19-spk-d",
       "label": "D",
-      "displayName": "Iris Novak"
+      "displayName": "Isolde Placeholder"
     },
     {
       "id": "m19-spk-e",
       "label": "E",
-      "displayName": "Kwame Mensah"
+      "displayName": "Kieran Testcase"
     }
   ],
   "segments": [
@@ -43,7 +43,7 @@
       "startMs": 0,
       "endMs": 4020,
       "rev": 1,
-      "text": "Welcome, and Ravi, welcome back in a new role."
+      "text": "Welcome, and Rafferty, welcome back in a new role."
     },
     {
       "id": "m19-s002",
@@ -59,7 +59,7 @@
       "startMs": 12340,
       "endMs": 19400,
       "rev": 1,
-      "text": "Ravi reports to me, and I've asked him to own the integration side of the grid dashboard."
+      "text": "Rafferty reports to me, and I've asked him to own the integration side of the grid dashboard."
     },
     {
       "id": "m19-s004",
@@ -75,7 +75,7 @@
       "startMs": 23160,
       "endMs": 26800,
       "rev": 1,
-      "text": "Great. Kwame, where are we on the pipelines?"
+      "text": "Great. Kieran, where are we on the pipelines?"
     },
     {
       "id": "m19-s006",
@@ -187,7 +187,7 @@
       "startMs": 84080,
       "endMs": 86580,
       "rev": 1,
-      "text": "Ravi, how's the move going?"
+      "text": "Rafferty, how's the move going?"
     },
     {
       "id": "m19-s020",
@@ -203,7 +203,7 @@
       "startMs": 94520,
       "endMs": 97780,
       "rev": 1,
-      "text": "That sounds good. Grace, anything from you?"
+      "text": "That sounds good. Garnet, anything from you?"
     },
     {
       "id": "m19-s022",
@@ -240,7 +240,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Solvane integration kickoff with Ravi\n\n**Date:** May 14\n**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)\n\n## Summary\n\nKickoff of the integration workstream for the Solvane Energy grid dashboard. Ravi Menon has joined Solvane as integration lead and reports to Grace Holloway, who asked him to own integration for the dashboard.\n\n## Status\n\n- Kwame has finished the warehouse model and now needs access to the historian API for the backfill.\n- The historian enforces a rate limit, so the backfill will run overnight.\n\n## Decisions\n\n- **Nightly batch loads for phase one.** Streaming is not needed yet; fifteen-minute freshness is already the warehouse cadence.\n- The pilot covers **four of the fourteen sites** — the four biggest.\n- Grace wants a demo before the summer, early July at the latest.\n\n## Action items\n\n- **Ravi Menon** — provide API credentials for the SCADA historian by next Tuesday.\n- **Iris Novak** — send the list of the four pilot sites after the call.\n- **Kwame Mensah** — run the historian backfill after midnight.\n\n## Notes\n\n- Ravi has settled in Lisbon and now cycles to the office.\n- Iris is relieved to hand the integration side to Ravi.\n"
+    "body": "# Solvane integration kickoff with Rafferty\n\n**Date:** May 14\n**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Rafferty Fixture (Solvane Energy), Garnet Dummyson (Solvane Energy), Isolde Placeholder (Solvane Energy)\n\n## Summary\n\nKickoff of the integration workstream for the Solvane Energy grid dashboard. Rafferty Fixture has joined Solvane as integration lead and reports to Garnet Dummyson, who asked him to own integration for the dashboard.\n\n## Status\n\n- Kieran has finished the warehouse model and now needs access to the historian API for the backfill.\n- The historian enforces a rate limit, so the backfill will run overnight.\n\n## Decisions\n\n- **Nightly batch loads for phase one.** Streaming is not needed yet; fifteen-minute freshness is already the warehouse cadence.\n- The pilot covers **four of the fourteen sites** — the four biggest.\n- Garnet wants a demo before the summer, early July at the latest.\n\n## Action items\n\n- **Rafferty Fixture** — provide API credentials for the SCADA historian by next Tuesday.\n- **Isolde Placeholder** — send the list of the four pilot sites after the call.\n- **Kieran Testcase** — run the historian backfill after midnight.\n\n## Notes\n\n- Rafferty has settled in Lisbon and now cycles to the office.\n- Isolde is relieved to hand the integration side to Rafferty.\n"
   },
   "knownEntities": [
     {
@@ -264,11 +264,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -294,31 +294,31 @@
       ]
     },
     {
-      "id": "g-person-grace-holloway",
+      "id": "g-person-garnet-dummyson",
       "type": "Person",
-      "label": "Grace Holloway",
+      "label": "Garnet Dummyson",
       "aliases": [
-        "Grace"
+        "Garnet"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-iris-novak",
+      "id": "g-person-isolde-placeholder",
       "type": "Person",
-      "label": "Iris Novak",
+      "label": "Isolde Placeholder",
       "aliases": [
-        "Iris"
+        "Isolde"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-kwame-mensah",
+      "id": "g-person-kieran-testcase",
       "type": "Person",
-      "label": "Kwame Mensah",
+      "label": "Kieran Testcase",
       "aliases": [
-        "Kwame"
+        "Kieran"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -327,11 +327,11 @@
       ]
     },
     {
-      "id": "g-person-ravi-menon",
+      "id": "g-person-rafferty-fixture",
       "type": "Person",
-      "label": "Ravi Menon",
+      "label": "Rafferty Fixture",
       "aliases": [
-        "Ravi"
+        "Rafferty"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -358,84 +358,84 @@
       {
         "key": "meeting",
         "type": "Meeting",
-        "label": "Solvane integration kickoff with Ravi",
+        "label": "Solvane integration kickoff with Rafferty",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Solvane integration kickoff with Ravi"
+            "quote": "Solvane integration kickoff with Rafferty"
           }
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "kwame",
+        "key": "kieran",
         "type": "Person",
-        "label": "Kwame Mensah",
+        "label": "Kieran Testcase",
         "aliases": [],
-        "existingId": "g-person-kwame-mensah",
+        "existingId": "g-person-kieran-testcase",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Kwame Mensah (Larkspur Labs)"
+            "quote": "Kieran Testcase (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "ravi",
+        "key": "rafferty",
         "type": "Person",
-        "label": "Ravi Menon",
+        "label": "Rafferty Fixture",
         "aliases": [],
-        "existingId": "g-person-ravi-menon",
+        "existingId": "g-person-rafferty-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Ravi Menon has joined Solvane as integration lead"
+            "quote": "Rafferty Fixture has joined Solvane as integration lead"
           }
         ]
       },
       {
-        "key": "grace",
+        "key": "garnet",
         "type": "Person",
-        "label": "Grace Holloway",
+        "label": "Garnet Dummyson",
         "aliases": [],
-        "existingId": "g-person-grace-holloway",
+        "existingId": "g-person-garnet-dummyson",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Grace Holloway (Solvane Energy)"
+            "quote": "Garnet Dummyson (Solvane Energy)"
           }
         ]
       },
       {
-        "key": "iris",
+        "key": "isolde",
         "type": "Person",
-        "label": "Iris Novak",
+        "label": "Isolde Placeholder",
         "aliases": [],
-        "existingId": "g-person-iris-novak",
+        "existingId": "g-person-isolde-placeholder",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Iris Novak (Solvane Energy)"
+            "quote": "Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
@@ -473,7 +473,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -482,13 +482,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Rafferty Fixture (Solvane Energy), Garnet Dummyson (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "kwame",
+        "from": "kieran",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -497,13 +497,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Rafferty Fixture (Solvane Energy), Garnet Dummyson (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -512,13 +512,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Rafferty Fixture (Solvane Energy), Garnet Dummyson (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "grace",
+        "from": "garnet",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -527,13 +527,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Rafferty Fixture (Solvane Energy), Garnet Dummyson (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "iris",
+        "from": "isolde",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -542,13 +542,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Rafferty Fixture (Solvane Energy), Garnet Dummyson (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "solvane",
         "validFrom": null,
         "validTo": null,
@@ -557,14 +557,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Ravi Menon has joined Solvane as integration lead"
+            "quote": "Rafferty Fixture has joined Solvane as integration lead"
           }
         ]
       },
       {
         "type": "REPORTS_TO",
-        "from": "ravi",
-        "to": "grace",
+        "from": "rafferty",
+        "to": "garnet",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -573,7 +573,7 @@
           {
             "source": "segment",
             "segmentId": "m19-s003",
-            "quote": "Ravi reports to me"
+            "quote": "Rafferty reports to me"
           }
         ]
       },
@@ -643,10 +643,10 @@
       {
         "kind": "commitment",
         "subject": "dashboard",
-        "owner": "ravi",
-        "counterparty": "kwame",
+        "owner": "rafferty",
+        "counterparty": "kieran",
         "title": "Provide historian API credentials",
-        "statement": "Ravi will provide the API credentials for the SCADA historian by next Tuesday.",
+        "statement": "Rafferty will provide the API credentials for the SCADA historian by next Tuesday.",
         "status": "open",
         "occurredAt": "2026-05-14",
         "dueAt": "2026-05-19",
@@ -663,10 +663,10 @@
       {
         "kind": "commitment",
         "subject": "dashboard",
-        "owner": "iris",
+        "owner": "isolde",
         "counterparty": null,
         "title": "Send the pilot site list",
-        "statement": "Iris will send the list of the four pilot sites after the call.",
+        "statement": "Isolde will send the list of the four pilot sites after the call.",
         "status": "open",
         "occurredAt": "2026-05-14",
         "dueAt": "2026-05-14",
@@ -686,7 +686,7 @@
         "owner": null,
         "counterparty": null,
         "title": "Warehouse model done",
-        "statement": "Kwame has finished the warehouse model for the dashboard.",
+        "statement": "Kieran has finished the warehouse model for the dashboard.",
         "status": null,
         "occurredAt": "2026-05-14",
         "dueAt": null,
@@ -702,11 +702,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "ravi",
+        "subject": "rafferty",
         "owner": null,
         "counterparty": null,
         "title": "Settled in Lisbon, cycles to work",
-        "statement": "Ravi has settled in Lisbon and cycles to the office.",
+        "statement": "Rafferty has settled in Lisbon and cycles to the office.",
         "status": null,
         "occurredAt": "2026-05-14",
         "dueAt": null,

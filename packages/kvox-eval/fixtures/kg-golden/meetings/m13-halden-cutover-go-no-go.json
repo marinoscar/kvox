@@ -14,27 +14,27 @@
     {
       "id": "m13-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m13-spk-b",
       "label": "B",
-      "displayName": "Marcus Webb"
+      "displayName": "Maddox Sample"
     },
     {
       "id": "m13-spk-c",
       "label": "C",
-      "displayName": "Ravi Menon"
+      "displayName": "Rafferty Fixture"
     },
     {
       "id": "m13-spk-d",
       "label": "D",
-      "displayName": "Jonah Jiménez"
+      "displayName": "Jovan Démo"
     },
     {
       "id": "m13-spk-e",
       "label": "E",
-      "displayName": "Sarah Okonkwo"
+      "displayName": "Sasha Fixture"
     }
   ],
   "segments": [
@@ -44,7 +44,7 @@
       "startMs": 0,
       "endMs": 5540,
       "rev": 1,
-      "text": "This is the go/no-go for the northern depots cutover. JJ, technical readiness first."
+      "text": "This is the go/no-go for the northern depots cutover. JD, technical readiness first."
     },
     {
       "id": "m13-s002",
@@ -140,7 +140,7 @@
       "startMs": 67960,
       "endMs": 73120,
       "rev": 1,
-      "text": "Thanks Marcus. Ravi, who do you report to for the runbook sign-off?"
+      "text": "Thanks Maddox. Rafferty, who do you report to for the runbook sign-off?"
     },
     {
       "id": "m13-s014",
@@ -148,7 +148,7 @@
       "startMs": 73370,
       "endMs": 77390,
       "rev": 1,
-      "text": "I report to Marcus, so he signs it off."
+      "text": "I report to Maddox, so he signs it off."
     },
     {
       "id": "m13-s015",
@@ -164,7 +164,7 @@
       "startMs": 78870,
       "endMs": 81370,
       "rev": 1,
-      "text": "JJ, anything else you need?"
+      "text": "JD, anything else you need?"
     },
     {
       "id": "m13-s017",
@@ -196,7 +196,7 @@
       "startMs": 94430,
       "endMs": 99590,
       "rev": 1,
-      "text": "Please don't book the seafood place again. Marcus has a shellfish allergy."
+      "text": "Please don't book the seafood place again. Maddox has a shellfish allergy."
     },
     {
       "id": "m13-s021",
@@ -204,7 +204,7 @@
       "startMs": 99840,
       "endMs": 103100,
       "rev": 1,
-      "text": "Thank you, Sarah. Yes, a serious one."
+      "text": "Thank you, Sasha. Yes, a serious one."
     },
     {
       "id": "m13-s022",
@@ -233,7 +233,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Halden northern depots cutover go/no-go\n\n**Date:** April 2\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)\n\n## Summary\n\nGo/no-go review for the first regional cutover of the Halden route optimizer migration.\n\n## Readiness\n\n- **Technical:** the timezone fix is in, the rerun was clean, and the duplicate depot codes have been removed.\n- **Integrations:** northern depot managers have been briefed.\n- **Contract:** legal approved the data processing addendum last week.\n- **Rollback:** the old optimizer can be restored within an hour, but the procedure is not yet written down. Marcus wants it documented before anything is switched.\n\n## Decisions\n\n- **Go.** The northern depots cut over on **April 13**.\n- Changes to the carrier tables are frozen from April 10.\n\n## Action items\n\n- **Ravi Menon** — write the rollback runbook by April 9. Ravi reports to Marcus, who signs it off.\n- **Marcus Webb** — brief the board on the cutover plan at next week's board meeting.\n- **Sarah Okonkwo** — tell the carrier team about the change freeze today.\n\n## Notes\n\n- For the post-cutover team dinner, avoid seafood restaurants. Ravi suggested the Italian place near the depot instead, and Alex will book it once the cutover date holds.\n"
+    "body": "# Halden northern depots cutover go/no-go\n\n**Date:** April 2\n**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Rafferty Fixture (Halden Freight), Sasha Fixture (Halden Freight)\n\n## Summary\n\nGo/no-go review for the first regional cutover of the Halden route optimizer migration.\n\n## Readiness\n\n- **Technical:** the timezone fix is in, the rerun was clean, and the duplicate depot codes have been removed.\n- **Integrations:** northern depot managers have been briefed.\n- **Contract:** legal approved the data processing addendum last week.\n- **Rollback:** the old optimizer can be restored within an hour, but the procedure is not yet written down. Maddox wants it documented before anything is switched.\n\n## Decisions\n\n- **Go.** The northern depots cut over on **April 13**.\n- Changes to the carrier tables are frozen from April 10.\n\n## Action items\n\n- **Rafferty Fixture** — write the rollback runbook by April 9. Rafferty reports to Maddox, who signs it off.\n- **Maddox Sample** — brief the board on the cutover plan at next week's board meeting.\n- **Sasha Fixture** — tell the carrier team about the change freeze today.\n\n## Notes\n\n- For the post-cutover team dinner, avoid seafood restaurants. Rafferty suggested the Italian place near the depot instead, and Alma will book it once the cutover date holds.\n"
   },
   "knownEntities": [
     {
@@ -247,11 +247,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -271,12 +271,12 @@
       ]
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -287,11 +287,11 @@
       ]
     },
     {
-      "id": "g-person-marcus-webb",
+      "id": "g-person-maddox-sample",
       "type": "Person",
-      "label": "Marcus Webb",
+      "label": "Maddox Sample",
       "aliases": [
-        "Marcus"
+        "Maddox"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -300,11 +300,11 @@
       ]
     },
     {
-      "id": "g-person-ravi-menon",
+      "id": "g-person-rafferty-fixture",
       "type": "Person",
-      "label": "Ravi Menon",
+      "label": "Rafferty Fixture",
       "aliases": [
-        "Ravi"
+        "Rafferty"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -314,11 +314,11 @@
       ]
     },
     {
-      "id": "g-person-sarah-chen",
+      "id": "g-person-sasha-example",
       "type": "Person",
-      "label": "Sarah Chen",
+      "label": "Sasha Example",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -329,11 +329,11 @@
       ]
     },
     {
-      "id": "g-person-sarah-okonkwo",
+      "id": "g-person-sasha-fixture",
       "type": "Person",
-      "label": "Sarah Okonkwo",
+      "label": "Sasha Fixture",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -369,75 +369,75 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
         "key": "jj",
         "type": "Person",
-        "label": "Jonah Jiménez",
+        "label": "Jovan Démo",
         "aliases": [
-          "JJ"
+          "JD"
         ],
-        "existingId": "g-person-jonah-jimenez",
+        "existingId": "g-person-jovan-demo",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m13-s001",
-            "quote": "JJ, technical readiness first."
+            "quote": "JD, technical readiness first."
           }
         ]
       },
       {
-        "key": "marcus",
+        "key": "maddox",
         "type": "Person",
-        "label": "Marcus Webb",
+        "label": "Maddox Sample",
         "aliases": [],
-        "existingId": "g-person-marcus-webb",
+        "existingId": "g-person-maddox-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Marcus Webb (Halden Freight)"
+            "quote": "Maddox Sample (Halden Freight)"
           }
         ]
       },
       {
-        "key": "ravi",
+        "key": "rafferty",
         "type": "Person",
-        "label": "Ravi Menon",
+        "label": "Rafferty Fixture",
         "aliases": [],
-        "existingId": "g-person-ravi-menon",
+        "existingId": "g-person-rafferty-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Ravi Menon (Halden Freight)"
+            "quote": "Rafferty Fixture (Halden Freight)"
           }
         ]
       },
       {
-        "key": "sarahO",
+        "key": "sashaO",
         "type": "Person",
-        "label": "Sarah Okonkwo",
+        "label": "Sasha Fixture",
         "aliases": [],
-        "existingId": "g-person-sarah-okonkwo",
+        "existingId": "g-person-sasha-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Sarah Okonkwo (Halden Freight)"
+            "quote": "Sasha Fixture (Halden Freight)"
           }
         ]
       },
@@ -459,7 +459,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -468,7 +468,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Rafferty Fixture (Halden Freight), Sasha Fixture (Halden Freight)"
           }
         ]
       },
@@ -483,13 +483,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Rafferty Fixture (Halden Freight), Sasha Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "marcus",
+        "from": "maddox",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -498,13 +498,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Rafferty Fixture (Halden Freight), Sasha Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -513,13 +513,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Rafferty Fixture (Halden Freight), Sasha Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sarahO",
+        "from": "sashaO",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -528,14 +528,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Rafferty Fixture (Halden Freight), Sasha Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "REPORTS_TO",
-        "from": "ravi",
-        "to": "marcus",
+        "from": "rafferty",
+        "to": "maddox",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -544,7 +544,7 @@
           {
             "source": "segment",
             "segmentId": "m13-s014",
-            "quote": "I report to Marcus, so he signs it off."
+            "quote": "I report to Maddox, so he signs it off."
           }
         ]
       },
@@ -633,10 +633,10 @@
       {
         "kind": "commitment",
         "subject": "migration",
-        "owner": "ravi",
-        "counterparty": "marcus",
+        "owner": "rafferty",
+        "counterparty": "maddox",
         "title": "Write the rollback runbook",
-        "statement": "Ravi will write the rollback runbook by April 9.",
+        "statement": "Rafferty will write the rollback runbook by April 9.",
         "status": "open",
         "occurredAt": "2026-04-02",
         "dueAt": "2026-04-09",
@@ -653,10 +653,10 @@
       {
         "kind": "commitment",
         "subject": "migration",
-        "owner": "marcus",
+        "owner": "maddox",
         "counterparty": null,
         "title": "Brief the board on the cutover",
-        "statement": "Marcus will brief the board on the cutover plan at next week's meeting.",
+        "statement": "Maddox will brief the board on the cutover plan at next week's meeting.",
         "status": "open",
         "occurredAt": "2026-04-02",
         "dueAt": null,
@@ -673,10 +673,10 @@
       {
         "kind": "commitment",
         "subject": "migration",
-        "owner": "sarahO",
+        "owner": "sashaO",
         "counterparty": null,
         "title": "Tell the carrier team about the freeze",
-        "statement": "Sarah will tell the carrier team about the change freeze today.",
+        "statement": "Sasha will tell the carrier team about the change freeze today.",
         "status": "open",
         "occurredAt": "2026-04-02",
         "dueAt": "2026-04-02",
@@ -692,11 +692,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "marcus",
+        "subject": "maddox",
         "owner": null,
         "counterparty": null,
         "title": "Serious shellfish allergy",
-        "statement": "Marcus has a serious shellfish allergy.",
+        "statement": "Maddox has a serious shellfish allergy.",
         "status": null,
         "occurredAt": "2026-04-02",
         "dueAt": null,
@@ -706,7 +706,7 @@
           {
             "source": "segment",
             "segmentId": "m13-s020",
-            "quote": "Marcus has a shellfish allergy."
+            "quote": "Maddox has a shellfish allergy."
           },
           {
             "source": "segment",

@@ -1,6 +1,6 @@
 {
   "id": "m34",
-  "title": "Coffee with Dana Whitfield",
+  "title": "Coffee with Darcy Stubbs",
   "tags": [
     "personal",
     "note-only",
@@ -8,13 +8,13 @@
     "negative-one-off-activity"
   ],
   "recordedAt": "2026-05-21T10:30:00Z",
-  "contextText": "Coffee with Dana from Harbourline; no recording.",
+  "contextText": "Coffee with Darcy from Harbourline; no recording.",
   "hasTranscript": false,
   "speakers": [],
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Coffee with Dana Whitfield\n\n**Date:** May 21\n**Attendees:** Sam Kowalski, Dana Whitfield\n\n## Summary\n\nInformal coffee with Dana Whitfield, product lead at Harbourline, a week after the Rotterdam workshop. Mostly relationship-building, with a short update on their vendor shortlist for the next phase.\n\n## Harbourline update\n\n- Harbourline is choosing an identity-verification vendor for the account-linking step. Dana has three on the shortlist and wants our view on the user experience of each.\n- She liked the workshop format and wants the same structure for the retest readout.\n\n## Action items\n\n- **Dana Whitfield** — share the identity-verification vendor shortlist with Sam by next Wednesday.\n- **Sam Kowalski** — prepare a one-page comparison of the three vendors' onboarding flows once the list arrives.\n\n## Personal\n\n- Dana and Sam have been friends since university; they met in 2012 in the same first-year halls and have stayed close since. That is partly how Brambleway got the Harbourline introduction.\n- Dana is training for the Porto marathon in October. She has run a marathon every autumn for years and treats marathon running as her main hobby.\n- Sam has taken up long-distance running too and joins her Sunday long runs when he can; he is aiming for his first half marathon.\n- Dana mentioned she tried a pottery class once at a team social last month, but said it was not for her.\n\n## Next steps\n\nSam will send the vendor comparison within a week of receiving the shortlist, and we propose the retest readout for the second week of June so Harbourline can decide on the vendor before their planning cycle closes.\n"
+    "body": "# Coffee with Darcy Stubbs\n\n**Date:** May 21\n**Attendees:** Sabin Stubbs, Darcy Stubbs\n\n## Summary\n\nInformal coffee with Darcy Stubbs, product lead at Harbourline, a week after the Rotterdam workshop. Mostly relationship-building, with a short update on their vendor shortlist for the next phase.\n\n## Harbourline update\n\n- Harbourline is choosing an identity-verification vendor for the account-linking step. Darcy has three on the shortlist and wants our view on the user experience of each.\n- She liked the workshop format and wants the same structure for the retest readout.\n\n## Action items\n\n- **Darcy Stubbs** — share the identity-verification vendor shortlist with Sabin by next Wednesday.\n- **Sabin Stubbs** — prepare a one-page comparison of the three vendors' onboarding flows once the list arrives.\n\n## Personal\n\n- Darcy and Sabin have been friends since university; they met in 2012 in the same first-year halls and have stayed close since. That is partly how Brambleway got the Harbourline introduction.\n- Darcy is training for the Porto marathon in October. She has run a marathon every autumn for years and treats marathon running as her main hobby.\n- Sabin has taken up long-distance running too and joins her Sunday long runs when he can; he is aiming for his first half marathon.\n- Darcy mentioned she tried a pottery class once at a team social last month, but said it was not for her.\n\n## Next steps\n\nSabin will send the vendor comparison within a week of receiving the shortlist, and we propose the retest readout for the second week of June so Harbourline can decide on the vendor before their planning cycle closes.\n"
   },
   "knownEntities": [
     {
@@ -28,11 +28,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-sam-kowalski",
+      "id": "g-person-sabin-stubbs",
       "type": "Person",
-      "label": "Sam Kowalski",
+      "label": "Sabin Stubbs",
       "aliases": [
-        "Sam"
+        "Sabin"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -54,44 +54,44 @@
       {
         "key": "meeting",
         "type": "Meeting",
-        "label": "Coffee with Dana Whitfield",
+        "label": "Coffee with Darcy Stubbs",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Coffee with Dana Whitfield"
+            "quote": "Coffee with Darcy Stubbs"
           }
         ]
       },
       {
-        "key": "sam",
+        "key": "sabin",
         "type": "Person",
-        "label": "Sam Kowalski",
+        "label": "Sabin Stubbs",
         "aliases": [],
-        "existingId": "g-person-sam-kowalski",
+        "existingId": "g-person-sabin-stubbs",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Sam Kowalski, Dana Whitfield"
+            "quote": "**Attendees:** Sabin Stubbs, Darcy Stubbs"
           }
         ]
       },
       {
-        "key": "dana",
+        "key": "darcy",
         "type": "Person",
-        "label": "Dana Whitfield",
+        "label": "Darcy Stubbs",
         "aliases": [
-          "Dana"
+          "Darcy"
         ],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Dana Whitfield, product lead at Harbourline"
+            "quote": "Darcy Stubbs, product lead at Harbourline"
           }
         ]
       },
@@ -105,7 +105,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Dana Whitfield, product lead at Harbourline"
+            "quote": "Darcy Stubbs, product lead at Harbourline"
           }
         ]
       },
@@ -129,7 +129,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "sam",
+        "from": "sabin",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -138,13 +138,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Sam Kowalski, Dana Whitfield"
+            "quote": "**Attendees:** Sabin Stubbs, Darcy Stubbs"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "dana",
+        "from": "darcy",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -153,13 +153,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Sam Kowalski, Dana Whitfield"
+            "quote": "**Attendees:** Sabin Stubbs, Darcy Stubbs"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "dana",
+        "from": "darcy",
         "to": "harbourline",
         "validFrom": null,
         "validTo": null,
@@ -168,14 +168,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Dana Whitfield, product lead at Harbourline"
+            "quote": "Darcy Stubbs, product lead at Harbourline"
           }
         ]
       },
       {
         "type": "FRIEND_OF",
-        "from": "dana",
-        "to": "sam",
+        "from": "darcy",
+        "to": "sabin",
         "validFrom": "2012-01-01",
         "validTo": null,
         "precision": "year",
@@ -183,13 +183,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Dana and Sam have been friends since university; they met in 2012"
+            "quote": "Darcy and Sabin have been friends since university; they met in 2012"
           }
         ]
       },
       {
         "type": "INTERESTED_IN",
-        "from": "dana",
+        "from": "darcy",
         "to": "running",
         "validFrom": null,
         "validTo": null,
@@ -204,7 +204,7 @@
       },
       {
         "type": "INTERESTED_IN",
-        "from": "sam",
+        "from": "sabin",
         "to": "running",
         "validFrom": null,
         "validTo": null,
@@ -213,7 +213,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Sam has taken up long-distance running too and joins her Sunday long runs"
+            "quote": "Sabin has taken up long-distance running too and joins her Sunday long runs"
           }
         ]
       }
@@ -222,10 +222,10 @@
       {
         "kind": "commitment",
         "subject": "harbourline",
-        "owner": "dana",
+        "owner": "darcy",
         "counterparty": null,
         "title": "Share the vendor shortlist",
-        "statement": "Dana will share the identity-verification vendor shortlist with Sam by next Wednesday.",
+        "statement": "Darcy will share the identity-verification vendor shortlist with Sabin by next Wednesday.",
         "status": "open",
         "occurredAt": "2026-05-21",
         "dueAt": "2026-05-27",
@@ -234,7 +234,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "share the identity-verification vendor shortlist with Sam by next Wednesday"
+            "quote": "share the identity-verification vendor shortlist with Sabin by next Wednesday"
           }
         ]
       }

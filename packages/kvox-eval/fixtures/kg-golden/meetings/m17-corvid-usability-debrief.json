@@ -11,22 +11,22 @@
     {
       "id": "m17-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m17-spk-b",
       "label": "B",
-      "displayName": "Elif Kaya"
+      "displayName": "Elowen Sample"
     },
     {
       "id": "m17-spk-c",
       "label": "C",
-      "displayName": "Nadia Brooks"
+      "displayName": "Nell Fixture"
     },
     {
       "id": "m17-spk-d",
       "label": "D",
-      "displayName": "Samir Haddad"
+      "displayName": "Salim Stubbs"
     }
   ],
   "segments": [
@@ -36,7 +36,7 @@
       "startMs": 0,
       "endMs": 5540,
       "rev": 1,
-      "text": "Thanks all. Nadia ran the usability sessions this week, so over to her."
+      "text": "Thanks all. Nell ran the usability sessions this week, so over to her."
     },
     {
       "id": "m17-s002",
@@ -156,7 +156,7 @@
       "startMs": 77730,
       "endMs": 80610,
       "rev": 1,
-      "text": "Samir, anything from the clinical side?"
+      "text": "Salim, anything from the clinical side?"
     },
     {
       "id": "m17-s017",
@@ -164,7 +164,7 @@
       "startMs": 80860,
       "endMs": 89820,
       "rev": 1,
-      "text": "The wording on the consent step needs clinical review. I'll review the consent wording and send changes to Nadia by next Friday."
+      "text": "The wording on the consent step needs clinical review. I'll review the consent wording and send changes to Nell by next Friday."
     },
     {
       "id": "m17-s018",
@@ -180,7 +180,7 @@
       "startMs": 91300,
       "endMs": 97600,
       "rev": 1,
-      "text": "One organisational thing, I'm the product owner for this but Samir signs off anything clinical."
+      "text": "One organisational thing, I'm the product owner for this but Salim signs off anything clinical."
     },
     {
       "id": "m17-s020",
@@ -209,7 +209,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Corvid usability test debrief\n\n**Date:** April 30\n**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)\n\n## Summary\n\nDebrief of the first usability round on the Corvid Health patient intake redesign. Nadia ran the sessions this week with five front-desk staff across two clinics.\n\n## Results\n\n- Four of the five testers completed a full intake without any help.\n- The one who struggled got stuck on the medication search; the list was too long.\n- Samir wants the medication step fixed rather than simplified, because medication is where accuracy matters most. Nadia proposed type-ahead with the most common medications first.\n- The single-page layout clearly beat the step-by-step wizard: staff could see everything at once and jump back to fix mistakes.\n\n## Decisions\n\n- **Keep the single-page form**, with allergies at the top.\n- Two sign-offs apply: Elif as product owner, and Samir for anything clinical.\n\n## Action items\n\n- **Nadia Brooks** — ship the final designs (medication search, high contrast theme, error states) by May 15, sending them to Elif before engineering.\n- **Samir Haddad** — review the consent step wording and send changes to Nadia by next Friday.\n\n## Next steps\n\nOnce designs are signed off, engineering picks up the build for the first walk-in clinic.\n"
+    "body": "# Corvid usability test debrief\n\n**Date:** April 30\n**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)\n\n## Summary\n\nDebrief of the first usability round on the Corvid Health patient intake redesign. Nell ran the sessions this week with five front-desk staff across two clinics.\n\n## Results\n\n- Four of the five testers completed a full intake without any help.\n- The one who struggled got stuck on the medication search; the list was too long.\n- Salim wants the medication step fixed rather than simplified, because medication is where accuracy matters most. Nell proposed type-ahead with the most common medications first.\n- The single-page layout clearly beat the step-by-step wizard: staff could see everything at once and jump back to fix mistakes.\n\n## Decisions\n\n- **Keep the single-page form**, with allergies at the top.\n- Two sign-offs apply: Elowen as product owner, and Salim for anything clinical.\n\n## Action items\n\n- **Nell Fixture** — ship the final designs (medication search, high contrast theme, error states) by May 15, sending them to Elowen before engineering.\n- **Salim Stubbs** — review the consent step wording and send changes to Nell by next Friday.\n\n## Next steps\n\nOnce designs are signed off, engineering picks up the build for the first walk-in clinic.\n"
   },
   "knownEntities": [
     {
@@ -223,11 +223,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -251,11 +251,11 @@
       ]
     },
     {
-      "id": "g-person-elif-kaya",
+      "id": "g-person-elowen-sample",
       "type": "Person",
-      "label": "Elif Kaya",
+      "label": "Elowen Sample",
       "aliases": [
-        "Elif"
+        "Elowen"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -264,11 +264,11 @@
       ]
     },
     {
-      "id": "g-person-nadia-brooks",
+      "id": "g-person-nell-fixture",
       "type": "Person",
-      "label": "Nadia Brooks",
+      "label": "Nell Fixture",
       "aliases": [
-        "Nadia"
+        "Nell"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -278,12 +278,12 @@
       ]
     },
     {
-      "id": "g-person-samir-haddad",
+      "id": "g-person-salim-stubbs",
       "type": "Person",
-      "label": "Samir Haddad",
+      "label": "Salim Stubbs",
       "aliases": [
-        "Dr. Haddad",
-        "Samir"
+        "Dr. Stubbs",
+        "Salim"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -318,58 +318,58 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "nadia",
+        "key": "nell",
         "type": "Person",
-        "label": "Nadia Brooks",
+        "label": "Nell Fixture",
         "aliases": [],
-        "existingId": "g-person-nadia-brooks",
+        "existingId": "g-person-nell-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Nadia Brooks (Larkspur Labs)"
+            "quote": "Nell Fixture (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "elif",
+        "key": "elowen",
         "type": "Person",
-        "label": "Elif Kaya",
+        "label": "Elowen Sample",
         "aliases": [],
-        "existingId": "g-person-elif-kaya",
+        "existingId": "g-person-elowen-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Elif Kaya (Corvid Health)"
+            "quote": "Elowen Sample (Corvid Health)"
           }
         ]
       },
       {
-        "key": "samir",
+        "key": "salim",
         "type": "Person",
-        "label": "Samir Haddad",
+        "label": "Salim Stubbs",
         "aliases": [],
-        "existingId": "g-person-samir-haddad",
+        "existingId": "g-person-salim-stubbs",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Samir Haddad (Corvid Health)"
+            "quote": "Salim Stubbs (Corvid Health)"
           }
         ]
       },
@@ -391,7 +391,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -400,13 +400,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "nadia",
+        "from": "nell",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -415,13 +415,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "elif",
+        "from": "elowen",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -430,13 +430,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "samir",
+        "from": "salim",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -445,7 +445,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
@@ -511,8 +511,8 @@
         "subject": "intake",
         "owner": null,
         "counterparty": null,
-        "title": "Samir signs off clinical content",
-        "statement": "Elif signs off as product owner and Samir signs off anything clinical.",
+        "title": "Salim signs off clinical content",
+        "statement": "Elowen signs off as product owner and Salim signs off anything clinical.",
         "status": null,
         "occurredAt": "2026-04-30",
         "dueAt": null,
@@ -522,17 +522,17 @@
           {
             "source": "segment",
             "segmentId": "m17-s019",
-            "quote": "I'm the product owner for this but Samir signs off anything clinical."
+            "quote": "I'm the product owner for this but Salim signs off anything clinical."
           }
         ]
       },
       {
         "kind": "commitment",
         "subject": "intake",
-        "owner": "nadia",
-        "counterparty": "elif",
+        "owner": "nell",
+        "counterparty": "elowen",
         "title": "Ship final designs",
-        "statement": "Nadia will ship the final designs by May 15, sending them to Elif first.",
+        "statement": "Nell will ship the final designs by May 15, sending them to Elowen first.",
         "status": "open",
         "occurredAt": "2026-04-30",
         "dueAt": "2026-05-15",
@@ -549,10 +549,10 @@
       {
         "kind": "commitment",
         "subject": "intake",
-        "owner": "samir",
-        "counterparty": "nadia",
+        "owner": "salim",
+        "counterparty": "nell",
         "title": "Review consent wording",
-        "statement": "Samir will review the consent wording and send changes to Nadia by next Friday.",
+        "statement": "Salim will review the consent wording and send changes to Nell by next Friday.",
         "status": "open",
         "occurredAt": "2026-04-30",
         "dueAt": "2026-05-08",
@@ -562,7 +562,7 @@
           {
             "source": "segment",
             "segmentId": "m17-s017",
-            "quote": "I'll review the consent wording and send changes to Nadia by next Friday."
+            "quote": "I'll review the consent wording and send changes to Nell by next Friday."
           }
         ]
       }

@@ -14,22 +14,22 @@
     {
       "id": "m04-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m04-spk-b",
       "label": "B",
-      "displayName": "Elif Kaya"
+      "displayName": "Elowen Sample"
     },
     {
       "id": "m04-spk-c",
       "label": "C",
-      "displayName": "Samir Haddad"
+      "displayName": "Salim Stubbs"
     },
     {
       "id": "m04-spk-d",
       "label": "D",
-      "displayName": "Nadia Brooks"
+      "displayName": "Nell Fixture"
     }
   ],
   "segments": [
@@ -47,7 +47,7 @@
       "startMs": 8830,
       "endMs": 16650,
       "rev": 1,
-      "text": "Happy to. I'm Elif Kaya, product owner for patient-facing systems at Corvid Health. This intake redesign is my project."
+      "text": "Happy to. I'm Elowen Sample, product owner for patient-facing systems at Corvid Health. This intake redesign is my project."
     },
     {
       "id": "m04-s003",
@@ -55,7 +55,7 @@
       "startMs": 16900,
       "endMs": 25480,
       "rev": 1,
-      "text": "I'm Samir Haddad, clinical lead for the walk-in clinics. I'm here to make sure whatever we build works for the clinicians."
+      "text": "I'm Salim Stubbs, clinical lead for the walk-in clinics. I'm here to make sure whatever we build works for the clinicians."
     },
     {
       "id": "m04-s004",
@@ -63,7 +63,7 @@
       "startMs": 25730,
       "endMs": 31270,
       "rev": 1,
-      "text": "Nadia Brooks, I'm the designer from Larkspur. I'll be sketching as we go."
+      "text": "Nell Fixture, I'm the designer from Larkspur. I'll be sketching as we go."
     },
     {
       "id": "m04-s005",
@@ -71,7 +71,7 @@
       "startMs": 31520,
       "endMs": 34780,
       "rev": 1,
-      "text": "Let's start with the biggest pain. Elif?"
+      "text": "Let's start with the biggest pain. Elowen?"
     },
     {
       "id": "m04-s006",
@@ -199,7 +199,7 @@
       "startMs": 119980,
       "endMs": 125140,
       "rev": 1,
-      "text": "Thanks for telling us, Samir. We'll keep things asynchronous where we can."
+      "text": "Thanks for telling us, Salim. We'll keep things asynchronous where we can."
     },
     {
       "id": "m04-s022",
@@ -236,7 +236,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Corvid Health intake discovery workshop\n\n**Date:** January 29\n**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)\n\n## Summary\n\nDiscovery workshop for the patient intake redesign at Corvid Health. Elif Kaya, product owner for patient-facing systems, owns the project; Samir Haddad, clinical lead for the walk-in clinics, represents the clinicians. Nadia sketched throughout.\n\n## Current state\n\n- About 40 percent of intake forms arrive incomplete, most often missing allergies or current medication.\n- Incomplete forms fall on nurses, who chase the information at the bedside.\n- The problem is worst in the walk-in clinics; hospital wards have admissions staff who complete the forms.\n- Most clinics use paper and a clipboard. A couple of clinics have tablets that nobody uses.\n\n## Decisions\n\n- The redesign will **start with the walk-in clinics**; hospital wards are left for a later phase.\n- Monthly completion reporting is out of scope for this project.\n\n## Action items\n\n- **Elif Kaya** — send anonymized intake form samples to Nadia by next Tuesday.\n- **Larkspur** — come back with first sketches after reviewing the samples.\n\n## Notes\n\n- The data team at Corvid pulls monthly completion numbers; this is not part of the project.\n- Samir is on reduced hours for the next month; the team will keep communication asynchronous where possible.\n"
+    "body": "# Corvid Health intake discovery workshop\n\n**Date:** January 29\n**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)\n\n## Summary\n\nDiscovery workshop for the patient intake redesign at Corvid Health. Elowen Sample, product owner for patient-facing systems, owns the project; Salim Stubbs, clinical lead for the walk-in clinics, represents the clinicians. Nell sketched throughout.\n\n## Current state\n\n- About 40 percent of intake forms arrive incomplete, most often missing allergies or current medication.\n- Incomplete forms fall on nurses, who chase the information at the bedside.\n- The problem is worst in the walk-in clinics; hospital wards have admissions staff who complete the forms.\n- Most clinics use paper and a clipboard. A couple of clinics have tablets that nobody uses.\n\n## Decisions\n\n- The redesign will **start with the walk-in clinics**; hospital wards are left for a later phase.\n- Monthly completion reporting is out of scope for this project.\n\n## Action items\n\n- **Elowen Sample** — send anonymized intake form samples to Nell by next Tuesday.\n- **Larkspur** — come back with first sketches after reviewing the samples.\n\n## Notes\n\n- The data team at Corvid pulls monthly completion numbers; this is not part of the project.\n- Salim is on reduced hours for the next month; the team will keep communication asynchronous where possible.\n"
   },
   "knownEntities": [
     {
@@ -260,11 +260,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -275,21 +275,21 @@
       ]
     },
     {
-      "id": "g-person-elif-kaya",
+      "id": "g-person-elowen-sample",
       "type": "Person",
-      "label": "Elif Kaya",
+      "label": "Elowen Sample",
       "aliases": [
-        "Elif"
+        "Elowen"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-nadia-brooks",
+      "id": "g-person-nell-fixture",
       "type": "Person",
-      "label": "Nadia Brooks",
+      "label": "Nell Fixture",
       "aliases": [
-        "Nadia"
+        "Nell"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -314,53 +314,53 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "nadia",
+        "key": "nell",
         "type": "Person",
-        "label": "Nadia Brooks",
+        "label": "Nell Fixture",
         "aliases": [],
-        "existingId": "g-person-nadia-brooks",
+        "existingId": "g-person-nell-fixture",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m04-s004",
-            "quote": "Nadia Brooks, I'm the designer from Larkspur."
+            "quote": "Nell Fixture, I'm the designer from Larkspur."
           }
         ]
       },
       {
-        "key": "elif",
+        "key": "elowen",
         "type": "Person",
-        "label": "Elif Kaya",
+        "label": "Elowen Sample",
         "aliases": [],
-        "existingId": "g-person-elif-kaya",
+        "existingId": "g-person-elowen-sample",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m04-s002",
-            "quote": "I'm Elif Kaya, product owner for patient-facing systems at Corvid Health."
+            "quote": "I'm Elowen Sample, product owner for patient-facing systems at Corvid Health."
           }
         ]
       },
       {
-        "key": "samir",
+        "key": "salim",
         "type": "Person",
-        "label": "Samir Haddad",
+        "label": "Salim Stubbs",
         "aliases": [],
         "existingId": null,
         "props": {},
@@ -368,7 +368,7 @@
           {
             "source": "segment",
             "segmentId": "m04-s003",
-            "quote": "I'm Samir Haddad, clinical lead for the walk-in clinics."
+            "quote": "I'm Salim Stubbs, clinical lead for the walk-in clinics."
           }
         ]
       },
@@ -408,7 +408,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -417,13 +417,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "nadia",
+        "from": "nell",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -432,13 +432,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "elif",
+        "from": "elowen",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -447,13 +447,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "samir",
+        "from": "salim",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -462,13 +462,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "elif",
+        "from": "elowen",
         "to": "corvid",
         "validFrom": null,
         "validTo": null,
@@ -478,13 +478,13 @@
           {
             "source": "segment",
             "segmentId": "m04-s002",
-            "quote": "I'm Elif Kaya, product owner for patient-facing systems at Corvid Health."
+            "quote": "I'm Elowen Sample, product owner for patient-facing systems at Corvid Health."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "elif",
+        "from": "elowen",
         "to": "corvid",
         "validFrom": null,
         "validTo": null,
@@ -496,13 +496,13 @@
           {
             "source": "segment",
             "segmentId": "m04-s002",
-            "quote": "I'm Elif Kaya, product owner for patient-facing systems at Corvid Health."
+            "quote": "I'm Elowen Sample, product owner for patient-facing systems at Corvid Health."
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "samir",
+        "from": "salim",
         "to": "corvid",
         "validFrom": null,
         "validTo": null,
@@ -511,13 +511,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Samir Haddad (Corvid Health)"
+            "quote": "Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "nadia",
+        "from": "nell",
         "to": "g-org-larkspur-labs",
         "validFrom": null,
         "validTo": null,
@@ -527,13 +527,13 @@
           {
             "source": "segment",
             "segmentId": "m04-s004",
-            "quote": "Nadia Brooks, I'm the designer from Larkspur."
+            "quote": "Nell Fixture, I'm the designer from Larkspur."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "nadia",
+        "from": "nell",
         "to": "g-org-larkspur-labs",
         "validFrom": null,
         "validTo": null,
@@ -545,13 +545,13 @@
           {
             "source": "segment",
             "segmentId": "m04-s004",
-            "quote": "Nadia Brooks, I'm the designer from Larkspur."
+            "quote": "Nell Fixture, I'm the designer from Larkspur."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "samir",
+        "from": "salim",
         "to": "corvid",
         "validFrom": null,
         "validTo": null,
@@ -563,7 +563,7 @@
           {
             "source": "segment",
             "segmentId": "m04-s003",
-            "quote": "I'm Samir Haddad, clinical lead for the walk-in clinics."
+            "quote": "I'm Salim Stubbs, clinical lead for the walk-in clinics."
           }
         ]
       },
@@ -642,10 +642,10 @@
       {
         "kind": "commitment",
         "subject": "intake",
-        "owner": "elif",
-        "counterparty": "nadia",
+        "owner": "elowen",
+        "counterparty": "nell",
         "title": "Send anonymized intake form samples",
-        "statement": "Elif will send anonymized intake form samples to Nadia by next Tuesday.",
+        "statement": "Elowen will send anonymized intake form samples to Nell by next Tuesday.",
         "status": "open",
         "occurredAt": "2026-01-29",
         "dueAt": "2026-02-03",
@@ -661,11 +661,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "samir",
+        "subject": "salim",
         "owner": null,
         "counterparty": null,
         "title": "Recovering from knee surgery",
-        "statement": "Samir is recovering from knee surgery and is on reduced hours for the next month.",
+        "statement": "Salim is recovering from knee surgery and is on reduced hours for the next month.",
         "status": null,
         "occurredAt": "2026-01-29",
         "dueAt": null,

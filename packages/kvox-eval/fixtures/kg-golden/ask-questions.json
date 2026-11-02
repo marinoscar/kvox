@@ -3,9 +3,9 @@
     "id": "q01",
     "category": "lookup",
     "fixtures": ["m01"],
-    "question": "Who does Sarah Chen work for?",
+    "question": "Who does Sasha Example work for?",
     "expected": {
-      "entities": ["Sarah Chen", "Org Lambda Robotics"],
+      "entities": ["Sasha Example", "Org Lambda Robotics"],
       "answerAll": [["Org Lambda Robotics"]],
       "citeFrom": ["m01-s002"]
     }
@@ -14,9 +14,9 @@
     "id": "q02",
     "category": "lookup",
     "fixtures": ["m02"],
-    "question": "What is Marcus Webb's role at Halden Freight?",
+    "question": "What is Maddox Sample's role at Halden Freight?",
     "expected": {
-      "entities": ["Marcus Webb", "Halden Freight"],
+      "entities": ["Maddox Sample", "Halden Freight"],
       "answerAll": [["CIO"]],
       "citeFrom": ["m02-s002"]
     }
@@ -25,9 +25,9 @@
     "id": "q03",
     "category": "lookup",
     "fixtures": ["m04"],
-    "question": "What is Elif Kaya's role at Corvid Health?",
+    "question": "What is Elowen Sample's role at Corvid Health?",
     "expected": {
-      "entities": ["Elif Kaya", "Corvid Health"],
+      "entities": ["Elowen Sample", "Corvid Health"],
       "answerAll": [["product owner"]],
       "citeFrom": ["m04-s002"]
     }
@@ -36,9 +36,9 @@
     "id": "q04",
     "category": "lookup",
     "fixtures": ["m09"],
-    "question": "What is Owen Barker's role at Org Lambda Robotics?",
+    "question": "What is Otis Dummyson's role at Org Lambda Robotics?",
     "expected": {
-      "entities": ["Owen Barker", "Org Lambda Robotics"],
+      "entities": ["Otis Dummyson", "Org Lambda Robotics"],
       "answerAll": [["Head of Platform"]],
       "citeFrom": ["m09-s002"]
     }
@@ -47,10 +47,10 @@
     "id": "q05",
     "category": "lookup",
     "fixtures": ["m13"],
-    "question": "Who does Ravi Menon report to at Halden Freight?",
+    "question": "Who does Rafferty Fixture report to at Halden Freight?",
     "expected": {
-      "entities": ["Ravi Menon", "Marcus Webb"],
-      "answerAll": [["Marcus"]],
+      "entities": ["Rafferty Fixture", "Maddox Sample"],
+      "answerAll": [["Maddox"]],
       "citeFrom": ["m13-s014"]
     }
   },
@@ -58,9 +58,9 @@
     "id": "q06",
     "category": "lookup",
     "fixtures": ["m20"],
-    "question": "What is Chloé Dubois's role at Org Lambda Robotics?",
+    "question": "What is Cléo Sample's role at Org Lambda Robotics?",
     "expected": {
-      "entities": ["Chloé Dubois", "Org Lambda Robotics"],
+      "entities": ["Cléo Sample", "Org Lambda Robotics"],
       "answerAll": [["floor supervisor"]],
       "citeFrom": ["m20-s004"]
     }
@@ -69,9 +69,9 @@
     "id": "q07",
     "category": "lookup",
     "fixtures": ["m24"],
-    "question": "What is Mateo Rossi's role at Larkspur Labs?",
+    "question": "What is Maxim Mockwell's role at Larkspur Labs?",
     "expected": {
-      "entities": ["Mateo Rossi", "Larkspur Labs"],
+      "entities": ["Maxim Mockwell", "Larkspur Labs"],
       "answerAll": [["solutions architect"]],
       "citeFrom": ["m24-s003"]
     }
@@ -80,10 +80,10 @@
     "id": "q08",
     "category": "lookup",
     "fixtures": ["m03"],
-    "question": "Who does Nadia Brooks report to?",
+    "question": "Who does Nell Fixture report to?",
     "expected": {
-      "entities": ["Nadia Brooks", "Priya Raman"],
-      "answerAll": [["Priya"]],
+      "entities": ["Nell Fixture", "Pia Sample"],
+      "answerAll": [["Pia"]],
       "citeFrom": ["m03-s015"]
     }
   },
@@ -113,10 +113,10 @@
     "id": "q11",
     "category": "relationship",
     "fixtures": ["m29"],
-    "question": "Who does Aurelia Grant report to at Halden Freight?",
+    "question": "Who does Avalon Sample report to at Halden Freight?",
     "expected": {
-      "entities": ["Aurelia Grant", "Marcus Webb"],
-      "answerAll": [["Marcus"]],
+      "entities": ["Avalon Sample", "Maddox Sample"],
+      "answerAll": [["Maddox"]],
       "citeFrom": ["m29-s003"]
     }
   },
@@ -148,8 +148,8 @@
     "fixtures": ["m13"],
     "question": "Who attended the Halden northern depots cutover go/no-go meeting?",
     "expected": {
-      "entities": ["Alex Rivera", "Marcus Webb", "Ravi Menon", "Sarah Okonkwo"],
-      "answerAll": [["Alex Rivera"], ["Marcus Webb"], ["Ravi Menon"], ["Sarah Okonkwo"]],
+      "entities": ["Alma Mockwell", "Maddox Sample", "Rafferty Fixture", "Sasha Fixture"],
+      "answerAll": [["Alma Mockwell"], ["Maddox Sample"], ["Rafferty Fixture"], ["Sasha Fixture"]],
       "citeFrom": ["m13#note"]
     }
   },
@@ -157,9 +157,9 @@
     "id": "q15",
     "category": "temporal",
     "fixtures": ["m09"],
-    "question": "When was Tomás Aguilar promoted to Staff Engineer?",
+    "question": "When was Tobín Dummyson promoted to Staff Engineer?",
     "expected": {
-      "entities": ["Tomás Aguilar"],
+      "entities": ["Tobín Dummyson"],
       "answerAll": [["March"]],
       "citeFrom": ["m09-s004"]
     }
@@ -168,10 +168,10 @@
     "id": "q16",
     "category": "temporal",
     "fixtures": ["m09"],
-    "question": "Who did Tomás Aguilar report to before April 2026?",
+    "question": "Who did Tobín Dummyson report to before April 2026?",
     "expected": {
-      "entities": ["Tomás Aguilar", "Lena Park"],
-      "answerAll": [["Lena"]],
+      "entities": ["Tobín Dummyson", "Lorne Testcase"],
+      "answerAll": [["Lorne"]],
       "citeFrom": ["m09-s009"]
     }
   },
@@ -179,10 +179,10 @@
     "id": "q17",
     "category": "temporal",
     "fixtures": ["m09"],
-    "question": "Who does Tomás Aguilar report to from April 2026 onward?",
+    "question": "Who does Tobín Dummyson report to from April 2026 onward?",
     "expected": {
-      "entities": ["Tomás Aguilar", "Owen Barker"],
-      "answerAll": [["Owen"]],
+      "entities": ["Tobín Dummyson", "Otis Dummyson"],
+      "answerAll": [["Otis"]],
       "citeFrom": ["m09-s009"]
     }
   },
@@ -190,9 +190,9 @@
     "id": "q18",
     "category": "temporal",
     "fixtures": ["m15"],
-    "question": "When did Ravi Menon leave Halden Freight?",
+    "question": "When did Rafferty Fixture leave Halden Freight?",
     "expected": {
-      "entities": ["Ravi Menon", "Halden Freight"],
+      "entities": ["Rafferty Fixture", "Halden Freight"],
       "answerAll": [["April"]],
       "citeFrom": ["m15-s002"]
     }
@@ -201,9 +201,9 @@
     "id": "q19",
     "category": "temporal",
     "fixtures": ["m15"],
-    "question": "Which company did Ravi Menon join after leaving Halden Freight?",
+    "question": "Which company did Rafferty Fixture join after leaving Halden Freight?",
     "expected": {
-      "entities": ["Ravi Menon", "Solvane Energy"],
+      "entities": ["Rafferty Fixture", "Solvane Energy"],
       "answerAll": [["Solvane Energy"]],
       "citeFrom": ["m15-s004"]
     }
@@ -212,9 +212,9 @@
     "id": "q20",
     "category": "temporal",
     "fixtures": ["m22"],
-    "question": "Since when has Marcus Webb been Head of IT at Halden Freight?",
+    "question": "Since when has Maddox Sample been Head of IT at Halden Freight?",
     "expected": {
-      "entities": ["Marcus Webb", "Halden Freight"],
+      "entities": ["Maddox Sample", "Halden Freight"],
       "answerAll": [["2018"]],
       "citeFrom": ["m22-s002"]
     }
@@ -331,8 +331,8 @@
     "fixtures": ["m20", "m28"],
     "question": "Who does the floor supervisor in Building 3 at Org Lambda Robotics report to?",
     "expected": {
-      "entities": ["Chloé Dubois", "Sarah Chen"],
-      "answerAll": [["Sarah"]],
+      "entities": ["Cléo Sample", "Sasha Example"],
+      "answerAll": [["Sasha"]],
       "citeFrom": ["m28-s019"]
     }
   },
@@ -342,8 +342,8 @@
     "fixtures": ["m15"],
     "question": "Which company did Halden Freight's former integration lead join, and who took over his depot integration work at Halden?",
     "expected": {
-      "entities": ["Ravi Menon", "Solvane Energy"],
-      "answerAll": [["Solvane Energy"], ["JJ", "Jonah"]],
+      "entities": ["Rafferty Fixture", "Solvane Energy"],
+      "answerAll": [["Solvane Energy"], ["JD", "Jovan"]],
       "citeFrom": ["m15-s004", "m15-s013"]
     }
   },
@@ -351,10 +351,10 @@
     "id": "q33",
     "category": "multi_hop",
     "fixtures": ["m09"],
-    "question": "Who was Tomás Aguilar's manager before April 2026, and who manages him after that?",
+    "question": "Who was Tobín Dummyson's manager before April 2026, and who manages him after that?",
     "expected": {
-      "entities": ["Tomás Aguilar", "Lena Park", "Owen Barker"],
-      "answerAll": [["Lena"], ["Owen"]],
+      "entities": ["Tobín Dummyson", "Lorne Testcase", "Otis Dummyson"],
+      "answerAll": [["Lorne"], ["Otis"]],
       "citeFrom": ["m09-s009"]
     }
   },
@@ -362,11 +362,11 @@
     "id": "q34",
     "category": "as_of",
     "fixtures": ["m09"],
-    "question": "As of March 15, 2026, who did Tomás Aguilar report to?",
+    "question": "As of March 15, 2026, who did Tobín Dummyson report to?",
     "expected": {
-      "entities": ["Tomás Aguilar", "Lena Park"],
-      "answerAll": [["Lena"]],
-      "answerNone": ["Owen Barker"],
+      "entities": ["Tobín Dummyson", "Lorne Testcase"],
+      "answerAll": [["Lorne"]],
+      "answerNone": ["Otis Dummyson"],
       "citeFrom": ["m09-s009"]
     }
   },
@@ -374,10 +374,10 @@
     "id": "q35",
     "category": "as_of",
     "fixtures": ["m09"],
-    "question": "As of April 15, 2026, who did Tomás Aguilar report to?",
+    "question": "As of April 15, 2026, who did Tobín Dummyson report to?",
     "expected": {
-      "entities": ["Tomás Aguilar", "Owen Barker"],
-      "answerAll": [["Owen"]],
+      "entities": ["Tobín Dummyson", "Otis Dummyson"],
+      "answerAll": [["Otis"]],
       "citeFrom": ["m09-s009"]
     }
   },
@@ -385,9 +385,9 @@
     "id": "q36",
     "category": "as_of",
     "fixtures": ["m15"],
-    "question": "As of April 20, 2026, which company did Ravi Menon work for?",
+    "question": "As of April 20, 2026, which company did Rafferty Fixture work for?",
     "expected": {
-      "entities": ["Ravi Menon", "Halden Freight"],
+      "entities": ["Rafferty Fixture", "Halden Freight"],
       "answerAll": [["Halden Freight"]],
       "answerNone": ["Solvane Energy"],
       "citeFrom": ["m15-s002"]
@@ -397,9 +397,9 @@
     "id": "q37",
     "category": "as_of",
     "fixtures": ["m15"],
-    "question": "As of May 10, 2026, which company did Ravi Menon work for?",
+    "question": "As of May 10, 2026, which company did Rafferty Fixture work for?",
     "expected": {
-      "entities": ["Ravi Menon", "Solvane Energy"],
+      "entities": ["Rafferty Fixture", "Solvane Energy"],
       "answerAll": [["Solvane Energy"]],
       "citeFrom": ["m15-s004"]
     }
@@ -408,9 +408,9 @@
     "id": "q38",
     "category": "as_of",
     "fixtures": ["m22"],
-    "question": "As of the Halden Freight introductory call, since what year had Marcus Webb been Head of IT there?",
+    "question": "As of the Halden Freight introductory call, since what year had Maddox Sample been Head of IT there?",
     "expected": {
-      "entities": ["Marcus Webb", "Halden Freight"],
+      "entities": ["Maddox Sample", "Halden Freight"],
       "answerAll": [["2018"]],
       "citeFrom": ["m22-s002"]
     }
@@ -419,7 +419,7 @@
     "id": "q39",
     "category": "negative",
     "fixtures": ["m01"],
-    "question": "What is Sarah Chen's home address?",
+    "question": "What is Sasha Example's home address?",
     "expected": {
       "answerNone": ["home address"],
       "notFound": true
@@ -429,7 +429,7 @@
     "id": "q40",
     "category": "negative",
     "fixtures": ["m13"],
-    "question": "Does Marcus Webb have any serious allergies?",
+    "question": "Does Maddox Sample have any serious allergies?",
     "expected": {
       "answerNone": ["shellfish", "allergy"],
       "notFound": true
@@ -449,9 +449,9 @@
     "id": "q42",
     "category": "negative",
     "fixtures": ["m08"],
-    "question": "What did Jamie Fontaine decide about the Meridian project?",
+    "question": "What did Jalen Mockwell decide about the Meridian project?",
     "expected": {
-      "answerNone": ["Jamie Fontaine"],
+      "answerNone": ["Jalen Mockwell"],
       "notFound": true
     }
   },
@@ -459,9 +459,9 @@
     "id": "q43",
     "category": "multi_hop",
     "fixtures": ["m56", "m57"],
-    "question": "How is Joe connected to the Product X rollout?",
+    "question": "How is Jonty connected to the Product X rollout?",
     "expected": {
-      "entities": ["Joe Hartigan", "Product X rollout"],
+      "entities": ["Jonty Fixture", "Product X rollout"],
       "answerAll": [["Company A"], ["skeptical"], ["stakeholder"]],
       "citeFrom": ["m56#note", "m57#note"],
       "citeFromMin": 2

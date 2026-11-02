@@ -13,22 +13,22 @@
     {
       "id": "m25-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m25-spk-b",
       "label": "B",
-      "displayName": "Elif Kaya"
+      "displayName": "Elowen Sample"
     },
     {
       "id": "m25-spk-c",
       "label": "C",
-      "displayName": "Samir Haddad"
+      "displayName": "Salim Stubbs"
     },
     {
       "id": "m25-spk-d",
       "label": "D",
-      "displayName": "Nadia Brooks"
+      "displayName": "Nell Fixture"
     }
   ],
   "segments": [
@@ -46,7 +46,7 @@
       "startMs": 6550,
       "endMs": 16270,
       "rev": 1,
-      "text": "Before that, a quick org note. Since the reorg in May I report to Samir, so clinical and product sit in one team now."
+      "text": "Before that, a quick org note. Since the reorg in May I report to Salim, so clinical and product sit in one team now."
     },
     {
       "id": "m25-s003",
@@ -219,7 +219,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Corvid intake rollout planning\n\n**Date:** June 18\n**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)\n\n## Summary\n\nThe build of the new patient intake is complete for the first clinic. This session planned the rollout across Corvid Health's walk-in clinics.\n\n## Org change\n\nSince Corvid's reorg in May, Elif reports to Samir, so clinical and product now sit in one team. Samir expects this to make sign-offs easier.\n\n## Decisions\n\n- **Roll out clinic by clinic, starting with the Eastgate clinic**, which has the highest walk-in volume. No big-bang rollout.\n- Success bar: incomplete forms started at 40 percent; if Eastgate gets under 10 percent in the first month, the rollout goes wider.\n\n## Action items\n\n- **Elif Kaya** — train the front-desk leads at every clinic by July 10 (about thirty minutes each).\n- **Samir Haddad** — sign off the clinical wording on the medication screens by next Tuesday.\n- **Nadia Brooks** — send Samir the final screens this afternoon; sit at the Eastgate front desk on launch day.\n\n## Notes\n\n- Elif is relocating to the coast next spring and will stay on the project remotely.\n- Nadia's launch-day presence at Eastgate is meant to catch usability problems the test sessions missed.\n"
+    "body": "# Corvid intake rollout planning\n\n**Date:** June 18\n**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)\n\n## Summary\n\nThe build of the new patient intake is complete for the first clinic. This session planned the rollout across Corvid Health's walk-in clinics.\n\n## Org change\n\nSince Corvid's reorg in May, Elowen reports to Salim, so clinical and product now sit in one team. Salim expects this to make sign-offs easier.\n\n## Decisions\n\n- **Roll out clinic by clinic, starting with the Eastgate clinic**, which has the highest walk-in volume. No big-bang rollout.\n- Success bar: incomplete forms started at 40 percent; if Eastgate gets under 10 percent in the first month, the rollout goes wider.\n\n## Action items\n\n- **Elowen Sample** — train the front-desk leads at every clinic by July 10 (about thirty minutes each).\n- **Salim Stubbs** — sign off the clinical wording on the medication screens by next Tuesday.\n- **Nell Fixture** — send Salim the final screens this afternoon; sit at the Eastgate front desk on launch day.\n\n## Notes\n\n- Elowen is relocating to the coast next spring and will stay on the project remotely.\n- Nell's launch-day presence at Eastgate is meant to catch usability problems the test sessions missed.\n"
   },
   "knownEntities": [
     {
@@ -233,11 +233,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -268,11 +268,11 @@
       ]
     },
     {
-      "id": "g-person-elif-kaya",
+      "id": "g-person-elowen-sample",
       "type": "Person",
-      "label": "Elif Kaya",
+      "label": "Elowen Sample",
       "aliases": [
-        "Elif"
+        "Elowen"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -282,11 +282,11 @@
       ]
     },
     {
-      "id": "g-person-nadia-brooks",
+      "id": "g-person-nell-fixture",
       "type": "Person",
-      "label": "Nadia Brooks",
+      "label": "Nell Fixture",
       "aliases": [
-        "Nadia"
+        "Nell"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -297,12 +297,12 @@
       ]
     },
     {
-      "id": "g-person-samir-haddad",
+      "id": "g-person-salim-stubbs",
       "type": "Person",
-      "label": "Samir Haddad",
+      "label": "Salim Stubbs",
       "aliases": [
-        "Dr. Haddad",
-        "Samir"
+        "Dr. Stubbs",
+        "Salim"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -338,58 +338,58 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "nadia",
+        "key": "nell",
         "type": "Person",
-        "label": "Nadia Brooks",
+        "label": "Nell Fixture",
         "aliases": [],
-        "existingId": "g-person-nadia-brooks",
+        "existingId": "g-person-nell-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Nadia Brooks (Larkspur Labs)"
+            "quote": "Nell Fixture (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "elif",
+        "key": "elowen",
         "type": "Person",
-        "label": "Elif Kaya",
+        "label": "Elowen Sample",
         "aliases": [],
-        "existingId": "g-person-elif-kaya",
+        "existingId": "g-person-elowen-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Elif Kaya (Corvid Health)"
+            "quote": "Elowen Sample (Corvid Health)"
           }
         ]
       },
       {
-        "key": "samir",
+        "key": "salim",
         "type": "Person",
-        "label": "Samir Haddad",
+        "label": "Salim Stubbs",
         "aliases": [],
-        "existingId": "g-person-samir-haddad",
+        "existingId": "g-person-salim-stubbs",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Samir Haddad (Corvid Health)"
+            "quote": "Salim Stubbs (Corvid Health)"
           }
         ]
       },
@@ -425,7 +425,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -434,13 +434,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "nadia",
+        "from": "nell",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -449,13 +449,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "elif",
+        "from": "elowen",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -464,13 +464,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "samir",
+        "from": "salim",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -479,14 +479,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "REPORTS_TO",
-        "from": "elif",
-        "to": "samir",
+        "from": "elowen",
+        "to": "salim",
         "validFrom": "2026-05-01",
         "validTo": null,
         "precision": "month",
@@ -495,7 +495,7 @@
           {
             "source": "segment",
             "segmentId": "m25-s002",
-            "quote": "Since the reorg in May I report to Samir"
+            "quote": "Since the reorg in May I report to Salim"
           }
         ]
       },
@@ -559,10 +559,10 @@
       {
         "kind": "commitment",
         "subject": "intake",
-        "owner": "elif",
+        "owner": "elowen",
         "counterparty": null,
         "title": "Train front-desk leads",
-        "statement": "Elif will train the front-desk leads at every clinic by July 10.",
+        "statement": "Elowen will train the front-desk leads at every clinic by July 10.",
         "status": "open",
         "occurredAt": "2026-06-18",
         "dueAt": "2026-07-10",
@@ -579,10 +579,10 @@
       {
         "kind": "commitment",
         "subject": "intake",
-        "owner": "samir",
-        "counterparty": "nadia",
+        "owner": "salim",
+        "counterparty": "nell",
         "title": "Sign off clinical wording",
-        "statement": "Samir will sign off the clinical wording by next Tuesday.",
+        "statement": "Salim will sign off the clinical wording by next Tuesday.",
         "status": "open",
         "occurredAt": "2026-06-18",
         "dueAt": "2026-06-23",
@@ -599,10 +599,10 @@
       {
         "kind": "commitment",
         "subject": "intake",
-        "owner": "nadia",
-        "counterparty": "samir",
+        "owner": "nell",
+        "counterparty": "salim",
         "title": "Send final screens",
-        "statement": "Nadia will send Samir the final screens this afternoon.",
+        "statement": "Nell will send Salim the final screens this afternoon.",
         "status": "open",
         "occurredAt": "2026-06-18",
         "dueAt": "2026-06-18",
@@ -618,11 +618,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "elif",
+        "subject": "elowen",
         "owner": null,
         "counterparty": null,
         "title": "Relocating to the coast",
-        "statement": "Elif is relocating to the coast next spring and will stay on remotely.",
+        "statement": "Elowen is relocating to the coast next spring and will stay on remotely.",
         "status": null,
         "occurredAt": "2026-06-18",
         "dueAt": null,

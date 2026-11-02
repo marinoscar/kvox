@@ -12,17 +12,17 @@
     {
       "id": "m35-spk-a",
       "label": "A",
-      "displayName": "Nina Castellanos"
+      "displayName": "Nico Sample"
     },
     {
       "id": "m35-spk-b",
       "label": "B",
-      "displayName": "Oliver Brandt"
+      "displayName": "Osric Testcase"
     },
     {
       "id": "m35-spk-c",
       "label": "C",
-      "displayName": "Sam Kowalski"
+      "displayName": "Sabin Stubbs"
     }
   ],
   "segments": [
@@ -64,7 +64,7 @@
       "startMs": 27315,
       "endMs": 34930,
       "rev": 1,
-      "text": "Makes sense. Dana's vendor shortlist arrived, by the way. I'm halfway through the comparison."
+      "text": "Makes sense. Darcy's vendor shortlist arrived, by the way. I'm halfway through the comparison."
     },
     {
       "id": "m35-s006",
@@ -80,7 +80,7 @@
       "startMs": 39955,
       "endMs": 45480,
       "rev": 1,
-      "text": "Yes, I'll send the vendor comparison to Dana on Friday."
+      "text": "Yes, I'll send the vendor comparison to Darcy on Friday."
     },
     {
       "id": "m35-s008",
@@ -104,7 +104,7 @@
       "startMs": 54570,
       "endMs": 60040,
       "rev": 1,
-      "text": "Okay. Personal bits. Sam, you asked for the ninth off?"
+      "text": "Okay. Personal bits. Sabin, you asked for the ninth off?"
     },
     {
       "id": "m35-s011",
@@ -112,7 +112,7 @@
       "startMs": 60340,
       "endMs": 67405,
       "rev": 1,
-      "text": "Yes, June 9 is our tenth wedding anniversary. Tessa and I got married in June 2016."
+      "text": "Yes, June 9 is our tenth wedding anniversary. Tarn and I got married in June 2016."
     },
     {
       "id": "m35-s012",
@@ -136,7 +136,7 @@
       "startMs": 80785,
       "endMs": 86475,
       "rev": 1,
-      "text": "Quite right. Nina, you were telling me about your recital?"
+      "text": "Quite right. Nico, you were telling me about your recital?"
     },
     {
       "id": "m35-s015",
@@ -160,7 +160,7 @@
       "startMs": 99525,
       "endMs": 107250,
       "rev": 1,
-      "text": "Every week. It's the thing that keeps me sane. My friend Ruth from choir set the gig up for us."
+      "text": "Every week. It's the thing that keeps me sane. My friend Ruben from choir set the gig up for us."
     },
     {
       "id": "m35-s018",
@@ -168,7 +168,7 @@
       "startMs": 107550,
       "endMs": 112965,
       "rev": 1,
-      "text": "Ruth Adeyemi? The one who came to the studio opening?"
+      "text": "Ruben Mockwell? The one who came to the studio opening?"
     },
     {
       "id": "m35-s019",
@@ -176,7 +176,7 @@
       "startMs": 113265,
       "endMs": 120220,
       "rev": 1,
-      "text": "No, Ruth Moreno. We've been friends since we sang in the same choir back in 2018."
+      "text": "No, Ruben Placeholder. We've been friends since we sang in the same choir back in 2018."
     },
     {
       "id": "m35-s020",
@@ -192,12 +192,12 @@
       "startMs": 125575,
       "endMs": 131100,
       "rev": 1,
-      "text": "I will. Okay, Sam is off on June 9, noted. Thanks both."
+      "text": "I will. Okay, Sabin is off on June 9, noted. Thanks both."
     }
   ],
   "note": {
     "version": 1,
-    "body": "# Brambleway studio weekly sync\n\n**Date:** June 1\n**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski\n\n## Summary\n\nInternal sync covering the Harbourline retest, the identity-verification vendor comparison, and a couple of personal updates ahead of the summer.\n\n## Harbourline\n\n- The retest of the reworked account-linking screen is booked for next Thursday. It tested well internally.\n- The panel is three returning participants and two new ones, to check whether first-time users still skip the linking step.\n- Dana's vendor shortlist has arrived and Sam is halfway through the comparison.\n\n## Action items\n\n- **Sam Kowalski** — send the vendor comparison to Dana on Friday.\n\n## Personal updates\n\n- Sam is off on June 9: it is his tenth wedding anniversary. He and Tessa got married in June 2016 and are having dinner where they held their reception.\n- Nina has played jazz piano for about fifteen years and her group has a small gig in July. She plays every week.\n- The gig was arranged by Nina's friend Ruth Moreno; they have been friends since they sang in the same choir in 2018.\n\n## Next steps\n\nOliver runs the retest next Thursday and shares the recordings the same day. The team reviews the results together at the next sync, alongside Sam's vendor comparison, before anything goes back to Harbourline.\n"
+    "body": "# Brambleway studio weekly sync\n\n**Date:** June 1\n**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs\n\n## Summary\n\nInternal sync covering the Harbourline retest, the identity-verification vendor comparison, and a couple of personal updates ahead of the summer.\n\n## Harbourline\n\n- The retest of the reworked account-linking screen is booked for next Thursday. It tested well internally.\n- The panel is three returning participants and two new ones, to check whether first-time users still skip the linking step.\n- Darcy's vendor shortlist has arrived and Sabin is halfway through the comparison.\n\n## Action items\n\n- **Sabin Stubbs** — send the vendor comparison to Darcy on Friday.\n\n## Personal updates\n\n- Sabin is off on June 9: it is his tenth wedding anniversary. He and Tarn got married in June 2016 and are having dinner where they held their reception.\n- Nico has played jazz piano for about fifteen years and her group has a small gig in July. She plays every week.\n- The gig was arranged by Nico's friend Ruben Placeholder; they have been friends since they sang in the same choir in 2018.\n\n## Next steps\n\nOsric runs the retest next Thursday and shares the recordings the same day. The team reviews the results together at the next sync, alongside Sabin's vendor comparison, before anything goes back to Harbourline.\n"
   },
   "knownEntities": [
     {
@@ -211,11 +211,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-nina-castellanos",
+      "id": "g-person-nico-sample",
       "type": "Person",
-      "label": "Nina Castellanos",
+      "label": "Nico Sample",
       "aliases": [
-        "Nina"
+        "Nico"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -224,11 +224,11 @@
       ]
     },
     {
-      "id": "g-person-oliver-brandt",
+      "id": "g-person-osric-testcase",
       "type": "Person",
-      "label": "Oliver Brandt",
+      "label": "Osric Testcase",
       "aliases": [
-        "Oliver"
+        "Osric"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -237,11 +237,11 @@
       ]
     },
     {
-      "id": "g-person-sam-kowalski",
+      "id": "g-person-sabin-stubbs",
       "type": "Person",
-      "label": "Sam Kowalski",
+      "label": "Sabin Stubbs",
       "aliases": [
-        "Sam"
+        "Sabin"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -258,11 +258,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-dana-whitfield",
+      "id": "g-person-darcy-stubbs",
       "type": "Person",
-      "label": "Dana Whitfield",
+      "label": "Darcy Stubbs",
       "aliases": [
-        "Dana"
+        "Darcy"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -288,67 +288,67 @@
         ]
       },
       {
-        "key": "nina",
+        "key": "nico",
         "type": "Person",
-        "label": "Nina Castellanos",
+        "label": "Nico Sample",
         "aliases": [],
-        "existingId": "g-person-nina-castellanos",
+        "existingId": "g-person-nico-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
-        "key": "oliver",
+        "key": "osric",
         "type": "Person",
-        "label": "Oliver Brandt",
+        "label": "Osric Testcase",
         "aliases": [],
-        "existingId": "g-person-oliver-brandt",
+        "existingId": "g-person-osric-testcase",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
-        "key": "sam",
+        "key": "sabin",
         "type": "Person",
-        "label": "Sam Kowalski",
+        "label": "Sabin Stubbs",
         "aliases": [],
-        "existingId": "g-person-sam-kowalski",
+        "existingId": "g-person-sabin-stubbs",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
-        "key": "dana",
+        "key": "darcy",
         "type": "Person",
-        "label": "Dana Whitfield",
+        "label": "Darcy Stubbs",
         "aliases": [],
-        "existingId": "g-person-dana-whitfield",
+        "existingId": "g-person-darcy-stubbs",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "send the vendor comparison to Dana on Friday"
+            "quote": "send the vendor comparison to Darcy on Friday"
           }
         ]
       },
       {
-        "key": "tessa",
+        "key": "tarn",
         "type": "Person",
-        "label": "Tessa Kowalski",
+        "label": "Tarn Demo",
         "aliases": [
-          "Tessa"
+          "Tarn"
         ],
         "existingId": null,
         "props": {},
@@ -356,16 +356,16 @@
           {
             "source": "segment",
             "segmentId": "m35-s011",
-            "quote": "Tessa and I got married in June 2016."
+            "quote": "Tarn and I got married in June 2016."
           }
         ]
       },
       {
-        "key": "ruth",
+        "key": "ruben",
         "type": "Person",
-        "label": "Ruth Moreno",
+        "label": "Ruben Placeholder",
         "aliases": [
-          "Ruth"
+          "Ruben"
         ],
         "existingId": null,
         "props": {},
@@ -373,14 +373,14 @@
           {
             "source": "segment",
             "segmentId": "m35-s019",
-            "quote": "No, Ruth Moreno."
+            "quote": "No, Ruben Placeholder."
           }
         ]
       },
       {
         "key": "anniversary",
         "type": "Milestone",
-        "label": "Sam's tenth wedding anniversary",
+        "label": "Sabin's tenth wedding anniversary",
         "aliases": [],
         "existingId": null,
         "props": {
@@ -416,7 +416,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "nina",
+        "from": "nico",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -425,13 +425,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "oliver",
+        "from": "osric",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -440,13 +440,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sam",
+        "from": "sabin",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -455,14 +455,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
         "type": "SPOUSE_OF",
-        "from": "sam",
-        "to": "tessa",
+        "from": "sabin",
+        "to": "tarn",
         "validFrom": "2016-06-01",
         "validTo": null,
         "precision": "month",
@@ -471,17 +471,17 @@
           {
             "source": "segment",
             "segmentId": "m35-s011",
-            "quote": "Tessa and I got married in June 2016."
+            "quote": "Tarn and I got married in June 2016."
           },
           {
             "source": "note",
-            "quote": "He and Tessa got married in June 2016"
+            "quote": "He and Tarn got married in June 2016"
           }
         ]
       },
       {
         "type": "HAS_MILESTONE",
-        "from": "sam",
+        "from": "sabin",
         "to": "anniversary",
         "validFrom": null,
         "validTo": null,
@@ -490,13 +490,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Sam is off on June 9: it is his tenth wedding anniversary."
+            "quote": "Sabin is off on June 9: it is his tenth wedding anniversary."
           }
         ]
       },
       {
         "type": "INTERESTED_IN",
-        "from": "nina",
+        "from": "nico",
         "to": "piano",
         "validFrom": null,
         "validTo": null,
@@ -505,14 +505,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Nina has played jazz piano for about fifteen years"
+            "quote": "Nico has played jazz piano for about fifteen years"
           }
         ]
       },
       {
         "type": "FRIEND_OF",
-        "from": "nina",
-        "to": "ruth",
+        "from": "nico",
+        "to": "ruben",
         "validFrom": "2018-01-01",
         "validTo": null,
         "precision": "year",
@@ -529,11 +529,11 @@
     "items": [
       {
         "kind": "commitment",
-        "subject": "dana",
-        "owner": "sam",
+        "subject": "darcy",
+        "owner": "sabin",
         "counterparty": null,
-        "title": "Send the vendor comparison to Dana",
-        "statement": "Sam will send the vendor comparison to Dana on Friday.",
+        "title": "Send the vendor comparison to Darcy",
+        "statement": "Sabin will send the vendor comparison to Darcy on Friday.",
         "status": "open",
         "occurredAt": "2026-06-01",
         "dueAt": "2026-06-05",
@@ -543,7 +543,7 @@
           {
             "source": "segment",
             "segmentId": "m35-s007",
-            "quote": "I'll send the vendor comparison to Dana on Friday."
+            "quote": "I'll send the vendor comparison to Darcy on Friday."
           }
         ]
       }

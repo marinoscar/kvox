@@ -14,22 +14,22 @@
     {
       "id": "m16-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m16-spk-b",
       "label": "B",
-      "displayName": "Rosa Delgado"
+      "displayName": "Rhea Sample"
     },
     {
       "id": "m16-spk-c",
       "label": "C",
-      "displayName": "Ben Adeyemi"
+      "displayName": "Bram Dummyson"
     },
     {
       "id": "m16-spk-d",
       "label": "D",
-      "displayName": "Hana Sato"
+      "displayName": "Hazel Placeholder"
     }
   ],
   "segments": [
@@ -47,7 +47,7 @@
       "startMs": 6550,
       "endMs": 14750,
       "rev": 1,
-      "text": "I'm Rosa Delgado, claims director at Varden Insurance. The portal is where policyholders file and track claims, and it's painful."
+      "text": "I'm Rhea Sample, claims director at Varden Insurance. The portal is where policyholders file and track claims, and it's painful."
     },
     {
       "id": "m16-s003",
@@ -55,7 +55,7 @@
       "startMs": 15000,
       "endMs": 23200,
       "rev": 1,
-      "text": "Ben Adeyemi, I'm on the IT side at Varden. I look after the portal and the policy systems behind it."
+      "text": "Bram Dummyson, I'm on the IT side at Varden. I look after the portal and the policy systems behind it."
     },
     {
       "id": "m16-s004",
@@ -63,7 +63,7 @@
       "startMs": 23450,
       "endMs": 28610,
       "rev": 1,
-      "text": "Hana Sato, account director at Larkspur. I'll look after the commercial side."
+      "text": "Hazel Placeholder, account director at Larkspur. I'll look after the commercial side."
     },
     {
       "id": "m16-s005",
@@ -183,7 +183,7 @@
       "startMs": 101180,
       "endMs": 109760,
       "rev": 1,
-      "text": "Good. One more thing, I'm having surgery in June and will be out for two weeks. Ben will cover for me."
+      "text": "Good. One more thing, I'm having surgery in June and will be out for two weeks. Bram will cover for me."
     },
     {
       "id": "m16-s020",
@@ -191,7 +191,7 @@
       "startMs": 110010,
       "endMs": 114790,
       "rev": 1,
-      "text": "Thanks for telling us, Rosa. We'll plan the milestones around that."
+      "text": "Thanks for telling us, Rhea. We'll plan the milestones around that."
     },
     {
       "id": "m16-s021",
@@ -207,7 +207,7 @@
       "startMs": 120450,
       "endMs": 122570,
       "rev": 1,
-      "text": "Noted. Hana, anything else?"
+      "text": "Noted. Hazel, anything else?"
     },
     {
       "id": "m16-s023",
@@ -236,7 +236,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Varden Insurance claims portal introduction\n\n**Date:** April 23\n**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)\n\n## Summary\n\nFirst meeting with Varden Insurance about their claims portal, where policyholders file and track claims. Rosa Delgado, claims director, is the sponsor. Ben Adeyemi on the Varden IT side looks after the portal and the policy systems behind it.\n\n## Context\n\n- The portal handles about 9,000 claims a month.\n- The call centre is swamped with policyholders asking where their claim is.\n- The portal is fifteen years old; every change takes months.\n- Rosa wants a claims portal rebuild but wants to understand the options before committing to a build.\n\n## Decisions\n\n- Varden will run a **six-week discovery** before committing to any build. Rosa is the named sponsor.\n- Discovery stays in the portal layer. The policy systems are off limits; anything touching them needs approval from Varden's CIO, who is not a fast approver.\n\n## Action items\n\n- **Ben Adeyemi** — send the architecture diagrams by next Tuesday.\n- **Hana Sato** — send a discovery proposal by Monday.\n\n## Notes\n\n- Rosa will be out for two weeks in June; Ben covers for her. Milestones should be planned around that.\n- Ben is easier to reach on chat than by email.\n"
+    "body": "# Varden Insurance claims portal introduction\n\n**Date:** April 23\n**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Rhea Sample (Varden Insurance), Bram Dummyson (Varden Insurance)\n\n## Summary\n\nFirst meeting with Varden Insurance about their claims portal, where policyholders file and track claims. Rhea Sample, claims director, is the sponsor. Bram Dummyson on the Varden IT side looks after the portal and the policy systems behind it.\n\n## Context\n\n- The portal handles about 9,000 claims a month.\n- The call centre is swamped with policyholders asking where their claim is.\n- The portal is fifteen years old; every change takes months.\n- Rhea wants a claims portal rebuild but wants to understand the options before committing to a build.\n\n## Decisions\n\n- Varden will run a **six-week discovery** before committing to any build. Rhea is the named sponsor.\n- Discovery stays in the portal layer. The policy systems are off limits; anything touching them needs approval from Varden's CIO, who is not a fast approver.\n\n## Action items\n\n- **Bram Dummyson** — send the architecture diagrams by next Tuesday.\n- **Hazel Placeholder** — send a discovery proposal by Monday.\n\n## Notes\n\n- Rhea will be out for two weeks in June; Bram covers for her. Milestones should be planned around that.\n- Bram is easier to reach on chat than by email.\n"
   },
   "knownEntities": [
     {
@@ -250,11 +250,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -277,11 +277,11 @@
       ]
     },
     {
-      "id": "g-person-hana-sato",
+      "id": "g-person-hazel-placeholder",
       "type": "Person",
-      "label": "Hana Sato",
+      "label": "Hazel Placeholder",
       "aliases": [
-        "Hana"
+        "Hazel"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -306,38 +306,38 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "hana",
+        "key": "hazel",
         "type": "Person",
-        "label": "Hana Sato",
+        "label": "Hazel Placeholder",
         "aliases": [],
-        "existingId": "g-person-hana-sato",
+        "existingId": "g-person-hazel-placeholder",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m16-s004",
-            "quote": "Hana Sato, account director at Larkspur."
+            "quote": "Hazel Placeholder, account director at Larkspur."
           }
         ]
       },
       {
-        "key": "rosa",
+        "key": "rhea",
         "type": "Person",
-        "label": "Rosa Delgado",
+        "label": "Rhea Sample",
         "aliases": [],
         "existingId": null,
         "props": {},
@@ -345,14 +345,14 @@
           {
             "source": "segment",
             "segmentId": "m16-s002",
-            "quote": "I'm Rosa Delgado, claims director at Varden Insurance."
+            "quote": "I'm Rhea Sample, claims director at Varden Insurance."
           }
         ]
       },
       {
-        "key": "ben",
+        "key": "bram",
         "type": "Person",
-        "label": "Ben Adeyemi",
+        "label": "Bram Dummyson",
         "aliases": [],
         "existingId": null,
         "props": {},
@@ -360,7 +360,7 @@
           {
             "source": "segment",
             "segmentId": "m16-s003",
-            "quote": "Ben Adeyemi, I'm on the IT side at Varden."
+            "quote": "Bram Dummyson, I'm on the IT side at Varden."
           }
         ]
       },
@@ -375,7 +375,7 @@
           {
             "source": "segment",
             "segmentId": "m16-s002",
-            "quote": "I'm Rosa Delgado, claims director at Varden Insurance."
+            "quote": "I'm Rhea Sample, claims director at Varden Insurance."
           }
         ]
       },
@@ -398,7 +398,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -407,13 +407,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Rhea Sample (Varden Insurance), Bram Dummyson (Varden Insurance)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "hana",
+        "from": "hazel",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -422,13 +422,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Rhea Sample (Varden Insurance), Bram Dummyson (Varden Insurance)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "rosa",
+        "from": "rhea",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -437,13 +437,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Rhea Sample (Varden Insurance), Bram Dummyson (Varden Insurance)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "ben",
+        "from": "bram",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -452,13 +452,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Rhea Sample (Varden Insurance), Bram Dummyson (Varden Insurance)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "rosa",
+        "from": "rhea",
         "to": "varden",
         "validFrom": null,
         "validTo": null,
@@ -468,13 +468,13 @@
           {
             "source": "segment",
             "segmentId": "m16-s002",
-            "quote": "I'm Rosa Delgado, claims director at Varden Insurance."
+            "quote": "I'm Rhea Sample, claims director at Varden Insurance."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "rosa",
+        "from": "rhea",
         "to": "varden",
         "validFrom": null,
         "validTo": null,
@@ -486,13 +486,13 @@
           {
             "source": "segment",
             "segmentId": "m16-s002",
-            "quote": "I'm Rosa Delgado, claims director at Varden Insurance."
+            "quote": "I'm Rhea Sample, claims director at Varden Insurance."
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "ben",
+        "from": "bram",
         "to": "varden",
         "validFrom": null,
         "validTo": null,
@@ -502,13 +502,13 @@
           {
             "source": "segment",
             "segmentId": "m16-s003",
-            "quote": "Ben Adeyemi, I'm on the IT side at Varden."
+            "quote": "Bram Dummyson, I'm on the IT side at Varden."
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "hana",
+        "from": "hazel",
         "to": "g-org-larkspur-labs",
         "validFrom": null,
         "validTo": null,
@@ -518,13 +518,13 @@
           {
             "source": "segment",
             "segmentId": "m16-s004",
-            "quote": "Hana Sato, account director at Larkspur."
+            "quote": "Hazel Placeholder, account director at Larkspur."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "hana",
+        "from": "hazel",
         "to": "g-org-larkspur-labs",
         "validFrom": null,
         "validTo": null,
@@ -536,7 +536,7 @@
           {
             "source": "segment",
             "segmentId": "m16-s004",
-            "quote": "Hana Sato, account director at Larkspur."
+            "quote": "Hazel Placeholder, account director at Larkspur."
           }
         ]
       },
@@ -616,10 +616,10 @@
       {
         "kind": "commitment",
         "subject": "portal",
-        "owner": "ben",
+        "owner": "bram",
         "counterparty": "g-org-larkspur-labs",
         "title": "Send architecture diagrams",
-        "statement": "Ben will send the architecture diagrams by next Tuesday.",
+        "statement": "Bram will send the architecture diagrams by next Tuesday.",
         "status": "open",
         "occurredAt": "2026-04-23",
         "dueAt": "2026-04-28",
@@ -636,10 +636,10 @@
       {
         "kind": "commitment",
         "subject": "portal",
-        "owner": "hana",
+        "owner": "hazel",
         "counterparty": "varden",
         "title": "Send discovery proposal",
-        "statement": "Hana will send a discovery proposal by Monday.",
+        "statement": "Hazel will send a discovery proposal by Monday.",
         "status": "open",
         "occurredAt": "2026-04-23",
         "dueAt": "2026-04-27",
@@ -655,11 +655,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "rosa",
+        "subject": "rhea",
         "owner": null,
         "counterparty": null,
         "title": "Surgery in June",
-        "statement": "Rosa is having surgery in June and will be out for two weeks.",
+        "statement": "Rhea is having surgery in June and will be out for two weeks.",
         "status": null,
         "occurredAt": "2026-04-23",
         "dueAt": null,
@@ -675,11 +675,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "ben",
+        "subject": "bram",
         "owner": null,
         "counterparty": null,
         "title": "Easier to reach on chat",
-        "statement": "Ben is easier to reach on chat than by email.",
+        "statement": "Bram is easier to reach on chat than by email.",
         "status": null,
         "occurredAt": "2026-04-23",
         "dueAt": null,

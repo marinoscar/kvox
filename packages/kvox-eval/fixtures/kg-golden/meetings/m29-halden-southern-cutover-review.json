@@ -4,37 +4,37 @@
   "tags": [
     "client",
     "supersedes",
-    "two-sarahs",
+    "two-sashas",
     "resolution-trap"
   ],
   "recordedAt": "2026-07-23T14:00:00Z",
-  "contextText": "Review after the southern depots cutover; first meeting with Aurelia.",
+  "contextText": "Review after the southern depots cutover; first meeting with Avalon.",
   "hasTranscript": true,
   "speakers": [
     {
       "id": "m29-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m29-spk-b",
       "label": "B",
-      "displayName": "Marcus Webb"
+      "displayName": "Maddox Sample"
     },
     {
       "id": "m29-spk-c",
       "label": "C",
-      "displayName": "Aurelia Grant"
+      "displayName": "Avalon Sample"
     },
     {
       "id": "m29-spk-d",
       "label": "D",
-      "displayName": "Jonah Jiménez"
+      "displayName": "Jovan Démo"
     },
     {
       "id": "m29-spk-e",
       "label": "E",
-      "displayName": "Sarah Okonkwo"
+      "displayName": "Sasha Fixture"
     }
   ],
   "segments": [
@@ -44,7 +44,7 @@
       "startMs": 0,
       "endMs": 6680,
       "rev": 1,
-      "text": "Thanks all. This is the review of the southern depots cutover, and a welcome to Aurelia."
+      "text": "Thanks all. This is the review of the southern depots cutover, and a welcome to Avalon."
     },
     {
       "id": "m29-s002",
@@ -52,7 +52,7 @@
       "startMs": 6930,
       "endMs": 13610,
       "rev": 1,
-      "text": "Thanks. I'm Aurelia Grant, I joined Halden in June as integration lead, taking over from Ravi."
+      "text": "Thanks. I'm Avalon Sample, I joined Halden in June as integration lead, taking over from Rafferty."
     },
     {
       "id": "m29-s003",
@@ -60,7 +60,7 @@
       "startMs": 13860,
       "endMs": 17500,
       "rev": 1,
-      "text": "Aurelia reports to me, same as Ravi did."
+      "text": "Avalon reports to me, same as Rafferty did."
     },
     {
       "id": "m29-s004",
@@ -68,7 +68,7 @@
       "startMs": 17750,
       "endMs": 21010,
       "rev": 1,
-      "text": "Welcome. JJ, how did the cutover go?"
+      "text": "Welcome. JD, how did the cutover go?"
     },
     {
       "id": "m29-s005",
@@ -124,7 +124,7 @@
       "startMs": 51440,
       "endMs": 60780,
       "rev": 1,
-      "text": "The rollback runbook. Ravi's draft was never finished. I'll close out the rollback runbook by August 7, since it's still needed until decommission."
+      "text": "The rollback runbook. Rafferty's draft was never finished. I'll close out the rollback runbook by August 7, since it's still needed until decommission."
     },
     {
       "id": "m29-s012",
@@ -148,7 +148,7 @@
       "startMs": 72610,
       "endMs": 75870,
       "rev": 1,
-      "text": "Do you need anything from us, Sarah?"
+      "text": "Do you need anything from us, Sasha?"
     },
     {
       "id": "m29-s015",
@@ -172,7 +172,7 @@
       "startMs": 84660,
       "endMs": 90960,
       "rev": 1,
-      "text": "One thing for Aurelia, the depot mappings walkthrough Ravi recorded is on the shared drive."
+      "text": "One thing for Avalon, the depot mappings walkthrough Rafferty recorded is on the shared drive."
     },
     {
       "id": "m29-s018",
@@ -188,7 +188,7 @@
       "startMs": 94340,
       "endMs": 101780,
       "rev": 1,
-      "text": "Aurelia prefers a quick call over long email threads, so don't be shy about picking up the phone."
+      "text": "Avalon prefers a quick call over long email threads, so don't be shy about picking up the phone."
     },
     {
       "id": "m29-s020",
@@ -209,7 +209,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Halden southern depots cutover review\n\n**Date:** July 23\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)\n\n## Summary\n\nReview of the southern depots cutover on the Halden route optimizer migration, and a first meeting with Aurelia Grant, who joined Halden Freight in June as integration lead, replacing Ravi. Aurelia reports to Marcus.\n\n## Cutover\n\n- The southern depots cut over on July 20, three days later than planned because of a carrier data issue; it has been clean since. Nothing broke for drivers.\n- All regions are now on the new optimizer.\n\n## Decisions\n\n- **Decommission the old optimizer by September 30.**\n\n## Action items\n\n- **Aurelia Grant** — close out the rollback runbook by August 7. Ravi's draft was never finished, and the runbook is needed until decommission.\n- **Sarah Okonkwo** — renegotiate the old license termination by August 14; the license otherwise runs to the end of the year.\n- **Alex Rivera** — send Sarah a letter confirming the migration is complete, by Monday.\n\n## Notes\n\n- Ravi's recorded walkthrough of the depot mappings is on the shared drive; Aurelia has already watched it.\n- Aurelia prefers a quick call over long email threads.\n"
+    "body": "# Halden southern depots cutover review\n\n**Date:** July 23\n**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Avalon Sample (Halden Freight), Sasha Fixture (Halden Freight)\n\n## Summary\n\nReview of the southern depots cutover on the Halden route optimizer migration, and a first meeting with Avalon Sample, who joined Halden Freight in June as integration lead, replacing Rafferty. Avalon reports to Maddox.\n\n## Cutover\n\n- The southern depots cut over on July 20, three days later than planned because of a carrier data issue; it has been clean since. Nothing broke for drivers.\n- All regions are now on the new optimizer.\n\n## Decisions\n\n- **Decommission the old optimizer by September 30.**\n\n## Action items\n\n- **Avalon Sample** — close out the rollback runbook by August 7. Rafferty's draft was never finished, and the runbook is needed until decommission.\n- **Sasha Fixture** — renegotiate the old license termination by August 14; the license otherwise runs to the end of the year.\n- **Alma Mockwell** — send Sasha a letter confirming the migration is complete, by Monday.\n\n## Notes\n\n- Rafferty's recorded walkthrough of the depot mappings is on the shared drive; Avalon has already watched it.\n- Avalon prefers a quick call over long email threads.\n"
   },
   "knownEntities": [
     {
@@ -223,11 +223,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -262,12 +262,12 @@
       ]
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -282,11 +282,11 @@
       ]
     },
     {
-      "id": "g-person-marcus-webb",
+      "id": "g-person-maddox-sample",
       "type": "Person",
-      "label": "Marcus Webb",
+      "label": "Maddox Sample",
       "aliases": [
-        "Marcus"
+        "Maddox"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -297,11 +297,11 @@
       ]
     },
     {
-      "id": "g-person-ravi-menon",
+      "id": "g-person-rafferty-fixture",
       "type": "Person",
-      "label": "Ravi Menon",
+      "label": "Rafferty Fixture",
       "aliases": [
-        "Ravi"
+        "Rafferty"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -315,11 +315,11 @@
       ]
     },
     {
-      "id": "g-person-sarah-chen",
+      "id": "g-person-sasha-example",
       "type": "Person",
-      "label": "Sarah Chen",
+      "label": "Sasha Example",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -332,11 +332,11 @@
       ]
     },
     {
-      "id": "g-person-sarah-okonkwo",
+      "id": "g-person-sasha-fixture",
       "type": "Person",
-      "label": "Sarah Okonkwo",
+      "label": "Sasha Fixture",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -373,54 +373,54 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
         "key": "jj",
         "type": "Person",
-        "label": "Jonah Jiménez",
+        "label": "Jovan Démo",
         "aliases": [
-          "JJ"
+          "JD"
         ],
-        "existingId": "g-person-jonah-jimenez",
+        "existingId": "g-person-jovan-demo",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m29-s004",
-            "quote": "JJ, how did the cutover go?"
+            "quote": "JD, how did the cutover go?"
           }
         ]
       },
       {
-        "key": "marcus",
+        "key": "maddox",
         "type": "Person",
-        "label": "Marcus Webb",
+        "label": "Maddox Sample",
         "aliases": [],
-        "existingId": "g-person-marcus-webb",
+        "existingId": "g-person-maddox-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Marcus Webb (Halden Freight)"
+            "quote": "Maddox Sample (Halden Freight)"
           }
         ]
       },
       {
-        "key": "aurelia",
+        "key": "avalon",
         "type": "Person",
-        "label": "Aurelia Grant",
+        "label": "Avalon Sample",
         "aliases": [],
         "existingId": null,
         "props": {},
@@ -428,28 +428,28 @@
           {
             "source": "segment",
             "segmentId": "m29-s002",
-            "quote": "I'm Aurelia Grant, I joined Halden in June as integration lead"
+            "quote": "I'm Avalon Sample, I joined Halden in June as integration lead"
           }
         ]
       },
       {
-        "key": "sarahO",
+        "key": "sashaO",
         "type": "Person",
-        "label": "Sarah Okonkwo",
+        "label": "Sasha Fixture",
         "aliases": [
-          "Sarah"
+          "Sasha"
         ],
-        "existingId": "g-person-sarah-okonkwo",
+        "existingId": "g-person-sasha-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Sarah Okonkwo (Halden Freight)"
+            "quote": "Sasha Fixture (Halden Freight)"
           },
           {
             "source": "segment",
             "segmentId": "m29-s014",
-            "quote": "Do you need anything from us, Sarah?"
+            "quote": "Do you need anything from us, Sasha?"
           }
         ]
       },
@@ -464,7 +464,7 @@
           {
             "source": "segment",
             "segmentId": "m29-s002",
-            "quote": "I'm Aurelia Grant, I joined Halden in June as integration lead"
+            "quote": "I'm Avalon Sample, I joined Halden in June as integration lead"
           }
         ]
       },
@@ -486,7 +486,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -495,7 +495,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Avalon Sample (Halden Freight), Sasha Fixture (Halden Freight)"
           }
         ]
       },
@@ -510,13 +510,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Avalon Sample (Halden Freight), Sasha Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "marcus",
+        "from": "maddox",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -525,13 +525,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Avalon Sample (Halden Freight), Sasha Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "aurelia",
+        "from": "avalon",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -540,13 +540,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Avalon Sample (Halden Freight), Sasha Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sarahO",
+        "from": "sashaO",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -555,13 +555,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Avalon Sample (Halden Freight), Sasha Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "aurelia",
+        "from": "avalon",
         "to": "halden",
         "validFrom": "2026-06-01",
         "validTo": null,
@@ -571,13 +571,13 @@
           {
             "source": "segment",
             "segmentId": "m29-s002",
-            "quote": "I'm Aurelia Grant, I joined Halden in June as integration lead"
+            "quote": "I'm Avalon Sample, I joined Halden in June as integration lead"
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "aurelia",
+        "from": "avalon",
         "to": "halden",
         "validFrom": "2026-06-01",
         "validTo": null,
@@ -589,14 +589,14 @@
           {
             "source": "segment",
             "segmentId": "m29-s002",
-            "quote": "I'm Aurelia Grant, I joined Halden in June as integration lead"
+            "quote": "I'm Avalon Sample, I joined Halden in June as integration lead"
           }
         ]
       },
       {
         "type": "REPORTS_TO",
-        "from": "aurelia",
-        "to": "marcus",
+        "from": "avalon",
+        "to": "maddox",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -605,7 +605,7 @@
           {
             "source": "segment",
             "segmentId": "m29-s003",
-            "quote": "Aurelia reports to me, same as Ravi did."
+            "quote": "Avalon reports to me, same as Rafferty did."
           }
         ]
       },
@@ -669,10 +669,10 @@
       {
         "kind": "commitment",
         "subject": "migration",
-        "owner": "aurelia",
-        "counterparty": "marcus",
+        "owner": "avalon",
+        "counterparty": "maddox",
         "title": "Close out the rollback runbook",
-        "statement": "Aurelia will close out the rollback runbook by August 7.",
+        "statement": "Avalon will close out the rollback runbook by August 7.",
         "status": "open",
         "occurredAt": "2026-07-23",
         "dueAt": "2026-08-07",
@@ -689,10 +689,10 @@
       {
         "kind": "commitment",
         "subject": "halden",
-        "owner": "sarahO",
+        "owner": "sashaO",
         "counterparty": null,
         "title": "Renegotiate license termination",
-        "statement": "Sarah will renegotiate the old license termination by August 14.",
+        "statement": "Sasha will renegotiate the old license termination by August 14.",
         "status": "open",
         "occurredAt": "2026-07-23",
         "dueAt": "2026-08-14",
@@ -709,10 +709,10 @@
       {
         "kind": "commitment",
         "subject": "migration",
-        "owner": "alex",
-        "counterparty": "sarahO",
+        "owner": "alma",
+        "counterparty": "sashaO",
         "title": "Send migration completion letter",
-        "statement": "Alex will send Sarah a letter confirming the migration is complete by Monday.",
+        "statement": "Alma will send Sasha a letter confirming the migration is complete by Monday.",
         "status": "open",
         "occurredAt": "2026-07-23",
         "dueAt": "2026-07-27",
@@ -728,11 +728,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "aurelia",
+        "subject": "avalon",
         "owner": null,
         "counterparty": null,
         "title": "Prefers calls to email threads",
-        "statement": "Aurelia prefers a quick call over long email threads.",
+        "statement": "Avalon prefers a quick call over long email threads.",
         "status": null,
         "occurredAt": "2026-07-23",
         "dueAt": null,
@@ -742,7 +742,7 @@
           {
             "source": "segment",
             "segmentId": "m29-s019",
-            "quote": "Aurelia prefers a quick call over long email threads"
+            "quote": "Avalon prefers a quick call over long email threads"
           }
         ]
       }

@@ -13,22 +13,22 @@
     {
       "id": "m11-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m11-spk-b",
       "label": "B",
-      "displayName": "Grace Holloway"
+      "displayName": "Garnet Dummyson"
     },
     {
       "id": "m11-spk-c",
       "label": "C",
-      "displayName": "Iris Novak"
+      "displayName": "Isolde Placeholder"
     },
     {
       "id": "m11-spk-d",
       "label": "D",
-      "displayName": "Kwame Mensah"
+      "displayName": "Kieran Testcase"
     }
   ],
   "segments": [
@@ -46,7 +46,7 @@
       "startMs": 7310,
       "endMs": 17410,
       "rev": 1,
-      "text": "Good. I'm Grace Holloway, COO at Solvane Energy. The dashboard is my initiative, I want one screen that tells me how every site is doing."
+      "text": "Good. I'm Garnet Dummyson, COO at Solvane Energy. The dashboard is my initiative, I want one screen that tells me how every site is doing."
     },
     {
       "id": "m11-s003",
@@ -54,7 +54,7 @@
       "startMs": 17660,
       "endMs": 25860,
       "rev": 1,
-      "text": "I'm Iris Novak, I run data at Solvane. I joined Solvane in 2026, so I'm still learning where everything lives."
+      "text": "I'm Isolde Placeholder, I run data at Solvane. I joined Solvane in 2026, so I'm still learning where everything lives."
     },
     {
       "id": "m11-s004",
@@ -62,7 +62,7 @@
       "startMs": 26110,
       "endMs": 30890,
       "rev": 1,
-      "text": "Kwame Mensah, data engineer at Larkspur. I'll be building the pipelines."
+      "text": "Kieran Testcase, data engineer at Larkspur. I'll be building the pipelines."
     },
     {
       "id": "m11-s005",
@@ -134,7 +134,7 @@
       "startMs": 71760,
       "endMs": 76920,
       "rev": 1,
-      "text": "Decided. Iris, can we see a sample of what's in the warehouse?"
+      "text": "Decided. Isolde, can we see a sample of what's in the warehouse?"
     },
     {
       "id": "m11-s014",
@@ -158,7 +158,7 @@
       "startMs": 86470,
       "endMs": 90110,
       "rev": 1,
-      "text": "What does success look like for you, Grace?"
+      "text": "What does success look like for you, Garnet?"
     },
     {
       "id": "m11-s017",
@@ -198,7 +198,7 @@
       "startMs": 110480,
       "endMs": 113360,
       "rev": 1,
-      "text": "Grace, any constraints on meeting times?"
+      "text": "Garnet, any constraints on meeting times?"
     },
     {
       "id": "m11-s022",
@@ -230,7 +230,7 @@
       "startMs": 125280,
       "endMs": 128920,
       "rev": 1,
-      "text": "Iris does. I trust her judgement on data."
+      "text": "Isolde does. I trust her judgement on data."
     },
     {
       "id": "m11-s026",
@@ -243,7 +243,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Solvane Energy grid dashboard scoping\n\n**Date:** March 19\n**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)\n\n## Summary\n\nScoping session for the grid dashboard, an operations overview across Solvane Energy's solar sites. Grace Holloway, COO, sponsors the initiative; she wants one screen showing how every site is doing. Iris Novak runs data at Solvane and joined the company in 2026. Kwame will build the pipelines.\n\n## Context\n\n- Solvane operates fourteen solar sites today, with two more under construction.\n- SCADA feeds a historian, which loads the data warehouse every fifteen minutes.\n- Grace's measure of success: no more six spreadsheets every Monday morning.\n\n## Decisions\n\n- The dashboard **reads from the existing data warehouse, not directly from SCADA**. Reading SCADA directly would mean handling fourteen different vendor quirks, and fifteen-minute freshness is sufficient for an operations overview.\n- Iris signs off the data model.\n\n## Action items\n\n- **Iris Novak** — share a SCADA export sample and the warehouse schema by March 27.\n- **Kwame Mensah** — start modelling once the sample arrives.\n\n## Parked\n\n- Weather feeds. Iris noted cloud cover explains many output dips and suggested we should probably look into weather feeds at some point; parked for phase two to avoid widening scope.\n\n## Notes\n\n- Avoid Thursday evenings for meetings with Grace.\n"
+    "body": "# Solvane Energy grid dashboard scoping\n\n**Date:** March 19\n**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Garnet Dummyson (Solvane Energy), Isolde Placeholder (Solvane Energy)\n\n## Summary\n\nScoping session for the grid dashboard, an operations overview across Solvane Energy's solar sites. Garnet Dummyson, COO, sponsors the initiative; she wants one screen showing how every site is doing. Isolde Placeholder runs data at Solvane and joined the company in 2026. Kieran will build the pipelines.\n\n## Context\n\n- Solvane operates fourteen solar sites today, with two more under construction.\n- SCADA feeds a historian, which loads the data warehouse every fifteen minutes.\n- Garnet's measure of success: no more six spreadsheets every Monday morning.\n\n## Decisions\n\n- The dashboard **reads from the existing data warehouse, not directly from SCADA**. Reading SCADA directly would mean handling fourteen different vendor quirks, and fifteen-minute freshness is sufficient for an operations overview.\n- Isolde signs off the data model.\n\n## Action items\n\n- **Isolde Placeholder** — share a SCADA export sample and the warehouse schema by March 27.\n- **Kieran Testcase** — start modelling once the sample arrives.\n\n## Parked\n\n- Weather feeds. Isolde noted cloud cover explains many output dips and suggested we should probably look into weather feeds at some point; parked for phase two to avoid widening scope.\n\n## Notes\n\n- Avoid Thursday evenings for meetings with Garnet.\n"
   },
   "knownEntities": [
     {
@@ -257,11 +257,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -279,11 +279,11 @@
       ]
     },
     {
-      "id": "g-person-kwame-mensah",
+      "id": "g-person-kieran-testcase",
       "type": "Person",
-      "label": "Kwame Mensah",
+      "label": "Kieran Testcase",
       "aliases": [
-        "Kwame"
+        "Kieran"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -306,38 +306,38 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "kwame",
+        "key": "kieran",
         "type": "Person",
-        "label": "Kwame Mensah",
+        "label": "Kieran Testcase",
         "aliases": [],
-        "existingId": "g-person-kwame-mensah",
+        "existingId": "g-person-kieran-testcase",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m11-s004",
-            "quote": "Kwame Mensah, data engineer at Larkspur."
+            "quote": "Kieran Testcase, data engineer at Larkspur."
           }
         ]
       },
       {
-        "key": "grace",
+        "key": "garnet",
         "type": "Person",
-        "label": "Grace Holloway",
+        "label": "Garnet Dummyson",
         "aliases": [],
         "existingId": null,
         "props": {},
@@ -345,14 +345,14 @@
           {
             "source": "segment",
             "segmentId": "m11-s002",
-            "quote": "I'm Grace Holloway, COO at Solvane Energy."
+            "quote": "I'm Garnet Dummyson, COO at Solvane Energy."
           }
         ]
       },
       {
-        "key": "iris",
+        "key": "isolde",
         "type": "Person",
-        "label": "Iris Novak",
+        "label": "Isolde Placeholder",
         "aliases": [],
         "existingId": null,
         "props": {},
@@ -360,7 +360,7 @@
           {
             "source": "segment",
             "segmentId": "m11-s003",
-            "quote": "I'm Iris Novak, I run data at Solvane."
+            "quote": "I'm Isolde Placeholder, I run data at Solvane."
           }
         ]
       },
@@ -375,7 +375,7 @@
           {
             "source": "segment",
             "segmentId": "m11-s002",
-            "quote": "I'm Grace Holloway, COO at Solvane Energy."
+            "quote": "I'm Garnet Dummyson, COO at Solvane Energy."
           }
         ]
       },
@@ -398,7 +398,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -407,13 +407,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Garnet Dummyson (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "kwame",
+        "from": "kieran",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -422,13 +422,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Garnet Dummyson (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "grace",
+        "from": "garnet",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -437,13 +437,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Garnet Dummyson (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "iris",
+        "from": "isolde",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -452,13 +452,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Garnet Dummyson (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "grace",
+        "from": "garnet",
         "to": "solvane",
         "validFrom": null,
         "validTo": null,
@@ -468,13 +468,13 @@
           {
             "source": "segment",
             "segmentId": "m11-s002",
-            "quote": "I'm Grace Holloway, COO at Solvane Energy."
+            "quote": "I'm Garnet Dummyson, COO at Solvane Energy."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "grace",
+        "from": "garnet",
         "to": "solvane",
         "validFrom": null,
         "validTo": null,
@@ -486,13 +486,13 @@
           {
             "source": "segment",
             "segmentId": "m11-s002",
-            "quote": "I'm Grace Holloway, COO at Solvane Energy."
+            "quote": "I'm Garnet Dummyson, COO at Solvane Energy."
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "iris",
+        "from": "isolde",
         "to": "solvane",
         "validFrom": "2026-01-01",
         "validTo": null,
@@ -508,7 +508,7 @@
       },
       {
         "type": "WORKS_FOR",
-        "from": "kwame",
+        "from": "kieran",
         "to": "g-org-larkspur-labs",
         "validFrom": null,
         "validTo": null,
@@ -518,13 +518,13 @@
           {
             "source": "segment",
             "segmentId": "m11-s004",
-            "quote": "Kwame Mensah, data engineer at Larkspur."
+            "quote": "Kieran Testcase, data engineer at Larkspur."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "kwame",
+        "from": "kieran",
         "to": "g-org-larkspur-labs",
         "validFrom": null,
         "validTo": null,
@@ -536,7 +536,7 @@
           {
             "source": "segment",
             "segmentId": "m11-s004",
-            "quote": "Kwame Mensah, data engineer at Larkspur."
+            "quote": "Kieran Testcase, data engineer at Larkspur."
           }
         ]
       },
@@ -641,10 +641,10 @@
       {
         "kind": "commitment",
         "subject": "dashboard",
-        "owner": "iris",
-        "counterparty": "kwame",
+        "owner": "isolde",
+        "counterparty": "kieran",
         "title": "Share SCADA sample and schema",
-        "statement": "Iris will share a SCADA export sample and the warehouse schema by March 27.",
+        "statement": "Isolde will share a SCADA export sample and the warehouse schema by March 27.",
         "status": "open",
         "occurredAt": "2026-03-19",
         "dueAt": "2026-03-27",
@@ -660,11 +660,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "grace",
+        "subject": "garnet",
         "owner": null,
         "counterparty": null,
         "title": "Plays cello in a community orchestra",
-        "statement": "Grace plays cello in a community orchestra with rehearsals on Thursday evenings.",
+        "statement": "Garnet plays cello in a community orchestra with rehearsals on Thursday evenings.",
         "status": null,
         "occurredAt": "2026-03-19",
         "dueAt": null,

@@ -7,28 +7,28 @@
     "misspelling"
   ],
   "recordedAt": "2026-02-12T15:00:00Z",
-  "contextText": "Weekly pilot check-in. Sara Chen joining for the first half.",
+  "contextText": "Weekly pilot check-in. Sasa Example joining for the first half.",
   "hasTranscript": true,
   "speakers": [
     {
       "id": "m06-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m06-spk-b",
       "label": "B",
-      "displayName": "Sara Chen"
+      "displayName": "Sasa Example"
     },
     {
       "id": "m06-spk-c",
       "label": "C",
-      "displayName": "Tomás Aguilar"
+      "displayName": "Tobín Dummyson"
     },
     {
       "id": "m06-spk-d",
       "label": "D",
-      "displayName": "Jonah Jiménez"
+      "displayName": "Jovan Démo"
     }
   ],
   "segments": [
@@ -102,7 +102,7 @@
       "startMs": 56200,
       "endMs": 60220,
       "rev": 1,
-      "text": "Next, the picking strategy. Tomás, you had a proposal."
+      "text": "Next, the picking strategy. Tobín, you had a proposal."
     },
     {
       "id": "m06-s010",
@@ -166,7 +166,7 @@
       "startMs": 101000,
       "endMs": 103120,
       "rev": 1,
-      "text": "Will do, thanks Sarah."
+      "text": "Will do, thanks Sasha."
     },
     {
       "id": "m06-s018",
@@ -198,7 +198,7 @@
       "startMs": 119220,
       "endMs": 124000,
       "rev": 1,
-      "text": "Perfect. JJ, can you pair with him on the input format?"
+      "text": "Perfect. JD, can you pair with him on the input format?"
     },
     {
       "id": "m06-s022",
@@ -243,7 +243,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Lambda pilot weekly: floor data review\n\n**Date:** February 12\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Org Lambda Robotics, first half), Tomás Aguilar (Org Lambda Robotics)\n\n## Summary\n\nWeekly check-in on the Lambda pick-path pilot, focused on the January floor data for Building 3 and the picking strategy for the pilot aisles.\n\n## Findings\n\n- Pick rates in Building 3 dropped about 8 percent in January compared with December.\n- Sara Chen said this matches what her supervisors report: January always brings a new-hire wave.\n- January was also the month the fast movers were re-slotted, so part of the drop is pickers learning new locations.\n- JJ considers January a noisy baseline and proposed comparing against a blend of November and December. Sara agreed as long as the report says so explicitly.\n\n## Decisions\n\n- The pilot aisles will use **zone-based picking** instead of the current batch picking. Path optimisation works much better within a zone, and the retraining cost is about two shifts because supervisors already know the zone layout from peak season.\n- The pilot baseline will be a blend of November and December rather than January.\n\n## Action items\n\n- **Tomás Aguilar** — rerun the slotting simulation with January data included, by Friday the 20th.\n- **JJ** — send Tomás the input schema this afternoon.\n- **Alex Rivera** — note the zone-picking decision in Friday's written update.\n\n## Notes\n\n- Tomás leaves at three most days for school pickup, so afternoon sessions should be scheduled before three.\n"
+    "body": "# Lambda pilot weekly: floor data review\n\n**Date:** February 12\n**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Sasa Example (Org Lambda Robotics, first half), Tobín Dummyson (Org Lambda Robotics)\n\n## Summary\n\nWeekly check-in on the Lambda pick-path pilot, focused on the January floor data for Building 3 and the picking strategy for the pilot aisles.\n\n## Findings\n\n- Pick rates in Building 3 dropped about 8 percent in January compared with December.\n- Sasa Example said this matches what her supervisors report: January always brings a new-hire wave.\n- January was also the month the fast movers were re-slotted, so part of the drop is pickers learning new locations.\n- JD considers January a noisy baseline and proposed comparing against a blend of November and December. Sasa agreed as long as the report says so explicitly.\n\n## Decisions\n\n- The pilot aisles will use **zone-based picking** instead of the current batch picking. Path optimisation works much better within a zone, and the retraining cost is about two shifts because supervisors already know the zone layout from peak season.\n- The pilot baseline will be a blend of November and December rather than January.\n\n## Action items\n\n- **Tobín Dummyson** — rerun the slotting simulation with January data included, by Friday the 20th.\n- **JD** — send Tobín the input schema this afternoon.\n- **Alma Mockwell** — note the zone-picking decision in Friday's written update.\n\n## Notes\n\n- Tobín leaves at three most days for school pickup, so afternoon sessions should be scheduled before three.\n"
   },
   "knownEntities": [
     {
@@ -258,11 +258,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -275,12 +275,12 @@
       ]
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -289,11 +289,11 @@
       ]
     },
     {
-      "id": "g-person-sarah-chen",
+      "id": "g-person-sasha-example",
       "type": "Person",
-      "label": "Sarah Chen",
+      "label": "Sasha Example",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -301,11 +301,11 @@
       ]
     },
     {
-      "id": "g-person-sarah-okonkwo",
+      "id": "g-person-sasha-fixture",
       "type": "Person",
-      "label": "Sarah Okonkwo",
+      "label": "Sasha Fixture",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -313,12 +313,12 @@
       ]
     },
     {
-      "id": "g-person-tomas-aguilar",
+      "id": "g-person-tobin-dummyson",
       "type": "Person",
-      "label": "Tomás Aguilar",
+      "label": "Tobín Dummyson",
       "aliases": [
-        "Tomas Aguilar",
-        "Tomás"
+        "Tobin Dummyson",
+        "Tobín"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -352,62 +352,62 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
         "key": "jj",
         "type": "Person",
-        "label": "Jonah Jiménez",
+        "label": "Jovan Démo",
         "aliases": [
-          "JJ"
+          "JD"
         ],
-        "existingId": "g-person-jonah-jimenez",
+        "existingId": "g-person-jovan-demo",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "JJ (Larkspur Labs)"
+            "quote": "JD (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "sarah",
+        "key": "sasha",
         "type": "Person",
-        "label": "Sarah Chen",
+        "label": "Sasha Example",
         "aliases": [
-          "Sara Chen"
+          "Sasa Example"
         ],
-        "existingId": "g-person-sarah-chen",
+        "existingId": "g-person-sasha-example",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Sara Chen (Org Lambda Robotics, first half)"
+            "quote": "Sasa Example (Org Lambda Robotics, first half)"
           }
         ]
       },
       {
-        "key": "tomas",
+        "key": "tobin",
         "type": "Person",
-        "label": "Tomás Aguilar",
+        "label": "Tobín Dummyson",
         "aliases": [],
-        "existingId": "g-person-tomas-aguilar",
+        "existingId": "g-person-tobin-dummyson",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
@@ -443,7 +443,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -452,7 +452,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Org Lambda Robotics, first half), Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Sasa Example (Org Lambda Robotics, first half), Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
@@ -467,13 +467,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Org Lambda Robotics, first half), Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Sasa Example (Org Lambda Robotics, first half), Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sarah",
+        "from": "sasha",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -482,13 +482,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Org Lambda Robotics, first half), Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Sasa Example (Org Lambda Robotics, first half), Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "tomas",
+        "from": "tobin",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -497,7 +497,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Org Lambda Robotics, first half), Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Sasa Example (Org Lambda Robotics, first half), Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
@@ -586,10 +586,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "tomas",
+        "owner": "tobin",
         "counterparty": null,
         "title": "Rerun slotting simulation with January data",
-        "statement": "Tomás will rerun the slotting simulation with January data by Friday the 20th.",
+        "statement": "Tobín will rerun the slotting simulation with January data by Friday the 20th.",
         "status": "open",
         "occurredAt": "2026-02-12",
         "dueAt": "2026-02-20",
@@ -607,9 +607,9 @@
         "kind": "commitment",
         "subject": "pilot",
         "owner": "jj",
-        "counterparty": "tomas",
+        "counterparty": "tobin",
         "title": "Send simulation input schema",
-        "statement": "JJ will send Tomás the input schema this afternoon.",
+        "statement": "JD will send Tobín the input schema this afternoon.",
         "status": "open",
         "occurredAt": "2026-02-12",
         "dueAt": "2026-02-12",
@@ -625,11 +625,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "tomas",
+        "subject": "tobin",
         "owner": null,
         "counterparty": null,
         "title": "Leaves at three for school pickup",
-        "statement": "Tomás has two kids and leaves at three most days for school pickup.",
+        "statement": "Tobín has two kids and leaves at three most days for school pickup.",
         "status": null,
         "occurredAt": "2026-02-12",
         "dueAt": null,

@@ -13,22 +13,22 @@
     {
       "id": "m05-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m05-spk-b",
       "label": "B",
-      "displayName": "Priya Raman"
+      "displayName": "Pia Sample"
     },
     {
       "id": "m05-spk-c",
       "label": "C",
-      "displayName": "Jonah Jiménez"
+      "displayName": "Jovan Démo"
     },
     {
       "id": "m05-spk-d",
       "label": "D",
-      "displayName": "Theo Lindqvist"
+      "displayName": "Thane Dummyson"
     }
   ],
   "segments": [
@@ -38,7 +38,7 @@
       "startMs": 0,
       "endMs": 9340,
       "rev": 1,
-      "text": "Thanks for joining, Theo. For context, we need somewhere to host the services for the Lambda pick-path pilot, and we're deciding this week."
+      "text": "Thanks for joining, Thane. For context, we need somewhere to host the services for the Lambda pick-path pilot, and we're deciding this week."
     },
     {
       "id": "m05-s002",
@@ -46,7 +46,7 @@
       "startMs": 9590,
       "endMs": 17410,
       "rev": 1,
-      "text": "Happy to help. I'm Theo Lindqvist, account manager at Estuary Cloud. I look after most of our consulting partners."
+      "text": "Happy to help. I'm Thane Dummyson, account manager at Estuary Cloud. I look after most of our consulting partners."
     },
     {
       "id": "m05-s003",
@@ -62,7 +62,7 @@
       "startMs": 23830,
       "endMs": 34690,
       "rev": 1,
-      "text": "I'd rather not run our own cluster for a pilot. JJ's opinion, for what it's worth, is that we'd spend a week on plumbing we don't need."
+      "text": "I'd rather not run our own cluster for a pilot. JD's opinion, for what it's worth, is that we'd spend a week on plumbing we don't need."
     },
     {
       "id": "m05-s005",
@@ -70,7 +70,7 @@
       "startMs": 34940,
       "endMs": 42380,
       "rev": 1,
-      "text": "That was going to be my question for you, JJ. How much effort is managed Kubernetes on Estuary?"
+      "text": "That was going to be my question for you, JD. How much effort is managed Kubernetes on Estuary?"
     },
     {
       "id": "m05-s006",
@@ -158,7 +158,7 @@
       "startMs": 94830,
       "endMs": 100370,
       "rev": 1,
-      "text": "Theo, the missing piece is pricing. What's the timeline on a committed-use quote?"
+      "text": "Thane, the missing piece is pricing. What's the timeline on a committed-use quote?"
     },
     {
       "id": "m05-s017",
@@ -174,7 +174,7 @@
       "startMs": 104890,
       "endMs": 108910,
       "rev": 1,
-      "text": "Good. Please send it to me and copy Priya."
+      "text": "Good. Please send it to me and copy Pia."
     },
     {
       "id": "m05-s019",
@@ -190,7 +190,7 @@
       "startMs": 118370,
       "endMs": 122770,
       "rev": 1,
-      "text": "Email it is. JJ, anything else you need from Theo?"
+      "text": "Email it is. JD, anything else you need from Thane?"
     },
     {
       "id": "m05-s021",
@@ -222,12 +222,12 @@
       "startMs": 136590,
       "endMs": 140990,
       "rev": 1,
-      "text": "Right. Let's reconvene when the pricing is in. Thanks Theo."
+      "text": "Right. Let's reconvene when the pricing is in. Thanks Thane."
     }
   ],
   "note": {
     "version": 1,
-    "body": "# Hosting vendor selection for the pilot\n\n**Date:** February 5\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)\n\n## Summary\n\nThe team chose where to host the services for the Lambda pick-path pilot. The shortlist was Estuary Cloud's managed Kubernetes versus a self-run cluster. Theo Lindqvist, account manager at Estuary Cloud, joined to answer questions.\n\n## Discussion\n\n- JJ argued against running a cluster ourselves for a pilot: a week of plumbing we don't need. Setting up pipelines on Estuary's managed Kubernetes takes a couple of days, and the team has done it before for another client.\n- Estuary offers a dedicated namespace with support included for the pilot's duration.\n- Lambda requires floor data to stay in the EU; Estuary's Frankfurt region covers that.\n- Frankfurt had two short outages last year, both under an hour, and none this year. Priya judged that acceptable for a pilot.\n\n## Decisions\n\n- The pilot will be **hosted on Estuary Cloud managed Kubernetes in the Frankfurt region**.\n\n## Action items\n\n- **Theo Lindqvist** — send committed-use pricing by Friday February 13, to Alex with Priya copied.\n- **JJ** — start on the deployment pipelines on Monday.\n- Namespace and credentials follow about a day after contract signature.\n\n## Notes\n\n- Theo is much easier to reach by email than on calls; he travels a lot.\n- The critical path is now the pricing and Larkspur's own sign-off.\n"
+    "body": "# Hosting vendor selection for the pilot\n\n**Date:** February 5\n**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), JD (Larkspur Labs), Thane Dummyson (Estuary Cloud)\n\n## Summary\n\nThe team chose where to host the services for the Lambda pick-path pilot. The shortlist was Estuary Cloud's managed Kubernetes versus a self-run cluster. Thane Dummyson, account manager at Estuary Cloud, joined to answer questions.\n\n## Discussion\n\n- JD argued against running a cluster ourselves for a pilot: a week of plumbing we don't need. Setting up pipelines on Estuary's managed Kubernetes takes a couple of days, and the team has done it before for another client.\n- Estuary offers a dedicated namespace with support included for the pilot's duration.\n- Lambda requires floor data to stay in the EU; Estuary's Frankfurt region covers that.\n- Frankfurt had two short outages last year, both under an hour, and none this year. Pia judged that acceptable for a pilot.\n\n## Decisions\n\n- The pilot will be **hosted on Estuary Cloud managed Kubernetes in the Frankfurt region**.\n\n## Action items\n\n- **Thane Dummyson** — send committed-use pricing by Friday February 13, to Alma with Pia copied.\n- **JD** — start on the deployment pipelines on Monday.\n- Namespace and credentials follow about a day after contract signature.\n\n## Notes\n\n- Thane is much easier to reach by email than on calls; he travels a lot.\n- The critical path is now the pricing and Larkspur's own sign-off.\n"
   },
   "knownEntities": [
     {
@@ -252,11 +252,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -268,12 +268,12 @@
       ]
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -281,11 +281,11 @@
       ]
     },
     {
-      "id": "g-person-priya-raman",
+      "id": "g-person-pia-sample",
       "type": "Person",
-      "label": "Priya Raman",
+      "label": "Pia Sample",
       "aliases": [
-        "Priya"
+        "Pia"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -322,54 +322,54 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "priya",
+        "key": "pia",
         "type": "Person",
-        "label": "Priya Raman",
+        "label": "Pia Sample",
         "aliases": [],
-        "existingId": "g-person-priya-raman",
+        "existingId": "g-person-pia-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Priya Raman (Larkspur Labs)"
+            "quote": "Pia Sample (Larkspur Labs)"
           }
         ]
       },
       {
         "key": "jj",
         "type": "Person",
-        "label": "Jonah Jiménez",
+        "label": "Jovan Démo",
         "aliases": [
-          "JJ"
+          "JD"
         ],
-        "existingId": "g-person-jonah-jimenez",
+        "existingId": "g-person-jovan-demo",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m05-s004",
-            "quote": "JJ's opinion, for what it's worth"
+            "quote": "JD's opinion, for what it's worth"
           }
         ]
       },
       {
-        "key": "theo",
+        "key": "thane",
         "type": "Person",
-        "label": "Theo Lindqvist",
+        "label": "Thane Dummyson",
         "aliases": [],
         "existingId": null,
         "props": {},
@@ -377,7 +377,7 @@
           {
             "source": "segment",
             "segmentId": "m05-s002",
-            "quote": "I'm Theo Lindqvist, account manager at Estuary Cloud."
+            "quote": "I'm Thane Dummyson, account manager at Estuary Cloud."
           }
         ]
       },
@@ -392,7 +392,7 @@
           {
             "source": "segment",
             "segmentId": "m05-s002",
-            "quote": "I'm Theo Lindqvist, account manager at Estuary Cloud."
+            "quote": "I'm Thane Dummyson, account manager at Estuary Cloud."
           }
         ]
       },
@@ -415,7 +415,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -424,13 +424,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), JD (Larkspur Labs), Thane Dummyson (Estuary Cloud)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "priya",
+        "from": "pia",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -439,7 +439,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), JD (Larkspur Labs), Thane Dummyson (Estuary Cloud)"
           }
         ]
       },
@@ -454,13 +454,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), JD (Larkspur Labs), Thane Dummyson (Estuary Cloud)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "theo",
+        "from": "thane",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -469,13 +469,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), JD (Larkspur Labs), Thane Dummyson (Estuary Cloud)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "theo",
+        "from": "thane",
         "to": "estuary",
         "validFrom": null,
         "validTo": null,
@@ -485,13 +485,13 @@
           {
             "source": "segment",
             "segmentId": "m05-s002",
-            "quote": "I'm Theo Lindqvist, account manager at Estuary Cloud."
+            "quote": "I'm Thane Dummyson, account manager at Estuary Cloud."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "theo",
+        "from": "thane",
         "to": "estuary",
         "validFrom": null,
         "validTo": null,
@@ -503,7 +503,7 @@
           {
             "source": "segment",
             "segmentId": "m05-s002",
-            "quote": "I'm Theo Lindqvist, account manager at Estuary Cloud."
+            "quote": "I'm Thane Dummyson, account manager at Estuary Cloud."
           }
         ]
       },
@@ -568,10 +568,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "theo",
-        "counterparty": "alex",
+        "owner": "thane",
+        "counterparty": "alma",
         "title": "Send committed-use pricing",
-        "statement": "Theo will send committed-use pricing by Friday February 13.",
+        "statement": "Thane will send committed-use pricing by Friday February 13.",
         "status": "open",
         "occurredAt": "2026-02-05",
         "dueAt": "2026-02-13",
@@ -591,7 +591,7 @@
         "owner": "jj",
         "counterparty": null,
         "title": "Start on the deployment pipelines",
-        "statement": "JJ will start on the deployment pipelines on Monday.",
+        "statement": "JD will start on the deployment pipelines on Monday.",
         "status": "open",
         "occurredAt": "2026-02-05",
         "dueAt": "2026-02-09",
@@ -607,11 +607,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "theo",
+        "subject": "thane",
         "owner": null,
         "counterparty": null,
         "title": "Prefers email to calls",
-        "statement": "Theo is much easier to reach by email than on calls because he travels a lot.",
+        "statement": "Thane is much easier to reach by email than on calls because he travels a lot.",
         "status": null,
         "occurredAt": "2026-02-05",
         "dueAt": null,

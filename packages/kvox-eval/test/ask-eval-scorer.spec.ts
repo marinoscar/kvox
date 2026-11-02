@@ -35,7 +35,7 @@ function question(over: Partial<AskEvalQuestion> = {}): AskEvalQuestion {
     category: 'lookup',
     fixtures: ['m01'],
     scopeEntity: null,
-    question: 'Who does Sarah Chen work for?',
+    question: 'Who does Sasha Example work for?',
     expected: { entities: [], answerAll: [], answerNone: [], citeFrom: [], notFound: false },
     ...over,
   };
@@ -43,7 +43,7 @@ function question(over: Partial<AskEvalQuestion> = {}): AskEvalQuestion {
 
 function message(over: Partial<Pick<AskMessageResponse, 'content' | 'citations' | 'promptTokens' | 'completionTokens' | 'toolCalls'>> = {}) {
   return {
-    content: 'Sarah Chen works for Org Lambda Robotics.[^ev1]',
+    content: 'Sasha Example works for Org Lambda Robotics.[^ev1]',
     citations: [citation()],
     promptTokens: 100,
     completionTokens: 20,
@@ -125,7 +125,7 @@ describe('scoreEntityRecall', () => {
   });
   it('is the fraction of expected labels cited, case-insensitively', () => {
     const citations = [citation({ kind: 'entity', label: 'org lambda robotics' })];
-    expect(scoreEntityRecall(['Org Lambda Robotics', 'Sarah Chen'], citations)).toBe(0.5);
+    expect(scoreEntityRecall(['Org Lambda Robotics', 'Sasha Example'], citations)).toBe(0.5);
   });
   it('an invalid citation does not count toward recall', () => {
     const citations = [citation({ kind: 'entity', label: 'Org Lambda Robotics', valid: false })];
@@ -168,7 +168,7 @@ describe('scoreAnswerMatch', () => {
   });
 
   it('a group is satisfied by ANY alternative', () => {
-    const { matched } = scoreAnswerMatch(expected({ answerAll: [['JJ', 'Jonah']] }), 'Jonah took it over.', []);
+    const { matched } = scoreAnswerMatch(expected({ answerAll: [['JD', 'Jovan']] }), 'Jovan took it over.', []);
     expect(matched).toBe(true);
   });
 

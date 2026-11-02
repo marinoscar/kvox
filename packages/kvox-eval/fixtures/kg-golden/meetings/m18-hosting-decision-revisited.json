@@ -14,22 +14,22 @@
     {
       "id": "m18-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m18-spk-b",
       "label": "B",
-      "displayName": "Priya Raman"
+      "displayName": "Pia Sample"
     },
     {
       "id": "m18-spk-c",
       "label": "C",
-      "displayName": "Jonah Jiménez"
+      "displayName": "Jovan Démo"
     },
     {
       "id": "m18-spk-d",
       "label": "D",
-      "displayName": "Owen Barker"
+      "displayName": "Otis Dummyson"
     }
   ],
   "segments": [
@@ -39,7 +39,7 @@
       "startMs": 0,
       "endMs": 6300,
       "rev": 1,
-      "text": "Thanks for joining, Owen. We need to revisit the hosting decision we made in February."
+      "text": "Thanks for joining, Otis. We need to revisit the hosting decision we made in February."
     },
     {
       "id": "m18-s002",
@@ -79,7 +79,7 @@
       "startMs": 36170,
       "endMs": 40950,
       "rev": 1,
-      "text": "The services are containerised already. JJ's estimate, three weeks including testing."
+      "text": "The services are containerised already. JD's estimate, three weeks including testing."
     },
     {
       "id": "m18-s007",
@@ -127,7 +127,7 @@
       "startMs": 62170,
       "endMs": 64290,
       "rev": 1,
-      "text": "JJ, what's the plan?"
+      "text": "JD, what's the plan?"
     },
     {
       "id": "m18-s013",
@@ -151,7 +151,7 @@
       "startMs": 74600,
       "endMs": 78240,
       "rev": 1,
-      "text": "Priya, can you let Theo at Estuary know?"
+      "text": "Pia, can you let Thane at Estuary know?"
     },
     {
       "id": "m18-s016",
@@ -159,7 +159,7 @@
       "startMs": 78490,
       "endMs": 85170,
       "rev": 1,
-      "text": "Yes, I'll tell Theo this week. He was helpful, so I want to do it properly."
+      "text": "Yes, I'll tell Thane this week. He was helpful, so I want to do it properly."
     },
     {
       "id": "m18-s017",
@@ -183,7 +183,7 @@
       "startMs": 92820,
       "endMs": 97600,
       "rev": 1,
-      "text": "I'll set JJ up with read access to our monitoring stack."
+      "text": "I'll set JD up with read access to our monitoring stack."
     },
     {
       "id": "m18-s020",
@@ -191,7 +191,7 @@
       "startMs": 97850,
       "endMs": 104150,
       "rev": 1,
-      "text": "Great. Unrelated, for the go-live lunch, JJ's vegetarian, so let's not do the barbecue place."
+      "text": "Great. Unrelated, for the go-live lunch, JD's vegetarian, so let's not do the barbecue place."
     },
     {
       "id": "m18-s021",
@@ -212,7 +212,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Pilot hosting decision revisited\n\n**Date:** May 7\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Org Lambda Robotics)\n\n## Summary\n\nThe team revisited February's hosting decision for the Lambda pick-path pilot after Estuary Cloud's committed-use pricing arrived.\n\n## Discussion\n\n- Estuary's pricing came in about 40 percent above the budget agreed with Lambda. Owen called it a non-starter.\n- Since Owen joined, Lambda has built out an on-prem cluster that is half empty. JJ has reviewed it: it has everything the pilot needs, and floor data would never leave Lambda's network.\n- The services are already containerised; JJ estimates three weeks to move, including testing.\n- Owen's team supports the cluster and would rather the pilot runs there.\n\n## Decisions\n\n- **Reverse the February decision.** The pilot moves off Estuary Cloud to **Lambda's own on-prem cluster**, avoiding the Estuary contract entirely.\n\n## Action items\n\n- **JJ** — migrate the pilot services to the Lambda cluster by May 29.\n- **Owen Barker** — provide namespaces and access by Monday, and read access to the monitoring stack for JJ.\n- **Priya Raman** — tell Theo at Estuary about the change this week.\n\n## Notes\n\n- For the go-live lunch, choose a place with good vegetarian options.\n"
+    "body": "# Pilot hosting decision revisited\n\n**Date:** May 7\n**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), JD (Larkspur Labs), Otis Dummyson (Org Lambda Robotics)\n\n## Summary\n\nThe team revisited February's hosting decision for the Lambda pick-path pilot after Estuary Cloud's committed-use pricing arrived.\n\n## Discussion\n\n- Estuary's pricing came in about 40 percent above the budget agreed with Lambda. Otis called it a non-starter.\n- Since Otis joined, Lambda has built out an on-prem cluster that is half empty. JD has reviewed it: it has everything the pilot needs, and floor data would never leave Lambda's network.\n- The services are already containerised; JD estimates three weeks to move, including testing.\n- Otis's team supports the cluster and would rather the pilot runs there.\n\n## Decisions\n\n- **Reverse the February decision.** The pilot moves off Estuary Cloud to **Lambda's own on-prem cluster**, avoiding the Estuary contract entirely.\n\n## Action items\n\n- **JD** — migrate the pilot services to the Lambda cluster by May 29.\n- **Otis Dummyson** — provide namespaces and access by Monday, and read access to the monitoring stack for JD.\n- **Pia Sample** — tell Thane at Estuary about the change this week.\n\n## Notes\n\n- For the go-live lunch, choose a place with good vegetarian options.\n"
   },
   "knownEntities": [
     {
@@ -237,11 +237,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -266,12 +266,12 @@
       ]
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -284,11 +284,11 @@
       ]
     },
     {
-      "id": "g-person-owen-barker",
+      "id": "g-person-otis-dummyson",
       "type": "Person",
-      "label": "Owen Barker",
+      "label": "Otis Dummyson",
       "aliases": [
-        "Owen"
+        "Otis"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -296,11 +296,11 @@
       ]
     },
     {
-      "id": "g-person-priya-raman",
+      "id": "g-person-pia-sample",
       "type": "Person",
-      "label": "Priya Raman",
+      "label": "Pia Sample",
       "aliases": [
-        "Priya"
+        "Pia"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -311,11 +311,11 @@
       ]
     },
     {
-      "id": "g-person-theo-lindqvist",
+      "id": "g-person-thane-dummyson",
       "type": "Person",
-      "label": "Theo Lindqvist",
+      "label": "Thane Dummyson",
       "aliases": [
-        "Theo"
+        "Thane"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -349,61 +349,61 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "priya",
+        "key": "pia",
         "type": "Person",
-        "label": "Priya Raman",
+        "label": "Pia Sample",
         "aliases": [],
-        "existingId": "g-person-priya-raman",
+        "existingId": "g-person-pia-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Priya Raman (Larkspur Labs)"
+            "quote": "Pia Sample (Larkspur Labs)"
           }
         ]
       },
       {
         "key": "jj",
         "type": "Person",
-        "label": "Jonah Jiménez",
+        "label": "Jovan Démo",
         "aliases": [
-          "JJ"
+          "JD"
         ],
-        "existingId": "g-person-jonah-jimenez",
+        "existingId": "g-person-jovan-demo",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m18-s006",
-            "quote": "JJ's estimate, three weeks including testing."
+            "quote": "JD's estimate, three weeks including testing."
           }
         ]
       },
       {
-        "key": "owen",
+        "key": "otis",
         "type": "Person",
-        "label": "Owen Barker",
+        "label": "Otis Dummyson",
         "aliases": [],
-        "existingId": "g-person-owen-barker",
+        "existingId": "g-person-otis-dummyson",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Owen Barker (Org Lambda Robotics)"
+            "quote": "Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
@@ -432,7 +432,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Owen Barker (Org Lambda Robotics)"
+            "quote": "Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
@@ -454,7 +454,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -463,13 +463,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), JD (Larkspur Labs), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "priya",
+        "from": "pia",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -478,7 +478,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), JD (Larkspur Labs), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
@@ -493,13 +493,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), JD (Larkspur Labs), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "owen",
+        "from": "otis",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -508,7 +508,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), JD (Larkspur Labs), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
@@ -575,7 +575,7 @@
         "owner": "jj",
         "counterparty": null,
         "title": "Migrate pilot services to the Lambda cluster",
-        "statement": "JJ will migrate the pilot services to the Lambda cluster by May 29.",
+        "statement": "JD will migrate the pilot services to the Lambda cluster by May 29.",
         "status": "open",
         "occurredAt": "2026-05-07",
         "dueAt": "2026-05-29",
@@ -592,10 +592,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "owen",
+        "owner": "otis",
         "counterparty": "jj",
         "title": "Provide namespaces and access",
-        "statement": "Owen's team will provide namespaces and access by Monday.",
+        "statement": "Otis's team will provide namespaces and access by Monday.",
         "status": "open",
         "occurredAt": "2026-05-07",
         "dueAt": "2026-05-11",
@@ -612,10 +612,10 @@
       {
         "kind": "commitment",
         "subject": "estuary",
-        "owner": "priya",
-        "counterparty": "g-person-theo-lindqvist",
-        "title": "Tell Theo about the change",
-        "statement": "Priya will tell Theo at Estuary about the change this week.",
+        "owner": "pia",
+        "counterparty": "g-person-thane-dummyson",
+        "title": "Tell Thane about the change",
+        "statement": "Pia will tell Thane at Estuary about the change this week.",
         "status": "open",
         "occurredAt": "2026-05-07",
         "dueAt": null,
@@ -625,7 +625,7 @@
           {
             "source": "segment",
             "segmentId": "m18-s016",
-            "quote": "I'll tell Theo this week."
+            "quote": "I'll tell Thane this week."
           }
         ]
       },
@@ -635,7 +635,7 @@
         "owner": null,
         "counterparty": null,
         "title": "Vegetarian",
-        "statement": "JJ is vegetarian.",
+        "statement": "JD is vegetarian.",
         "status": null,
         "occurredAt": "2026-05-07",
         "dueAt": null,
@@ -645,7 +645,7 @@
           {
             "source": "segment",
             "segmentId": "m18-s020",
-            "quote": "JJ's vegetarian"
+            "quote": "JD's vegetarian"
           }
         ]
       }

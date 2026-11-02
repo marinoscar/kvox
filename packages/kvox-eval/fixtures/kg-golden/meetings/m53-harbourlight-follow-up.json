@@ -14,7 +14,7 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Harbourlight migration follow-up\n\n**Date:** September 1\n**Attendees:** Imogen Farrow, Teodor Blanc, Priya Lindqvist\n\n## Summary\n\nA month after the first risk review, the group met to see what had changed on the Harbourlight migration project at Quillfeather Credit Union. Progress is good, and the cutover window is now being drafted for the board. Two of the three earlier concerns have moved, and a new one has appeared.\n\n## What changed\n\nThe security team completed its review. Security sign-off was granted with conditions, so cutover can be scheduled, but the penetration retest is still open and must be passed before go-live. Teodor said the conditions are reasonable and the findings were minor.\n\nThe nightly outage of the test environment has been fixed, and the regression runs now finish overnight.\n\n## Concerns raised\n\n- Staff availability over the holiday freeze leaves little time to rehearse the cutover, because most of the team has booked leave for the same two weeks.\n- Dashboard latency doubled after the schema change, and the reporting screens now take several seconds to load. Priya thinks an index is missing, but this has not been confirmed.\n\n## Background\n\nThe Harbourlight migration project has nine people working on it, and the board wants a recommendation before the end of the quarter. The member communication plan is on track and is owned by a different team.\n\n## Next steps\n\nThe group will check the retest result and the dashboard latency at the next review. The summary goes to the programme office.\n"
+    "body": "# Harbourlight migration follow-up\n\n**Date:** September 1\n**Attendees:** Imani Testcase, Tamsin Testcase, Pia Fixture\n\n## Summary\n\nA month after the first risk review, the group met to see what had changed on the Harbourlight migration project at Quillfeather Credit Union. Progress is good, and the cutover window is now being drafted for the board. Two of the three earlier concerns have moved, and a new one has appeared.\n\n## What changed\n\nThe security team completed its review. Security sign-off was granted with conditions, so cutover can be scheduled, but the penetration retest is still open and must be passed before go-live. Tamsin said the conditions are reasonable and the findings were minor.\n\nThe nightly outage of the test environment has been fixed, and the regression runs now finish overnight.\n\n## Concerns raised\n\n- Staff availability over the holiday freeze leaves little time to rehearse the cutover, because most of the team has booked leave for the same two weeks.\n- Dashboard latency doubled after the schema change, and the reporting screens now take several seconds to load. Pia thinks an index is missing, but this has not been confirmed.\n\n## Background\n\nThe Harbourlight migration project has nine people working on it, and the board wants a recommendation before the end of the quarter. The member communication plan is on track and is owned by a different team.\n\n## Next steps\n\nThe group will check the retest result and the dashboard latency at the next review. The summary goes to the programme office.\n"
   },
   "knownEntities": [
     {
@@ -52,44 +52,44 @@
         ]
       },
       {
-        "key": "imogen",
+        "key": "imani",
         "type": "Person",
-        "label": "Imogen Farrow",
+        "label": "Imani Testcase",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+            "quote": "Imani Testcase, Tamsin Testcase, Pia Fixture"
           }
         ]
       },
       {
-        "key": "teodor",
+        "key": "tamsin",
         "type": "Person",
-        "label": "Teodor Blanc",
+        "label": "Tamsin Testcase",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+            "quote": "Imani Testcase, Tamsin Testcase, Pia Fixture"
           }
         ]
       },
       {
-        "key": "priya",
+        "key": "pia",
         "type": "Person",
-        "label": "Priya Lindqvist",
+        "label": "Pia Fixture",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+            "quote": "Imani Testcase, Tamsin Testcase, Pia Fixture"
           }
         ]
       },

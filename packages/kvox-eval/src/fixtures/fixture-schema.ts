@@ -14,9 +14,9 @@
 // reaches it only from its `scripts/` and its specs.
 //
 // Reference conventions used by the labels:
-//   - an entity label's `key` is local to its fixture ("sarah", "meeting");
+//   - an entity label's `key` is local to its fixture ("sasha", "meeting");
 //   - a relation's `from`/`to` and an item's `subject`/`owner`/`counterparty`
-//     name either such a key or a `knownEntities` id ("g-person-sarah-chen");
+//     name either such a key or a `knownEntities` id ("g-person-sasha-example");
 //   - an item is addressed from another fixture as `<fixtureId>#<kind>-<n>`,
 //     `n` being its 1-based position among that fixture's items of that kind
 //     ("m03#claim-1") — that is what `supersedesLabel` holds.

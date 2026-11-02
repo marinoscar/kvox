@@ -11,27 +11,27 @@
     {
       "id": "m14-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m14-spk-b",
       "label": "B",
-      "displayName": "Felix Amundsen"
+      "displayName": "Florian Mockwell"
     },
     {
       "id": "m14-spk-c",
       "label": "C",
-      "displayName": "Wen Zhao"
+      "displayName": "Waverly Testcase"
     },
     {
       "id": "m14-spk-d",
       "label": "D",
-      "displayName": "Kwame Mensah"
+      "displayName": "Kieran Testcase"
     },
     {
       "id": "m14-spk-e",
       "label": "E",
-      "displayName": "Priya Raman"
+      "displayName": "Pia Sample"
     }
   ],
   "segments": [
@@ -97,7 +97,7 @@
       "startMs": 38630,
       "endMs": 40750,
       "rev": 1,
-      "text": "Wen, do you agree?"
+      "text": "Waverly, do you agree?"
     },
     {
       "id": "m14-s009",
@@ -145,7 +145,7 @@
       "startMs": 67670,
       "endMs": 71690,
       "rev": 1,
-      "text": "Wen, how does validation fit with your team's workload?"
+      "text": "Waverly, how does validation fit with your team's workload?"
     },
     {
       "id": "m14-s015",
@@ -153,7 +153,7 @@
       "startMs": 71940,
       "endMs": 76340,
       "rev": 1,
-      "text": "It's tight. I report to Felix and we're already stretched."
+      "text": "It's tight. I report to Florian and we're already stretched."
     },
     {
       "id": "m14-s016",
@@ -161,7 +161,7 @@
       "startMs": 76590,
       "endMs": 81370,
       "rev": 1,
-      "text": "I'll free up two analysts for two weeks. Wen, pick who."
+      "text": "I'll free up two analysts for two weeks. Waverly, pick who."
     },
     {
       "id": "m14-s017",
@@ -177,7 +177,7 @@
       "startMs": 83230,
       "endMs": 86490,
       "rev": 1,
-      "text": "Felix, how do you want progress reported?"
+      "text": "Florian, how do you want progress reported?"
     },
     {
       "id": "m14-s019",
@@ -201,7 +201,7 @@
       "startMs": 94520,
       "endMs": 102340,
       "rev": 1,
-      "text": "From our side, Kwame leads the model work and JJ will help on the API once we get there."
+      "text": "From our side, Kieran leads the model work and JD will help on the API once we get there."
     },
     {
       "id": "m14-s022",
@@ -238,7 +238,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Gullwing chargeback discovery readout\n\n**Date:** April 9\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)\n\n## Summary\n\nReadout of the four-week discovery phase for Gullwing's chargeback automation.\n\n## Findings\n\n- Manual review takes about 18 minutes per dispute on average. Most of that time is spent reading merchant evidence, which often arrives as forty-page PDFs.\n- 60 percent of volume sits in three reason codes: goods not received, duplicate processing, and cancelled recurring.\n- Those three codes are also the most rule-like; the judgement calls are in the long tail.\n\n## Decisions\n\n- **Automate the top three dispute reason codes first**, and prove the approach before widening.\n- The next gate: once the labelled sample is complete, Larkspur presents a first model's accuracy and Felix decides on the build.\n\n## Action items\n\n- **Kwame Mensah** — build a labelled sample of 2,000 disputes by the end of the month.\n- **Wen Zhao** — have her team validate the labels; choose two analysts.\n- **Felix Amundsen** — free up two analysts for two weeks for label validation.\n- **Alex Rivera** — report weekly progress numbers in a spreadsheet.\n\n## Notes\n\n- Wen reports to Felix; the risk team is already stretched.\n- Felix wants numbers in a spreadsheet, not slides.\n- Kwame leads the model work; JJ will help on the API later.\n"
+    "body": "# Gullwing chargeback discovery readout\n\n**Date:** April 9\n**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments)\n\n## Summary\n\nReadout of the four-week discovery phase for Gullwing's chargeback automation.\n\n## Findings\n\n- Manual review takes about 18 minutes per dispute on average. Most of that time is spent reading merchant evidence, which often arrives as forty-page PDFs.\n- 60 percent of volume sits in three reason codes: goods not received, duplicate processing, and cancelled recurring.\n- Those three codes are also the most rule-like; the judgement calls are in the long tail.\n\n## Decisions\n\n- **Automate the top three dispute reason codes first**, and prove the approach before widening.\n- The next gate: once the labelled sample is complete, Larkspur presents a first model's accuracy and Florian decides on the build.\n\n## Action items\n\n- **Kieran Testcase** — build a labelled sample of 2,000 disputes by the end of the month.\n- **Waverly Testcase** — have her team validate the labels; choose two analysts.\n- **Florian Mockwell** — free up two analysts for two weeks for label validation.\n- **Alma Mockwell** — report weekly progress numbers in a spreadsheet.\n\n## Notes\n\n- Waverly reports to Florian; the risk team is already stretched.\n- Florian wants numbers in a spreadsheet, not slides.\n- Kieran leads the model work; JD will help on the API later.\n"
   },
   "knownEntities": [
     {
@@ -252,11 +252,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -277,22 +277,22 @@
       ]
     },
     {
-      "id": "g-person-felix-amundsen",
+      "id": "g-person-florian-mockwell",
       "type": "Person",
-      "label": "Felix Amundsen",
+      "label": "Florian Mockwell",
       "aliases": [
-        "Felix"
+        "Florian"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -304,11 +304,11 @@
       ]
     },
     {
-      "id": "g-person-kwame-mensah",
+      "id": "g-person-kieran-testcase",
       "type": "Person",
-      "label": "Kwame Mensah",
+      "label": "Kieran Testcase",
       "aliases": [
-        "Kwame"
+        "Kieran"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -316,11 +316,11 @@
       ]
     },
     {
-      "id": "g-person-priya-raman",
+      "id": "g-person-pia-sample",
       "type": "Person",
-      "label": "Priya Raman",
+      "label": "Pia Sample",
       "aliases": [
-        "Priya"
+        "Pia"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -330,11 +330,11 @@
       ]
     },
     {
-      "id": "g-person-wen-zhao",
+      "id": "g-person-waverly-testcase",
       "type": "Person",
-      "label": "Wen Zhao",
+      "label": "Waverly Testcase",
       "aliases": [
-        "Wen"
+        "Waverly"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -365,72 +365,72 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "priya",
+        "key": "pia",
         "type": "Person",
-        "label": "Priya Raman",
+        "label": "Pia Sample",
         "aliases": [],
-        "existingId": "g-person-priya-raman",
+        "existingId": "g-person-pia-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Priya Raman (Larkspur Labs)"
+            "quote": "Pia Sample (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "kwame",
+        "key": "kieran",
         "type": "Person",
-        "label": "Kwame Mensah",
+        "label": "Kieran Testcase",
         "aliases": [],
-        "existingId": "g-person-kwame-mensah",
+        "existingId": "g-person-kieran-testcase",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Kwame Mensah (Larkspur Labs)"
+            "quote": "Kieran Testcase (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "felix",
+        "key": "florian",
         "type": "Person",
-        "label": "Felix Amundsen",
+        "label": "Florian Mockwell",
         "aliases": [],
-        "existingId": "g-person-felix-amundsen",
+        "existingId": "g-person-florian-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Felix Amundsen (Gullwing Payments)"
+            "quote": "Florian Mockwell (Gullwing Payments)"
           }
         ]
       },
       {
-        "key": "wen",
+        "key": "waverly",
         "type": "Person",
-        "label": "Wen Zhao",
+        "label": "Waverly Testcase",
         "aliases": [],
-        "existingId": "g-person-wen-zhao",
+        "existingId": "g-person-waverly-testcase",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Wen Zhao (Gullwing Payments)"
+            "quote": "Waverly Testcase (Gullwing Payments)"
           }
         ]
       },
@@ -466,7 +466,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -475,13 +475,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "priya",
+        "from": "pia",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -490,13 +490,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "kwame",
+        "from": "kieran",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -505,13 +505,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "felix",
+        "from": "florian",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -520,13 +520,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "wen",
+        "from": "waverly",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -535,14 +535,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "REPORTS_TO",
-        "from": "wen",
-        "to": "felix",
+        "from": "waverly",
+        "to": "florian",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -551,7 +551,7 @@
           {
             "source": "segment",
             "segmentId": "m14-s015",
-            "quote": "I report to Felix"
+            "quote": "I report to Florian"
           }
         ]
       },
@@ -636,10 +636,10 @@
       {
         "kind": "commitment",
         "subject": "chargeback",
-        "owner": "kwame",
+        "owner": "kieran",
         "counterparty": null,
         "title": "Build labelled sample of 2,000 disputes",
-        "statement": "Kwame will build a labelled sample of 2,000 disputes by the end of the month.",
+        "statement": "Kieran will build a labelled sample of 2,000 disputes by the end of the month.",
         "status": "open",
         "occurredAt": "2026-04-09",
         "dueAt": "2026-04-30",
@@ -656,10 +656,10 @@
       {
         "kind": "commitment",
         "subject": "chargeback",
-        "owner": "felix",
-        "counterparty": "wen",
+        "owner": "florian",
+        "counterparty": "waverly",
         "title": "Free up two analysts",
-        "statement": "Felix will free up two analysts for two weeks for label validation.",
+        "statement": "Florian will free up two analysts for two weeks for label validation.",
         "status": "open",
         "occurredAt": "2026-04-09",
         "dueAt": null,
@@ -676,10 +676,10 @@
       {
         "kind": "commitment",
         "subject": "chargeback",
-        "owner": "alex",
-        "counterparty": "felix",
+        "owner": "alma",
+        "counterparty": "florian",
         "title": "Weekly numbers in a spreadsheet",
-        "statement": "Alex will report weekly progress numbers in a spreadsheet.",
+        "statement": "Alma will report weekly progress numbers in a spreadsheet.",
         "status": "open",
         "occurredAt": "2026-04-09",
         "dueAt": null,
@@ -695,11 +695,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "felix",
+        "subject": "florian",
         "owner": null,
         "counterparty": null,
         "title": "Reads spreadsheets, not slides",
-        "statement": "Felix wants numbers in a spreadsheet and doesn't read slides.",
+        "statement": "Florian wants numbers in a spreadsheet and doesn't read slides.",
         "status": null,
         "occurredAt": "2026-04-09",
         "dueAt": null,

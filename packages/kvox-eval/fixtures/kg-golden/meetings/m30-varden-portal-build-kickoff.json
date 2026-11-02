@@ -8,33 +8,33 @@
     "sensitive"
   ],
   "recordedAt": "2026-08-06T13:00:00Z",
-  "contextText": "Build phase kickoff after discovery. Rosa back from leave.",
+  "contextText": "Build phase kickoff after discovery. Rhea back from leave.",
   "hasTranscript": true,
   "speakers": [
     {
       "id": "m30-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m30-spk-b",
       "label": "B",
-      "displayName": "Rosa Delgado"
+      "displayName": "Rhea Sample"
     },
     {
       "id": "m30-spk-c",
       "label": "C",
-      "displayName": "Ben Adeyemi"
+      "displayName": "Bram Dummyson"
     },
     {
       "id": "m30-spk-d",
       "label": "D",
-      "displayName": "Mateo Rossi"
+      "displayName": "Maxim Mockwell"
     },
     {
       "id": "m30-spk-e",
       "label": "E",
-      "displayName": "Hana Sato"
+      "displayName": "Hazel Placeholder"
     }
   ],
   "segments": [
@@ -44,7 +44,7 @@
       "startMs": 0,
       "endMs": 4020,
       "rev": 1,
-      "text": "Welcome back, Rosa, and welcome to the build kickoff."
+      "text": "Welcome back, Rhea, and welcome to the build kickoff."
     },
     {
       "id": "m30-s002",
@@ -52,7 +52,7 @@
       "startMs": 4270,
       "endMs": 13230,
       "rev": 1,
-      "text": "Thanks. I'm back, but on mornings only for now while I recover from the surgery. Ben stays my backup in the afternoons."
+      "text": "Thanks. I'm back, but on mornings only for now while I recover from the surgery. Bram stays my backup in the afternoons."
     },
     {
       "id": "m30-s003",
@@ -68,7 +68,7 @@
       "startMs": 17370,
       "endMs": 22530,
       "rev": 1,
-      "text": "Mateo, there's one thing from the spike we need to discuss first."
+      "text": "Maxim, there's one thing from the spike we need to discuss first."
     },
     {
       "id": "m30-s005",
@@ -140,7 +140,7 @@
       "startMs": 76700,
       "endMs": 81100,
       "rev": 1,
-      "text": "Decided. Mateo, what do you need to write it up?"
+      "text": "Decided. Maxim, what do you need to write it up?"
     },
     {
       "id": "m30-s014",
@@ -209,7 +209,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Varden claims portal build kickoff\n\n**Date:** August 6\n**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)\n\n## Summary\n\nKickoff of the build phase for the Varden Insurance claims portal rebuild. Rosa is back from leave, working mornings only for now; Ben covers afternoons.\n\n## Spike finding\n\n- In June the team decided to rebuild the portal on top of the existing policy API.\n- The integration spike showed the API's claims endpoints only batch overnight and cannot support real-time claim status during the day.\n- Real-time status is the heart of the project: status checks are thirty percent of claims calls.\n\n## Decisions\n\n- **Reverse the June decision: replace the policy API's claims endpoints with a new claims service**, keeping the rest of the policy API. The reversal is based on the spike, which was not available in June.\n- Two claims handlers will be involved from the start as product champions.\n\n## Budget\n\nThe build phase is approved at 1.4 million with a ten percent contingency.\n\n## Action items\n\n- **Mateo Rossi** — write the architecture decision record by next Tuesday, including a staging environment for Ben's team.\n- **Rosa Delgado** — nominate two claims handlers as product champions by August 14.\n\n## Notes\n\n- Rosa is on mornings only for now; schedule key decisions before noon.\n"
+    "body": "# Varden claims portal build kickoff\n\n**Date:** August 6\n**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Maxim Mockwell (Larkspur Labs), Rhea Sample (Varden Insurance), Bram Dummyson (Varden Insurance)\n\n## Summary\n\nKickoff of the build phase for the Varden Insurance claims portal rebuild. Rhea is back from leave, working mornings only for now; Bram covers afternoons.\n\n## Spike finding\n\n- In June the team decided to rebuild the portal on top of the existing policy API.\n- The integration spike showed the API's claims endpoints only batch overnight and cannot support real-time claim status during the day.\n- Real-time status is the heart of the project: status checks are thirty percent of claims calls.\n\n## Decisions\n\n- **Reverse the June decision: replace the policy API's claims endpoints with a new claims service**, keeping the rest of the policy API. The reversal is based on the spike, which was not available in June.\n- Two claims handlers will be involved from the start as product champions.\n\n## Budget\n\nThe build phase is approved at 1.4 million with a ten percent contingency.\n\n## Action items\n\n- **Maxim Mockwell** — write the architecture decision record by next Tuesday, including a staging environment for Bram's team.\n- **Rhea Sample** — nominate two claims handlers as product champions by August 14.\n\n## Notes\n\n- Rhea is on mornings only for now; schedule key decisions before noon.\n"
   },
   "knownEntities": [
     {
@@ -223,11 +223,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -263,11 +263,11 @@
       ]
     },
     {
-      "id": "g-person-ben-adeyemi",
+      "id": "g-person-bram-dummyson",
       "type": "Person",
-      "label": "Ben Adeyemi",
+      "label": "Bram Dummyson",
       "aliases": [
-        "Ben"
+        "Bram"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -275,11 +275,11 @@
       ]
     },
     {
-      "id": "g-person-hana-sato",
+      "id": "g-person-hazel-placeholder",
       "type": "Person",
-      "label": "Hana Sato",
+      "label": "Hazel Placeholder",
       "aliases": [
-        "Hana"
+        "Hazel"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -289,11 +289,11 @@
       ]
     },
     {
-      "id": "g-person-mateo-rossi",
+      "id": "g-person-maxim-mockwell",
       "type": "Person",
-      "label": "Mateo Rossi",
+      "label": "Maxim Mockwell",
       "aliases": [
-        "Mateo"
+        "Maxim"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -301,11 +301,11 @@
       ]
     },
     {
-      "id": "g-person-rosa-delgado",
+      "id": "g-person-rhea-sample",
       "type": "Person",
-      "label": "Rosa Delgado",
+      "label": "Rhea Sample",
       "aliases": [
-        "Rosa"
+        "Rhea"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -340,72 +340,72 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "hana",
+        "key": "hazel",
         "type": "Person",
-        "label": "Hana Sato",
+        "label": "Hazel Placeholder",
         "aliases": [],
-        "existingId": "g-person-hana-sato",
+        "existingId": "g-person-hazel-placeholder",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Hana Sato (Larkspur Labs)"
+            "quote": "Hazel Placeholder (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "mateo",
+        "key": "maxim",
         "type": "Person",
-        "label": "Mateo Rossi",
+        "label": "Maxim Mockwell",
         "aliases": [],
-        "existingId": "g-person-mateo-rossi",
+        "existingId": "g-person-maxim-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Mateo Rossi (Larkspur Labs)"
+            "quote": "Maxim Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "rosa",
+        "key": "rhea",
         "type": "Person",
-        "label": "Rosa Delgado",
+        "label": "Rhea Sample",
         "aliases": [],
-        "existingId": "g-person-rosa-delgado",
+        "existingId": "g-person-rhea-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Rosa Delgado (Varden Insurance)"
+            "quote": "Rhea Sample (Varden Insurance)"
           }
         ]
       },
       {
-        "key": "ben",
+        "key": "bram",
         "type": "Person",
-        "label": "Ben Adeyemi",
+        "label": "Bram Dummyson",
         "aliases": [],
-        "existingId": "g-person-ben-adeyemi",
+        "existingId": "g-person-bram-dummyson",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Ben Adeyemi (Varden Insurance)"
+            "quote": "Bram Dummyson (Varden Insurance)"
           }
         ]
       },
@@ -441,7 +441,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -450,13 +450,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Maxim Mockwell (Larkspur Labs), Rhea Sample (Varden Insurance), Bram Dummyson (Varden Insurance)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "hana",
+        "from": "hazel",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -465,13 +465,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Maxim Mockwell (Larkspur Labs), Rhea Sample (Varden Insurance), Bram Dummyson (Varden Insurance)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "mateo",
+        "from": "maxim",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -480,13 +480,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Maxim Mockwell (Larkspur Labs), Rhea Sample (Varden Insurance), Bram Dummyson (Varden Insurance)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "rosa",
+        "from": "rhea",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -495,13 +495,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Maxim Mockwell (Larkspur Labs), Rhea Sample (Varden Insurance), Bram Dummyson (Varden Insurance)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "ben",
+        "from": "bram",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -510,7 +510,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Maxim Mockwell (Larkspur Labs), Rhea Sample (Varden Insurance), Bram Dummyson (Varden Insurance)"
           }
         ]
       },
@@ -634,10 +634,10 @@
       {
         "kind": "commitment",
         "subject": "portal",
-        "owner": "mateo",
+        "owner": "maxim",
         "counterparty": null,
         "title": "Write the architecture decision record",
-        "statement": "Mateo will write the architecture decision record by next Tuesday.",
+        "statement": "Maxim will write the architecture decision record by next Tuesday.",
         "status": "open",
         "occurredAt": "2026-08-06",
         "dueAt": "2026-08-11",
@@ -654,10 +654,10 @@
       {
         "kind": "commitment",
         "subject": "portal",
-        "owner": "rosa",
+        "owner": "rhea",
         "counterparty": null,
         "title": "Nominate two product champions",
-        "statement": "Rosa will nominate two claims handlers as product champions by August 14.",
+        "statement": "Rhea will nominate two claims handlers as product champions by August 14.",
         "status": "open",
         "occurredAt": "2026-08-06",
         "dueAt": "2026-08-14",
@@ -673,11 +673,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "rosa",
+        "subject": "rhea",
         "owner": null,
         "counterparty": null,
         "title": "Recovering from surgery, mornings only",
-        "statement": "Rosa is working mornings only while she recovers from surgery.",
+        "statement": "Rhea is working mornings only while she recovers from surgery.",
         "status": null,
         "occurredAt": "2026-08-06",
         "dueAt": null,

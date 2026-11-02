@@ -4,7 +4,7 @@
   "tags": [
     "client",
     "resolution-trap",
-    "two-sarahs",
+    "two-sashas",
     "sensitive"
   ],
   "recordedAt": "2026-02-26T14:00:00Z",
@@ -14,22 +14,22 @@
     {
       "id": "m08-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m08-spk-b",
       "label": "B",
-      "displayName": "Sarah Okonkwo"
+      "displayName": "Sasha Fixture"
     },
     {
       "id": "m08-spk-c",
       "label": "C",
-      "displayName": "Ravi Menon"
+      "displayName": "Rafferty Fixture"
     },
     {
       "id": "m08-spk-d",
       "label": "D",
-      "displayName": "Jonah Jiménez"
+      "displayName": "Jovan Démo"
     }
   ],
   "segments": [
@@ -39,7 +39,7 @@
       "startMs": 0,
       "endMs": 5540,
       "rev": 1,
-      "text": "Okay, checkpoint on the migration. JJ, can you start with the dry run?"
+      "text": "Okay, checkpoint on the migration. JD, can you start with the dry run?"
     },
     {
       "id": "m08-s002",
@@ -103,7 +103,7 @@
       "startMs": 48980,
       "endMs": 53000,
       "rev": 1,
-      "text": "Good. Sarah, where are we on the contract side?"
+      "text": "Good. Sasha, where are we on the contract side?"
     },
     {
       "id": "m08-s010",
@@ -199,7 +199,7 @@
       "startMs": 115800,
       "endMs": 121340,
       "rev": 1,
-      "text": "Of course, Ravi, thanks for the heads-up. We'll route anything urgent through JJ."
+      "text": "Of course, Rafferty, thanks for the heads-up. We'll route anything urgent through JD."
     },
     {
       "id": "m08-s022",
@@ -215,7 +215,7 @@
       "startMs": 123580,
       "endMs": 131400,
       "rev": 1,
-      "text": "Also, when you send the sub-processor list, send it to me, not to Marcus. I'll forward it to legal."
+      "text": "Also, when you send the sub-processor list, send it to me, not to Maddox. I'll forward it to legal."
     },
     {
       "id": "m08-s024",
@@ -228,7 +228,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Halden migration checkpoint\n\n**Date:** February 26\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sarah (Halden Freight procurement), Ravi Menon (Halden Freight)\n\n## Summary\n\nCheckpoint on the Halden route optimizer migration after the first full dry run.\n\n## Dry run results\n\n- 98 percent of carrier records migrated cleanly on the first pass.\n- The 2 percent that failed are mostly carriers with duplicate depot codes, a data issue on Halden's side; Ravi's team will deduplicate them next week.\n- A timezone conversion bug shifts delivery windows by an hour for the southern depots.\n\n## Decisions\n\n- Cutover will happen **region by region, starting with the northern depots**, which have the smallest volume and the most patient depot managers. The scripts are already region-aware.\n\n## Contract\n\nThe data processing addendum is with Halden's legal team. Sarah expects questions only about the sub-processor list, which Larkspur will send today — to Sarah, not Marcus.\n\n## Action items\n\n- **Sarah (procurement)** — get legal to approve the data processing addendum by March 6.\n- **JJ** — fix the timezone bug by Wednesday and rerun the southern slice.\n- **Ravi Menon** — have his team deduplicate the carrier depot codes next week.\n- **Alex Rivera** — send the updated sub-processor list to Sarah today.\n\n## Notes\n\n- Ravi may be slow to reply for a couple of days next month for personal reasons; urgent items go through JJ.\n"
+    "body": "# Halden migration checkpoint\n\n**Date:** February 26\n**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Sasha (Halden Freight procurement), Rafferty Fixture (Halden Freight)\n\n## Summary\n\nCheckpoint on the Halden route optimizer migration after the first full dry run.\n\n## Dry run results\n\n- 98 percent of carrier records migrated cleanly on the first pass.\n- The 2 percent that failed are mostly carriers with duplicate depot codes, a data issue on Halden's side; Rafferty's team will deduplicate them next week.\n- A timezone conversion bug shifts delivery windows by an hour for the southern depots.\n\n## Decisions\n\n- Cutover will happen **region by region, starting with the northern depots**, which have the smallest volume and the most patient depot managers. The scripts are already region-aware.\n\n## Contract\n\nThe data processing addendum is with Halden's legal team. Sasha expects questions only about the sub-processor list, which Larkspur will send today — to Sasha, not Maddox.\n\n## Action items\n\n- **Sasha (procurement)** — get legal to approve the data processing addendum by March 6.\n- **JD** — fix the timezone bug by Wednesday and rerun the southern slice.\n- **Rafferty Fixture** — have his team deduplicate the carrier depot codes next week.\n- **Alma Mockwell** — send the updated sub-processor list to Sasha today.\n\n## Notes\n\n- Rafferty may be slow to reply for a couple of days next month for personal reasons; urgent items go through JD.\n"
   },
   "knownEntities": [
     {
@@ -242,11 +242,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -261,12 +261,12 @@
       ]
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -276,11 +276,11 @@
       ]
     },
     {
-      "id": "g-person-marcus-webb",
+      "id": "g-person-maddox-sample",
       "type": "Person",
-      "label": "Marcus Webb",
+      "label": "Maddox Sample",
       "aliases": [
-        "Marcus"
+        "Maddox"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -289,11 +289,11 @@
       ]
     },
     {
-      "id": "g-person-ravi-menon",
+      "id": "g-person-rafferty-fixture",
       "type": "Person",
-      "label": "Ravi Menon",
+      "label": "Rafferty Fixture",
       "aliases": [
-        "Ravi"
+        "Rafferty"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -302,11 +302,11 @@
       ]
     },
     {
-      "id": "g-person-sarah-chen",
+      "id": "g-person-sasha-example",
       "type": "Person",
-      "label": "Sarah Chen",
+      "label": "Sasha Example",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -315,11 +315,11 @@
       ]
     },
     {
-      "id": "g-person-sarah-okonkwo",
+      "id": "g-person-sasha-fixture",
       "type": "Person",
-      "label": "Sarah Okonkwo",
+      "label": "Sasha Fixture",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -354,67 +354,67 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
         "key": "jj",
         "type": "Person",
-        "label": "Jonah Jiménez",
+        "label": "Jovan Démo",
         "aliases": [
-          "JJ"
+          "JD"
         ],
-        "existingId": "g-person-jonah-jimenez",
+        "existingId": "g-person-jovan-demo",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "JJ (Larkspur Labs)"
+            "quote": "JD (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "sarahO",
+        "key": "sashaO",
         "type": "Person",
-        "label": "Sarah Okonkwo",
+        "label": "Sasha Fixture",
         "aliases": [
-          "Sarah"
+          "Sasha"
         ],
-        "existingId": "g-person-sarah-okonkwo",
+        "existingId": "g-person-sasha-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Sarah (Halden Freight procurement)"
+            "quote": "Sasha (Halden Freight procurement)"
           },
           {
             "source": "segment",
             "segmentId": "m08-s009",
-            "quote": "Sarah, where are we on the contract side?"
+            "quote": "Sasha, where are we on the contract side?"
           }
         ]
       },
       {
-        "key": "ravi",
+        "key": "rafferty",
         "type": "Person",
-        "label": "Ravi Menon",
+        "label": "Rafferty Fixture",
         "aliases": [],
-        "existingId": "g-person-ravi-menon",
+        "existingId": "g-person-rafferty-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Ravi Menon (Halden Freight)"
+            "quote": "Rafferty Fixture (Halden Freight)"
           }
         ]
       },
@@ -450,7 +450,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -459,7 +459,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sarah (Halden Freight procurement), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Sasha (Halden Freight procurement), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
@@ -474,13 +474,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sarah (Halden Freight procurement), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Sasha (Halden Freight procurement), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sarahO",
+        "from": "sashaO",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -489,13 +489,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sarah (Halden Freight procurement), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Sasha (Halden Freight procurement), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -504,7 +504,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sarah (Halden Freight procurement), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Sasha (Halden Freight procurement), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
@@ -569,10 +569,10 @@
       {
         "kind": "commitment",
         "subject": "migration",
-        "owner": "sarahO",
+        "owner": "sashaO",
         "counterparty": null,
         "title": "Legal approval of the DPA",
-        "statement": "Sarah will get legal to approve the data processing addendum by March 6.",
+        "statement": "Sasha will get legal to approve the data processing addendum by March 6.",
         "status": "open",
         "occurredAt": "2026-02-26",
         "dueAt": "2026-03-06",
@@ -592,7 +592,7 @@
         "owner": "jj",
         "counterparty": null,
         "title": "Fix the timezone bug",
-        "statement": "JJ will fix the timezone bug by Wednesday and rerun that slice.",
+        "statement": "JD will fix the timezone bug by Wednesday and rerun that slice.",
         "status": "open",
         "occurredAt": "2026-02-26",
         "dueAt": "2026-03-04",
@@ -609,10 +609,10 @@
       {
         "kind": "commitment",
         "subject": "migration",
-        "owner": "ravi",
+        "owner": "rafferty",
         "counterparty": null,
         "title": "Deduplicate carrier depot codes",
-        "statement": "Ravi's team will deduplicate the carriers with duplicate depot codes next week.",
+        "statement": "Rafferty's team will deduplicate the carriers with duplicate depot codes next week.",
         "status": "open",
         "occurredAt": "2026-02-26",
         "dueAt": null,
@@ -629,10 +629,10 @@
       {
         "kind": "commitment",
         "subject": "migration",
-        "owner": "alex",
-        "counterparty": "sarahO",
+        "owner": "alma",
+        "counterparty": "sashaO",
         "title": "Send the sub-processor list",
-        "statement": "Alex will send an updated sub-processor list to Sarah today.",
+        "statement": "Alma will send an updated sub-processor list to Sasha today.",
         "status": "open",
         "occurredAt": "2026-02-26",
         "dueAt": "2026-02-26",
@@ -648,11 +648,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "ravi",
+        "subject": "rafferty",
         "owner": null,
         "counterparty": null,
         "title": "Divorce court hearing next month",
-        "statement": "Ravi has a court hearing on his divorce next month and may be slow to reply.",
+        "statement": "Rafferty has a court hearing on his divorce next month and may be slow to reply.",
         "status": null,
         "occurredAt": "2026-02-26",
         "dueAt": null,

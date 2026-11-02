@@ -13,7 +13,7 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Win-loss debrief: Marlow Systems\n\n**Date:** September 29\n**Attendees:** Noor Haidari, Callum Reid, Beatriz Alves\n\n## Summary\n\nA debrief on three recent tenders in the grain and commodities segment, held by the Win-loss analysis team. The aim was to record who the competing vendors were, which customers sit behind them, and who inside the team is following each account.\n\n## Market picture\n\n- Hollis Grain Co is a customer of Marlow Systems and is currently evaluating Marlow Platform, the vendor's new planning product, as a replacement for its spreadsheets.\n- Marlow Platform is offered by Marlow Systems.\n- Tessel Analytics competes with Marlow Systems for commodity accounts and was the second bidder in two of the three tenders.\n- Tessel Analytics is a partner of Alder Consulting, which brought it into the Hollis Grain Co tender.\n\n## The analysis\n\n- The Win-loss analysis concerns Marlow Platform, because the team wants to understand why buyers choose it.\n- Noor Haidari leads the Win-loss analysis and presents the findings to sales leadership.\n- Callum Reid is a stakeholder in the Win-loss analysis, as the sales director whose team lost the tenders, and he said he is resistant to the idea of changing the bid process based on three cases.\n- Beatriz Alves knows Marlow Platform well from a previous role and is regarded as the team's expert on it.\n\n## Observations\n\n- Hollis Grain Co has not said whether it will move beyond the evaluation.\n- The debrief did not cover pricing or discounts.\n- Beatriz Alves left early, so she did not comment on the proposed process changes.\n\n## Open points\n\nThe sample is small, and the team still needs the loss reasons for the third tender. No date has been set for presenting to sales leadership.\n"
+    "body": "# Win-loss debrief: Marlow Systems\n\n**Date:** September 29\n**Attendees:** Nova Testcase, Cade Placeholder, Bellamy Testcase\n\n## Summary\n\nA debrief on three recent tenders in the grain and commodities segment, held by the Win-loss analysis team. The aim was to record who the competing vendors were, which customers sit behind them, and who inside the team is following each account.\n\n## Market picture\n\n- Hollis Grain Co is a customer of Marlow Systems and is currently evaluating Marlow Platform, the vendor's new planning product, as a replacement for its spreadsheets.\n- Marlow Platform is offered by Marlow Systems.\n- Tessel Analytics competes with Marlow Systems for commodity accounts and was the second bidder in two of the three tenders.\n- Tessel Analytics is a partner of Alder Consulting, which brought it into the Hollis Grain Co tender.\n\n## The analysis\n\n- The Win-loss analysis concerns Marlow Platform, because the team wants to understand why buyers choose it.\n- Nova Testcase leads the Win-loss analysis and presents the findings to sales leadership.\n- Cade Placeholder is a stakeholder in the Win-loss analysis, as the sales director whose team lost the tenders, and he said he is resistant to the idea of changing the bid process based on three cases.\n- Bellamy Testcase knows Marlow Platform well from a previous role and is regarded as the team's expert on it.\n\n## Observations\n\n- Hollis Grain Co has not said whether it will move beyond the evaluation.\n- The debrief did not cover pricing or discounts.\n- Bellamy Testcase left early, so she did not comment on the proposed process changes.\n\n## Open points\n\nThe sample is small, and the team still needs the loss reasons for the third tender. No date has been set for presenting to sales leadership.\n"
   },
   "knownEntities": [],
   "knownRelations": [],
@@ -34,44 +34,44 @@
         ]
       },
       {
-        "key": "noor",
+        "key": "nova",
         "type": "Person",
-        "label": "Noor Haidari",
+        "label": "Nova Testcase",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Noor Haidari, Callum Reid, Beatriz Alves"
+            "quote": "Nova Testcase, Cade Placeholder, Bellamy Testcase"
           }
         ]
       },
       {
-        "key": "callum",
+        "key": "cade",
         "type": "Person",
-        "label": "Callum Reid",
+        "label": "Cade Placeholder",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Noor Haidari, Callum Reid, Beatriz Alves"
+            "quote": "Nova Testcase, Cade Placeholder, Bellamy Testcase"
           }
         ]
       },
       {
-        "key": "beatriz",
+        "key": "bellamy",
         "type": "Person",
-        "label": "Beatriz Alves",
+        "label": "Bellamy Testcase",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Noor Haidari, Callum Reid, Beatriz Alves"
+            "quote": "Nova Testcase, Cade Placeholder, Bellamy Testcase"
           }
         ]
       },
@@ -257,7 +257,7 @@
       },
       {
         "type": "INVOLVED_IN",
-        "from": "noor",
+        "from": "nova",
         "to": "winloss",
         "validFrom": null,
         "validTo": null,
@@ -268,13 +268,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Noor Haidari leads the Win-loss analysis"
+            "quote": "Nova Testcase leads the Win-loss analysis"
           }
         ]
       },
       {
         "type": "INVOLVED_IN",
-        "from": "callum",
+        "from": "cade",
         "to": "winloss",
         "validFrom": null,
         "validTo": null,
@@ -286,13 +286,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Callum Reid is a stakeholder in the Win-loss analysis"
+            "quote": "Cade Placeholder is a stakeholder in the Win-loss analysis"
           }
         ]
       },
       {
         "type": "KNOWS_ABOUT",
-        "from": "beatriz",
+        "from": "bellamy",
         "to": "platform",
         "validFrom": null,
         "validTo": null,
@@ -303,7 +303,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Beatriz Alves knows Marlow Platform well from a previous role and is regarded as the team's expert on it"
+            "quote": "Bellamy Testcase knows Marlow Platform well from a previous role and is regarded as the team's expert on it"
           }
         ]
       }
@@ -311,8 +311,8 @@
     "items": [],
     "negatives": [
       {
-        "quote": "Beatriz Alves left early, so she did not comment on the proposed process changes",
-        "why": "No position was stated: no stance for Beatriz Alves."
+        "quote": "Bellamy Testcase left early, so she did not comment on the proposed process changes",
+        "why": "No position was stated: no stance for Bellamy Testcase."
       }
     ]
   }

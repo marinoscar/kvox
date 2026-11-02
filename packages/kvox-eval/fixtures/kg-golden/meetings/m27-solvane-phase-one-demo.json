@@ -7,33 +7,33 @@
     "negative-vague-task"
   ],
   "recordedAt": "2026-07-09T10:00:00Z",
-  "contextText": "Phase one demo to Grace and the Solvane operations leads.",
+  "contextText": "Phase one demo to Garnet and the Solvane operations leads.",
   "hasTranscript": true,
   "speakers": [
     {
       "id": "m27-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m27-spk-b",
       "label": "B",
-      "displayName": "Grace Holloway"
+      "displayName": "Garnet Dummyson"
     },
     {
       "id": "m27-spk-c",
       "label": "C",
-      "displayName": "Ravi Menon"
+      "displayName": "Rafferty Fixture"
     },
     {
       "id": "m27-spk-d",
       "label": "D",
-      "displayName": "Iris Novak"
+      "displayName": "Isolde Placeholder"
     },
     {
       "id": "m27-spk-e",
       "label": "E",
-      "displayName": "Kwame Mensah"
+      "displayName": "Kieran Testcase"
     }
   ],
   "segments": [
@@ -43,7 +43,7 @@
       "startMs": 0,
       "endMs": 5540,
       "rev": 1,
-      "text": "Thanks everyone. Kwame will drive, this is phase one of the grid dashboard."
+      "text": "Thanks everyone. Kieran will drive, this is phase one of the grid dashboard."
     },
     {
       "id": "m27-s002",
@@ -115,7 +115,7 @@
       "startMs": 49450,
       "endMs": 51950,
       "rev": 1,
-      "text": "Grace, what about phase two?"
+      "text": "Garnet, what about phase two?"
     },
     {
       "id": "m27-s011",
@@ -123,7 +123,7 @@
       "startMs": 52200,
       "endMs": 58500,
       "rev": 1,
-      "text": "Weather. Iris was right in March, cloud cover explains most of the dips we chase."
+      "text": "Weather. Isolde was right in March, cloud cover explains most of the dips we chase."
     },
     {
       "id": "m27-s012",
@@ -171,7 +171,7 @@
       "startMs": 79340,
       "endMs": 83360,
       "rev": 1,
-      "text": "Iris, how do we learn what the operators think?"
+      "text": "Isolde, how do we learn what the operators think?"
     },
     {
       "id": "m27-s018",
@@ -195,7 +195,7 @@
       "startMs": 89490,
       "endMs": 91990,
       "rev": 1,
-      "text": "Iris, how's the MBA going?"
+      "text": "Isolde, how's the MBA going?"
     },
     {
       "id": "m27-s021",
@@ -224,7 +224,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Solvane grid dashboard phase one demo\n\n**Date:** July 9\n**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)\n\n## Summary\n\nKwame demonstrated phase one of the Solvane Energy grid dashboard. Grace confirmed it delivers what she asked for: one screen for every pilot site.\n\n## What was shown\n\n- An overview of all four pilot sites showing output against forecast and alarms, with data at most fifteen minutes old.\n- A per-site drill-down to inverter-level output.\n- The nightly batch has run cleanly every night since it was switched on.\n\n## Issues\n\n- The solar output chart has a timezone offset, an hour off for the two southern sites. Grace wants it fixed before she shows the dashboard to anyone.\n\n## Decisions\n\n- **Phase two adds a weather overlay** to the output chart. Grace noted Iris was right in March: cloud cover explains most of the dips the team chases.\n- Alarm paging integration is not in phase two; weather comes first.\n\n## Action items\n\n- **Kwame Mensah** — fix the timezone offset on the output chart by Friday.\n- **Iris Novak** — collect operator feedback on phase one in three weeks.\n\n## Notes\n\n- Iris is halfway through a part-time MBA.\n- Ravi raised paging integration as something to look into at some point; nobody took it on.\n"
+    "body": "# Solvane grid dashboard phase one demo\n\n**Date:** July 9\n**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Garnet Dummyson (Solvane Energy), Rafferty Fixture (Solvane Energy), Isolde Placeholder (Solvane Energy)\n\n## Summary\n\nKieran demonstrated phase one of the Solvane Energy grid dashboard. Garnet confirmed it delivers what she asked for: one screen for every pilot site.\n\n## What was shown\n\n- An overview of all four pilot sites showing output against forecast and alarms, with data at most fifteen minutes old.\n- A per-site drill-down to inverter-level output.\n- The nightly batch has run cleanly every night since it was switched on.\n\n## Issues\n\n- The solar output chart has a timezone offset, an hour off for the two southern sites. Garnet wants it fixed before she shows the dashboard to anyone.\n\n## Decisions\n\n- **Phase two adds a weather overlay** to the output chart. Garnet noted Isolde was right in March: cloud cover explains most of the dips the team chases.\n- Alarm paging integration is not in phase two; weather comes first.\n\n## Action items\n\n- **Kieran Testcase** — fix the timezone offset on the output chart by Friday.\n- **Isolde Placeholder** — collect operator feedback on phase one in three weeks.\n\n## Notes\n\n- Isolde is halfway through a part-time MBA.\n- Rafferty raised paging integration as something to look into at some point; nobody took it on.\n"
   },
   "knownEntities": [
     {
@@ -238,11 +238,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -275,11 +275,11 @@
       ]
     },
     {
-      "id": "g-person-grace-holloway",
+      "id": "g-person-garnet-dummyson",
       "type": "Person",
-      "label": "Grace Holloway",
+      "label": "Garnet Dummyson",
       "aliases": [
-        "Grace"
+        "Garnet"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -287,11 +287,11 @@
       ]
     },
     {
-      "id": "g-person-iris-novak",
+      "id": "g-person-isolde-placeholder",
       "type": "Person",
-      "label": "Iris Novak",
+      "label": "Isolde Placeholder",
       "aliases": [
-        "Iris"
+        "Isolde"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -299,11 +299,11 @@
       ]
     },
     {
-      "id": "g-person-kwame-mensah",
+      "id": "g-person-kieran-testcase",
       "type": "Person",
-      "label": "Kwame Mensah",
+      "label": "Kieran Testcase",
       "aliases": [
-        "Kwame"
+        "Kieran"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -315,11 +315,11 @@
       ]
     },
     {
-      "id": "g-person-ravi-menon",
+      "id": "g-person-rafferty-fixture",
       "type": "Person",
-      "label": "Ravi Menon",
+      "label": "Rafferty Fixture",
       "aliases": [
-        "Ravi"
+        "Rafferty"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -359,72 +359,72 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "kwame",
+        "key": "kieran",
         "type": "Person",
-        "label": "Kwame Mensah",
+        "label": "Kieran Testcase",
         "aliases": [],
-        "existingId": "g-person-kwame-mensah",
+        "existingId": "g-person-kieran-testcase",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Kwame Mensah (Larkspur Labs)"
+            "quote": "Kieran Testcase (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "grace",
+        "key": "garnet",
         "type": "Person",
-        "label": "Grace Holloway",
+        "label": "Garnet Dummyson",
         "aliases": [],
-        "existingId": "g-person-grace-holloway",
+        "existingId": "g-person-garnet-dummyson",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Grace Holloway (Solvane Energy)"
+            "quote": "Garnet Dummyson (Solvane Energy)"
           }
         ]
       },
       {
-        "key": "ravi",
+        "key": "rafferty",
         "type": "Person",
-        "label": "Ravi Menon",
+        "label": "Rafferty Fixture",
         "aliases": [],
-        "existingId": "g-person-ravi-menon",
+        "existingId": "g-person-rafferty-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Ravi Menon (Solvane Energy)"
+            "quote": "Rafferty Fixture (Solvane Energy)"
           }
         ]
       },
       {
-        "key": "iris",
+        "key": "isolde",
         "type": "Person",
-        "label": "Iris Novak",
+        "label": "Isolde Placeholder",
         "aliases": [],
-        "existingId": "g-person-iris-novak",
+        "existingId": "g-person-isolde-placeholder",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Iris Novak (Solvane Energy)"
+            "quote": "Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
@@ -447,7 +447,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -456,13 +456,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Garnet Dummyson (Solvane Energy), Rafferty Fixture (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "kwame",
+        "from": "kieran",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -471,13 +471,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Garnet Dummyson (Solvane Energy), Rafferty Fixture (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "grace",
+        "from": "garnet",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -486,13 +486,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Garnet Dummyson (Solvane Energy), Rafferty Fixture (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -501,13 +501,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Garnet Dummyson (Solvane Energy), Rafferty Fixture (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "iris",
+        "from": "isolde",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -516,7 +516,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Garnet Dummyson (Solvane Energy), Rafferty Fixture (Solvane Energy), Isolde Placeholder (Solvane Energy)"
           }
         ]
       },
@@ -581,10 +581,10 @@
       {
         "kind": "commitment",
         "subject": "dashboard",
-        "owner": "kwame",
-        "counterparty": "grace",
+        "owner": "kieran",
+        "counterparty": "garnet",
         "title": "Fix output chart timezone offset",
-        "statement": "Kwame will fix the timezone offset on the output chart by Friday.",
+        "statement": "Kieran will fix the timezone offset on the output chart by Friday.",
         "status": "open",
         "occurredAt": "2026-07-09",
         "dueAt": "2026-07-10",
@@ -601,10 +601,10 @@
       {
         "kind": "commitment",
         "subject": "dashboard",
-        "owner": "iris",
+        "owner": "isolde",
         "counterparty": null,
         "title": "Collect operator feedback",
-        "statement": "Iris will collect operator feedback on phase one in three weeks.",
+        "statement": "Isolde will collect operator feedback on phase one in three weeks.",
         "status": "open",
         "occurredAt": "2026-07-09",
         "dueAt": "2026-07-30",
@@ -620,11 +620,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "iris",
+        "subject": "isolde",
         "owner": null,
         "counterparty": null,
         "title": "Doing a part-time MBA",
-        "statement": "Iris is halfway through a part-time MBA.",
+        "statement": "Isolde is halfway through a part-time MBA.",
         "status": null,
         "occurredAt": "2026-07-09",
         "dueAt": null,

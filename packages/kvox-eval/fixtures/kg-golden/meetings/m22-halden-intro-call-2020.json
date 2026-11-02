@@ -13,17 +13,17 @@
     {
       "id": "m22-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m22-spk-b",
       "label": "B",
-      "displayName": "Marcus Webb"
+      "displayName": "Maddox Sample"
     },
     {
       "id": "m22-spk-c",
       "label": "C",
-      "displayName": "Ravi Menon"
+      "displayName": "Rafferty Fixture"
     }
   ],
   "segments": [
@@ -41,7 +41,7 @@
       "startMs": 5790,
       "endMs": 13610,
       "rev": 1,
-      "text": "We are. I'm Marcus Webb, Head of IT at Halden Freight. I've been Head of IT here since 2018."
+      "text": "We are. I'm Maddox Sample, Head of IT at Halden Freight. I've been Head of IT here since 2018."
     },
     {
       "id": "m22-s003",
@@ -49,7 +49,7 @@
       "startMs": 13860,
       "endMs": 19400,
       "rev": 1,
-      "text": "And I'm Ravi Menon, I joined Halden last year as an integration developer."
+      "text": "And I'm Rafferty Fixture, I joined Halden last year as an integration developer."
     },
     {
       "id": "m22-s004",
@@ -153,7 +153,7 @@
       "startMs": 84950,
       "endMs": 87070,
       "rev": 1,
-      "text": "Yes, Ravi, attach one."
+      "text": "Yes, Rafferty, attach one."
     },
     {
       "id": "m22-s017",
@@ -201,12 +201,12 @@
       "startMs": 113230,
       "endMs": 116490,
       "rev": 1,
-      "text": "Thanks, Ravi. Looking forward to the RFP."
+      "text": "Thanks, Rafferty. Looking forward to the RFP."
     }
   ],
   "note": {
     "version": 1,
-    "body": "# Halden Freight introductory call\n\n**Date:** June 10\n**Attendees:** Alex Rivera (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight)\n\n## Summary\n\nFirst call with Halden Freight about route planning tools. Marcus Webb has been Head of IT at Halden since 2018. Ravi Menon joined Halden last year as an integration developer and will be the technical contact over the summer.\n\n## Context\n\n- Halden runs 22 depots, up from 15 three years ago.\n- Planners still build routes in spreadsheets, which break every time a depot is added.\n- Halden prefers a product over a custom build, but it must integrate with their old dispatch system, which only exports flat files.\n\n## Decisions\n\n- Halden will **shortlist two vendors** and run a proof of concept with each.\n- Decision expected by the end of the summer.\n\n## Action items\n\n- **Marcus Webb** — send the RFP by June 19.\n- **Ravi Menon** — attach a sample dispatch export to the RFP pack.\n- **Larkspur** — respond within two weeks of receiving the RFP.\n\n## Notes\n\n- Marcus is hard to reach in August; he sails most of the month. Aim to wrap the proof of concept before then.\n- Flat-file integrations are routine for Larkspur and should not be a blocker.\n"
+    "body": "# Halden Freight introductory call\n\n**Date:** June 10\n**Attendees:** Alma Mockwell (Larkspur Labs), Maddox Sample (Halden Freight), Rafferty Fixture (Halden Freight)\n\n## Summary\n\nFirst call with Halden Freight about route planning tools. Maddox Sample has been Head of IT at Halden since 2018. Rafferty Fixture joined Halden last year as an integration developer and will be the technical contact over the summer.\n\n## Context\n\n- Halden runs 22 depots, up from 15 three years ago.\n- Planners still build routes in spreadsheets, which break every time a depot is added.\n- Halden prefers a product over a custom build, but it must integrate with their old dispatch system, which only exports flat files.\n\n## Decisions\n\n- Halden will **shortlist two vendors** and run a proof of concept with each.\n- Decision expected by the end of the summer.\n\n## Action items\n\n- **Maddox Sample** — send the RFP by June 19.\n- **Rafferty Fixture** — attach a sample dispatch export to the RFP pack.\n- **Larkspur** — respond within two weeks of receiving the RFP.\n\n## Notes\n\n- Maddox is hard to reach in August; he sails most of the month. Aim to wrap the proof of concept before then.\n- Flat-file integrations are routine for Larkspur and should not be a blocker.\n"
   },
   "knownEntities": [
     {
@@ -230,31 +230,31 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-marcus-webb",
+      "id": "g-person-maddox-sample",
       "type": "Person",
-      "label": "Marcus Webb",
+      "label": "Maddox Sample",
       "aliases": [
-        "Marcus"
+        "Maddox"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-ravi-menon",
+      "id": "g-person-rafferty-fixture",
       "type": "Person",
-      "label": "Ravi Menon",
+      "label": "Rafferty Fixture",
       "aliases": [
-        "Ravi"
+        "Rafferty"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -277,46 +277,46 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "marcus",
+        "key": "maddox",
         "type": "Person",
-        "label": "Marcus Webb",
+        "label": "Maddox Sample",
         "aliases": [],
-        "existingId": "g-person-marcus-webb",
+        "existingId": "g-person-maddox-sample",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m22-s002",
-            "quote": "I'm Marcus Webb, Head of IT at Halden Freight."
+            "quote": "I'm Maddox Sample, Head of IT at Halden Freight."
           }
         ]
       },
       {
-        "key": "ravi",
+        "key": "rafferty",
         "type": "Person",
-        "label": "Ravi Menon",
+        "label": "Rafferty Fixture",
         "aliases": [],
-        "existingId": "g-person-ravi-menon",
+        "existingId": "g-person-rafferty-fixture",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m22-s003",
-            "quote": "And I'm Ravi Menon, I joined Halden last year as an integration developer."
+            "quote": "And I'm Rafferty Fixture, I joined Halden last year as an integration developer."
           }
         ]
       },
@@ -331,7 +331,7 @@
           {
             "source": "segment",
             "segmentId": "m22-s002",
-            "quote": "I'm Marcus Webb, Head of IT at Halden Freight."
+            "quote": "I'm Maddox Sample, Head of IT at Halden Freight."
           }
         ]
       }
@@ -339,7 +339,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -348,13 +348,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Maddox Sample (Halden Freight), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "marcus",
+        "from": "maddox",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -363,13 +363,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Maddox Sample (Halden Freight), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -378,13 +378,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Maddox Sample (Halden Freight), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "marcus",
+        "from": "maddox",
         "to": "halden",
         "validFrom": "2018-01-01",
         "validTo": null,
@@ -402,7 +402,7 @@
       },
       {
         "type": "WORKS_FOR",
-        "from": "marcus",
+        "from": "maddox",
         "to": "halden",
         "validFrom": "2018-01-01",
         "validTo": null,
@@ -418,7 +418,7 @@
       },
       {
         "type": "WORKS_FOR",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "halden",
         "validFrom": "2019-01-01",
         "validTo": null,
@@ -434,7 +434,7 @@
       },
       {
         "type": "HAS_ROLE",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "halden",
         "validFrom": "2019-01-01",
         "validTo": null,
@@ -495,10 +495,10 @@
       {
         "kind": "commitment",
         "subject": "halden",
-        "owner": "marcus",
+        "owner": "maddox",
         "counterparty": "g-org-larkspur-labs",
         "title": "Send the RFP",
-        "statement": "Marcus will send the RFP by June 19.",
+        "statement": "Maddox will send the RFP by June 19.",
         "status": "open",
         "occurredAt": "2020-06-10",
         "dueAt": "2020-06-19",
@@ -515,10 +515,10 @@
       {
         "kind": "commitment",
         "subject": "halden",
-        "owner": "ravi",
+        "owner": "rafferty",
         "counterparty": null,
         "title": "Attach a sample dispatch export",
-        "statement": "Ravi will attach a sample dispatch export to the RFP pack.",
+        "statement": "Rafferty will attach a sample dispatch export to the RFP pack.",
         "status": "open",
         "occurredAt": "2020-06-10",
         "dueAt": null,
@@ -534,11 +534,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "marcus",
+        "subject": "maddox",
         "owner": null,
         "counterparty": null,
         "title": "Sails most of August",
-        "statement": "Marcus sails most of August and is hard to reach then.",
+        "statement": "Maddox sails most of August and is hard to reach then.",
         "status": null,
         "occurredAt": "2020-06-10",
         "dueAt": null,

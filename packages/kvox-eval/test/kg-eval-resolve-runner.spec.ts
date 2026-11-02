@@ -31,14 +31,14 @@ describe('kg:eval extract+resolve runner (#364)', () => {
   });
 
   it('ports pg_trgm similarity closely enough to catch a misspelling', () => {
-    expect(trigramSimilarity('Sarah Chen', 'Sarah Chen')).toBe(1);
-    expect(trigramSimilarity('Sara Chen', 'Sarah Chen')).toBeGreaterThanOrEqual(0.4);
-    expect(trigramSimilarity('Tom Hale', 'Sarah Chen')).toBeLessThan(0.4);
+    expect(trigramSimilarity('Sasha Example', 'Sasha Example')).toBe(1);
+    expect(trigramSimilarity('Sasa Example', 'Sasha Example')).toBeGreaterThanOrEqual(0.4);
+    expect(trigramSimilarity('Tobias Fixture', 'Sasha Example')).toBeLessThan(0.4);
   });
 
   it('links a speaker-identified person outright and leaves an unknown one new', () => {
-    const [sarah, stranger] = resolveRowsInMemory(m01, [personRow('e1', 'Sarah Chen'), personRow('e2', 'Zebulon Quux')]);
-    expect(sarah.resolution).toMatchObject({ ref: 'g-person-sarah-chen', score: 1, source: 'speaker' });
+    const [sasha, stranger] = resolveRowsInMemory(m01, [personRow('e1', 'Sasha Example'), personRow('e2', 'Zenith Placeholder')]);
+    expect(sasha.resolution).toMatchObject({ ref: 'g-person-sasha-example', score: 1, source: 'speaker' });
     expect(stranger.resolution).toMatchObject({ ref: null });
   });
 
@@ -72,13 +72,13 @@ describe('kg:eval extract+resolve runner (#364)', () => {
     const withPrior = {
       ...m01,
       knownRelations: [
-        { id: 'k-works', type: 'WORKS_FOR', from: 'g-joe', to: 'g-kappa', props: {}, validFrom: '2019-01-01', validTo: '2025-01-01', precision: 'year' as const },
+        { id: 'k-works', type: 'WORKS_FOR', from: 'g-jonty', to: 'g-kappa', props: {}, validFrom: '2019-01-01', validTo: '2025-01-01', precision: 'year' as const },
         { id: 'k-role', type: 'WORKS_FOR', from: 'g-ann', to: 'g-kappa', props: {}, validFrom: '2019-01-01', validTo: null, precision: 'year' as const },
       ],
     };
 
     it('a fact inside a known edge is known; a new employer closes an open edge', () => {
-      const known = applyDedupStagesInMemory(withPrior, [linkedEntity('e1', 'Person', 'g-joe'), linkedEntity('e2', 'Organization', 'g-kappa'), worksFor('2020-01-01')]);
+      const known = applyDedupStagesInMemory(withPrior, [linkedEntity('e1', 'Person', 'g-jonty'), linkedEntity('e2', 'Organization', 'g-kappa'), worksFor('2020-01-01')]);
       expect(known.rows[2].flags).toEqual(['known']);
       expect(known.stats).toMatchObject({ known: 1, closings: 0 });
 
@@ -107,7 +107,7 @@ describe('kg:eval extract+resolve runner (#364)', () => {
     });
 
     it('does nothing without prior edges (every golden fixture today)', () => {
-      const out = applyDedupStagesInMemory(m01, [linkedEntity('e1', 'Person', 'g-joe'), linkedEntity('e2', 'Organization', 'g-kappa'), worksFor('2020-01-01')]);
+      const out = applyDedupStagesInMemory(m01, [linkedEntity('e1', 'Person', 'g-jonty'), linkedEntity('e2', 'Organization', 'g-kappa'), worksFor('2020-01-01')]);
       expect(out.stats).toEqual({ known: 0, closings: 0, overlaps: 0, unordered: 0 });
       expect(out.rows[2].flags).toEqual([]);
     });
