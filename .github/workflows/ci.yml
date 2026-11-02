@@ -22,12 +22,12 @@ concurrency:
 #   web Vitest, per shard of 4       1.5-2.7 min
 #   everything else                  under 1 min per step
 #
-# That made the workflow 9-13 min, set by the API suite and the visual run.
+# That made the workflow 9-13 min, set by the API suite and the visual run (since removed).
 # The API suite is now `api-test` (4 shards) and
 # `test:db` is `db-test` (2 shards), the same shape `web-test` already had.
-# The visual regression job was removed from CI (its suite and the manual
-# `visual-baselines.yml` workflow remain). Typecheck, the CLI suite and the
-# CLI build stay together in `Build & Test`.
+# The visual regression job and its suite were removed (the project has no
+# pixel tests by decision). Typecheck, the CLI suite and the CLI build stay
+# together in `Build & Test`.
 #
 # Measured on PR #514 (same commit, 4 API shards, no queueing on the re-run):
 # 4m55s wall clock, down from 9m27s-12m01s. The API shards are still the

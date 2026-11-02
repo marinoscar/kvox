@@ -13,7 +13,7 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Harbor Mutual assistant rollout stakeholder review\n\n**Date:** August 4\n**Attendees:** Joan Keller, Ravi Sundaram, Mei Lindqvist\n\n## Summary\n\nA working session to map who is involved in the Assistant rollout at Harbor Mutual and where each person stands. The rollout brings Quillbase, a drafting assistant from Vantor Systems, to the claims teams. Harbor Mutual has been piloting Quillbase since June with a single claims team, and the group wanted one shared picture of the people around the decision before the second wave is planned.\n\n## Who is involved\n\n- Ravi Sundaram is the executive sponsor of the Assistant rollout and a strong champion of it. He opened the session by saying the claims teams deserve better tooling than they have today.\n- Joan Keller is the budget approver for the Assistant rollout. She said plainly that she is skeptical, because the pilot has not yet shown a saving that covers the licence cost.\n- Mei Lindqvist leads the Assistant rollout day to day and runs the weekly pilot check-in with the claims team.\n\n## What the rollout is about\n\n- The Assistant rollout concerns Quillbase itself: whether the quality of its drafts justifies the price per seat.\n- It also concerns Data residency, because claims documents must stay in the country and Vantor Systems has not yet confirmed where Quillbase stores the prompts it receives.\n\n## Observations\n\n- Tomas Brandt, who uses Quillbase every day in the pilot team, sounded tired during the call, but he did not say anything about the rollout either way.\n- The claims team asked for a shorter template for routine letters, which the pilot has not yet delivered.\n- Nobody from procurement joined, so contract terms were not discussed.\n\n## Open points\n\nA written statement from Vantor Systems on where prompts are stored is needed before the second wave is decided. The pilot report should also include the number of drafts that were sent without edits, since that figure drives the saving Joan Keller is looking for.\n"
+    "body": "# Harbor Mutual assistant rollout stakeholder review\n\n**Date:** August 4\n**Attendees:** Jasper Dummyson, Rafferty Mockwell, Milo Placeholder\n\n## Summary\n\nA working session to map who is involved in the Assistant rollout at Harbor Mutual and where each person stands. The rollout brings Quillbase, a drafting assistant from Vantor Systems, to the claims teams. Harbor Mutual has been piloting Quillbase since June with a single claims team, and the group wanted one shared picture of the people around the decision before the second wave is planned.\n\n## Who is involved\n\n- Rafferty Mockwell is the executive sponsor of the Assistant rollout and a strong champion of it. He opened the session by saying the claims teams deserve better tooling than they have today.\n- Jasper Dummyson is the budget approver for the Assistant rollout. She said plainly that she is skeptical, because the pilot has not yet shown a saving that covers the licence cost.\n- Milo Placeholder leads the Assistant rollout day to day and runs the weekly pilot check-in with the claims team.\n\n## What the rollout is about\n\n- The Assistant rollout concerns Quillbase itself: whether the quality of its drafts justifies the price per seat.\n- It also concerns Data residency, because claims documents must stay in the country and Vantor Systems has not yet confirmed where Quillbase stores the prompts it receives.\n\n## Observations\n\n- Tobin Mockwell, who uses Quillbase every day in the pilot team, sounded tired during the call, but he did not say anything about the rollout either way.\n- The claims team asked for a shorter template for routine letters, which the pilot has not yet delivered.\n- Nobody from procurement joined, so contract terms were not discussed.\n\n## Open points\n\nA written statement from Vantor Systems on where prompts are stored is needed before the second wave is decided. The pilot report should also include the number of drafts that were sent without edits, since that figure drives the saving Jasper Dummyson is looking for.\n"
   },
   "knownEntities": [],
   "knownRelations": [],
@@ -34,58 +34,58 @@
         ]
       },
       {
-        "key": "joan",
+        "key": "jasper",
         "type": "Person",
-        "label": "Joan Keller",
+        "label": "Jasper Dummyson",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Joan Keller, Ravi Sundaram, Mei Lindqvist"
+            "quote": "Jasper Dummyson, Rafferty Mockwell, Milo Placeholder"
           }
         ]
       },
       {
-        "key": "ravi",
+        "key": "rafferty",
         "type": "Person",
-        "label": "Ravi Sundaram",
+        "label": "Rafferty Mockwell",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Joan Keller, Ravi Sundaram, Mei Lindqvist"
+            "quote": "Jasper Dummyson, Rafferty Mockwell, Milo Placeholder"
           }
         ]
       },
       {
-        "key": "mei",
+        "key": "milo",
         "type": "Person",
-        "label": "Mei Lindqvist",
+        "label": "Milo Placeholder",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Joan Keller, Ravi Sundaram, Mei Lindqvist"
+            "quote": "Jasper Dummyson, Rafferty Mockwell, Milo Placeholder"
           }
         ]
       },
       {
-        "key": "tomas",
+        "key": "tobin",
         "type": "Person",
-        "label": "Tomas Brandt",
+        "label": "Tobin Mockwell",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Tomas Brandt, who uses Quillbase every day in the pilot team"
+            "quote": "Tobin Mockwell, who uses Quillbase every day in the pilot team"
           }
         ]
       },
@@ -165,7 +165,7 @@
     "relations": [
       {
         "type": "INVOLVED_IN",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "rollout",
         "validFrom": null,
         "validTo": null,
@@ -177,13 +177,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Ravi Sundaram is the executive sponsor of the Assistant rollout and a strong champion of it"
+            "quote": "Rafferty Mockwell is the executive sponsor of the Assistant rollout and a strong champion of it"
           }
         ]
       },
       {
         "type": "INVOLVED_IN",
-        "from": "joan",
+        "from": "jasper",
         "to": "rollout",
         "validFrom": null,
         "validTo": null,
@@ -195,13 +195,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Joan Keller is the budget approver for the Assistant rollout. She said plainly that she is skeptical"
+            "quote": "Jasper Dummyson is the budget approver for the Assistant rollout. She said plainly that she is skeptical"
           }
         ]
       },
       {
         "type": "INVOLVED_IN",
-        "from": "mei",
+        "from": "milo",
         "to": "rollout",
         "validFrom": null,
         "validTo": null,
@@ -212,7 +212,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Mei Lindqvist leads the Assistant rollout day to day"
+            "quote": "Milo Placeholder leads the Assistant rollout day to day"
           }
         ]
       },
@@ -298,7 +298,7 @@
     "negatives": [
       {
         "quote": "sounded tired during the call, but he did not say anything about the rollout either way",
-        "why": "Tone is not a stance: Tomas Brandt stated no position, so no INVOLVED_IN stance may be set and no INVOLVED_IN is created without a stated role."
+        "why": "Tone is not a stance: Tobin Mockwell stated no position, so no INVOLVED_IN stance may be set and no INVOLVED_IN is created without a stated role."
       }
     ]
   }

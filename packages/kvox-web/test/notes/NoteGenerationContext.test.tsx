@@ -39,7 +39,7 @@ function note(overrides: Partial<Note> = {}): Note {
     templateId: 'tpl-1',
     templateName: 'Executive summary',
     sourceName: null,
-    contextText: 'Ana and Ben were there.\nThe budget line is the point.',
+    contextText: 'Anders and Bram were there.\nThe budget line is the point.',
     currentGenerationId: 'gen-1',
     failureReason: null,
     createdAt: '2024-03-12T10:00:00.000Z',
@@ -202,7 +202,7 @@ describe('NoteGenerationContext — every field', () => {
     renderPanel();
     await expand(user);
 
-    expect(screen.getByText(/Ana and Ben were there\./)).toBeInTheDocument();
+    expect(screen.getByText(/Anders and Bram were there\./)).toBeInTheDocument();
   });
 
   it('says "None provided" rather than leaving the context blank', async () => {

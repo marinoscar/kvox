@@ -12,9 +12,9 @@ import {
 import { useGraphExplorer } from '../../src/graph/ui/hooks/useGraphExplorer.js';
 import {
   KAPPA_ID,
-  ANA_ID,
-  BEN_ID,
-  JOE_ID,
+  ANDERS_ID,
+  BRAM_ID,
+  JONTY_ID,
   Q3_MEETING_ID,
   expandFixture,
   gid,
@@ -59,12 +59,12 @@ function renderExplorer() {
 describe('useGraphExplorer — load', () => {
   it('expands the seeds with the full cap and no filters while nothing is hidden', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
 
-    expect(bodies).toEqual([{ nodeIds: [JOE_ID], cap: EXPLORER_NODE_CAP }]);
-    expect(result.current.state.seedIds).toEqual([JOE_ID]);
+    expect(bodies).toEqual([{ nodeIds: [JONTY_ID], cap: EXPLORER_NODE_CAP }]);
+    expect(result.current.state.seedIds).toEqual([JONTY_ID]);
     expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(true);
-    expect(result.current.state.expanded.has(JOE_ID)).toBe(true);
+    expect(result.current.state.expanded.has(JONTY_ID)).toBe(true);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.version).toBeGreaterThan(0);
   });
@@ -79,10 +79,10 @@ describe('useGraphExplorer — load', () => {
 
   it('retries the last action', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     await act(() => result.current.retry());
     expect(bodies).toHaveLength(2);
-    expect(bodies[1].nodeIds).toEqual([JOE_ID]);
+    expect(bodies[1].nodeIds).toEqual([JONTY_ID]);
   });
 
   it('aborts a superseded request, and only the newer answer lands', async () => {
@@ -100,18 +100,18 @@ describe('useGraphExplorer — load', () => {
     act(() => {
       first = result.current.load([KAPPA_ID]);
     });
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     await act(() => first);
 
     expect(signals[0].aborted).toBe(true);
-    expect(result.current.state.seedIds).toEqual([JOE_ID]);
+    expect(result.current.state.seedIds).toEqual([JONTY_ID]);
   });
 });
 
 describe('useGraphExplorer — expand', () => {
   it('asks for at most the remaining capacity, from the one node', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     const count = result.current.state.graph.order;
     await act(() => result.current.expand(KAPPA_ID));
 
@@ -122,7 +122,7 @@ describe('useGraphExplorer — expand', () => {
 
   it('carries the allowed types and relation types once something is hidden', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     act(() => {
       result.current.setHiddenTypes(['Meeting']);
       result.current.setHiddenRelationTypes(['PART_OF']);
@@ -137,18 +137,18 @@ describe('useGraphExplorer — expand', () => {
     server.use(
       http.post('*/api/graph/explore/expand', async ({ request }) => {
         bodies.push((await request.json()) as ExpandFixtureRequest);
-        return HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) });
+        return HttpResponse.json({ data: manyNodesSlice(JONTY_ID, 400) });
       }),
     );
     const { result } = renderHookWithProviders(() =>
       useGraphExplorer({ nodeTypes: NODE_TYPES, relationTypes: RELATION_TYPES, nodeCap: 120 }),
     );
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     expect(bodies[0]!.cap).toBe(120);
     // DOI truncation shows the best 30; the budget's cap (not 300) is what the stub expansions run into.
     expect(realNodeCount(result.current.state)).toBe(1 + EXPLORER_NEIGHBOUR_LIMIT);
     expect(result.current.capped).toBe(false);
-    const more = stubId(JOE_ID, 'Person');
+    const more = stubId(JONTY_ID, 'Person');
     for (let i = 0; i < 6 && !result.current.capped; i += 1) {
       await act(() => result.current.expand(more));
     }
@@ -158,7 +158,7 @@ describe('useGraphExplorer — expand', () => {
     const sent = bodies.length;
     const kept = result.current.state.graph
       .nodes()
-      .find((id) => id !== JOE_ID && !result.current.state.graph.getNodeAttribute(id, 'isStub'))!;
+      .find((id) => id !== JONTY_ID && !result.current.state.graph.getNodeAttribute(id, 'isStub'))!;
     await act(() => result.current.expand(kept));
     expect(bodies).toHaveLength(sent);
   });
@@ -169,7 +169,7 @@ describe('useGraphExplorer — expand', () => {
         useGraphExplorer({ nodeTypes: NODE_TYPES, relationTypes: RELATION_TYPES, nodeCap: props.cap }),
       { initialProps: { cap: 300 } },
     );
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     const before = result.current.state.graph.order;
     rerender({ cap: 120 });
     expect(result.current.state.cap).toBe(120);
@@ -178,7 +178,7 @@ describe('useGraphExplorer — expand', () => {
 
   it('narrows an expand to one relation type, and adds only that relation\'s neighbours (GIC-11)', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     await act(() => result.current.expand(KAPPA_ID, { relationTypes: ['PART_OF'] }));
 
     expect(bodies[1].nodeIds).toEqual([KAPPA_ID]);
@@ -186,12 +186,12 @@ describe('useGraphExplorer — expand', () => {
     expect(bodies[1].types).toBeUndefined();
     const graph = result.current.state.graph;
     expect(graph.hasNode(gid(6))).toBe(true); // Project Atlas, PART_OF Kappa
-    expect(graph.hasNode(gid(12))).toBe(false); // Dana Li WORKS_FOR Kappa
+    expect(graph.hasNode(gid(12))).toBe(false); // Darcy Placeholder WORKS_FOR Kappa
   });
 
   it('narrows an expand to one entity type', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     await act(() => result.current.expand(KAPPA_ID, { types: ['Person'] }));
 
     expect(bodies[1].types).toEqual(['Person']);
@@ -202,7 +202,7 @@ describe('useGraphExplorer — expand', () => {
 
   it('intersects a narrowed expand with the filters in force, and sends nothing for a type the user hid', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     act(() => {
       result.current.setHiddenRelationTypes(['PART_OF']);
       result.current.setHiddenTypes(['Person']);
@@ -220,17 +220,17 @@ describe('useGraphExplorer — expand', () => {
     server.use(
       http.post('*/api/graph/explore/expand', async ({ request }) => {
         bodies.push((await request.json()) as ExpandFixtureRequest);
-        return HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) });
+        return HttpResponse.json({ data: manyNodesSlice(JONTY_ID, 400) });
       }),
     );
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     // An open shows the best 30 neighbours; the other 370 wait behind one "+N more" stub.
     expect(realNodeCount(result.current.state)).toBe(1 + EXPLORER_NEIGHBOUR_LIMIT);
     expect(result.current.capped).toBe(false);
 
     // Expand the stub until the cap stops it.
-    const more = stubId(JOE_ID, 'Person');
+    const more = stubId(JONTY_ID, 'Person');
     for (let i = 0; i < 12 && !result.current.capped; i += 1) {
       await act(() => result.current.expand(more));
     }
@@ -241,7 +241,7 @@ describe('useGraphExplorer — expand', () => {
     expect(result.current.capped).toBe(false);
 
     const sent = bodies.length;
-    const kept = result.current.state.graph.nodes().find((id) => id !== JOE_ID && !result.current.state.graph.getNodeAttribute(id, 'isStub'))!;
+    const kept = result.current.state.graph.nodes().find((id) => id !== JONTY_ID && !result.current.state.graph.getNodeAttribute(id, 'isStub'))!;
     await act(() => result.current.expand(kept));
     expect(bodies).toHaveLength(sent);
     expect(result.current.capped).toBe(true);
@@ -253,7 +253,7 @@ describe('useGraphExplorer — expand', () => {
 
   it('keeps the graph on an expand failure and reports it', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     server.use(
       http.post('*/api/graph/explore/expand', () =>
         HttpResponse.json({ message: 'Graph query timed out', statusCode: 503 }, { status: 503 }),
@@ -262,7 +262,7 @@ describe('useGraphExplorer — expand', () => {
     await act(() => result.current.expand(KAPPA_ID));
     expect(result.current.error).toBe('Graph query timed out');
     expect(result.current.notFound).toBe(false);
-    expect(result.current.state.graph.hasNode(JOE_ID)).toBe(true);
+    expect(result.current.state.graph.hasNode(JONTY_ID)).toBe(true);
   });
 });
 
@@ -277,14 +277,14 @@ describe('useGraphExplorer — a 200-neighbour hub (#667)', () => {
     );
   });
 
-  const stub = (type: string) => stubId(JOE_ID, type);
+  const stub = (type: string) => stubId(JONTY_ID, type);
 
   it('opens with at most 30 neighbours and one "+N more" stub per type', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
 
     const graph = result.current.state.graph;
-    const neighbours = graph.filterNodes((id, a) => id !== JOE_ID && !a.isStub);
+    const neighbours = graph.filterNodes((id, a) => id !== JONTY_ID && !a.isStub);
     expect(neighbours).toHaveLength(EXPLORER_NEIGHBOUR_LIMIT);
     expect(graph.filterNodes((_id, a) => Boolean(a.isStub)).sort()).toEqual(
       ['Meeting', 'Organization', 'Person'].map(stub).sort(),
@@ -294,7 +294,7 @@ describe('useGraphExplorer — a 200-neighbour hub (#667)', () => {
 
   it('expanding a stub asks for types=[that type] of its parent, and replaces the stub with nodes', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     const shownBefore = result.current.state.graph.filterNodes(
       (_id, a) => a.entityType === 'Organization' && !a.isStub,
     ).length;
@@ -303,7 +303,7 @@ describe('useGraphExplorer — a 200-neighbour hub (#667)', () => {
 
     await act(() => result.current.expand(stub('Organization')));
 
-    expect(bodies[1]).toMatchObject({ nodeIds: [JOE_ID], types: ['Organization'] });
+    expect(bodies[1]).toMatchObject({ nodeIds: [JONTY_ID], types: ['Organization'] });
     const graph = result.current.state.graph;
     const shownAfter = graph.filterNodes((_id, a) => a.entityType === 'Organization' && !a.isStub).length;
     expect(shownAfter).toBe(Math.min(50, shownBefore + EXPLORER_NEIGHBOUR_LIMIT));
@@ -316,7 +316,7 @@ describe('useGraphExplorer — a 200-neighbour hub (#667)', () => {
 
   it('expanding a stub repeatedly shows every neighbour of that type, then no stub', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     for (let i = 0; i < 6 && result.current.state.graph.hasNode(stub('Meeting')); i += 1) {
       await act(() => result.current.expand(stub('Meeting')));
     }
@@ -327,7 +327,7 @@ describe('useGraphExplorer — a 200-neighbour hub (#667)', () => {
 
   it('carries the active filters and the remaining capacity on a stub expansion', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     act(() => result.current.setHiddenRelationTypes(['PART_OF']));
     const room = EXPLORER_NODE_CAP - realNodeCount(result.current.state);
     await act(() => result.current.expand(stub('Person')));
@@ -339,7 +339,7 @@ describe('useGraphExplorer — a 200-neighbour hub (#667)', () => {
 
   it('the stubs do not count toward the node cap', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     const state = result.current.state;
     expect(state.graph.order).toBeGreaterThan(realNodeCount(state));
     expect(remainingCapacity(state)).toBe(EXPLORER_NODE_CAP - 1 - EXPLORER_NEIGHBOUR_LIMIT);
@@ -349,47 +349,47 @@ describe('useGraphExplorer — a 200-neighbour hub (#667)', () => {
 describe('useGraphExplorer — as_of', () => {
   it('rebuilds from the seeds and every expanded node, at that date', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     await act(() => result.current.expand(KAPPA_ID));
-    // Today: Joe reports to Ana.
+    // Today: Jonty reports to Anders.
     const reportsTo = () =>
       result.current.state.graph
         .filterEdges((_e, attrs) => attrs.relationType === 'REPORTS_TO')
         .map((e) => result.current.state.graph.target(e));
-    expect(reportsTo()).toEqual([ANA_ID]);
+    expect(reportsTo()).toEqual([ANDERS_ID]);
 
     await act(() => result.current.setAsOf('2026-06-01'));
 
-    expect(bodies[2]).toEqual({ nodeIds: [JOE_ID, KAPPA_ID], as_of: '2026-06-01', cap: EXPLORER_NODE_CAP });
+    expect(bodies[2]).toEqual({ nodeIds: [JONTY_ID, KAPPA_ID], as_of: '2026-06-01', cap: EXPLORER_NODE_CAP });
     expect(result.current.state.asOf).toBe('2026-06-01');
-    // In June, Joe reported to Ben.
-    expect(reportsTo()).toEqual([BEN_ID]);
-    expect(result.current.state.seedIds).toEqual([JOE_ID]);
+    // In June, Jonty reported to Bram.
+    expect(reportsTo()).toEqual([BRAM_ID]);
+    expect(result.current.state.seedIds).toEqual([JONTY_ID]);
   });
 
   it('caps the rebuild at fifty seed ids', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     const many = Array.from({ length: 60 }, (_, i) => gid(7000 + i));
     act(() => {
       for (const id of many) result.current.state.expanded.add(id);
     });
     await act(() => result.current.setAsOf('2026-06-01'));
     expect(bodies[1].nodeIds).toHaveLength(50);
-    expect(bodies[1].nodeIds[0]).toBe(JOE_ID);
+    expect(bodies[1].nodeIds[0]).toBe(JONTY_ID);
   });
 
   it('only records the date before anything is loaded', async () => {
     const { result } = renderExplorer();
     await act(() => result.current.setAsOf('2026-06-01'));
     expect(bodies).toHaveLength(0);
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     expect(bodies[0].as_of).toBe('2026-06-01');
   });
 
   it('keeps positions of the nodes that survive', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     const before = result.current.state.graph.getNodeAttributes(KAPPA_ID);
     await act(() => result.current.setAsOf('2026-06-01'));
     const after = result.current.state.graph.getNodeAttributes(KAPPA_ID);
@@ -400,14 +400,14 @@ describe('useGraphExplorer — as_of', () => {
 describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
   it('prunes already-loaded nodes that no longer qualify, a seed included, and brings the seed back (#764)', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     expect(result.current.state.graph.hasNode(Q3_MEETING_ID)).toBe(true);
     act(() => result.current.setHiddenTypes(['Meeting', 'Person']));
     expect(result.current.state.graph.hasNode(Q3_MEETING_ID)).toBe(false);
-    expect(result.current.state.graph.hasNode(ANA_ID)).toBe(false);
+    expect(result.current.state.graph.hasNode(ANDERS_ID)).toBe(false);
     // The Person seed is filtered like any node, but stays the anchor; what came from it stays.
-    expect(result.current.state.graph.hasNode(JOE_ID)).toBe(false);
-    expect(result.current.state.seedIds).toEqual([JOE_ID]);
+    expect(result.current.state.graph.hasNode(JONTY_ID)).toBe(false);
+    expect(result.current.state.seedIds).toEqual([JONTY_ID]);
     expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(true);
 
     // Hiding is local: no request. Re-enabling refetches what the filter removed (#667).
@@ -415,12 +415,12 @@ describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
     const before = result.current.state.graph.getNodeAttributes(KAPPA_ID);
     await act(async () => result.current.setHiddenTypes([]));
     await waitFor(() => expect(result.current.state.graph.hasNode(Q3_MEETING_ID)).toBe(true));
-    expect(result.current.state.graph.hasNode(ANA_ID)).toBe(true);
-    expect(result.current.state.graph.hasNode(JOE_ID)).toBe(true);
-    expect(result.current.state.graph.getNodeAttribute(JOE_ID, 'isSeed')).toBe(true);
+    expect(result.current.state.graph.hasNode(ANDERS_ID)).toBe(true);
+    expect(result.current.state.graph.hasNode(JONTY_ID)).toBe(true);
+    expect(result.current.state.graph.getNodeAttribute(JONTY_ID, 'isSeed')).toBe(true);
     expect(bodies).toHaveLength(2);
     // The seeds and expanded nodes are asked again, with no type filter now that nothing is hidden.
-    expect(bodies[1]).toEqual({ nodeIds: [JOE_ID], cap: expect.any(Number) });
+    expect(bodies[1]).toEqual({ nodeIds: [JONTY_ID], cap: expect.any(Number) });
     // Nothing that stayed moved.
     const after = result.current.state.graph.getNodeAttributes(KAPPA_ID);
     expect({ x: after.x, y: after.y }).toEqual({ x: before.x, y: before.y });
@@ -429,31 +429,31 @@ describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
   it('a load under a type no node has leaves the canvas empty but keeps the seed (Products only, #764)', async () => {
     const { result } = renderExplorer();
     act(() => result.current.setHiddenTypes(NODE_TYPES.filter((t) => t !== 'Project')));
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     expect(bodies[0].types).toEqual(['Project']);
     // The fixture returns the Person seed regardless of the filter; the client filters it too.
-    expect(result.current.state.graph.hasNode(JOE_ID)).toBe(false);
-    expect(result.current.state.seedIds).toEqual([JOE_ID]);
+    expect(result.current.state.graph.hasNode(JONTY_ID)).toBe(false);
+    expect(result.current.state.seedIds).toEqual([JONTY_ID]);
   });
 
   it('never sends types: [] — a filter that allows nothing fetches nothing', async () => {
     const { result } = renderExplorer();
     act(() => result.current.setHiddenTypes(NODE_TYPES));
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     expect(bodies).toHaveLength(0);
     expect(result.current.state.graph.order).toBe(0);
-    expect(result.current.state.seedIds).toEqual([JOE_ID]);
+    expect(result.current.state.seedIds).toEqual([JONTY_ID]);
 
     // Relaxing it asks again, from the seed, with exactly what is allowed.
     await act(async () => result.current.setHiddenTypes(NODE_TYPES.filter((t) => t !== 'Organization')));
     await waitFor(() => expect(bodies).toHaveLength(1));
-    expect(bodies[0]).toMatchObject({ nodeIds: [JOE_ID], types: ['Organization'] });
+    expect(bodies[0]).toMatchObject({ nodeIds: [JONTY_ID], types: ['Organization'] });
     await waitFor(() => expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(true));
   });
 
   it('re-enabling a relation type refetches too; hiding more does not', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     act(() => result.current.setHiddenRelationTypes(['ATTENDED']));
     expect(bodies).toHaveLength(1);
     expect(result.current.state.graph.hasNode(Q3_MEETING_ID)).toBe(false);
@@ -465,13 +465,13 @@ describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
 
   it('hides nodes and promotes seeds', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
-    act(() => result.current.hide(JOE_ID));
-    expect(result.current.state.graph.hasNode(JOE_ID)).toBe(true);
+    await act(() => result.current.load([JONTY_ID]));
+    act(() => result.current.hide(JONTY_ID));
+    expect(result.current.state.graph.hasNode(JONTY_ID)).toBe(true);
     act(() => result.current.makeSeed(KAPPA_ID));
-    expect(result.current.state.seedIds).toEqual([JOE_ID, KAPPA_ID]);
-    act(() => result.current.hide(ANA_ID));
-    expect(result.current.state.graph.hasNode(ANA_ID)).toBe(false);
+    expect(result.current.state.seedIds).toEqual([JONTY_ID, KAPPA_ID]);
+    act(() => result.current.hide(ANDERS_ID));
+    expect(result.current.state.graph.hasNode(ANDERS_ID)).toBe(false);
   });
 
   it('renders the hand-off nodes before the expand answers, then merges it', async () => {
@@ -487,27 +487,27 @@ describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
     let pending!: Promise<void>;
     act(() => {
       pending = result.current.loadHandoff({
-        seedIds: [JOE_ID, BEN_ID],
+        seedIds: [JONTY_ID, BRAM_ID],
         title: 'Cluster 3',
         nodes: [
-          { id: JOE_ID, label: 'Joe Rivera', type: 'Person', x: 40, y: 40, degree: 6 },
-          { id: BEN_ID, label: 'Ben Okafor', type: 'Person', x: -40, y: 10, degree: 2 },
+          { id: JONTY_ID, label: 'Jonty Placeholder', type: 'Person', x: 40, y: 40, degree: 6 },
+          { id: BRAM_ID, label: 'Bram Example', type: 'Person', x: -40, y: 10, degree: 2 },
         ],
       });
     });
     expect(result.current.state.graph.order).toBe(2);
-    expect(result.current.state.graph.getNodeAttributes(JOE_ID)).toMatchObject({ x: 40, y: 40 });
+    expect(result.current.state.graph.getNodeAttributes(JONTY_ID)).toMatchObject({ x: 40, y: 40 });
     expect(result.current.isLoading).toBe(true);
 
     await act(() => pending);
-    expect(bodies).toEqual([{ nodeIds: [JOE_ID, BEN_ID], cap: EXPLORER_NODE_CAP }]);
+    expect(bodies).toEqual([{ nodeIds: [JONTY_ID, BRAM_ID], cap: EXPLORER_NODE_CAP }]);
     expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(true);
-    expect(result.current.state.graph.getNodeAttributes(JOE_ID)).toMatchObject({ x: 40, y: 40 });
+    expect(result.current.state.graph.getNodeAttributes(JONTY_ID)).toMatchObject({ x: 40, y: 40 });
   });
 
   it('resets to an empty graph, keeping the filters', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     act(() => result.current.setHiddenTypes(['Meeting']));
     act(() => result.current.reset());
     await waitFor(() => expect(result.current.state.graph.order).toBe(0));

@@ -13,7 +13,7 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Lumen Assist rollout steering committee\n\n**Date:** July 6\n**Attendees:** Priya Anand, Lars Meyer, Hana Kovac\n\n## Summary\n\nSteering committee for Wexcombe Insurance's rollout of the Lumen Assist AI assistant, run by Tarnmoor Advisory. The group reviewed the first pilot wave, the supporting tools and the topics that keep coming back in every status meeting.\n\n## Pilot status\n\n- About two hundred claims handlers now have Lumen Assist, an AI assistant for drafting and summarising, and early feedback is positive.\n- Quillbase, the document store the assistant reads from, still has gaps: older policy wording was never migrated.\n- Orbitdesk, the service desk platform, will carry all support tickets about the rollout so that nothing is tracked in email.\n- Kestrel Search, the enterprise search tool, is being tested as the way handlers find source documents before they ask the assistant anything.\n\n## Topics that keep coming back\n\n- Change management is the main risk. Handlers who were not briefed in person adopted the assistant far more slowly.\n- Adoption metrics sit under change management: the committee wants one weekly number, not five dashboards.\n- Licensing cost is rising faster than planned, and Hana asked that it be handled as a standing item.\n- Licensing cost is part of the wider AI governance topic, together with who may use which model on which data.\n\n## Decisions\n\n- The pilot continues to a second wave in August with the same group of handlers.\n\n## Action items\n\n- **Hana Kovac** will circulate a one-page adoption metrics definition after the meeting.\n- **Lars Meyer** will list the missing policy wording that has to move into Quillbase.\n\n## Next steps\n\nThe committee meets again in three weeks to review the second wave plan and the licence forecast.\n"
+    "body": "# Lumen Assist rollout steering committee\n\n**Date:** July 6\n**Attendees:** Pia Example, Laurel Dummyson, Hazel Mockwell\n\n## Summary\n\nSteering committee for Wexcombe Insurance's rollout of the Lumen Assist AI assistant, run by Tarnmoor Advisory. The group reviewed the first pilot wave, the supporting tools and the topics that keep coming back in every status meeting.\n\n## Pilot status\n\n- About two hundred claims handlers now have Lumen Assist, an AI assistant for drafting and summarising, and early feedback is positive.\n- Quillbase, the document store the assistant reads from, still has gaps: older policy wording was never migrated.\n- Orbitdesk, the service desk platform, will carry all support tickets about the rollout so that nothing is tracked in email.\n- Kestrel Search, the enterprise search tool, is being tested as the way handlers find source documents before they ask the assistant anything.\n\n## Topics that keep coming back\n\n- Change management is the main risk. Handlers who were not briefed in person adopted the assistant far more slowly.\n- Adoption metrics sit under change management: the committee wants one weekly number, not five dashboards.\n- Licensing cost is rising faster than planned, and Hazel asked that it be handled as a standing item.\n- Licensing cost is part of the wider AI governance topic, together with who may use which model on which data.\n\n## Decisions\n\n- The pilot continues to a second wave in August with the same group of handlers.\n\n## Action items\n\n- **Hazel Mockwell** will circulate a one-page adoption metrics definition after the meeting.\n- **Laurel Dummyson** will list the missing policy wording that has to move into Quillbase.\n\n## Next steps\n\nThe committee meets again in three weeks to review the second wave plan and the licence forecast.\n"
   },
   "knownEntities": [],
   "knownRelations": [],
@@ -34,44 +34,44 @@
         ]
       },
       {
-        "key": "priya",
+        "key": "pia",
         "type": "Person",
-        "label": "Priya Anand",
+        "label": "Pia Example",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Priya Anand, Lars Meyer, Hana Kovac"
+            "quote": "Pia Example, Laurel Dummyson, Hazel Mockwell"
           }
         ]
       },
       {
-        "key": "lars",
+        "key": "laurel",
         "type": "Person",
-        "label": "Lars Meyer",
+        "label": "Laurel Dummyson",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Priya Anand, Lars Meyer, Hana Kovac"
+            "quote": "Pia Example, Laurel Dummyson, Hazel Mockwell"
           }
         ]
       },
       {
-        "key": "hana",
+        "key": "hazel",
         "type": "Person",
-        "label": "Hana Kovac",
+        "label": "Hazel Mockwell",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Priya Anand, Lars Meyer, Hana Kovac"
+            "quote": "Pia Example, Laurel Dummyson, Hazel Mockwell"
           }
         ]
       },

@@ -14,7 +14,7 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Planning the Copenhagen design conference\n\n**Date:** June 8\n**Attendees:** Nina Castellanos, Sam Kowalski\n\n## Summary\n\nPlanning session for the studio's attendance at the DesignOps Summit in Copenhagen, including the talk proposal, budget and travel.\n\n## The conference\n\n- Nina and Sam will attend the DesignOps Summit in Copenhagen from September 14 to September 16, on behalf of the studio. This is a work trip, paid from the studio's events budget.\n- The studio's talk proposal on the Harbourline onboarding research was accepted. Nina presents; Sam runs the live demo.\n- Booth space was considered and rejected: too expensive for a studio of our size.\n\n## Decisions\n\n- Brambleway will not take a booth at the summit this year and will put the money into the talk and a small client dinner instead.\n\n## Action items\n\n- **Sam Kowalski** — book flights and the hotel for the summit by June 19.\n- **Nina Castellanos** — send the final talk outline to the summit organisers.\n\n## Personal\n\n- Sam is staying on after the summit for a week of cycling through Denmark with Tessa, his wife, from September 17 to September 24. That part is personal leave, and he will book it separately from the studio travel.\n- Tessa is flying in on the last day of the summit to meet him.\n\n## Next steps\n\nWe rehearse the talk internally in the last week of August, and Nina confirms the client dinner guest list with Harbourline by the end of July.\n"
+    "body": "# Planning the Copenhagen design conference\n\n**Date:** June 8\n**Attendees:** Nico Sample, Sabin Stubbs\n\n## Summary\n\nPlanning session for the studio's attendance at the DesignOps Summit in Copenhagen, including the talk proposal, budget and travel.\n\n## The conference\n\n- Nico and Sabin will attend the DesignOps Summit in Copenhagen from September 14 to September 16, on behalf of the studio. This is a work trip, paid from the studio's events budget.\n- The studio's talk proposal on the Harbourline onboarding research was accepted. Nico presents; Sabin runs the live demo.\n- Booth space was considered and rejected: too expensive for a studio of our size.\n\n## Decisions\n\n- Brambleway will not take a booth at the summit this year and will put the money into the talk and a small client dinner instead.\n\n## Action items\n\n- **Sabin Stubbs** — book flights and the hotel for the summit by June 19.\n- **Nico Sample** — send the final talk outline to the summit organisers.\n\n## Personal\n\n- Sabin is staying on after the summit for a week of cycling through Denmark with Tarn, his wife, from September 17 to September 24. That part is personal leave, and he will book it separately from the studio travel.\n- Tarn is flying in on the last day of the summit to meet him.\n\n## Next steps\n\nWe rehearse the talk internally in the last week of August, and Nico confirms the client dinner guest list with Harbourline by the end of July.\n"
   },
   "knownEntities": [
     {
@@ -28,11 +28,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-nina-castellanos",
+      "id": "g-person-nico-sample",
       "type": "Person",
-      "label": "Nina Castellanos",
+      "label": "Nico Sample",
       "aliases": [
-        "Nina"
+        "Nico"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -42,11 +42,11 @@
       ]
     },
     {
-      "id": "g-person-sam-kowalski",
+      "id": "g-person-sabin-stubbs",
       "type": "Person",
-      "label": "Sam Kowalski",
+      "label": "Sabin Stubbs",
       "aliases": [
-        "Sam"
+        "Sabin"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -56,11 +56,11 @@
       ]
     },
     {
-      "id": "g-person-tessa-kowalski",
+      "id": "g-person-tarn-demo",
       "type": "Person",
-      "label": "Tessa Kowalski",
+      "label": "Tarn Demo",
       "aliases": [
-        "Tessa"
+        "Tarn"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -68,10 +68,10 @@
   ],
   "knownRelations": [
     {
-      "id": "g-rel-sam-spouse-tessa",
+      "id": "g-rel-sabin-spouse-tarn",
       "type": "SPOUSE_OF",
-      "from": "g-person-sam-kowalski",
-      "to": "g-person-tessa-kowalski",
+      "from": "g-person-sabin-stubbs",
+      "to": "g-person-tarn-demo",
       "props": {},
       "validFrom": "2016-06-01",
       "validTo": null,
@@ -95,44 +95,44 @@
         ]
       },
       {
-        "key": "nina",
+        "key": "nico",
         "type": "Person",
-        "label": "Nina Castellanos",
+        "label": "Nico Sample",
         "aliases": [],
-        "existingId": "g-person-nina-castellanos",
+        "existingId": "g-person-nico-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Sabin Stubbs"
           }
         ]
       },
       {
-        "key": "sam",
+        "key": "sabin",
         "type": "Person",
-        "label": "Sam Kowalski",
+        "label": "Sabin Stubbs",
         "aliases": [],
-        "existingId": "g-person-sam-kowalski",
+        "existingId": "g-person-sabin-stubbs",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Sabin Stubbs"
           }
         ]
       },
       {
-        "key": "tessa",
+        "key": "tarn",
         "type": "Person",
-        "label": "Tessa Kowalski",
+        "label": "Tarn Demo",
         "aliases": [],
-        "existingId": "g-person-tessa-kowalski",
+        "existingId": "g-person-tarn-demo",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "with Tessa, his wife"
+            "quote": "with Tarn, his wife"
           }
         ]
       },
@@ -164,7 +164,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "a week of cycling through Denmark with Tessa, his wife, from September 17 to September 24"
+            "quote": "a week of cycling through Denmark with Tarn, his wife, from September 17 to September 24"
           }
         ]
       }
@@ -172,7 +172,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "nina",
+        "from": "nico",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -181,13 +181,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Sabin Stubbs"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sam",
+        "from": "sabin",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -196,14 +196,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Sabin Stubbs"
           }
         ]
       },
       {
         "type": "SPOUSE_OF",
-        "from": "tessa",
-        "to": "sam",
+        "from": "tarn",
+        "to": "sabin",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -211,13 +211,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "with Tessa, his wife"
+            "quote": "with Tarn, his wife"
           }
         ]
       },
       {
         "type": "TRAVELED_ON",
-        "from": "sam",
+        "from": "sabin",
         "to": "denmark",
         "validFrom": null,
         "validTo": null,
@@ -226,13 +226,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Sam is staying on after the summit for a week of cycling through Denmark"
+            "quote": "Sabin is staying on after the summit for a week of cycling through Denmark"
           }
         ]
       },
       {
         "type": "TRAVELED_ON",
-        "from": "tessa",
+        "from": "tarn",
         "to": "denmark",
         "validFrom": null,
         "validTo": null,
@@ -241,7 +241,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "a week of cycling through Denmark with Tessa, his wife"
+            "quote": "a week of cycling through Denmark with Tarn, his wife"
           }
         ]
       }
@@ -269,10 +269,10 @@
       {
         "kind": "commitment",
         "subject": "brambleway",
-        "owner": "sam",
+        "owner": "sabin",
         "counterparty": null,
         "title": "Book summit flights and hotel",
-        "statement": "Sam will book flights and the hotel for the summit by June 19.",
+        "statement": "Sabin will book flights and the hotel for the summit by June 19.",
         "status": "open",
         "occurredAt": "2026-06-08",
         "dueAt": "2026-06-19",
@@ -288,7 +288,7 @@
     ],
     "negatives": [
       {
-        "quote": "Nina and Sam will attend the DesignOps Summit in Copenhagen from September 14 to September 16, on behalf of the studio.",
+        "quote": "Nico and Sabin will attend the DesignOps Summit in Copenhagen from September 14 to September 16, on behalf of the studio.",
         "why": "Attending a conference for the studio is a work trip, never a personal Trip (§17.2 Trip disambiguation)."
       }
     ]

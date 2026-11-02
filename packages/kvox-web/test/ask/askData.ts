@@ -16,7 +16,7 @@ import {
   EV_GONE,
   EV_NOTE,
   EV_SEGMENT,
-  JOE_ID,
+  JONTY_ID,
   NOTE_ID,
   TRANSCRIPT_ID,
   gid,
@@ -29,10 +29,10 @@ import type {
   AskToolCall,
 } from '../../src/ask/headless/index.js';
 
-export { EV_GONE, EV_NOTE, EV_SEGMENT, JOE_ID, NOTE_ID, TRANSCRIPT_ID };
+export { EV_GONE, EV_NOTE, EV_SEGMENT, JONTY_ID, NOTE_ID, TRANSCRIPT_ID };
 
 export const CONV_ATLAS_ID = gid(1201);
-export const CONV_JOE_ID = gid(1202);
+export const CONV_JONTY_ID = gid(1202);
 export const CONV_EMPTY_ID = gid(1203);
 export const CONV_FAILED_ID = gid(1204);
 
@@ -69,7 +69,7 @@ export function askCitation(overrides: Partial<AskCitation> & Pick<AskCitation, 
 /** One citation of each kind, plus one the tools never issued. */
 export const ATLAS_CITATIONS: AskCitation[] = [
   askCitation({ marker: 'ev1', kind: 'evidence', id: EV_SEGMENT, label: 'Q3 planning call' }),
-  askCitation({ marker: 'ent1', kind: 'entity', id: JOE_ID, label: 'Joe Rivera' }),
+  askCitation({ marker: 'ent1', kind: 'entity', id: JONTY_ID, label: 'Jonty Placeholder' }),
   askCitation({
     marker: 'doc1',
     kind: 'document',
@@ -177,19 +177,19 @@ export function defaultAskConversations(): AskMockConversation[] {
     },
     {
       summary: askSummary({
-        id: CONV_JOE_ID,
-        title: 'What did Joe promise us?',
-        scopeEntity: { id: JOE_ID, label: 'Joe Rivera', type: 'Person' },
-        lastMessagePreview: 'Joe committed to the Atlas launch.',
+        id: CONV_JONTY_ID,
+        title: 'What did Jonty promise us?',
+        scopeEntity: { id: JONTY_ID, label: 'Jonty Placeholder', type: 'Person' },
+        lastMessagePreview: 'Jonty committed to the Atlas launch.',
         updatedAt: '2026-09-24T15:00:00.000Z',
       }),
       messages: [
-        askMessage({ id: gid(1311), role: 'user', conversationId: CONV_JOE_ID, content: 'What did Joe promise us?' }),
+        askMessage({ id: gid(1311), role: 'user', conversationId: CONV_JONTY_ID, content: 'What did Jonty promise us?' }),
         askMessage({
           id: gid(1312),
           role: 'assistant',
-          conversationId: CONV_JOE_ID,
-          content: 'Joe committed to the Atlas launch [^ev1].',
+          conversationId: CONV_JONTY_ID,
+          content: 'Jonty committed to the Atlas launch [^ev1].',
           citations: [ATLAS_CITATIONS[0]],
         }),
       ],

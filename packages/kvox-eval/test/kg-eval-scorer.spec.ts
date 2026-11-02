@@ -35,17 +35,17 @@ function tinyFixture(overrides: Partial<GoldenFixtureInput['labels']> = {}): Gol
     recordedAt: '2026-03-05T10:00:00Z',
     contextText: null,
     hasTranscript: true,
-    speakers: [{ id: 'spk-a', label: 'A', displayName: 'Alex Rivera' }],
+    speakers: [{ id: 'spk-a', label: 'A', displayName: 'Alma Mockwell' }],
     segments: [
-      seg('m99-s001', 'JJ will send the draft plan to Sarah Chen by Friday.', 0),
-      seg('m99-s002', 'Sarah Chen joined Org Lambda Robotics in 2026.', 1100),
-      seg('m99-s003', 'Priya Raman runs the team.', 2200),
+      seg('m99-s001', 'JD will send the draft plan to Sasha Example by Friday.', 0),
+      seg('m99-s002', 'Sasha Example joined Org Lambda Robotics in 2026.', 1100),
+      seg('m99-s003', 'Pia Sample runs the team.', 2200),
     ],
-    note: { version: 1, body: '# Tiny meeting\n\nJJ owes Sarah the draft plan.' },
+    note: { version: 1, body: '# Tiny meeting\n\nJD owes Sasha the draft plan.' },
     knownEntities: [
-      { id: 'g-jj', type: 'Person', label: 'Jonah Jiménez', aliases: ['JJ'], props: {}, attendedFixtureIds: [] },
-      { id: 'g-sarah', type: 'Person', label: 'Sarah Chen', aliases: [], props: {}, attendedFixtureIds: [] },
-      { id: 'g-priya', type: 'Person', label: 'Priya Raman', aliases: [], props: {}, attendedFixtureIds: [] },
+      { id: 'g-jd', type: 'Person', label: 'Jovan Démo', aliases: ['JD'], props: {}, attendedFixtureIds: [] },
+      { id: 'g-sasha', type: 'Person', label: 'Sasha Example', aliases: [], props: {}, attendedFixtureIds: [] },
+      { id: 'g-pia', type: 'Person', label: 'Pia Sample', aliases: [], props: {}, attendedFixtureIds: [] },
       { id: 'g-nwr', type: 'Organization', label: 'Org Lambda Robotics', aliases: ['NWR'], props: {}, attendedFixtureIds: [] },
     ],
     labels: {
@@ -53,24 +53,24 @@ function tinyFixture(overrides: Partial<GoldenFixtureInput['labels']> = {}): Gol
         {
           key: 'jj',
           type: 'Person',
-          label: 'Jonah Jiménez',
-          aliases: ['JJ'],
-          existingId: 'g-jj',
-          evidence: [{ source: 'segment', segmentId: 'm99-s001', quote: 'JJ will send' }],
+          label: 'Jovan Démo',
+          aliases: ['JD'],
+          existingId: 'g-jd',
+          evidence: [{ source: 'segment', segmentId: 'm99-s001', quote: 'JD will send' }],
         },
         {
-          key: 'sarah',
+          key: 'sasha',
           type: 'Person',
-          label: 'Sarah Chen',
-          existingId: 'g-sarah',
-          evidence: [{ source: 'segment', segmentId: 'm99-s002', quote: 'Sarah Chen joined' }],
+          label: 'Sasha Example',
+          existingId: 'g-sasha',
+          evidence: [{ source: 'segment', segmentId: 'm99-s002', quote: 'Sasha Example joined' }],
         },
         {
-          key: 'priya',
+          key: 'pia',
           type: 'Person',
-          label: 'Priya Raman',
-          existingId: 'g-priya',
-          evidence: [{ source: 'segment', segmentId: 'm99-s003', quote: 'Priya Raman runs the team.' }],
+          label: 'Pia Sample',
+          existingId: 'g-pia',
+          evidence: [{ source: 'segment', segmentId: 'm99-s003', quote: 'Pia Sample runs the team.' }],
         },
         {
           key: 'nwr',
@@ -84,7 +84,7 @@ function tinyFixture(overrides: Partial<GoldenFixtureInput['labels']> = {}): Gol
       relations: [
         {
           type: 'WORKS_FOR',
-          from: 'sarah',
+          from: 'sasha',
           to: 'nwr',
           validFrom: '2026-01-01',
           validTo: null,
@@ -95,15 +95,15 @@ function tinyFixture(overrides: Partial<GoldenFixtureInput['labels']> = {}): Gol
       items: [
         {
           kind: 'commitment',
-          subject: 'sarah',
+          subject: 'sasha',
           owner: 'jj',
-          counterparty: 'sarah',
+          counterparty: 'sasha',
           title: 'Send the draft plan',
-          statement: 'JJ will send the draft plan to Sarah Chen by Friday.',
+          statement: 'JD will send the draft plan to Sasha Example by Friday.',
           status: 'open',
           occurredAt: '2026-03-05',
           dueAt: '2026-03-06',
-          evidence: [{ source: 'segment', segmentId: 'm99-s001', quote: 'JJ will send the draft plan' }],
+          evidence: [{ source: 'segment', segmentId: 'm99-s001', quote: 'JD will send the draft plan' }],
         },
       ],
       negatives: [],
@@ -117,17 +117,17 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 describe('normalizeName', () => {
   it.each([
-    ['Sarah Chen', 'sarah chen'],
-    ['  Sarah   Chen, ', 'sarah chen'],
-    ['SARAH CHEN.', 'sarah chen'],
+    ['Sasha Example', 'sasha example'],
+    ['  Sasha   Example, ', 'sasha example'],
+    ['SASHA EXAMPLE.', 'sasha example'],
     ["O'Neil-Smith", "o'neil-smith"],
     ["'quoted'", 'quoted'],
     ['- dash -', 'dash'],
-    ['Tomás Aguilar', 'tomás aguilar'],
+    ['Tobín Dummyson', 'tobín dummyson'],
     ['Ｆｕｌｌｗｉｄｔｈ', 'fullwidth'],
-    ['Dr. Haddad', 'dr haddad'],
+    ['Dr. Stubbs', 'dr stubbs'],
     ['Org Lambda Robotics (NWR)', 'org lambda robotics nwr'],
-    ['Sarah’s', "sarah's"],
+    ['Sasha’s', "sasha's"],
   ])('%j → %j', (input, expected) => {
     expect(normalizeName(input)).toBe(expected);
   });
@@ -191,27 +191,27 @@ describe('scoreFixture / scoreRun', () => {
   it('counts a wrong type as one FP (predicted type) and one FN (gold type)', () => {
     const f = tinyFixture();
     const pred = goldPrediction(f);
-    pred.entities.find((e) => e.ref === 'priya')!.type = 'Organization';
+    pred.entities.find((e) => e.ref === 'pia')!.type = 'Organization';
     const s = scoreFixture(f, pred);
     expect(s.types.Person).toEqual({ tp: 2, fp: 0, fn: 1 });
     expect(s.types.Organization).toEqual({ tp: 1, fp: 1, fn: 0 });
-    // Coverage ignores type: Priya is still "found".
+    // Coverage ignores type: Pia is still "found".
     expect(s.coverage).toEqual({ matched: 4, total: 4 });
   });
 
-  it('matches an alias ("JJ") as a true positive', () => {
+  it('matches an alias ("JD") as a true positive', () => {
     const f = tinyFixture();
     const pred = goldPrediction(f);
     const jj = pred.entities.find((e) => e.ref === 'jj')!;
-    jj.label = 'JJ';
+    jj.label = 'JD';
     jj.aliases = [];
     expect(scoreFixture(f, pred).types.Person).toEqual({ tp: 3, fp: 0, fn: 0 });
   });
 
-  it('assigns one-to-one: two predicted Sarahs against one gold Sarah is 1 TP + 1 FP', () => {
+  it('assigns one-to-one: two predicted Sashas against one gold Sasha is 1 TP + 1 FP', () => {
     const f = tinyFixture();
     const pred = goldPrediction(f);
-    pred.entities.push({ ...clone(pred.entities.find((e) => e.ref === 'sarah')!), ref: 'sarah-2', resolution: null });
+    pred.entities.push({ ...clone(pred.entities.find((e) => e.ref === 'sasha')!), ref: 'sasha-2', resolution: null });
     const s = scoreFixture(f, pred);
     expect(s.types.Person).toEqual({ tp: 3, fp: 1, fn: 0 });
   });
@@ -219,11 +219,11 @@ describe('scoreFixture / scoreRun', () => {
   it('does not match below token-set Jaccard 0.8, but does at or above it', () => {
     const f = tinyFixture();
     const low = goldPrediction(f);
-    low.entities.find((e) => e.ref === 'priya')!.label = 'Priya';
+    low.entities.find((e) => e.ref === 'pia')!.label = 'Pia';
     expect(scoreFixture(f, low).types.Person).toEqual({ tp: 2, fp: 1, fn: 1 });
 
     const reordered = goldPrediction(f);
-    reordered.entities.find((e) => e.ref === 'priya')!.label = 'Raman, Priya';
+    reordered.entities.find((e) => e.ref === 'pia')!.label = 'Sample, Pia';
     expect(scoreFixture(f, reordered).types.Person).toEqual({ tp: 3, fp: 0, fn: 0 });
   });
 
@@ -237,14 +237,14 @@ describe('scoreFixture / scoreRun', () => {
   it('requires a commitment owner to match when the label names one', () => {
     const f = tinyFixture();
     const pred = goldPrediction(f);
-    pred.items[0].owner = 'priya';
+    pred.items[0].owner = 'pia';
     expect(scoreFixture(f, pred).types.Commitment).toEqual({ tp: 0, fp: 1, fn: 1 });
   });
 
   it('accepts a relation endpoint named by knownEntities id instead of a ref', () => {
     const f = tinyFixture();
     const pred = goldPrediction(f);
-    pred.relations[0].from = 'g-sarah';
+    pred.relations[0].from = 'g-sasha';
     pred.relations[0].to = 'g-nwr';
     expect(scoreFixture(f, pred).types['relation:WORKS_FOR']).toEqual({ tp: 1, fp: 0, fn: 0 });
   });
@@ -252,10 +252,10 @@ describe('scoreFixture / scoreRun', () => {
   it('computes auto-link precision over prechecked links only: 3 links, 1 wrong → 0.667', () => {
     const f = tinyFixture();
     const pred = goldPrediction(f);
-    // jj, sarah, priya prechecked-linked; one wrong; the org link is not prechecked.
-    pred.entities.find((e) => e.ref === 'priya')!.resolution = {
+    // jj, sasha, pia prechecked-linked; one wrong; the org link is not prechecked.
+    pred.entities.find((e) => e.ref === 'pia')!.resolution = {
       outcome: 'linked',
-      entityId: 'g-sarah',
+      entityId: 'g-sasha',
       score: 0.97,
       prechecked: true,
     };
@@ -305,9 +305,9 @@ describe('scoreFixture / scoreRun', () => {
   it('counts evidence that does not resolve, or whose quote is not located, as invalid', () => {
     const f = tinyFixture();
     const pred = goldPrediction(f);
-    pred.entities[0].evidence.push({ source: 'segment', segmentId: 'm99-s404', quote: 'JJ will send' });
+    pred.entities[0].evidence.push({ source: 'segment', segmentId: 'm99-s404', quote: 'JD will send' });
     pred.entities[1].evidence.push({ source: 'segment', segmentId: 'm99-s001', quote: 'not in the segment' });
-    pred.entities[2].evidence.push({ source: 'note', segmentId: null, quote: 'JJ owes   Sarah' });
+    pred.entities[2].evidence.push({ source: 'note', segmentId: null, quote: 'JD owes   Sasha' });
     const s = scoreFixture(f, pred);
     const total = s.evidence.total;
     expect(s.evidence).toEqual({ valid: total - 2, total });

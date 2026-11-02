@@ -29,7 +29,7 @@ function Harness({ target, onAdded = vi.fn() }: { target: GraphSelectionTarget; 
     <div>
       <div ref={ref}>
         <p data-segment-id={SEGMENT_ID} data-segment-rev="2">
-          Tom will check with legal.
+          Tobias will check with legal.
         </p>
         <p data-segment-id="other" data-segment-rev="1">
           Second line.
@@ -41,7 +41,7 @@ function Harness({ target, onAdded = vi.fn() }: { target: GraphSelectionTarget; 
         resolve={(range, container) =>
           resolveSegmentSelection(range, container, {
             transcriptId: 't1',
-            segmentText: (id) => (id === SEGMENT_ID ? 'Tom will check with legal.' : 'Second line.'),
+            segmentText: (id) => (id === SEGMENT_ID ? 'Tobias will check with legal.' : 'Second line.'),
           })
         }
         target={target}
@@ -88,7 +88,7 @@ const transcriptTarget = (onShowNotes = vi.fn()): GraphSelectionTarget => ({
 describe('GraphSelectionAdd — the button', () => {
   it('appears beside a selection within one line', async () => {
     const { container } = render(<Harness target={transcriptTarget()} />, { wrapperOptions: { user: mockAdminUser } });
-    act(() => selectInLine(4, 9));
+    act(() => selectInLine(7, 12));
     const button = await screen.findByRole('button', { name: 'Add to graph' });
     expect(button).toBeEnabled();
     expect(screen.getByTestId('graph-selection-popper')).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('GraphSelectionAdd — the button', () => {
   it('is a bottom bar on a phone', async () => {
     setViewportWidth(390);
     const { container } = render(<Harness target={transcriptTarget()} />);
-    act(() => selectInLine(4, 9));
+    act(() => selectInLine(7, 12));
     expect(await screen.findByTestId('graph-selection-bar')).toBeInTheDocument();
     expect(screen.queryByTestId('graph-selection-popper')).not.toBeInTheDocument();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
@@ -116,7 +116,7 @@ describe('GraphSelectionAdd — the target draft', () => {
   it('no draft on the transcript: "Adding needs a draft" → Show notes', async () => {
     const onShowNotes = vi.fn();
     render(<Harness target={transcriptTarget(onShowNotes)} />);
-    act(() => selectInLine(4, 9));
+    act(() => selectInLine(7, 12));
     fireEvent.click(await screen.findByRole('button', { name: 'Add to graph' }));
     expect(await screen.findByRole('heading', { name: 'Adding needs a draft' })).toBeInTheDocument();
     expect(listQueries).toEqual(['?status=draft&transcriptId=t1&limit=20']);
@@ -128,7 +128,7 @@ describe('GraphSelectionAdd — the target draft', () => {
     drafts = [proposalSummaryRow(PROPOSAL_ID)];
     const onAdded = vi.fn();
     render(<Harness target={transcriptTarget()} onAdded={onAdded} />);
-    act(() => selectInLine(4, 9));
+    act(() => selectInLine(7, 12));
     fireEvent.click(await screen.findByRole('button', { name: 'Add to graph' }));
     expect(await screen.findByRole('heading', { name: 'Add to graph' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('will');
@@ -138,7 +138,7 @@ describe('GraphSelectionAdd — the target draft', () => {
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
     const add = proposalMock.requests.find((request) => request.path.endsWith('/items'));
     expect(add?.body).toMatchObject({
-      evidence: [{ source: 'segment', segmentId: SEGMENT_ID, segmentRev: 2, charStart: 4, charEnd: 8, quote: 'will' }],
+      evidence: [{ source: 'segment', segmentId: SEGMENT_ID, segmentRev: 2, charStart: 7, charEnd: 11, quote: 'will' }],
     });
     expect(onAdded.mock.calls[0][1]).toBe(PROPOSAL_ID);
   });
@@ -149,7 +149,7 @@ describe('GraphSelectionAdd — the target draft', () => {
       proposalSummaryRow('p-2', { noteTitle: 'Decision log' }),
     ];
     render(<Harness target={transcriptTarget()} />);
-    act(() => selectInLine(4, 9));
+    act(() => selectInLine(7, 12));
     fireEvent.click(await screen.findByRole('button', { name: 'Add to graph' }));
     expect(await screen.findByRole('heading', { name: 'Add to which draft?' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Standup minutes/ }));
@@ -159,7 +159,7 @@ describe('GraphSelectionAdd — the target draft', () => {
   it('note page without a draft offers Extract…', async () => {
     const onExtract = vi.fn();
     render(<Harness target={{ kind: 'note', detail: mockProposalDetail('committed'), onExtract }} />);
-    act(() => selectInLine(4, 9));
+    act(() => selectInLine(7, 12));
     fireEvent.click(await screen.findByRole('button', { name: 'Add to graph' }));
     expect(await screen.findByRole('heading', { name: 'Adding needs a draft' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Extract…' }));

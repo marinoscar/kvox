@@ -275,7 +275,7 @@ export class GraphFixture {
         startMs: 1500,
         endMs: 4000,
         ordinal: 1000,
-        text: 'Sarah joined Kappa in 2019',
+        text: 'Sasha joined Kappa in 2019',
         words: [],
       },
     });

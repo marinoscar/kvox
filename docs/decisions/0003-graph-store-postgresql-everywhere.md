@@ -19,7 +19,7 @@ Reasons:
 3. **One transaction.** Notes, transcripts and graph commit together.
 4. **Cost of change.** The graph slices use about 158 raw SQL calls; a graph database needs a new storage layer under all of them.
 5. **The web edition needs more than an embedded database offers.** Multi-user, row-level security and backup and restore do not fit an embedded single-process store. Switching would split the editions.
-6. **The reference questions are shallow.** "Action items from Joe" and "meetings with Jenny's boss" are one- or two-hop indexed joins.
+6. **The reference questions are shallow.** "Action items from Jonty" and "meetings with Jarek's boss" are one- or two-hop indexed joins.
 7. **Ask never generates SQL or Cypher** ([../specs/ontology.md](../specs/ontology.md) section 9.3), so a query language adds nothing.
 
 ## Consequences

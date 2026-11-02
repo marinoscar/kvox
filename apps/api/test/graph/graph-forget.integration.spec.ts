@@ -71,9 +71,9 @@ describe('POST /api/graph/entities/:id/forget (integration)', () => {
     const now = new Date('2026-09-01T00:00:00.000Z');
     const base = { ownerId, props: {}, occurredAt: null, ontologyVersion: '1.0.0', createdAt: now, updatedAt: now };
     entities = [
-      { ...base, id: PERSON_ID, type: 'Person', label: 'Sarah Chen', reviewStatus: 'accepted', mergedIntoId: null },
+      { ...base, id: PERSON_ID, type: 'Person', label: 'Sasha Example', reviewStatus: 'accepted', mergedIntoId: null },
       { ...base, id: ORG_ID, type: 'Organization', label: 'Kappa', reviewStatus: 'accepted', mergedIntoId: null },
-      { ...base, id: MERGED_ID, type: 'Person', label: 'S. Chen', reviewStatus: 'merged', mergedIntoId: PERSON_ID },
+      { ...base, id: MERGED_ID, type: 'Person', label: 'S. Example', reviewStatus: 'merged', mergedIntoId: PERSON_ID },
     ];
   }
 
@@ -148,7 +148,7 @@ describe('POST /api/graph/entities/:id/forget (integration)', () => {
         meta: { entityId: PERSON_ID, jobId: 'job-1' },
       },
     ]);
-    expect(JSON.stringify(audits())).not.toMatch(/Sarah/);
+    expect(JSON.stringify(audits())).not.toMatch(/Sasha/);
 
     // The entity is untouched by the request itself — the job deletes it.
     expect(prismaMock.kgEntity.delete).not.toHaveBeenCalled();

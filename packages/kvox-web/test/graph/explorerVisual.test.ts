@@ -30,7 +30,7 @@ import {
 } from '../../src/graph/ui/components/explorer/explorerReducers.js';
 import { STANCE_COLORS } from '../../src/graph/ui/components/explorer/explorerEncoding.js';
 import type { GraphEdge, GraphSlice } from '../../src/graph/headless/clients/graph.js';
-import { KAPPA_ID, ANA_ID, JOE_ID, Q3_MEETING_ID, expandFixture, gid, hubFixture } from './graphData.js';
+import { KAPPA_ID, ANDERS_ID, JONTY_ID, Q3_MEETING_ID, expandFixture, gid, hubFixture } from './graphData.js';
 
 /**
  * The explorer's visual language, model half (#667): degree of interest, the
@@ -40,11 +40,11 @@ import { KAPPA_ID, ANA_ID, JOE_ID, Q3_MEETING_ID, expandFixture, gid, hubFixture
 
 const NOW = Date.parse('2026-09-26T00:00:00.000Z');
 
-function joeSlice(): GraphSlice {
-  return expandFixture({ nodeIds: [JOE_ID], cap: 300 })!;
+function jontySlice(): GraphSlice {
+  return expandFixture({ nodeIds: [JONTY_ID], cap: 300 })!;
 }
 
-function loaded(slice: GraphSlice = joeSlice(), opts: Parameters<typeof mergeSlice>[2] = {}): ExplorerState {
+function loaded(slice: GraphSlice = jontySlice(), opts: Parameters<typeof mergeSlice>[2] = {}): ExplorerState {
   const state = createExplorerState();
   state.seedIds = [...slice.seedIds];
   mergeSlice(state, slice, { now: NOW, ...opts });
@@ -52,7 +52,7 @@ function loaded(slice: GraphSlice = joeSlice(), opts: Parameters<typeof mergeSli
 }
 
 function hubState(): ExplorerState {
-  return loaded(hubFixture({ nodeIds: [JOE_ID], cap: 300 })!, { neighbourLimit: EXPLORER_NEIGHBOUR_LIMIT });
+  return loaded(hubFixture({ nodeIds: [JONTY_ID], cap: 300 })!, { neighbourLimit: EXPLORER_NEIGHBOUR_LIMIT });
 }
 
 describe('degreeOfInterest', () => {
@@ -93,10 +93,10 @@ describe('degreeOfInterest', () => {
 describe('truncation order is degree of interest', () => {
   function slice(nodes: { id: string; degree: number; lastSeenAt?: string; mentionCount?: number }[]): GraphSlice {
     return {
-      seedIds: [JOE_ID],
+      seedIds: [JONTY_ID],
       asOf: '2026-09-26T00:00:00.000Z',
       nodes: [
-        { id: JOE_ID, nodeKind: 'entity', type: 'Person', label: 'Joe', depth: 0, degree: 3, status: null, occurredAt: null },
+        { id: JONTY_ID, nodeKind: 'entity', type: 'Person', label: 'Jonty', depth: 0, degree: 3, status: null, occurredAt: null },
         ...nodes.map((n) => ({
           nodeKind: 'entity' as const,
           type: 'Person',
@@ -111,7 +111,7 @@ describe('truncation order is degree of interest', () => {
         id: gid(900 + i),
         type: 'WORKS_FOR',
         source: n.id,
-        target: JOE_ID,
+        target: JONTY_ID,
         valid: null,
         confidence: 0.5,
         virtual: false,
@@ -125,7 +125,7 @@ describe('truncation order is degree of interest', () => {
     const a = gid(701);
     const b = gid(702);
     const state = createExplorerState();
-    state.seedIds = [JOE_ID];
+    state.seedIds = [JONTY_ID];
     // Room for the seed and ONE neighbour.
     const filler = Array.from({ length: EXPLORER_NODE_CAP - 2 }, (_, i) => gid(10_000 + i));
     mergeSlice(state, { ...slice([]), nodes: [slice([]).nodes[0], ...filler.map((id) => ({ ...slice([]).nodes[0], id, label: id }))] });
@@ -147,7 +147,7 @@ describe('truncation order is degree of interest', () => {
     );
     expect(state.graph.hasNode(recent)).toBe(true);
     expect(state.graph.hasNode(stale)).toBe(false);
-    expect(state.graph.hasNode(stubId(JOE_ID, 'Person'))).toBe(true);
+    expect(state.graph.hasNode(stubId(JONTY_ID, 'Person'))).toBe(true);
   });
 
   it('searched nodes outrank the rest', () => {
@@ -163,9 +163,9 @@ describe('truncation order is degree of interest', () => {
 
   it('the seeds of a slice always come first, whatever their score', () => {
     const state = createExplorerState();
-    const big = hubFixture({ nodeIds: [JOE_ID], cap: 300 })!;
-    mergeSlice(state, { ...big, nodes: big.nodes.map((n) => (n.id === JOE_ID ? { ...n, degree: 0 } : n)) }, { neighbourLimit: 5 });
-    expect(state.graph.hasNode(JOE_ID)).toBe(true);
+    const big = hubFixture({ nodeIds: [JONTY_ID], cap: 300 })!;
+    mergeSlice(state, { ...big, nodes: big.nodes.map((n) => (n.id === JONTY_ID ? { ...n, degree: 0 } : n)) }, { neighbourLimit: 5 });
+    expect(state.graph.hasNode(JONTY_ID)).toBe(true);
   });
 });
 
@@ -178,12 +178,12 @@ describe('first open of a 200-neighbour hub', () => {
 
     const stubs = state.graph.filterNodes((_id, a) => Boolean(a.isStub));
     // Every type that overflowed has exactly one stub, and the counts add up to the rest.
-    const shown = (type: string) => real.filter((id) => state.graph.getNodeAttribute(id, 'entityType') === type && id !== JOE_ID).length;
+    const shown = (type: string) => real.filter((id) => state.graph.getNodeAttribute(id, 'entityType') === type && id !== JONTY_ID).length;
     const total = { Person: 120, Organization: 50, Meeting: 30 } as const;
     for (const type of Object.keys(total) as (keyof typeof total)[]) {
-      const stub = state.graph.getNodeAttributes(stubId(JOE_ID, type));
+      const stub = state.graph.getNodeAttributes(stubId(JONTY_ID, type));
       expect(stub.isStub).toBe(true);
-      expect(stub.stubParentId).toBe(JOE_ID);
+      expect(stub.stubParentId).toBe(JONTY_ID);
       expect(stub.stubType).toBe(type);
       expect(stub.stubCount).toBe(total[type] - shown(type));
       expect(stub.label).toBe(`+${stub.stubCount} more ${type}`);
@@ -194,16 +194,16 @@ describe('first open of a 200-neighbour hub', () => {
 
   it('the 30 are the best by degree of interest: every shown neighbour is at least as connected as every hidden one', () => {
     const state = hubState();
-    const slice = hubFixture({ nodeIds: [JOE_ID], cap: 300 })!;
-    const shown = slice.nodes.filter((n) => n.id !== JOE_ID && state.graph.hasNode(n.id)).map((n) => n.degree);
-    const hidden = slice.nodes.filter((n) => n.id !== JOE_ID && !state.graph.hasNode(n.id)).map((n) => n.degree);
+    const slice = hubFixture({ nodeIds: [JONTY_ID], cap: 300 })!;
+    const shown = slice.nodes.filter((n) => n.id !== JONTY_ID && state.graph.hasNode(n.id)).map((n) => n.degree);
+    const hidden = slice.nodes.filter((n) => n.id !== JONTY_ID && !state.graph.hasNode(n.id)).map((n) => n.degree);
     expect(shown).toHaveLength(30);
     expect(Math.min(...shown)).toBeGreaterThanOrEqual(Math.max(...hidden));
   });
 
   it('a stub is tied to its node, does not count toward the cap and is not a relation to filter', () => {
     const state = hubState();
-    const id = stubId(JOE_ID, 'Person');
+    const id = stubId(JONTY_ID, 'Person');
     expect(state.graph.hasEdge(`stubedge:${id}`)).toBe(true);
     expect(state.graph.getEdgeAttribute(`stubedge:${id}`, 'relationType')).toBe(STUB_RELATION);
     expect(remainingCapacity(state)).toBe(EXPLORER_NODE_CAP - 31);
@@ -215,20 +215,20 @@ describe('first open of a 200-neighbour hub', () => {
 
   it('dropping a stub removes its node and edge; only a stub can be dropped', () => {
     const state = hubState();
-    const id = stubId(JOE_ID, 'Person');
+    const id = stubId(JONTY_ID, 'Person');
     expect(dropStub(state, id)).toBe(true);
     expect(state.graph.hasNode(id)).toBe(false);
     expect(state.graph.hasEdge(`stubedge:${id}`)).toBe(false);
-    expect(dropStub(state, JOE_ID)).toBe(false);
-    expect(state.graph.hasNode(JOE_ID)).toBe(true);
+    expect(dropStub(state, JONTY_ID)).toBe(false);
+    expect(state.graph.hasNode(JONTY_ID)).toBe(true);
   });
 
   it('a stub follows its type: hiding the type removes it', () => {
     const state = hubState();
     state.hiddenTypes = new Set(['Meeting']);
     applyFilters(state, new Set(['Person', 'Organization']), null);
-    expect(state.graph.hasNode(stubId(JOE_ID, 'Meeting'))).toBe(false);
-    expect(state.graph.hasNode(stubId(JOE_ID, 'Person'))).toBe(true);
+    expect(state.graph.hasNode(stubId(JONTY_ID, 'Meeting'))).toBe(false);
+    expect(state.graph.hasNode(stubId(JONTY_ID, 'Person'))).toBe(true);
   });
 
   it('stubs are in the list and the keyboard order, last; they never count as nodes', () => {
@@ -236,12 +236,12 @@ describe('first open of a 200-neighbour hub', () => {
     const rows = toListModel(state);
     expect(rows).toHaveLength(31 + 3);
     const order = keyboardOrder(state, NOW);
-    expect(order[0]).toBe(JOE_ID);
+    expect(order[0]).toBe(JONTY_ID);
     expect(order.slice(-3).every((id) => state.graph.getNodeAttribute(id, 'isStub'))).toBe(true);
   });
 
   it('without a limit a merge adds every node and no stub', () => {
-    const state = loaded(hubFixture({ nodeIds: [JOE_ID], cap: 300 })!);
+    const state = loaded(hubFixture({ nodeIds: [JONTY_ID], cap: 300 })!);
     expect(state.graph.filterNodes((_id, a) => Boolean(a.isStub))).toHaveLength(0);
     expect(state.graph.order).toBe(201);
   });
@@ -251,13 +251,13 @@ describe('keyboardOrder is degree of interest', () => {
   it('puts the seed first, then at each distance the best connected, then label', () => {
     const state = loaded();
     const order = keyboardOrder(state, NOW);
-    expect(order[0]).toBe(JOE_ID);
+    expect(order[0]).toBe(JONTY_ID);
     expect(new Set(order)).toEqual(new Set(state.graph.nodes()));
     const depth = new Map(toListModel(state).map((row) => [row.id, row.depthFromSeed]));
     for (const distance of new Set(depth.values())) {
       const degrees = order
         // Nodes with a date also score recency, so compare the undated ones.
-        .filter((id) => id !== JOE_ID && depth.get(id) === distance && !state.graph.getNodeAttribute(id, 'occurredAt'))
+        .filter((id) => id !== JONTY_ID && depth.get(id) === distance && !state.graph.getNodeAttribute(id, 'occurredAt'))
         .map((id) => state.graph.getNodeAttribute(id, 'degree'));
       expect([...degrees].sort((a, b) => b - a)).toEqual(degrees);
     }
@@ -265,7 +265,7 @@ describe('keyboardOrder is degree of interest', () => {
 
   it('a pinned node outranks a better connected one', () => {
     const state = loaded();
-    const others = keyboardOrder(state, NOW).filter((id) => id !== JOE_ID);
+    const others = keyboardOrder(state, NOW).filter((id) => id !== JONTY_ID);
     const last = others[others.length - 1];
     state.graph.setNodeAttribute(last, 'fixed', true);
     expect(keyboardOrder(state, NOW)[1]).toBe(last);
@@ -275,7 +275,7 @@ describe('keyboardOrder is degree of interest', () => {
 describe('seed flags and rings', () => {
   it('marks the seeds of a merge, and a promoted node', () => {
     const state = loaded();
-    expect(state.graph.getNodeAttribute(JOE_ID, 'isSeed')).toBe(true);
+    expect(state.graph.getNodeAttribute(JONTY_ID, 'isSeed')).toBe(true);
     expect(state.graph.getNodeAttribute(KAPPA_ID, 'isSeed')).toBe(false);
     makeSeed(state, KAPPA_ID);
     expect(state.graph.getNodeAttribute(KAPPA_ID, 'isSeed')).toBe(true);
@@ -285,7 +285,7 @@ describe('seed flags and rings', () => {
     const state = loaded();
     mergeSlice(state, expandFixture({ nodeIds: [KAPPA_ID], cap: 300 })!, { parentId: KAPPA_ID });
     expect(state.graph.getNodeAttribute(KAPPA_ID, 'isSeed')).toBe(false);
-    expect(state.graph.getNodeAttribute(JOE_ID, 'isSeed')).toBe(true);
+    expect(state.graph.getNodeAttribute(JONTY_ID, 'isSeed')).toBe(true);
   });
 });
 
@@ -293,17 +293,17 @@ describe('edge appearance in the graph', () => {
   function stanceSlice(): GraphSlice {
     const project = gid(801);
     return {
-      seedIds: [JOE_ID],
+      seedIds: [JONTY_ID],
       asOf: '2026-09-26T00:00:00.000Z',
       nodes: [
-        { id: JOE_ID, nodeKind: 'entity', type: 'Person', label: 'Joe', depth: 0, degree: 2, status: null, occurredAt: null },
+        { id: JONTY_ID, nodeKind: 'entity', type: 'Person', label: 'Jonty', depth: 0, degree: 2, status: null, occurredAt: null },
         { id: project, nodeKind: 'entity', type: 'Project', label: 'Product X rollout', depth: 1, degree: 2, status: null, occurredAt: null },
       ],
       edges: [
         // Two parallel relations in the same direction, and one back the other way.
-        { id: gid(811), type: 'INVOLVED_IN', source: JOE_ID, target: project, valid: null, confidence: 0.9, virtual: false, props: { stance: 'resistant', role: 'sponsor' } },
-        { id: gid(812), type: 'WORKS_ON', source: JOE_ID, target: project, valid: null, confidence: 0.4, virtual: false, props: {} },
-        { id: gid(813), type: 'OWNS', source: project, target: JOE_ID, valid: null, confidence: 0.5, virtual: true, props: {} },
+        { id: gid(811), type: 'INVOLVED_IN', source: JONTY_ID, target: project, valid: null, confidence: 0.9, virtual: false, props: { stance: 'resistant', role: 'sponsor' } },
+        { id: gid(812), type: 'WORKS_ON', source: JONTY_ID, target: project, valid: null, confidence: 0.4, virtual: false, props: {} },
+        { id: gid(813), type: 'OWNS', source: project, target: JONTY_ID, valid: null, confidence: 0.5, virtual: true, props: {} },
       ],
       truncated: false,
       cap: 300,
@@ -368,11 +368,11 @@ describe('edge appearance in the graph', () => {
 describe('highlightSet', () => {
   it('is the node, its neighbours and its own edges; null for no focus or an unknown node', () => {
     const state = loaded();
-    const set = highlightSet(state.graph, JOE_ID)!;
-    expect(set.nodes.has(JOE_ID)).toBe(true);
+    const set = highlightSet(state.graph, JONTY_ID)!;
+    expect(set.nodes.has(JONTY_ID)).toBe(true);
     expect(set.nodes.has(KAPPA_ID)).toBe(true);
     expect(set.nodes.has(Q3_MEETING_ID)).toBe(true);
-    expect(set.edges.size).toBe(state.graph.degree(JOE_ID));
+    expect(set.edges.size).toBe(state.graph.degree(JONTY_ID));
     expect(highlightSet(state.graph, null)).toBeNull();
     expect(highlightSet(state.graph, gid(123456))).toBeNull();
   });
@@ -398,13 +398,13 @@ describe('reducers', () => {
     // A node with no edge to the focus, so it would be dimmed.
     const marked = 'lone-marked';
     state.graph.addNode(marked, { ...state.graph.getNodeAttributes(state.graph.nodes()[0]!), label: 'Lone' });
-    const node = buildNodeReducer({ ...context(state, { focusId: JOE_ID }), markedIds: new Set([marked]) });
+    const node = buildNodeReducer({ ...context(state, { focusId: JONTY_ID }), markedIds: new Set([marked]) });
     const out = node(marked, nodeData(state, marked));
     expect(out.highlighted).toBe(true);
     expect(out.forceLabel).toBe(true);
     expect(out.color).toBe(state.graph.getNodeAttribute(marked, 'color'));
     // Unmarked, the same node is dimmed.
-    const plain = buildNodeReducer(context(state, { focusId: JOE_ID }));
+    const plain = buildNodeReducer(context(state, { focusId: JONTY_ID }));
     expect(plain(marked, nodeData(state, marked)).label).toBe('');
   });
 
@@ -427,16 +427,16 @@ describe('reducers', () => {
 
   it('hover: lights the node and its neighbours, forces their labels, and dims the rest to 15% — hidden: nothing', () => {
     const state = loaded();
-    // A node with no edge to Joe: not his neighbour.
+    // A node with no edge to Jonty: not his neighbour.
     state.graph.addNode(gid(990), { ...state.graph.getNodeAttributes(KAPPA_ID), label: 'Stranger' });
-    const ctx = context(state, { focusId: JOE_ID });
+    const ctx = context(state, { focusId: JONTY_ID });
     const node = buildNodeReducer(ctx);
-    const lit = highlightSet(state.graph, JOE_ID)!;
+    const lit = highlightSet(state.graph, JONTY_ID)!;
 
-    const joe = node(JOE_ID, nodeData(state, JOE_ID));
-    expect(joe.highlighted).toBe(true);
-    expect(joe.forceLabel).toBe(true);
-    expect(joe.zIndex).toBeGreaterThan(Number(node(KAPPA_ID, nodeData(state, KAPPA_ID)).zIndex));
+    const jonty = node(JONTY_ID, nodeData(state, JONTY_ID));
+    expect(jonty.highlighted).toBe(true);
+    expect(jonty.forceLabel).toBe(true);
+    expect(jonty.zIndex).toBeGreaterThan(Number(node(KAPPA_ID, nodeData(state, KAPPA_ID)).zIndex));
 
     for (const id of lit.nodes) {
       const out = node(id, nodeData(state, id));
@@ -457,67 +457,67 @@ describe('reducers', () => {
   it('leaving restores the view: no focus gives back exactly the undimmed output', () => {
     const state = loaded();
     const idle = buildNodeReducer(context(state));
-    const hovered = buildNodeReducer(context(state, { focusId: JOE_ID }));
+    const hovered = buildNodeReducer(context(state, { focusId: JONTY_ID }));
     const back = buildNodeReducer(context(state, { focusId: null }));
     for (const id of state.graph.nodes()) {
       expect(back(id, nodeData(state, id))).toEqual(idle(id, nodeData(state, id)));
     }
-    expect(hovered(JOE_ID, nodeData(state, JOE_ID))).not.toEqual(idle(JOE_ID, nodeData(state, JOE_ID)));
+    expect(hovered(JONTY_ID, nodeData(state, JONTY_ID))).not.toEqual(idle(JONTY_ID, nodeData(state, JONTY_ID)));
   });
 
   it('the selection lights its neighbours when nothing is hovered, and the hover wins over it', () => {
     const state = loaded();
     const selected = buildNodeReducer(context(state, { selectedId: KAPPA_ID }));
     expect(selected(KAPPA_ID, nodeData(state, KAPPA_ID)).highlighted).toBe(true);
-    const hoverWins = buildNodeReducer(context(state, { selectedId: KAPPA_ID, focusId: JOE_ID }));
-    expect(hoverWins(JOE_ID, nodeData(state, JOE_ID)).highlighted).toBe(true);
+    const hoverWins = buildNodeReducer(context(state, { selectedId: KAPPA_ID, focusId: JONTY_ID }));
+    expect(hoverWins(JONTY_ID, nodeData(state, JONTY_ID)).highlighted).toBe(true);
     expect(hoverWins(KAPPA_ID, nodeData(state, KAPPA_ID)).highlighted).toBeUndefined();
   });
 
   it('the TimeBar dims the nodes outside the window and the edges touching them, never a marked or focused node (GIC-15)', () => {
     const state = loaded();
-    const faded = new Set([ANA_ID, JOE_ID]);
-    const node = buildNodeReducer({ ...context(state, { focusId: JOE_ID }), dimmedIds: faded, markedIds: new Set([KAPPA_ID]) });
-    const idle = buildNodeReducer(context(state, { focusId: JOE_ID }));
+    const faded = new Set([ANDERS_ID, JONTY_ID]);
+    const node = buildNodeReducer({ ...context(state, { focusId: JONTY_ID }), dimmedIds: faded, markedIds: new Set([KAPPA_ID]) });
+    const idle = buildNodeReducer(context(state, { focusId: JONTY_ID }));
 
     // Dimmed: faded, unlabelled, unringed.
-    const ana = node(ANA_ID, nodeData(state, ANA_ID));
-    expect(ana.label).toBe('');
-    expect(ana.ringSize).toBe(0);
-    expect(String(ana.color)).toContain(`${DIM_OPACITY}`);
+    const anders = node(ANDERS_ID, nodeData(state, ANDERS_ID));
+    expect(anders.label).toBe('');
+    expect(anders.ringSize).toBe(0);
+    expect(String(anders.color)).toContain(`${DIM_OPACITY}`);
     // The focused node keeps its look even when listed.
-    expect(node(JOE_ID, nodeData(state, JOE_ID))).toEqual(idle(JOE_ID, nodeData(state, JOE_ID)));
+    expect(node(JONTY_ID, nodeData(state, JONTY_ID))).toEqual(idle(JONTY_ID, nodeData(state, JONTY_ID)));
 
-    const timeOnly = buildNodeReducer({ ...context(state), dimmedIds: new Set([ANA_ID]) });
+    const timeOnly = buildNodeReducer({ ...context(state), dimmedIds: new Set([ANDERS_ID]) });
     const plain = buildNodeReducer(context(state));
-    expect(timeOnly(ANA_ID, nodeData(state, ANA_ID)).label).toBe('');
+    expect(timeOnly(ANDERS_ID, nodeData(state, ANDERS_ID)).label).toBe('');
     expect(timeOnly(KAPPA_ID, nodeData(state, KAPPA_ID))).toEqual(plain(KAPPA_ID, nodeData(state, KAPPA_ID)));
     // A marked node is never dimmed.
     const marked = buildNodeReducer({ ...context(state), dimmedIds: new Set([KAPPA_ID]), markedIds: new Set([KAPPA_ID]) });
     expect(marked(KAPPA_ID, nodeData(state, KAPPA_ID)).highlighted).toBe(true);
 
     // An edge with a dimmed end is dimmed; the rest are untouched. Nothing dimmed: identical to no TimeBar.
-    const edge = buildEdgeReducer({ ...context(state), dimmedIds: new Set([ANA_ID]) });
+    const edge = buildEdgeReducer({ ...context(state), dimmedIds: new Set([ANDERS_ID]) });
     const plainEdge = buildEdgeReducer(context(state));
     for (const id of state.graph.edges()) {
       const [a, b] = state.graph.extremities(id);
       const out = edge(id, edgeData(state, id));
-      if (a === ANA_ID || b === ANA_ID) expect(String(out.color)).toContain(`${DIM_OPACITY}`);
+      if (a === ANDERS_ID || b === ANDERS_ID) expect(String(out.color)).toContain(`${DIM_OPACITY}`);
       else expect(out).toEqual(plainEdge(id, edgeData(state, id)));
     }
     const none = buildNodeReducer({ ...context(state), dimmedIds: new Set() });
-    expect(none(ANA_ID, nodeData(state, ANA_ID))).toEqual(plain(ANA_ID, nodeData(state, ANA_ID)));
+    expect(none(ANDERS_ID, nodeData(state, ANDERS_ID))).toEqual(plain(ANDERS_ID, nodeData(state, ANDERS_ID)));
   });
 
   it('hides nodes and edges outside visibleIds, without dimming the rest', () => {
     const state = loaded();
-    const visibleIds = new Set(state.graph.nodes().filter((id) => id !== ANA_ID));
+    const visibleIds = new Set(state.graph.nodes().filter((id) => id !== ANDERS_ID));
     const node = buildNodeReducer(context(state, { visibleIds }));
     const edge = buildEdgeReducer(context(state, { visibleIds }));
-    expect(node(ANA_ID, nodeData(state, ANA_ID)).hidden).toBe(true);
-    expect(node(JOE_ID, nodeData(state, JOE_ID)).hidden).toBeUndefined();
-    const anaEdge = state.graph.edges().find((id) => state.graph.extremities(id).includes(ANA_ID))!;
-    expect(edge(anaEdge, edgeData(state, anaEdge)).hidden).toBe(true);
+    expect(node(ANDERS_ID, nodeData(state, ANDERS_ID)).hidden).toBe(true);
+    expect(node(JONTY_ID, nodeData(state, JONTY_ID)).hidden).toBeUndefined();
+    const andersEdge = state.graph.edges().find((id) => state.graph.extremities(id).includes(ANDERS_ID))!;
+    expect(edge(andersEdge, edgeData(state, andersEdge)).hidden).toBe(true);
   });
 
   it('edges: the focus edges are lit and labelled, the others dimmed and unlabelled', () => {
@@ -548,20 +548,20 @@ describe('reducers', () => {
     expect(hovered(edgeId, edgeData(state, edgeId)).label).toBe(state.graph.getEdgeAttribute(edgeId, 'label'));
 
     const hub = hubState();
-    const wall = buildEdgeReducer(context(hub, { focusId: JOE_ID }));
-    expect(MAX_FOCUS_EDGE_LABELS).toBeLessThan(hub.graph.degree(JOE_ID));
+    const wall = buildEdgeReducer(context(hub, { focusId: JONTY_ID }));
+    expect(MAX_FOCUS_EDGE_LABELS).toBeLessThan(hub.graph.degree(JONTY_ID));
     for (const id of hub.graph.edges()) expect(wall(id, edgeData(hub, id)).label).toBe('');
   });
 
   it('rings: a seed, a pinned and the selected node each get theirs; a plain node none', () => {
     const state = loaded();
-    state.graph.setNodeAttribute(ANA_ID, 'fixed', true);
+    state.graph.setNodeAttribute(ANDERS_ID, 'fixed', true);
     const node = buildNodeReducer(context(state, { selectedId: KAPPA_ID }));
-    const joe = node(JOE_ID, nodeData(state, JOE_ID));
-    const ana = node(ANA_ID, nodeData(state, ANA_ID));
+    const jonty = node(JONTY_ID, nodeData(state, JONTY_ID));
+    const anders = node(ANDERS_ID, nodeData(state, ANDERS_ID));
     const kappa = node(KAPPA_ID, nodeData(state, KAPPA_ID));
-    expect(joe.ringSize).toBeGreaterThan(Number(kappa.ringSize));
-    expect(Number(ana.gapSize)).toBeGreaterThan(0);
+    expect(jonty.ringSize).toBeGreaterThan(Number(kappa.ringSize));
+    expect(Number(anders.gapSize)).toBeGreaterThan(0);
     expect(kappa.ringColor).toBe('#1976d2');
     const plain = buildNodeReducer(context(state))(Q3_MEETING_ID, nodeData(state, Q3_MEETING_ID));
     expect(plain.ringSize).toBeUndefined();
@@ -572,7 +572,7 @@ describe('reducers', () => {
     const node = buildNodeReducer(context(state));
     const edge = buildEdgeReducer(context(state));
     const plainNode = { x: 0, y: 0, size: 5, color: '#123456', label: 'A' };
-    expect(node(JOE_ID, plainNode)).toEqual(plainNode);
+    expect(node(JONTY_ID, plainNode)).toEqual(plainNode);
     const plainEdge = { size: 1, color: '#123456', type: 'arrow' };
     expect(edge(state.graph.edges()[0], plainEdge)).toEqual({ ...plainEdge, label: '' });
   });
@@ -580,14 +580,14 @@ describe('reducers', () => {
   it('a stub keeps its label even with nothing lit', () => {
     const state = hubState();
     const node = buildNodeReducer(context(state));
-    const id = stubId(JOE_ID, 'Person');
+    const id = stubId(JONTY_ID, 'Person');
     expect(node(id, nodeData(state, id)).forceLabel).toBe(true);
   });
 
   it('compact: seeds keep their labels', () => {
     const state = loaded();
     const node = buildNodeReducer(context(state, { compact: true }));
-    expect(node(JOE_ID, nodeData(state, JOE_ID)).forceLabel).toBe(true);
+    expect(node(JONTY_ID, nodeData(state, JONTY_ID)).forceLabel).toBe(true);
     expect(node(KAPPA_ID, nodeData(state, KAPPA_ID)).forceLabel).toBeUndefined();
   });
 });
@@ -612,7 +612,7 @@ describe('legendModel', () => {
     const model = legendModel(state, nodeTypes, relationTypes);
     const person = model.types.find((t) => t.key === 'Person')!;
     expect(person.count).toBe(state.graph.filterNodes((_id, a) => a.entityType === 'Person').length);
-    expect(person.color).toBe(state.graph.getNodeAttribute(JOE_ID, 'color'));
+    expect(person.color).toBe(state.graph.getNodeAttribute(JONTY_ID, 'color'));
     expect(person.icon).toBe('person');
     expect(person.shown).toBe(true);
     // Nothing on the canvas, nothing hidden: no row of zeros.

@@ -48,7 +48,7 @@ function edge(s: EdgeSpec): TemporalEdge {
   return {
     id: s.id,
     type: s.type ?? 'WORKS_FOR',
-    fromId: s.fromId ?? 'joe',
+    fromId: s.fromId ?? 'jonty',
     toId: s.toId,
     props: s.props ?? {},
     valid: s.valid,
@@ -60,7 +60,7 @@ function edge(s: EdgeSpec): TemporalEdge {
 function cand(s: Omit<EdgeSpec, 'id' | 'status'>): CandidateEdge {
   return {
     type: s.type ?? 'WORKS_FOR',
-    fromId: s.fromId ?? 'joe',
+    fromId: s.fromId ?? 'jonty',
     toId: s.toId,
     props: s.props ?? {},
     valid: s.valid,

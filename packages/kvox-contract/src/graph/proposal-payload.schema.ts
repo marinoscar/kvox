@@ -211,7 +211,7 @@ export type ItemPayload = z.infer<typeof itemPayloadSchema>;
 
 /**
  * #365 — a `kind: 'closing'` row: §5.4's closing rule as a reviewable proposal
- * row ("Closes: Joe works for Kappa, 2019 → Feb 2026"), never a side effect.
+ * row ("Closes: Jonty works for Kappa, 2019 → Feb 2026"), never a side effect.
  * Never pre-checked. UI copy (#367):
  *   `Closes: {fromLabel} {relationType label} {toLabel}{, as roleTitle}{, roleBusinessUnit},`
  *   `{previousValid.from at its precision} → {closeAt at its precision}`

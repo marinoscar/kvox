@@ -61,7 +61,7 @@ const SAMPLE_DATA: Record<string, unknown> = {
     role: 'editor',
     title: HOSTILE_SCRIPT,
     path: '/transcripts/transcript-1',
-    sharedBy: 'Ana Rivera',
+    sharedBy: 'Anders Sample',
     openUrl: 'https://app.example.com/transcripts/transcript-1',
     signInUrl: 'https://app.example.com',
   },

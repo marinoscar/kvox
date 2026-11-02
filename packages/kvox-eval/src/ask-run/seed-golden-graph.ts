@@ -20,7 +20,7 @@
 // and storage objects are not graph rows; they are plain inserts.
 //
 // AN ENTITY THAT RECURS ACROSS MEETINGS BECOMES ONE ROW. A fixture's
-// `knownEntities[].id` (`"g-person-sarah-chen"`) is the stable cross-fixture
+// `knownEntities[].id` (`"g-person-sasha-example"`) is the stable cross-fixture
 // identity a later meeting's `existingId` links back to. Fixtures are seeded in
 // id order, so a person's first mention creates the row; a later `existingId`,
 // or a label/alias that matches what any fixture declares for that global id,

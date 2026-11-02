@@ -8,7 +8,7 @@ import 'vitest-axe/extend-expect';
 
 import { EntityConnectionsList } from '../../src/graph/ui/components/EntityConnectionsList.js';
 import { server } from './msw-compat.js';
-import { KAPPA_ID, DANA_ID, JOE_ID, gid, graphOntologyFixture } from './graphData.js';
+import { KAPPA_ID, DARCY_ID, JONTY_ID, gid, graphOntologyFixture } from './graphData.js';
 import { render } from './helpers.js';
 import { graphWriter } from './graphTestUsers.js';
 
@@ -30,7 +30,7 @@ const setResponse = (type: string, toId: string) => ({
     relation: {
       id: NEW_EDGE,
       type,
-      fromId: JOE_ID,
+      fromId: JONTY_ID,
       toId,
       props: {},
       valid: { from: '2026-10-17T00:00:00.000Z', to: null, precision: 'day' },
@@ -67,8 +67,8 @@ beforeEach(() => {
 function renderList(props: { canEdit?: boolean; entityType?: string } = {}) {
   return render(
     <EntityConnectionsList
-      entityId={JOE_ID}
-      entityLabel="Joe Rivera"
+      entityId={JONTY_ID}
+      entityLabel="Jonty Placeholder"
       ontology={graphOntologyFixture}
       entityType={props.entityType ?? 'Person'}
       canEdit={props.canEdit ?? true}
@@ -114,12 +114,12 @@ describe('EntityConnectionsList — manual relation edits (#586)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Set manager' });
     expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled();
 
-    await pick(user, 'Manager', 'Dana', /Dana Li/);
+    await pick(user, 'Manager', 'Darcy', /Darcy Placeholder/);
     const before = neighborhoodReads;
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]).toEqual({ path: `/graph/entities/${JOE_ID}/relations`, body: { type: 'REPORTS_TO', toId: DANA_ID } });
+    expect(posted[0]).toEqual({ path: `/graph/entities/${JONTY_ID}/relations`, body: { type: 'REPORTS_TO', toId: DARCY_ID } });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Set manager' })).not.toBeInTheDocument());
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
     await waitFor(() => expect(neighborhoodReads).toBeGreaterThan(before));
@@ -164,7 +164,7 @@ describe('EntityConnectionsList — manual relation edits (#586)', () => {
     renderList();
     await user.click(await screen.findByRole('button', { name: 'Set manager' }));
     const dialog = await screen.findByRole('dialog', { name: 'Set manager' });
-    await pick(user, 'Manager', 'Dana', /Dana Li/);
+    await pick(user, 'Manager', 'Darcy', /Darcy Placeholder/);
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('cannot point at');
     expect(screen.getByRole('dialog', { name: 'Set manager' })).toBeInTheDocument();
@@ -176,10 +176,10 @@ describe('EntityConnectionsList — manual relation edits (#586)', () => {
     await screen.findByRole('heading', { level: 3, name: 'Reports to' });
     expect(screen.queryByRole('button', { name: /^Remove Attended/ })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Remove Reports to Ana Diaz' }));
+    await user.click(screen.getByRole('button', { name: 'Remove Reports to Anders Placeholder' }));
     const dialog = await screen.findByRole('dialog', { name: 'Remove this connection?' });
     await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
-    await waitFor(() => expect(deleted).toEqual([`/graph/entities/${JOE_ID}/relations/${gid(411)}`]));
+    await waitFor(() => expect(deleted).toEqual([`/graph/entities/${JONTY_ID}/relations/${gid(411)}`]));
     expect(await screen.findByText('Removed.')).toBeInTheDocument();
   });
 });

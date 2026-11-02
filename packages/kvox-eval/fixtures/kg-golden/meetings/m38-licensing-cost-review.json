@@ -13,13 +13,13 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Quarterly licensing cost review\n\n**Date:** July 20\n**Attendees:** Hana Kovac, Marcus Oyelaran, Elin Dahl\n\n## Summary\n\nReview of what Wexcombe Insurance pays for software licences, prepared by Tarnmoor Advisory with the finance team. The focus was where seats are paid for but not used, and which products overlap.\n\n## What we reviewed\n\n- Lumen Assist is billed per seat, and the first wave has used fewer seats than were bought.\n- Fabricant Studio, the low-code platform used by the operations team, has three departments paying separately for the same tier.\n- Ledgerline, the general ledger software, is not in scope but its renewal falls in the same quarter.\n- Trellis Cloud, the hosting platform behind several internal tools, is the largest single line after Lumen Assist.\n\n## Cost themes\n\n- Licensing cost is the umbrella topic for this review.\n- Seat utilisation is a narrower part of licensing cost: unused seats are the quickest saving.\n- Vendor consolidation is also part of licensing cost, because fewer vendors means better volume terms.\n- Budget forecasting needs a monthly refresh once the second wave of the assistant starts.\n\n## Decisions\n\n- Unused Lumen Assist seats will be released at the end of the month and rebought only on demand.\n\n## Action items\n\n- **Marcus Oyelaran** will merge the three Fabricant Studio contracts into one.\n- **Elin Dahl** will build the monthly budget forecasting view for the committee.\n\n## Next steps\n\nThe findings go to the steering committee at its next meeting, and finance will bring the Ledgerline renewal options to the following one.\n"
+    "body": "# Quarterly licensing cost review\n\n**Date:** July 20\n**Attendees:** Hazel Mockwell, Maddox Placeholder, Emlyn Mockwell\n\n## Summary\n\nReview of what Wexcombe Insurance pays for software licences, prepared by Tarnmoor Advisory with the finance team. The focus was where seats are paid for but not used, and which products overlap.\n\n## What we reviewed\n\n- Lumen Assist is billed per seat, and the first wave has used fewer seats than were bought.\n- Fabricant Studio, the low-code platform used by the operations team, has three departments paying separately for the same tier.\n- Ledgerline, the general ledger software, is not in scope but its renewal falls in the same quarter.\n- Trellis Cloud, the hosting platform behind several internal tools, is the largest single line after Lumen Assist.\n\n## Cost themes\n\n- Licensing cost is the umbrella topic for this review.\n- Seat utilisation is a narrower part of licensing cost: unused seats are the quickest saving.\n- Vendor consolidation is also part of licensing cost, because fewer vendors means better volume terms.\n- Budget forecasting needs a monthly refresh once the second wave of the assistant starts.\n\n## Decisions\n\n- Unused Lumen Assist seats will be released at the end of the month and rebought only on demand.\n\n## Action items\n\n- **Maddox Placeholder** will merge the three Fabricant Studio contracts into one.\n- **Emlyn Mockwell** will build the monthly budget forecasting view for the committee.\n\n## Next steps\n\nThe findings go to the steering committee at its next meeting, and finance will bring the Ledgerline renewal options to the following one.\n"
   },
   "knownEntities": [
     {
-      "id": "g-person-hana-kovac",
+      "id": "g-person-hazel-mockwell",
       "type": "Person",
-      "label": "Hana Kovac",
+      "label": "Hazel Mockwell",
       "aliases": [],
       "props": {},
       "attendedFixtureIds": [
@@ -77,44 +77,44 @@
         ]
       },
       {
-        "key": "hana",
+        "key": "hazel",
         "type": "Person",
-        "label": "Hana Kovac",
+        "label": "Hazel Mockwell",
         "aliases": [],
-        "existingId": "g-person-hana-kovac",
+        "existingId": "g-person-hazel-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Hana Kovac, Marcus Oyelaran, Elin Dahl"
+            "quote": "Hazel Mockwell, Maddox Placeholder, Emlyn Mockwell"
           }
         ]
       },
       {
-        "key": "marcus",
+        "key": "maddox",
         "type": "Person",
-        "label": "Marcus Oyelaran",
+        "label": "Maddox Placeholder",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Hana Kovac, Marcus Oyelaran, Elin Dahl"
+            "quote": "Hazel Mockwell, Maddox Placeholder, Emlyn Mockwell"
           }
         ]
       },
       {
-        "key": "elin",
+        "key": "emlyn",
         "type": "Person",
-        "label": "Elin Dahl",
+        "label": "Emlyn Mockwell",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Hana Kovac, Marcus Oyelaran, Elin Dahl"
+            "quote": "Hazel Mockwell, Maddox Placeholder, Emlyn Mockwell"
           }
         ]
       },

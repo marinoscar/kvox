@@ -13,7 +13,7 @@
  *     view, "Connect A and B"). The Lenses are NOT here until their story
  *     ships: the page adds an action to `actions` only when the capability exists.
  *
- * `type:Person joe` narrows both result sections to a type.
+ * `type:Person jonty` narrows both result sections to a type.
  *
  * ACCESSIBILITY. The input is a `combobox` that controls a `listbox` of
  * `option`s grouped by section; focus stays in the input and the active option

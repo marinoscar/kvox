@@ -271,7 +271,7 @@ describe('useNoteSummary — the notification stream', () => {
 
   it('works with no notification provider mounted at all', async () => {
     // A host with no notification stream (`useLatestEventId` is optional) is
-    // the visual harness and most tests, and that must not be a crash.
+    // the common case in tests, and that must not be a crash.
     noNotifications();
 
     const { result } = renderHook(() => useNoteSummary());

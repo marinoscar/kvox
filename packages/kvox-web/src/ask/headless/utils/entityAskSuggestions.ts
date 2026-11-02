@@ -3,7 +3,7 @@
  * conversation has any messages (#381, spec `docs/specs/ontology.md` §21.5).
  *
  * Pure: built from the entity's own type and label, so a Person is offered
- * "What has Joe committed to?" and a Project "What's still open on Atlas?".
+ * "What has Jonty committed to?" and a Project "What's still open on Atlas?".
  * A type with no questions of its own (a Meeting, a user-defined type) gets
  * the one question every entity can answer.
  *

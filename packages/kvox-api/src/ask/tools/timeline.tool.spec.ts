@@ -6,7 +6,7 @@ import { TimelineTool } from './timeline.tool.js';
 // dropped, superseded flagged, ≤ 2 evidence quotes per event, uuid-free.
 // =============================================================================
 
-const SARAH = uid(1);
+const SASHA = uid(1);
 const KAPPA = uid(2);
 const DECISION = uid(3);
 const FACT = uid(4);
@@ -88,7 +88,7 @@ describe('TimelineTool', () => {
         eventKind: 'relation_started',
         at: '2016-06-01T00:00:00.000Z',
         precision: 'month',
-        relation: { id: uid(41), type: 'SPOUSE_OF', direction: 'out', other: ref(uid(42), 'Tessa', 'Person'), valid: null },
+        relation: { id: uid(41), type: 'SPOUSE_OF', direction: 'out', other: ref(uid(42), 'Tarn', 'Person'), valid: null },
         evidenceIds: [],
         evidenceCount: 0,
       },
@@ -106,38 +106,38 @@ describe('TimelineTool', () => {
     const prisma = { kgEvidence: { findMany: jest.fn(async () => []) } };
     const tool = new TimelineTool(graphRead as never, prisma as never);
     const ctx = makeCtx();
-    const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SARAH, 'Sarah') }));
+    const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SASHA, 'Sasha') }));
     const text = JSON.stringify(res.data);
     expect(text).not.toContain('SPOUSE_OF');
     expect(text).not.toContain('Lisbon trip');
     expect(text).toContain('WORKS_AT');
 
     const allowed = makeCtx({ personalFactsAllowed: true });
-    const withOptIn = await tool.run(allowed, tool.input.parse({ entity: seedEntity(allowed, SARAH, 'Sarah') }));
+    const withOptIn = await tool.run(allowed, tool.input.parse({ entity: seedEntity(allowed, SASHA, 'Sasha') }));
     expect(JSON.stringify(withOptIn.data)).toContain('SPOUSE_OF');
   });
 
   it('never asks for sensitive facts and maps null to defaults', async () => {
     const { tool, graphRead } = build();
     const ctx = makeCtx();
-    const h = seedEntity(ctx, SARAH, 'Sarah');
+    const h = seedEntity(ctx, SASHA, 'Sasha');
     await tool.run(ctx, tool.input.parse({ entity: h, asOf: null, kinds: null, limit: null }));
-    expect(graphRead.timeline).toHaveBeenCalledWith(ctx.user, SARAH, { as_of: undefined, kinds: undefined, includeSensitive: false, limit: 15 });
+    expect(graphRead.timeline).toHaveBeenCalledWith(ctx.user, SASHA, { as_of: undefined, kinds: undefined, includeSensitive: false, limit: 15 });
   });
 
   it('passes kinds as CSV and caps the limit at 25', async () => {
     const { tool, graphRead } = build();
     const ctx = makeCtx();
-    const h = seedEntity(ctx, SARAH);
+    const h = seedEntity(ctx, SASHA);
     await tool.run(ctx, tool.input.parse({ entity: h, kinds: ['decision', 'meeting'], asOf: '2026-01-01', limit: 25 }));
-    expect(graphRead.timeline).toHaveBeenCalledWith(ctx.user, SARAH, { as_of: '2026-01-01', kinds: 'decision,meeting', includeSensitive: false, limit: 25 });
+    expect(graphRead.timeline).toHaveBeenCalledWith(ctx.user, SASHA, { as_of: '2026-01-01', kinds: 'decision,meeting', includeSensitive: false, limit: 25 });
     expect(tool.input.safeParse({ entity: h, limit: 26 }).success).toBe(false);
   });
 
   it('shapes events, drops personal facts, flags superseded, keeps two quotes', async () => {
     const { tool } = build();
     const ctx = makeCtx();
-    const h = seedEntity(ctx, SARAH, 'Sarah');
+    const h = seedEntity(ctx, SASHA, 'Sasha');
     const res = await tool.run(ctx, tool.input.parse({ entity: h }));
     const data = res.data as Array<Record<string, unknown>>;
     expect(data).toHaveLength(3);
@@ -164,14 +164,14 @@ describe('TimelineTool', () => {
     expect(data[2]).toMatchObject({ ref: 'ent3', event: 'meeting', text: 'Kickoff', at: null, precision: 'unknown' });
     expect(JSON.stringify(data)).not.toContain('Moving house');
     expect(res.truncated).toBe(true);
-    expect(res.summary).toBe('Timeline of Sarah · 3 events');
+    expect(res.summary).toBe('Timeline of Sasha · 3 events');
     expectNoUuid(res.data);
   });
 
   it('keeps personal facts with the opt-in', async () => {
     const { tool } = build(null);
     const ctx = makeCtx({ personalFactsAllowed: true });
-    const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SARAH) }));
+    const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SASHA) }));
     expect(JSON.stringify(res.data)).toContain('Moving house');
     expect(res.truncated).toBe(false);
   });

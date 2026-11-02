@@ -7,7 +7,7 @@ import { KvoxRateLimitError } from '../../ports/index.js';
 const USER = '11111111-1111-4111-8111-111111111111';
 const PROPOSAL = '22222222-2222-4222-8222-222222222222';
 const TRANSCRIPT = '33333333-3333-4333-8333-333333333333';
-const SARAH = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const SASHA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const MEETING = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
@@ -15,7 +15,7 @@ const thresholds = GRAPH_PREFERENCE_DEFAULTS.resolution;
 
 describe('decide (outcome bands)', () => {
   const outcome = (score: number, band: MentionOutcome['band'], ambiguous = false): MentionOutcome => ({
-    candidates: [{ entityId: SARAH, label: 'Sarah Chen', type: 'Person', score, signals: ['alias_exact'], arm: 'alias_exact' }],
+    candidates: [{ entityId: SASHA, label: 'Sasha Example', type: 'Person', score, signals: ['alias_exact'], arm: 'alias_exact' }],
     ambiguous,
     band,
   });
@@ -23,7 +23,7 @@ describe('decide (outcome bands)', () => {
 
   it('links the top candidate at or above auto-link, sourced from its arm', () => {
     const d = decide(outcome(0.95, 'link'), thresholds, null);
-    expect(d.resolution).toMatchObject({ ref: SARAH, score: 0.95, source: 'alias', adjudication: null });
+    expect(d.resolution).toMatchObject({ ref: SASHA, score: 0.95, source: 'alias', adjudication: null });
     expect(d.flags).toEqual([]);
   });
 
@@ -45,12 +45,12 @@ describe('decide (outcome bands)', () => {
 
   it('maps the three verdicts', () => {
     expect(decide(outcome(0.7, 'middle'), thresholds, verdict('same'))).toMatchObject({
-      resolution: { ref: SARAH, score: 0.9, source: 'adjudication', adjudication: { verdict: 'same' } },
+      resolution: { ref: SASHA, score: 0.9, source: 'adjudication', adjudication: { verdict: 'same' } },
       flags: [],
     });
     expect(decide(outcome(0.7, 'middle'), thresholds, verdict('different')).resolution).toMatchObject({ ref: null, adjudication: { verdict: 'different' } });
     const uncertain = decide(outcome(0.7, 'middle'), thresholds, verdict('uncertain'));
-    expect(uncertain.resolution.ref).toBe(SARAH);
+    expect(uncertain.resolution.ref).toBe(SASHA);
     expect(uncertain.flags).toEqual(['possible_duplicate']);
   });
 
@@ -99,11 +99,11 @@ function build(options: {
       findMany: jest.fn(async () => []),
     },
     transcript: { findFirst: jest.fn(async () => ({ id: TRANSCRIPT, speakerIdentities: {} })) },
-    transcriptSpeaker: { findMany: jest.fn(async () => [{ id: 'spk-a', label: 'A', displayName: 'Sarah Chen' }]) },
-    kgRelation: { findMany: jest.fn(async () => [{ fromSpeakerId: 'spk-a', toId: SARAH }]) },
+    transcriptSpeaker: { findMany: jest.fn(async () => [{ id: 'spk-a', label: 'A', displayName: 'Sasha Example' }]) },
+    kgRelation: { findMany: jest.fn(async () => [{ fromSpeakerId: 'spk-a', toId: SASHA }]) },
     kgEntity: {
       findMany: jest.fn(async ({ where }: { where: Row }) =>
-        where.reviewStatus ? [{ id: SARAH }] : [],
+        where.reviewStatus ? [{ id: SASHA }] : [],
       ),
     },
   };
@@ -151,7 +151,7 @@ function build(options: {
 
 const raw = (entityId: string, over: Partial<RawCandidate> = {}): RawCandidate => ({
   entityId,
-  label: 'Sarah Chen',
+  label: 'Sasha Example',
   type: 'Person',
   aliasExact: false,
   trigram: null,
@@ -161,9 +161,9 @@ const raw = (entityId: string, over: Partial<RawCandidate> = {}): RawCandidate =
 
 describe('ResolutionService.resolveProposal', () => {
   it('links a speaker-identified Person without scoring it', async () => {
-    const t = build({ items: [entityItem('i1', 'e1', 'sarah chen')], speakerLinked: true });
+    const t = build({ items: [entityItem('i1', 'e1', 'sasha example')], speakerLinked: true });
     const stats = await t.service.resolveProposal(t.ctx(), 'kg.extract');
-    expect(t.updates[0].resolution).toMatchObject({ ref: SARAH, score: 1, source: 'speaker', candidates: [] });
+    expect(t.updates[0].resolution).toMatchObject({ ref: SASHA, score: 1, source: 'speaker', candidates: [] });
     expect(t.candidates.forMention).not.toHaveBeenCalled();
     expect(stats).toMatchObject({ entities: 1, linked: 1, speaker: 1 });
   });
@@ -213,11 +213,11 @@ describe('ResolutionService.resolveProposal', () => {
   });
 
   it('re-scores a model_claimed_match row like any other — the claim adds nothing', async () => {
-    const claimed = entityItem('i1', 'k1', 'Sarah', {
+    const claimed = entityItem('i1', 'k1', 'Sasha', {
       resolution: { ref: OTHER, score: null, source: 'model', candidates: [], adjudication: null },
       flags: ['model_claimed_match'],
     });
-    const t = build({ items: [claimed], candidates: { Sarah: [raw(SARAH, { trigram: 0.5 })] } });
+    const t = build({ items: [claimed], candidates: { Sasha: [raw(SASHA, { trigram: 0.5 })] } });
     await t.service.resolveProposal(t.ctx(), 'kg.extract');
     const u = t.updates[0];
     expect(u.resolution.ref).toBeNull(); // 0.467 < newThreshold: new, whatever the model claimed
@@ -226,8 +226,8 @@ describe('ResolutionService.resolveProposal', () => {
   });
 
   it('writes the same resolution under review_all — that mode only changes the pre-check', async () => {
-    const items = () => [entityItem('i1', 'e1', 'Sarah Chen')];
-    const candidates = { 'Sarah Chen': [raw(SARAH, { aliasExact: true })] };
+    const items = () => [entityItem('i1', 'e1', 'Sasha Example')];
+    const candidates = { 'Sasha Example': [raw(SASHA, { aliasExact: true })] };
     const a = build({ items: items(), candidates });
     const b = build({ items: items(), candidates });
     await a.service.resolveProposal(a.ctx(), 'kg.extract');
@@ -237,8 +237,8 @@ describe('ResolutionService.resolveProposal', () => {
 
   it('records why the vector arm was skipped, and still resolves by name', async () => {
     const t = build({
-      items: [entityItem('i1', 'e1', 'Sarah Chen')],
-      candidates: { 'Sarah Chen': [raw(SARAH, { aliasExact: true })] },
+      items: [entityItem('i1', 'e1', 'Sasha Example')],
+      candidates: { 'Sasha Example': [raw(SASHA, { aliasExact: true })] },
       embedder: { ok: false, reason: 'embedding_unsupported' },
     });
     const stats = await t.service.resolveProposal(t.ctx(), 'kg.extract');
@@ -247,26 +247,26 @@ describe('ResolutionService.resolveProposal', () => {
   });
 
   it('passes a mention vector to the candidates when the caller can embed', async () => {
-    const t = build({ items: [entityItem('i1', 'e1', 'Sarah Chen')], embedder: { ok: true } });
+    const t = build({ items: [entityItem('i1', 'e1', 'Sasha Example')], embedder: { ok: true } });
     const stats = await t.service.resolveProposal(t.ctx(), 'kg.extract');
     expect(stats.vectorArm).toBe('ok');
     expect(t.candidates.forMention.mock.calls[0][1]).toMatchObject({ vector: { values: [0.1], model: 'emb' } });
   });
 
   it('adjudicates the middle band, and makes no provider call with adjudication off', async () => {
-    const candidates = { 'S. Chen': [raw(SARAH, { trigram: 0.85 })] }; // 0.7 → middle
+    const candidates = { 'S. Example': [raw(SASHA, { trigram: 0.85 })] }; // 0.7 → middle
     const on = build({
-      items: [entityItem('i1', 'e1', 'S. Chen')],
+      items: [entityItem('i1', 'e1', 'S. Example')],
       candidates,
       adjudicate: jest.fn(async () => new Map([['p1', { verdict: 'uncertain', rationale: 'maybe', model: 'm' }]])),
     });
     const onStats = await on.service.resolveProposal(on.ctx(), 'kg.extract');
     expect(on.adjudication.adjudicate).toHaveBeenCalledTimes(1);
-    expect(on.updates[0].resolution).toMatchObject({ ref: SARAH, adjudication: { verdict: 'uncertain' } });
+    expect(on.updates[0].resolution).toMatchObject({ ref: SASHA, adjudication: { verdict: 'uncertain' } });
     expect(on.updates[0].flags).toContain('possible_duplicate');
     expect(onStats).toMatchObject({ adjudicated: 1, uncertain: 1 });
 
-    const off = build({ items: [entityItem('i1', 'e1', 'S. Chen')], candidates });
+    const off = build({ items: [entityItem('i1', 'e1', 'S. Example')], candidates });
     const offStats = await off.service.resolveProposal(off.ctx({ adjudication: 'off' }), 'kg.extract');
     expect(off.adjudication.adjudicate).not.toHaveBeenCalled();
     expect(off.updates[0].resolution.ref).toBeNull();
@@ -275,9 +275,9 @@ describe('ResolutionService.resolveProposal', () => {
   });
 
   it('rethrows a rate limit from adjudication and degrades any other refusal', async () => {
-    const candidates = { 'S. Chen': [raw(SARAH, { trigram: 0.85 })] };
+    const candidates = { 'S. Example': [raw(SASHA, { trigram: 0.85 })] };
     const limited = build({
-      items: [entityItem('i1', 'e1', 'S. Chen')],
+      items: [entityItem('i1', 'e1', 'S. Example')],
       candidates,
       adjudicate: jest.fn(async () => {
         throw new KvoxRateLimitError('ai-provider:u', undefined, '429');
@@ -286,7 +286,7 @@ describe('ResolutionService.resolveProposal', () => {
     await expect(limited.service.resolveProposal(limited.ctx(), 'kg.extract')).rejects.toBeInstanceOf(KvoxRateLimitError);
 
     const refused = build({
-      items: [entityItem('i1', 'e1', 'S. Chen')],
+      items: [entityItem('i1', 'e1', 'S. Example')],
       candidates,
       adjudicate: jest.fn(async () => {
         throw new Error('graph off');

@@ -1536,9 +1536,7 @@ to the tallest card in the row, and the chip was what made the disabled card
 the tallest; removing it changes every card's rendered height in that row.
 And `NavigationRail` skips any card carrying no `path` or `disabled: true`, so
 a card invisible to the rail until now claims a row in it. Both are real
-layout changes with no bug behind them, so six pixel baselines — across
-`admin-hub.spec.ts`, `console-rail.spec.ts` and `hub-search.spec.ts` in
-`tests/visual/` — moved and were regenerated alongside this issue.
+layout changes with no bug behind them.
 
 ### 10.12 Rejected alternatives (the operator interface)
 

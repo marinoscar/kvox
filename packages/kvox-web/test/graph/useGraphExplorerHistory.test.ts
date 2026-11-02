@@ -18,7 +18,7 @@ import {
 } from '../../src/graph/ui/components/explorer/history/snapshot.js';
 import { createExplorerState, realNodeCount } from '../../src/graph/ui/components/explorer/explorerModel.js';
 import { useGraphExplorer } from '../../src/graph/ui/hooks/useGraphExplorer.js';
-import { KAPPA_ID, ANA_ID, JOE_ID, expandFixture, type ExpandFixtureRequest } from './graphData.js';
+import { KAPPA_ID, ANDERS_ID, JONTY_ID, expandFixture, type ExpandFixtureRequest } from './graphData.js';
 import { server } from './msw-compat.js';
 import { renderHook as renderHookWithProviders } from './helpers.js';
 
@@ -112,14 +112,14 @@ describe('focus trail rules', () => {
 describe('useGraphExplorer — undo and redo', () => {
   it('has nothing to undo after the first load', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     expect(result.current.canUndo).toBe(false);
     expect(result.current.undo()).toBeNull();
   });
 
   it('Undo restores the graph after Hide, and Redo hides it again', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     const before = realNodeCount(result.current.state);
     expect(result.current.state.graph.hasNode(KAPPA_ID)).toBe(true);
 
@@ -143,7 +143,7 @@ describe('useGraphExplorer — undo and redo', () => {
 
   it('Undo restores the graph after Expand', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     const before = realNodeCount(result.current.state);
     const edgesBefore = result.current.state.graph.size;
 
@@ -161,7 +161,7 @@ describe('useGraphExplorer — undo and redo', () => {
 
   it('a slice added from outside (a connect result) is a step, and Undo takes it back', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     const before = realNodeCount(result.current.state);
     const slice = expandFixture({ nodeIds: [KAPPA_ID] } as ExpandFixtureRequest)!;
 
@@ -177,7 +177,7 @@ describe('useGraphExplorer — undo and redo', () => {
 
   it('a failed expand is not a step', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     failExpand = true;
     await act(() => result.current.expand(KAPPA_ID));
     expect(result.current.error).not.toBeNull();
@@ -187,19 +187,19 @@ describe('useGraphExplorer — undo and redo', () => {
 
   it('a new step after Undo clears Redo', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     act(() => result.current.hide(KAPPA_ID));
     act(() => {
       result.current.undo();
     });
     expect(result.current.canRedo).toBe(true);
-    act(() => result.current.hide(ANA_ID));
+    act(() => result.current.hide(ANDERS_ID));
     expect(result.current.canRedo).toBe(false);
   });
 
   it('a filter change is a step, and Undo hands back the filters for the URL', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     act(() => result.current.setHiddenTypes(['Meeting']));
     act(() => result.current.setHiddenRelationTypes(['ATTENDED']));
     expect(result.current.undoDepth()).toBe(2);
@@ -208,18 +208,18 @@ describe('useGraphExplorer — undo and redo', () => {
     act(() => {
       view = result.current.undo();
     });
-    expect(view).toEqual({ seedIds: [JOE_ID], hiddenTypes: ['Meeting'], hiddenRelationTypes: [], asOf: null });
+    expect(view).toEqual({ seedIds: [JONTY_ID], hiddenTypes: ['Meeting'], hiddenRelationTypes: [], asOf: null });
     expect([...result.current.state.hiddenRelationTypes]).toEqual([]);
 
     act(() => {
       view = result.current.undo();
     });
-    expect(view).toEqual({ seedIds: [JOE_ID], hiddenTypes: [], hiddenRelationTypes: [], asOf: null });
+    expect(view).toEqual({ seedIds: [JONTY_ID], hiddenTypes: [], hiddenRelationTypes: [], asOf: null });
   });
 
   it('setting the filters the explorer already has is not a step', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     act(() => result.current.setHiddenTypes([]));
     act(() => result.current.setHiddenRelationTypes([]));
     expect(result.current.undoDepth()).toBe(0);
@@ -227,7 +227,7 @@ describe('useGraphExplorer — undo and redo', () => {
 
   it('keeps at most 50 steps', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     for (let i = 0; i < HISTORY_LIMIT + 8; i += 1) {
       act(() => result.current.setHiddenRelationTypes(i % 2 === 0 ? ['ATTENDED'] : []));
     }
@@ -240,15 +240,15 @@ describe('useGraphExplorer — undo and redo', () => {
 
   it('a snapshot taken before a seed change is restored with the old seeds', async () => {
     const { result } = renderExplorer();
-    await act(() => result.current.load([JOE_ID]));
+    await act(() => result.current.load([JONTY_ID]));
     await act(() => result.current.load([KAPPA_ID]));
     expect(result.current.state.seedIds).toEqual([KAPPA_ID]);
     let view: ReturnType<typeof result.current.undo> = null;
     act(() => {
       view = result.current.undo();
     });
-    expect(view!.seedIds).toEqual([JOE_ID]);
-    expect(result.current.state.seedIds).toEqual([JOE_ID]);
-    expect(result.current.state.graph.hasNode(JOE_ID)).toBe(true);
+    expect(view!.seedIds).toEqual([JONTY_ID]);
+    expect(result.current.state.seedIds).toEqual([JONTY_ID]);
+    expect(result.current.state.graph.hasNode(JONTY_ID)).toBe(true);
   });
 });

@@ -27,11 +27,11 @@ describe('graph insights contract (GIC-16)', () => {
       openRisks: [],
     };
     expect(graphInsightsResponseSchema.parse(base)).toEqual(base);
-    const entity = { id: A, label: 'Joe', type: 'Person' };
+    const entity = { id: A, label: 'Jonty', type: 'Person' };
     const full = {
       ...base,
       themes: [{ clusterId: 0, label: 'Product X', labelEntityId: A, size: 9, typeCounts: { Person: 9 }, memberSample: [{ ...entity, degree: 3 }] }],
-      connectors: [{ entity, score: 0.4, clusters: [{ id: 0, label: 'Product X' }], reason: 'Joe connects the Product X group.' }],
+      connectors: [{ entity, score: 0.4, clusters: [{ id: 0, label: 'Product X' }], reason: 'Jonty connects the Product X group.' }],
       rising: [{ entity, count: 5, previous: 1, reason: 'x' }],
       fadingTies: [{ from: entity, to: entity, relationTypes: ['KNOWS'], lastEvidenceAt: '2026-01-01T00:00:00.000Z', evidenceBefore: 4, reason: 'x' }],
       openRisks: [{ id: A, title: null, statement: 's', severity: 'high', subject: entity, occurredAt: null }],

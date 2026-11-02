@@ -31,7 +31,7 @@ const share = (overrides: Record<string, unknown> = {}) => ({
   role: 'viewer',
   title: 'Board meeting',
   path: '/transcripts/t-1',
-  sharedBy: 'Ana Rivera',
+  sharedBy: 'Anders Sample',
   ...overrides,
 });
 

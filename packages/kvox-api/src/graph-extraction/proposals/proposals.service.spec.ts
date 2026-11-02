@@ -6,9 +6,9 @@ import { nextUserRef, ProposalsService } from './proposals.service.js';
 const schema = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
 const OWNER = '0a000000-0000-4000-8000-000000000001';
 const P = '0b000000-0000-4000-8000-000000000001';
-const SARAH = '0f000000-0000-4000-8000-000000000001';
+const SASHA = '0f000000-0000-4000-8000-000000000001';
 const KAPPA = '0f000000-0000-4000-8000-000000000002';
-const JOE = '0f000000-0000-4000-8000-000000000003';
+const JONTY = '0f000000-0000-4000-8000-000000000003';
 
 const user = { id: OWNER, email: 'o@example.test', roles: [], permissions: ['graph:read', 'graph:write'], isActive: true };
 
@@ -42,14 +42,14 @@ function baseItems(): Row[] {
   return [
     item(E1, {
       decision: 'accept',
-      payload: { ref: 'e1', type: 'Person', label: 'Sarah Chen', aliases: [], props: {}, occurredAt: null },
+      payload: { ref: 'e1', type: 'Person', label: 'Sasha Example', aliases: [], props: {}, occurredAt: null },
       resolution: {
-        ref: SARAH,
+        ref: SASHA,
         score: 0.9,
         source: 'alias',
         candidates: [
-          { entityId: SARAH, label: 'Sarah Chen', type: 'Person', score: 0.9, signals: [] },
-          { entityId: JOE, label: 'Sarah C', type: 'Person', score: 0.5, signals: [] },
+          { entityId: SASHA, label: 'Sasha Example', type: 'Person', score: 0.9, signals: [] },
+          { entityId: JONTY, label: 'Sasha C', type: 'Person', score: 0.5, signals: [] },
         ],
         adjudication: null,
       },
@@ -63,7 +63,7 @@ function baseItems(): Row[] {
     item(PF, {
       kind: 'item',
       payload: {
-        ref: 'k1', kind: 'person_fact', title: 'Health', statement: 'Sarah has a condition', subject: { ref: 'e1' }, owner: null,
+        ref: 'k1', kind: 'person_fact', title: 'Health', statement: 'Sasha has a condition', subject: { ref: 'e1' }, owner: null,
         counterparty: null, meeting: null, status: null, occurredAt: null, dueAt: null, sensitivity: 'sensitive', statementHash: 'h',
         props: {}, validFrom: null, validTo: null, precision: 'unknown',
       },
@@ -75,9 +75,9 @@ function baseItems(): Row[] {
 function setup(opts: { status?: string; items?: Row[]; evidence?: string[]; entities?: Row[] } = {}) {
   const items = opts.items ?? baseItems();
   const entities = opts.entities ?? [
-    { id: SARAH, type: 'Person', ownerId: OWNER },
+    { id: SASHA, type: 'Person', ownerId: OWNER },
     { id: KAPPA, type: 'Organization', ownerId: OWNER },
-    { id: JOE, type: 'Person', ownerId: OWNER },
+    { id: JONTY, type: 'Person', ownerId: OWNER },
   ];
   const tx: Row = {
     $queryRaw: jest.fn(async () => [{ status: opts.status ?? 'draft' }]),
@@ -127,7 +127,7 @@ describe('ProposalsService — decisions', () => {
     const { service, updateData } = setup();
     await service.decide(user, P, E1, {
       decision: 'edit',
-      editedPayload: { ref: 'ignored', type: 'Organization', label: 'Sarah Chen Ltd', aliases: [], props: {}, occurredAt: null },
+      editedPayload: { ref: 'ignored', type: 'Organization', label: 'Sasha Example Ltd', aliases: [], props: {}, occurredAt: null },
     });
     const data = updateData();
     expect(data.decision).toBe('edit');
@@ -140,7 +140,7 @@ describe('ProposalsService — decisions', () => {
   it('edit with an undeclared prop is 400 with issues (closed props)', async () => {
     const { service } = setup();
     const err = await service
-      .decide(user, P, E1, { decision: 'edit', editedPayload: { type: 'Person', label: 'Sarah', props: { shoeSize: 42 } } })
+      .decide(user, P, E1, { decision: 'edit', editedPayload: { type: 'Person', label: 'Sasha', props: { shoeSize: 42 } } })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(BadRequestException);
     expect(issues(err)[0].path).toMatch(/^props/);
@@ -183,20 +183,20 @@ describe('ProposalsService — decisions', () => {
     await expect(
       service.decide(user, P, E1, { decision: 'merge_into', mergeIntoId: 'e0000000-0000-4000-8000-000000000077' }),
     ).rejects.toBeInstanceOf(NotFoundException);
-    await service.decide(user, P, E1, { decision: 'merge_into', mergeIntoId: JOE });
-    expect(updateData()).toEqual(expect.objectContaining({ decision: 'merge_into', mergeIntoId: JOE }));
+    await service.decide(user, P, E1, { decision: 'merge_into', mergeIntoId: JONTY });
+    expect(updateData()).toEqual(expect.objectContaining({ decision: 'merge_into', mergeIntoId: JONTY }));
   });
 
   it('merge_into on a relation row is 400', async () => {
     const { service } = setup();
-    await expect(service.decide(user, P, R1, { decision: 'merge_into', mergeIntoId: JOE })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.decide(user, P, R1, { decision: 'merge_into', mergeIntoId: JONTY })).rejects.toBeInstanceOf(BadRequestException);
   });
 
   describe('relinkTo', () => {
     it('re-points an endpoint into editedPayload', async () => {
       const { service, updateData } = setup();
-      await service.decide(user, P, R1, { decision: 'accept', relinkTo: { field: 'from', target: { entityId: SARAH } } });
-      expect(updateData().editedPayload).toEqual(expect.objectContaining({ from: { entityId: SARAH }, to: { entityId: KAPPA } }));
+      await service.decide(user, P, R1, { decision: 'accept', relinkTo: { field: 'from', target: { entityId: SASHA } } });
+      expect(updateData().editedPayload).toEqual(expect.objectContaining({ from: { entityId: SASHA }, to: { entityId: KAPPA } }));
     });
 
     it('refuses a rejected proposal ref', async () => {
@@ -212,13 +212,13 @@ describe('ProposalsService — decisions', () => {
 
     it('refuses an endpoint of the wrong type', async () => {
       const { service } = setup();
-      const err = await service.decide(user, P, R1, { decision: 'accept', relinkTo: { field: 'to', target: { entityId: JOE } } }).catch((e: unknown) => e);
+      const err = await service.decide(user, P, R1, { decision: 'accept', relinkTo: { field: 'to', target: { entityId: JONTY } } }).catch((e: unknown) => e);
       expect(issues(err)).toEqual([expect.objectContaining({ path: 'to' })]);
     });
 
     it('refuses a field the row does not have, a null subject, and an entity that is not yours', async () => {
       const { service } = setup();
-      await expect(service.decide(user, P, R1, { decision: 'accept', relinkTo: { field: 'subject', target: { entityId: SARAH } } })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.decide(user, P, R1, { decision: 'accept', relinkTo: { field: 'subject', target: { entityId: SASHA } } })).rejects.toBeInstanceOf(BadRequestException);
       await expect(service.decide(user, P, R1, { decision: 'accept', relinkTo: { field: 'from', target: null } })).rejects.toBeInstanceOf(BadRequestException);
       await expect(
         service.decide(user, P, R1, { decision: 'accept', relinkTo: { field: 'from', target: { entityId: 'e0000000-0000-4000-8000-000000000066' } } }),
@@ -228,11 +228,11 @@ describe('ProposalsService — decisions', () => {
 
   it('distinctFrom removes the candidate and clears a ref pointing at it', async () => {
     const { service, updateData } = setup();
-    await service.decide(user, P, E1, { decision: 'accept', distinctFrom: [SARAH] });
+    await service.decide(user, P, E1, { decision: 'accept', distinctFrom: [SASHA] });
     const data = updateData();
-    expect(data.distinctFrom).toEqual([SARAH]);
+    expect(data.distinctFrom).toEqual([SASHA]);
     expect(data.resolution).toEqual(expect.objectContaining({ ref: null }));
-    expect(data.resolution.candidates.map((c: Row) => c.entityId)).toEqual([JOE]);
+    expect(data.resolution.candidates.map((c: Row) => c.entityId)).toEqual([JONTY]);
   });
 
   it('removing the last citation is 400 would_orphan', async () => {
@@ -308,11 +308,11 @@ describe('ProposalsService — add from span', () => {
     const { service, tx } = setup();
     await service.addItem(user, P, {
       kind: 'entity',
-      payload: { type: 'Person', label: 'S. Chen' },
-      existingEntityId: SARAH,
+      payload: { type: 'Person', label: 'S. Example' },
+      existingEntityId: SASHA,
       evidence: [{ source: 'note', noteVersion: 1, charStart: 0, charEnd: 2, quote: 'ab' }],
     });
-    expect(tx.kgProposalItem.create.mock.calls[0][0].data).toEqual(expect.objectContaining({ decision: 'merge_into', mergeIntoId: SARAH }));
+    expect(tx.kgProposalItem.create.mock.calls[0][0].data).toEqual(expect.objectContaining({ decision: 'merge_into', mergeIntoId: SASHA }));
     await expect(
       service.addItem(user, P, { kind: 'entity', payload: { type: 'Person', label: 'X' }, existingEntityId: KAPPA, evidence: [{ source: 'note', noteVersion: 1, charStart: 0, charEnd: 2, quote: 'ab' }] }),
     ).rejects.toBeInstanceOf(BadRequestException);

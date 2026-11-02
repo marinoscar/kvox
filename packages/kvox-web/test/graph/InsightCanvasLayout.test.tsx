@@ -18,7 +18,7 @@ import { mockTouchInput } from './shellMedia.js';
 /**
  * The Insight Canvas shell (GIC-08, #669): one tree, three window classes.
  * jsdom has no layout, so these tests pin STRUCTURE, ARIA, focus and
- * persistence; the geometry is the Playwright specs' (tests/visual).
+ * persistence.
  */
 
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };

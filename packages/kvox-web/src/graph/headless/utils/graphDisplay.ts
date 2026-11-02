@@ -125,7 +125,7 @@ export function entityTypeLabel(key: string, ontology: GraphOntology | null): st
 }
 
 /**
- * "Joe Rivera" → "JR"; one word → its first two letters.
+ * "Jonty Placeholder" → "JP"; one word → its first two letters.
  *
  * @stability experimental
  */

@@ -14,7 +14,7 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Northlake data platform steering\n\n**Date:** September 8\n**Attendees:** Ingrid Vasquez, Bartholomew Nkemelu, Saoirse Delacroix\n\n## Summary\n\nThe steering group reviewed the Northlake data platform project, which consolidates reporting data from five source systems into one store. The review also touched on a wider worry about vendor lock-in, because the platform vendor stores data in its own format.\n\n## Delivery status\n\nThe ingestion layer for three of the five source systems is working in the test environment. The remaining two sources are the finance system and the order system. Ingrid described the design as sound and said the team has enough people for the current phase.\n\n## Concerns raised\n\n- Vendor lock-in is a worry because the export format is proprietary, and moving to another platform later would mean rebuilding every pipeline.\n- The Northlake data platform is three weeks behind plan because the source system owner is unresponsive, and the order system cannot be connected without that person's approval.\n- Cost overrun is likely if the data volume doubles, as the storage tier is billed per terabyte. Moving cold data to archive storage would cut the bill.\n\n## Background\n\nThe Northlake data platform replaces a set of nightly exports that the analysts maintain by hand. Bartholomew noted that the analysts are looking forward to the change, and Saoirse reminded the group that a data catalogue will be needed once the platform is live.\n\n## Next steps\n\nThe group will review progress again in two weeks. The summary goes to the data governance board.\n"
+    "body": "# Northlake data platform steering\n\n**Date:** September 8\n**Attendees:** Ines Testcase, Barnaby Dummyson, Sanne Sample\n\n## Summary\n\nThe steering group reviewed the Northlake data platform project, which consolidates reporting data from five source systems into one store. The review also touched on a wider worry about vendor lock-in, because the platform vendor stores data in its own format.\n\n## Delivery status\n\nThe ingestion layer for three of the five source systems is working in the test environment. The remaining two sources are the finance system and the order system. Ines described the design as sound and said the team has enough people for the current phase.\n\n## Concerns raised\n\n- Vendor lock-in is a worry because the export format is proprietary, and moving to another platform later would mean rebuilding every pipeline.\n- The Northlake data platform is three weeks behind plan because the source system owner is unresponsive, and the order system cannot be connected without that person's approval.\n- Cost overrun is likely if the data volume doubles, as the storage tier is billed per terabyte. Moving cold data to archive storage would cut the bill.\n\n## Background\n\nThe Northlake data platform replaces a set of nightly exports that the analysts maintain by hand. Barnaby noted that the analysts are looking forward to the change, and Sanne reminded the group that a data catalogue will be needed once the platform is live.\n\n## Next steps\n\nThe group will review progress again in two weeks. The summary goes to the data governance board.\n"
   },
   "knownEntities": [],
   "knownRelations": [],
@@ -35,44 +35,44 @@
         ]
       },
       {
-        "key": "ingrid",
+        "key": "ines",
         "type": "Person",
-        "label": "Ingrid Vasquez",
+        "label": "Ines Testcase",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Ingrid Vasquez, Bartholomew Nkemelu, Saoirse Delacroix"
+            "quote": "Ines Testcase, Barnaby Dummyson, Sanne Sample"
           }
         ]
       },
       {
-        "key": "bartholomew",
+        "key": "barnaby",
         "type": "Person",
-        "label": "Bartholomew Nkemelu",
+        "label": "Barnaby Dummyson",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Ingrid Vasquez, Bartholomew Nkemelu, Saoirse Delacroix"
+            "quote": "Ines Testcase, Barnaby Dummyson, Sanne Sample"
           }
         ]
       },
       {
-        "key": "saoirse",
+        "key": "sanne",
         "type": "Person",
-        "label": "Saoirse Delacroix",
+        "label": "Sanne Sample",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Ingrid Vasquez, Bartholomew Nkemelu, Saoirse Delacroix"
+            "quote": "Ines Testcase, Barnaby Dummyson, Sanne Sample"
           }
         ]
       },

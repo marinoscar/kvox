@@ -118,7 +118,7 @@ export const Milestone = defineEntityType({
     'A dated life event of one person — a birthday, an anniversary, a wedding, a birth, a graduation, a move or a retirement.',
   disambiguation: [
     'A dated life event of one person; never a project milestone (that is a Project/Decision).',
-    'Label it by person and event ("Priya\'s 40th birthday"), so two people\'s birthdays never collapse into one row.',
+    'Label it by person and event ("Pia\'s 40th birthday"), so two people\'s birthdays never collapse into one row.',
   ],
   attributes: {
     date: {

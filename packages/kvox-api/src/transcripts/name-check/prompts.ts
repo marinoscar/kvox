@@ -9,7 +9,7 @@
 //   • DISCOVERY (thorough mode only, #330) — the transcript is packed into
 //     chunks of roughly {@link DISCOVERY_CHUNK_TOKENS} and the model is asked
 //     for spans that are probably mis-hearings of the listed names. It finds
-//     what a phonetic key cannot ("Oscar" heard as "the scar"), at the price of
+//     what a phonetic key cannot ("Orlo" heard as "the low"), at the price of
 //     reading the whole transcript.
 //   • ADJUDICATION (both modes) — every candidate, from either source, is shown
 //     to the model with its neighbouring lines and the span marked, and the
@@ -136,12 +136,12 @@ export const DISCOVERY_SYSTEM_PROMPT = [
   '',
   'You are given part of a transcript, one segment per line as "[<n>] <Speaker>: <text>", and a list of',
   'names and terms that occur in this conversation. Find spans of text that are probably',
-  'mis-transcriptions of one of the listed names or terms — for example "Skar" or "Oh scar" for "Oscar".',
+  'mis-transcriptions of one of the listed names or terms — for example "Rolo" or "Or low" for "Orlo".',
   '',
   'Rules:',
   '- Report a span only when it is very likely a mis-hearing of a listed name or term in its context.',
   '- Never report text that already spells the name or term correctly.',
-  '- Never report ordinary words used in their normal meaning (for example "scar tissue").',
+  '- Never report ordinary words used in their normal meaning (for example "low tide").',
   '- "seg" is the number in square brackets at the start of the line the span is on.',
   '- "text" must be copied exactly as it appears in that line, character for character, and be as short',
   '  as possible: only the mis-heard words.',
@@ -172,7 +172,7 @@ export interface DiscoveryChunk {
  *
  * Greedy, in reading order, with ONE SEGMENT OF OVERLAP: each chunk after the
  * first starts with the previous chunk's last segment, so a mis-hearing whose
- * context straddles the seam ("…said Oh" / "scar was right…") is seen whole at
+ * context straddles the seam ("…said Oh" / "low was right…") is seen whole at
  * least once. A finding reported twice for the overlapping segment is
  * de-duplicated by span when the findings are located.
  *
@@ -322,8 +322,8 @@ export function locateDiscoveryFindings(
     if (!needle) continue;
 
     const covered = bySegment.get(segment.id) ?? [];
-    // Occurrences that are already whole words first ("scar" the word before
-    // the "scar" inside "Oscars"), then reading order.
+    // Occurrences that are already whole words first ("low" the word before
+    // the "low" inside "Orlos"), then reading order.
     const spans = occurrences(segment.text, needle)
       .map((at) => {
         const [start, end] = widenToWords(segment.text, at, at + needle.length);
@@ -427,10 +427,10 @@ export const ADJUDICATION_SYSTEM_PROMPT = [
   '',
   'Rules:',
   '- Answer "replace" only when the marked span is very likely a mis-hearing of the target in this context.',
-  '- Otherwise answer "keep". Common words used in their normal meaning (for example "scar tissue") are "keep".',
+  '- Otherwise answer "keep". Common words used in their normal meaning (for example "low tide") are "keep".',
   '- Never change anything other than the marked span.',
   '- "replacement" must be the target itself, or its possessive, plural or inflected form when the grammar',
-  '  of the sentence needs it (for example "Oscar\'s"). Nothing else.',
+  '  of the sentence needs it (for example "Orlo\'s"). Nothing else.',
   '- Keep the language of the transcript.',
   '- "confidence" is your probability, from 0 to 1, that "replace" is correct.',
   '- "reason" is a few words.',

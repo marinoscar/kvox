@@ -32,7 +32,7 @@ import type { GraphPathsFailure } from './useGraphPaths.js';
  * @stability experimental
  */
 export interface PathPanelProps {
-  /** The two ends, e.g. "Joe Rivera and Product X rollout". */
+  /** The two ends, e.g. "Jonty Placeholder and Product X rollout". */
   title: string;
   /** The state of the search. */
   status: 'idle' | 'loading' | 'ready' | 'error';

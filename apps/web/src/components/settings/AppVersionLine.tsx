@@ -17,7 +17,7 @@
  * (or the line moves into the About card for everyone).
  *
  * `__APP_VERSION__` is a build-time `define` (`vite.config.ts`,
- * `vitest.config.ts`, `visual/vite.config.ts`).
+ * `vitest.config.ts`).
  */
 
 import { Box, Divider, Typography } from '@mui/material';

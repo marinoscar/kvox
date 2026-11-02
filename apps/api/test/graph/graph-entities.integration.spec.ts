@@ -79,7 +79,7 @@ describe('PATCH /api/graph/entities/:id (integration)', () => {
         id: ENTITY_ID,
         ownerId,
         type: 'Person',
-        label: 'Sarah Chen',
+        label: 'Sasha Example',
         props: { title: 'CTO' },
         reviewStatus: 'accepted',
         mergedIntoId: null,
@@ -92,7 +92,7 @@ describe('PATCH /api/graph/entities/:id (integration)', () => {
         id: MERGED_ID,
         ownerId,
         type: 'Person',
-        label: 'S. Chen',
+        label: 'S. Example',
         props: {},
         reviewStatus: 'merged',
         mergedIntoId: ENTITY_ID,
@@ -103,7 +103,7 @@ describe('PATCH /api/graph/entities/:id (integration)', () => {
       },
     ];
     aliases = [
-      { id: 'c0c0c0c0-c0c0-4c0c-8c0c-c0c0c0c0c0c0', entityId: ENTITY_ID, ownerId, alias: 'Sarah Chen', normalized: 'sarah chen', source: 'extraction', createdAt: now },
+      { id: 'c0c0c0c0-c0c0-4c0c-8c0c-c0c0c0c0c0c0', entityId: ENTITY_ID, ownerId, alias: 'Sasha Example', normalized: 'sasha example', source: 'extraction', createdAt: now },
     ];
   }
 
@@ -148,16 +148,16 @@ describe('PATCH /api/graph/entities/:id (integration)', () => {
     const res = await request(context.app.getHttpServer())
       .patch(url())
       .set(authHeader(owner.accessToken))
-      .send({ label: 'Sarah Chen-Li', props: { title: null }, addAliases: ['Sally', 'SALLY!'] })
+      .send({ label: 'Sasha Example-Li', props: { title: null }, addAliases: ['Sabby', 'SABBY!'] })
       .expect(200);
 
     const body = res.body.data;
     expect(graphEntitySchema.safeParse(body).success).toBe(true);
-    expect(body).toMatchObject({ id: ENTITY_ID, label: 'Sarah Chen-Li', props: {}, reviewStatus: 'edited' });
+    expect(body).toMatchObject({ id: ENTITY_ID, label: 'Sasha Example-Li', props: {}, reviewStatus: 'edited' });
     expect(body.aliases.map((a: Row) => [a.alias, a.source])).toEqual([
-      ['Sarah Chen', 'extraction'],
-      ['Sarah Chen-Li', 'user'],
-      ['Sally', 'user'],
+      ['Sasha Example', 'extraction'],
+      ['Sasha Example-Li', 'user'],
+      ['Sabby', 'user'],
     ]);
 
     const audit = prismaMock.auditEvent.create.mock.calls
@@ -172,7 +172,7 @@ describe('PATCH /api/graph/entities/:id (integration)', () => {
       meta: { changedKeys: '["title"]', labelChanged: true, aliasesAdded: 2, aliasesRemoved: 0 },
     });
     // No values anywhere in the audit row.
-    expect(JSON.stringify(audit)).not.toMatch(/Sarah|Sally|CTO/);
+    expect(JSON.stringify(audit)).not.toMatch(/Sasha|Sabby|CTO/);
   });
 
   it("answers another user's entity with the same 404 a missing one gets", async () => {

@@ -38,7 +38,7 @@ describe('graphDisplay', () => {
   });
 
   it('derives initials', () => {
-    expect(initials('Joe Rivera')).toBe('JR');
+    expect(initials('Jonty Placeholder')).toBe('JP');
     expect(initials('Kappa')).toBe('KA');
     expect(initials('  ')).toBe('?');
   });

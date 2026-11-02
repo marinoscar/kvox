@@ -1166,7 +1166,7 @@ the transcript exists, full stop, deleted only when the whole transcript is
 
 ### 4.6 Naming a speaker is an overlay, not a version (issue #323)
 
-Turning "Speaker A" into "Oscar" is an *identification*: metadata about the
+Turning "Speaker A" into "Orlo" is an *identification*: metadata about the
 recording, the same category as its title, not a correction of what was
 said. A batch made only of `speaker.rename` ops that each either replace a
 speaker still on its ingest placeholder (`defaultSpeakerName`, "Speaker
@@ -1175,8 +1175,8 @@ path (`TranscriptEditingService.identify`/`saveIdentifications`): the name is
 written straight to the live speaker row and to
 `transcripts.speaker_identities` (id → name), and nothing else —
 `current_version` does not move, no `transcript_versions` row is appended, no
-snapshot is queued. Renaming an already-identified speaker ("Oscar" →
-"Joe") is a correction and stays on the ordinary versioned path; a batch
+snapshot is queued. Renaming an already-identified speaker ("Orlo" →
+"Jonty") is a correction and stays on the ordinary versioned path; a batch
 mixing an identification with any other op — including a text edit — is one
 version as before, exactly like every other mixed batch. `rev` is never
 bumped by an identification: the version log has no record of it, so a `rev`
@@ -1189,8 +1189,8 @@ note sources — is overlaid with the current `speaker_identities` map exactly
 once, at `TranscriptMaterializeService.materialize`'s outermost return: any
 speaker still carrying its ingest placeholder at the requested version takes
 its identified name. This is deliberate on three counts: it is
-**retroactive** (Oscar was Oscar in the recording, so v1 viewed today says
-"Oscar" too); it is **rev-neutral** (the overlay does not touch `rev`
+**retroactive** (Orlo was Orlo in the recording, so v1 viewed today says
+"Orlo" too); it is **rev-neutral** (the overlay does not touch `rev`
 either, so the log stays replayable); and it is **idempotent** (a state that
 already carries the name — a snapshot taken from live tables after the
 naming, or a restored state re-overlaid under the transcript row's lock —
@@ -1198,25 +1198,25 @@ passes through unchanged). `loadLiveState` itself is never overlaid: the
 live row already carries the name, and the write paths diff against exactly
 what is in the table.
 
-A *versioned* rename that puts a speaker back on its placeholder ("Oscar" →
+A *versioned* rename that puts a speaker back on its placeholder ("Orlo" →
 "Speaker A") retires that speaker's `speaker_identities` entry in the same
 transaction. Without this the overlay would turn the live placeholder back
-into "Oscar" on every subsequent read, breaking `materialize(currentVersion)
+into "Orlo" on every subsequent read, breaking `materialize(currentVersion)
 == DB state` (§4.4). The honest edge case: retiring the entry is a
 whole-history choice, not a per-version one — every *older* version that
 replays to the placeholder for that speaker now shows "Speaker A" too, where
-it showed "Oscar" a moment before, because the overlay can only say
+it showed "Orlo" a moment before, because the overlay can only say
 "identified" or "not" for the whole transcript, never "identified as of
 version N." A version whose *snapshot* was taken from live tables while the
-name was still set keeps "Oscar" baked into its snapshot regardless — that is
+name was still set keeps "Orlo" baked into its snapshot regardless — that is
 the one place the retired name survives.
 
 An identification-only batch returns the current version unchanged, with a
-summary of `"Named Speaker A as Oscar"` (joined with `; ` for more than one)
+summary of `"Named Speaker A as Orlo"` (joined with `; ` for more than one)
 or `"No changes"`, and is recorded to the audit log as
 `transcript.speaker_identified` — the one change to what a transcript says
 that leaves no `transcript_versions` row, so the audit entry is the only
-place "who decided that voice was Oscar" is answered at all.
+place "who decided that voice was Orlo" is answered at all.
 
 ## 5. Concurrency
 

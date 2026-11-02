@@ -68,7 +68,7 @@ const mockApply = vi.mocked(applyOperations);
 
 const SPEAKERS: TranscriptSpeaker[] = [
   { id: 'sp1', label: 'A', displayName: 'Speaker A', colorIndex: 0, rev: 1 },
-  { id: 'sp2', label: 'B', displayName: 'Ana', colorIndex: 1, rev: 1 },
+  { id: 'sp2', label: 'B', displayName: 'Anders', colorIndex: 1, rev: 1 },
 ];
 
 const SEGMENTS: TranscriptSegment[] = Array.from({ length: 4 }, (_, index) => ({
@@ -77,7 +77,7 @@ const SEGMENTS: TranscriptSegment[] = Array.from({ length: 4 }, (_, index) => ({
   startMs: index * 5000,
   endMs: index * 5000 + 4000,
   ordinal: (index + 1) * 1000,
-  text: `Hi Skar number ${index}`,
+  text: `Hi Rolo number ${index}`,
   wordsAlignment: 'exact' as const,
   confidence: 0.9,
   origin: 'ai' as const,
@@ -123,12 +123,12 @@ function suggestion(index: number, overrides: Partial<NameSuggestion> = {}): Nam
     startMs: index * 5000,
     start: 3,
     end: 7,
-    original: 'Skar',
-    replacement: 'Oscar',
+    original: 'Rolo',
+    replacement: 'Orlo',
     confidence: 0.9,
     reason: null,
     source: 'phonetic',
-    preview: `Hi Skar number ${index}`,
+    preview: `Hi Rolo number ${index}`,
     stale: false,
     ...overrides,
   };
@@ -142,7 +142,7 @@ function latestReady(suggestions: NameSuggestion[]): LatestNameCheck {
       mode: 'standard',
       status: 'ready',
       basedOnVersion: 4,
-      terms: ['Oscar'],
+      terms: ['Orlo'],
       providerId: 'openai',
       model: 'gpt-test',
       candidateCount: suggestions.length,
@@ -234,7 +234,7 @@ describe('TranscriptPage — the post-rename name-check nudge', () => {
       version: 5,
       summary: 'Renamed a speaker',
       idempotentReplay: false,
-      speakers: [{ ...SPEAKERS[0], displayName: 'Oscar', rev: 2 }, SPEAKERS[1]],
+      speakers: [{ ...SPEAKERS[0], displayName: 'Orlo', rev: 2 }, SPEAKERS[1]],
       segments: SEGMENTS,
       merges: [],
     } satisfies OperationsResult);
@@ -242,10 +242,10 @@ describe('TranscriptPage — the post-rename name-check nudge', () => {
     renderPage();
     await screen.findByRole('region', { name: 'Transcript' });
 
-    await renameSpeakerTo(user, 'Speaker A', 'Oscar');
+    await renameSpeakerTo(user, 'Speaker A', 'Orlo');
 
     expect(
-      await screen.findByText('Check the transcript for misheard "Oscar"?'),
+      await screen.findByText('Check the transcript for misheard "Orlo"?'),
     ).toBeInTheDocument();
 
     // "Check" opens the start dialog pre-selected to that speaker only.
@@ -256,8 +256,8 @@ describe('TranscriptPage — the post-rename name-check nudge', () => {
     });
     await user.click(screen.getByRole('button', { name: 'Check' }));
     const dialog = await screen.findByRole('dialog', { name: 'Fix names with AI' });
-    expect(await within(dialog).findByRole('checkbox', { name: 'Oscar' })).toBeChecked();
-    expect(within(dialog).getByRole('checkbox', { name: 'Ana' })).not.toBeChecked();
+    expect(await within(dialog).findByRole('checkbox', { name: 'Orlo' })).toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: 'Anders' })).not.toBeChecked();
   });
 
   it('does not offer it for a generic label like "Speaker B"', async () => {
@@ -273,7 +273,7 @@ describe('TranscriptPage — the post-rename name-check nudge', () => {
     renderPage();
     await screen.findByRole('region', { name: 'Transcript' });
 
-    await renameSpeakerTo(user, 'Ana', 'Speaker B');
+    await renameSpeakerTo(user, 'Anders', 'Speaker B');
 
     await waitFor(() => expect(mockApply).toHaveBeenCalled());
     // Give a (wrongly) mounted prompt the chance to read the AI config.
@@ -290,7 +290,7 @@ describe('TranscriptPage — the post-rename name-check nudge', () => {
       version: 5,
       summary: 'Renamed a speaker',
       idempotentReplay: false,
-      speakers: [{ ...SPEAKERS[0], displayName: 'Oscar', rev: 2 }, SPEAKERS[1]],
+      speakers: [{ ...SPEAKERS[0], displayName: 'Orlo', rev: 2 }, SPEAKERS[1]],
       segments: SEGMENTS,
       merges: [],
     } satisfies OperationsResult);
@@ -298,7 +298,7 @@ describe('TranscriptPage — the post-rename name-check nudge', () => {
     renderPage(noKey);
     await screen.findByRole('region', { name: 'Transcript' });
 
-    await renameSpeakerTo(user, 'Speaker A', 'Oscar');
+    await renameSpeakerTo(user, 'Speaker A', 'Orlo');
 
     await waitFor(() => expect(mockApply).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -322,7 +322,7 @@ describe('TranscriptPage — reviewing name suggestions', () => {
         version: 5,
         segments: SEGMENTS.map((segment) =>
           segment.id === 's0' || segment.id === 's2'
-            ? { ...segment, text: segment.text.replace('Skar', 'Oscar'), rev: 2 }
+            ? { ...segment, text: segment.text.replace('Rolo', 'Orlo'), rev: 2 }
             : segment,
         ),
         speakers: SPEAKERS,
@@ -337,15 +337,15 @@ describe('TranscriptPage — reviewing name suggestions', () => {
 
     await user.click(screen.getByRole('button', { name: 'Fix names with AI' }));
     const panel = await screen.findByRole('region', { name: 'Name suggestions' });
-    expect(within(panel).getByRole('heading', { name: /Skar → Oscar ×3/ })).toBeInTheDocument();
+    expect(within(panel).getByRole('heading', { name: /Rolo → Orlo ×3/ })).toBeInTheDocument();
 
-    await user.click(within(panel).getByRole('button', { name: 'Accept all "Skar" → "Oscar"' }));
+    await user.click(within(panel).getByRole('button', { name: 'Accept all "Rolo" → "Orlo"' }));
 
     expect(
       await screen.findByText('Applied 2 corrections — 1 skipped because the text changed'),
     ).toBeInTheDocument();
     expect(applyBodies).toEqual([{ suggestionIds: [suggestions[0].id, suggestions[1].id] }]);
-    expect(await screen.findByText('Hi Oscar number 0')).toBeInTheDocument();
+    expect(await screen.findByText('Hi Orlo number 0')).toBeInTheDocument();
   });
 
   it('closes find & replace when the name panel opens', async () => {

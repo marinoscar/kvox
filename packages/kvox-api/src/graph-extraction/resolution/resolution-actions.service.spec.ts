@@ -16,8 +16,8 @@ function harness(survivor: Record<string, unknown> = { id: S, ownerId: OWNER, re
     kgMerge: { findMany: jest.fn().mockResolvedValue(merges) },
     kgEntity: {
       findMany: jest.fn().mockResolvedValue([
-        { id: 'e1', label: 'Sara', type: 'Person' },
-        { id: 'e2', label: 'S. Chen', type: 'Person' },
+        { id: 'e1', label: 'Sasa', type: 'Person' },
+        { id: 'e2', label: 'S. Example', type: 'Person' },
       ]),
     },
   };
@@ -35,8 +35,8 @@ describe('ResolutionActionsService.listMerges', () => {
       expect.objectContaining({ where: { ownerId: OWNER, survivorId: S }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
     );
     expect(out.merges).toEqual([
-      { mergeId: 'm2', mergedEntity: { id: 'e2', label: 'S. Chen', type: 'Person' }, createdAt: '2026-02-01T00:00:00.000Z', reversedAt: null, reversible: true },
-      { mergeId: 'm1', mergedEntity: { id: 'e1', label: 'Sara', type: 'Person' }, createdAt: '2026-01-01T00:00:00.000Z', reversedAt: '2026-01-02T00:00:00.000Z', reversible: false },
+      { mergeId: 'm2', mergedEntity: { id: 'e2', label: 'S. Example', type: 'Person' }, createdAt: '2026-02-01T00:00:00.000Z', reversedAt: null, reversible: true },
+      { mergeId: 'm1', mergedEntity: { id: 'e1', label: 'Sasa', type: 'Person' }, createdAt: '2026-01-01T00:00:00.000Z', reversedAt: '2026-01-02T00:00:00.000Z', reversible: false },
     ]);
   });
 

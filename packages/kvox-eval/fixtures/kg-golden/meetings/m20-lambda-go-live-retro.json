@@ -12,27 +12,27 @@
     {
       "id": "m20-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m20-spk-b",
       "label": "B",
-      "displayName": "Sarah Chen"
+      "displayName": "Sasha Example"
     },
     {
       "id": "m20-spk-c",
       "label": "C",
-      "displayName": "Tomás Aguilar"
+      "displayName": "Tobín Dummyson"
     },
     {
       "id": "m20-spk-d",
       "label": "D",
-      "displayName": "Owen Barker"
+      "displayName": "Otis Dummyson"
     },
     {
       "id": "m20-spk-e",
       "label": "E",
-      "displayName": "Chloé Dubois"
+      "displayName": "Cléo Sample"
     }
   ],
   "segments": [
@@ -42,7 +42,7 @@
       "startMs": 0,
       "endMs": 4400,
       "rev": 1,
-      "text": "Two weeks since go-live, so let's look back. Sarah, headline?"
+      "text": "Two weeks since go-live, so let's look back. Sasha, headline?"
     },
     {
       "id": "m20-s002",
@@ -66,7 +66,7 @@
       "startMs": 19650,
       "endMs": 29370,
       "rev": 1,
-      "text": "I'm Chloé Dubois, floor supervisor in Building 3. The pickers like it, mostly. The zone layout took a few days to get used to."
+      "text": "I'm Cléo Sample, floor supervisor in Building 3. The pickers like it, mostly. The zone layout took a few days to get used to."
     },
     {
       "id": "m20-s005",
@@ -146,7 +146,7 @@
       "startMs": 68810,
       "endMs": 70550,
       "rev": 1,
-      "text": "Thank you, Chloé."
+      "text": "Thank you, Cléo."
     },
     {
       "id": "m20-s015",
@@ -154,7 +154,7 @@
       "startMs": 70800,
       "endMs": 74820,
       "rev": 1,
-      "text": "Owen, I'll need a budget number for Building 5."
+      "text": "Otis, I'll need a budget number for Building 5."
     },
     {
       "id": "m20-s016",
@@ -170,7 +170,7 @@
       "startMs": 80480,
       "endMs": 84500,
       "rev": 1,
-      "text": "Chloé, how do the pickers prefer to get information?"
+      "text": "Cléo, how do the pickers prefer to get information?"
     },
     {
       "id": "m20-s018",
@@ -194,7 +194,7 @@
       "startMs": 96710,
       "endMs": 99970,
       "rev": 1,
-      "text": "Tomás, are you comfortable with the timeline?"
+      "text": "Tobín, are you comfortable with the timeline?"
     },
     {
       "id": "m20-s021",
@@ -215,7 +215,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Lambda pilot go-live retrospective\n\n**Date:** May 21\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)\n\n## Summary\n\nRetrospective two weeks after the pick-path pilot went live in Building 3 at Org Lambda Robotics.\n\n## Results\n\n- Pick rates in Building 3 are up 12 percent in the first two weeks, above what was promised to the board.\n- Walking distance per order is down about a fifth.\n- Chloé Dubois, floor supervisor in Building 3, reports that pickers mostly like it; the zone layout took a few days to get used to.\n\n## What didn't go well\n\n- On the first night a service restarted and nobody noticed for forty minutes because the on-call alert was missed. Alert routing has since been fixed.\n\n## Decisions\n\n- **Extend the pilot to Building 5 in Q3**, using the same approach.\n- Translate the quick guide into French for the floor team.\n\n## Action items\n\n- **Chloé Dubois** — collect a picker feedback survey by June 5.\n- **Owen Barker** — put together the budget request for Building 5 by June 12.\n\n## Notes\n\n- French-language documents work much better for the floor team; most of the night shift, and Chloé herself, are French speakers.\n"
+    "body": "# Lambda pilot go-live retrospective\n\n**Date:** May 21\n**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics), Cléo Sample (Org Lambda Robotics)\n\n## Summary\n\nRetrospective two weeks after the pick-path pilot went live in Building 3 at Org Lambda Robotics.\n\n## Results\n\n- Pick rates in Building 3 are up 12 percent in the first two weeks, above what was promised to the board.\n- Walking distance per order is down about a fifth.\n- Cléo Sample, floor supervisor in Building 3, reports that pickers mostly like it; the zone layout took a few days to get used to.\n\n## What didn't go well\n\n- On the first night a service restarted and nobody noticed for forty minutes because the on-call alert was missed. Alert routing has since been fixed.\n\n## Decisions\n\n- **Extend the pilot to Building 5 in Q3**, using the same approach.\n- Translate the quick guide into French for the floor team.\n\n## Action items\n\n- **Cléo Sample** — collect a picker feedback survey by June 5.\n- **Otis Dummyson** — put together the budget request for Building 5 by June 12.\n\n## Notes\n\n- French-language documents work much better for the floor team; most of the night shift, and Cléo herself, are French speakers.\n"
   },
   "knownEntities": [
     {
@@ -230,11 +230,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -261,11 +261,11 @@
       ]
     },
     {
-      "id": "g-person-owen-barker",
+      "id": "g-person-otis-dummyson",
       "type": "Person",
-      "label": "Owen Barker",
+      "label": "Otis Dummyson",
       "aliases": [
-        "Owen"
+        "Otis"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -274,11 +274,11 @@
       ]
     },
     {
-      "id": "g-person-sarah-chen",
+      "id": "g-person-sasha-example",
       "type": "Person",
-      "label": "Sarah Chen",
+      "label": "Sasha Example",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -289,12 +289,12 @@
       ]
     },
     {
-      "id": "g-person-tomas-aguilar",
+      "id": "g-person-tobin-dummyson",
       "type": "Person",
-      "label": "Tomás Aguilar",
+      "label": "Tobín Dummyson",
       "aliases": [
-        "Tomas Aguilar",
-        "Tomás"
+        "Tobin Dummyson",
+        "Tobín"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -332,65 +332,65 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "sarah",
+        "key": "sasha",
         "type": "Person",
-        "label": "Sarah Chen",
+        "label": "Sasha Example",
         "aliases": [],
-        "existingId": "g-person-sarah-chen",
+        "existingId": "g-person-sasha-example",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Sarah Chen (Org Lambda Robotics)"
+            "quote": "Sasha Example (Org Lambda Robotics)"
           }
         ]
       },
       {
-        "key": "tomas",
+        "key": "tobin",
         "type": "Person",
-        "label": "Tomás Aguilar",
+        "label": "Tobín Dummyson",
         "aliases": [],
-        "existingId": "g-person-tomas-aguilar",
+        "existingId": "g-person-tobin-dummyson",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
-        "key": "owen",
+        "key": "otis",
         "type": "Person",
-        "label": "Owen Barker",
+        "label": "Otis Dummyson",
         "aliases": [],
-        "existingId": "g-person-owen-barker",
+        "existingId": "g-person-otis-dummyson",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Owen Barker (Org Lambda Robotics)"
+            "quote": "Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
-        "key": "chloe",
+        "key": "cleo",
         "type": "Person",
-        "label": "Chloé Dubois",
+        "label": "Cléo Sample",
         "aliases": [],
         "existingId": null,
         "props": {},
@@ -398,7 +398,7 @@
           {
             "source": "segment",
             "segmentId": "m20-s004",
-            "quote": "I'm Chloé Dubois, floor supervisor in Building 3."
+            "quote": "I'm Cléo Sample, floor supervisor in Building 3."
           }
         ]
       },
@@ -434,7 +434,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -443,13 +443,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics), Cléo Sample (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sarah",
+        "from": "sasha",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -458,13 +458,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics), Cléo Sample (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "tomas",
+        "from": "tobin",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -473,13 +473,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics), Cléo Sample (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "owen",
+        "from": "otis",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -488,13 +488,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics), Cléo Sample (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "chloe",
+        "from": "cleo",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -503,13 +503,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics), Chloé Dubois (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics), Cléo Sample (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "chloe",
+        "from": "cleo",
         "to": "nwr",
         "validFrom": null,
         "validTo": null,
@@ -518,13 +518,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Chloé Dubois (Org Lambda Robotics)"
+            "quote": "Cléo Sample (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "chloe",
+        "from": "cleo",
         "to": "nwr",
         "validFrom": null,
         "validTo": null,
@@ -536,7 +536,7 @@
           {
             "source": "segment",
             "segmentId": "m20-s004",
-            "quote": "I'm Chloé Dubois, floor supervisor in Building 3."
+            "quote": "I'm Cléo Sample, floor supervisor in Building 3."
           }
         ]
       },
@@ -600,10 +600,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "chloe",
+        "owner": "cleo",
         "counterparty": null,
         "title": "Collect picker feedback survey",
-        "statement": "Chloé will collect a picker feedback survey by June 5.",
+        "statement": "Cléo will collect a picker feedback survey by June 5.",
         "status": "open",
         "occurredAt": "2026-05-21",
         "dueAt": "2026-06-05",
@@ -620,10 +620,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "owen",
-        "counterparty": "sarah",
+        "owner": "otis",
+        "counterparty": "sasha",
         "title": "Budget request for Building 5",
-        "statement": "Owen will put together the budget request for Building 5 by June 12.",
+        "statement": "Otis will put together the budget request for Building 5 by June 12.",
         "status": "open",
         "occurredAt": "2026-05-21",
         "dueAt": "2026-06-12",
@@ -639,11 +639,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "chloe",
+        "subject": "cleo",
         "owner": null,
         "counterparty": null,
         "title": "French speaker",
-        "statement": "Chloé is a French speaker and French-language documents work better for her floor team.",
+        "statement": "Cléo is a French speaker and French-language documents work better for her floor team.",
         "status": null,
         "occurredAt": "2026-05-21",
         "dueAt": null,

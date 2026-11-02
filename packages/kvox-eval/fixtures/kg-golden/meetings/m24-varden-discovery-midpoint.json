@@ -7,28 +7,28 @@
     "relative-date"
   ],
   "recordedAt": "2026-06-11T13:00:00Z",
-  "contextText": "Midpoint of the six-week Varden discovery. Rosa is out, Ben covering.",
+  "contextText": "Midpoint of the six-week Varden discovery. Rhea is out, Bram covering.",
   "hasTranscript": true,
   "speakers": [
     {
       "id": "m24-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m24-spk-b",
       "label": "B",
-      "displayName": "Ben Adeyemi"
+      "displayName": "Bram Dummyson"
     },
     {
       "id": "m24-spk-c",
       "label": "C",
-      "displayName": "Mateo Rossi"
+      "displayName": "Maxim Mockwell"
     },
     {
       "id": "m24-spk-d",
       "label": "D",
-      "displayName": "Rosa Delgado"
+      "displayName": "Rhea Sample"
     }
   ],
   "segments": [
@@ -38,7 +38,7 @@
       "startMs": 0,
       "endMs": 5540,
       "rev": 1,
-      "text": "Thanks for joining. Rosa, good of you to dial in before your leave."
+      "text": "Thanks for joining. Rhea, good of you to dial in before your leave."
     },
     {
       "id": "m24-s002",
@@ -46,7 +46,7 @@
       "startMs": 5790,
       "endMs": 10570,
       "rev": 1,
-      "text": "Just for the first part. Ben will take it from there."
+      "text": "Just for the first part. Bram will take it from there."
     },
     {
       "id": "m24-s003",
@@ -54,7 +54,7 @@
       "startMs": 10820,
       "endMs": 17880,
       "rev": 1,
-      "text": "I'm Mateo Rossi, solutions architect at Larkspur. I've spent the last three weeks in the portal code."
+      "text": "I'm Maxim Mockwell, solutions architect at Larkspur. I've spent the last three weeks in the portal code."
     },
     {
       "id": "m24-s004",
@@ -62,7 +62,7 @@
       "startMs": 18130,
       "endMs": 20630,
       "rev": 1,
-      "text": "Mateo, what did you find?"
+      "text": "Maxim, what did you find?"
     },
     {
       "id": "m24-s005",
@@ -118,7 +118,7 @@
       "startMs": 61700,
       "endMs": 65340,
       "rev": 1,
-      "text": "Decided. Ben, anything that blocks the next phase?"
+      "text": "Decided. Bram, anything that blocks the next phase?"
     },
     {
       "id": "m24-s012",
@@ -142,7 +142,7 @@
       "startMs": 73370,
       "endMs": 76250,
       "rev": 1,
-      "text": "Mateo, what's next on your side?"
+      "text": "Maxim, what's next on your side?"
     },
     {
       "id": "m24-s015",
@@ -158,7 +158,7 @@
       "startMs": 83050,
       "endMs": 86690,
       "rev": 1,
-      "text": "I'll drop off now. Ben has my proxy."
+      "text": "I'll drop off now. Bram has my proxy."
     },
     {
       "id": "m24-s017",
@@ -166,7 +166,7 @@
       "startMs": 86940,
       "endMs": 89060,
       "rev": 1,
-      "text": "Get well soon, Rosa."
+      "text": "Get well soon, Rhea."
     },
     {
       "id": "m24-s018",
@@ -190,7 +190,7 @@
       "startMs": 100130,
       "endMs": 103390,
       "rev": 1,
-      "text": "Ben, who owns the claims status data?"
+      "text": "Bram, who owns the claims status data?"
     },
     {
       "id": "m24-s021",
@@ -219,7 +219,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Varden discovery midpoint review\n\n**Date:** June 11\n**Attendees:** Alex Rivera (Larkspur Labs), Mateo Rossi (Larkspur Labs), Ben Adeyemi (Varden Insurance), Rosa Delgado (Varden Insurance, first part)\n\n## Summary\n\nMidpoint review of the six-week discovery for the Varden Insurance claims portal rebuild. Rosa joined for the first part before her leave; Ben covers for her. Mateo Rossi, Larkspur's solutions architect, has spent three weeks in the portal code.\n\n## Findings\n\n- About 30 percent of claims calls are simple status checks the portal could answer. Rosa said that deflection alone pays for the project.\n- The policy API is old but stable; the portal layer is the problem.\n- Replacing the policy API would be a multi-year programme.\n\n## Decisions\n\n- **Rebuild the portal on top of the existing policy API**, rather than replacing the API.\n\n## Action items\n\n- **Ben Adeyemi** — provide sandbox access to the policy API by Friday; introduce Mateo to the claims operations team, who own the claims status data.\n- **Mateo Rossi** — produce the integration spike report against the sandbox in three weeks.\n- **Alex Rivera** — include a cost breakdown in the discovery readout.\n\n## Notes\n\n- Varden's CIO will want a cost breakdown before phase two.\n- Ben holds Rosa's proxy while she is out.\n"
+    "body": "# Varden discovery midpoint review\n\n**Date:** June 11\n**Attendees:** Alma Mockwell (Larkspur Labs), Maxim Mockwell (Larkspur Labs), Bram Dummyson (Varden Insurance), Rhea Sample (Varden Insurance, first part)\n\n## Summary\n\nMidpoint review of the six-week discovery for the Varden Insurance claims portal rebuild. Rhea joined for the first part before her leave; Bram covers for her. Maxim Mockwell, Larkspur's solutions architect, has spent three weeks in the portal code.\n\n## Findings\n\n- About 30 percent of claims calls are simple status checks the portal could answer. Rhea said that deflection alone pays for the project.\n- The policy API is old but stable; the portal layer is the problem.\n- Replacing the policy API would be a multi-year programme.\n\n## Decisions\n\n- **Rebuild the portal on top of the existing policy API**, rather than replacing the API.\n\n## Action items\n\n- **Bram Dummyson** — provide sandbox access to the policy API by Friday; introduce Maxim to the claims operations team, who own the claims status data.\n- **Maxim Mockwell** — produce the integration spike report against the sandbox in three weeks.\n- **Alma Mockwell** — include a cost breakdown in the discovery readout.\n\n## Notes\n\n- Varden's CIO will want a cost breakdown before phase two.\n- Bram holds Rhea's proxy while she is out.\n"
   },
   "knownEntities": [
     {
@@ -243,11 +243,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -277,31 +277,31 @@
       ]
     },
     {
-      "id": "g-person-ben-adeyemi",
+      "id": "g-person-bram-dummyson",
       "type": "Person",
-      "label": "Ben Adeyemi",
+      "label": "Bram Dummyson",
       "aliases": [
-        "Ben"
+        "Bram"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-mateo-rossi",
+      "id": "g-person-maxim-mockwell",
       "type": "Person",
-      "label": "Mateo Rossi",
+      "label": "Maxim Mockwell",
       "aliases": [
-        "Mateo"
+        "Maxim"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-rosa-delgado",
+      "id": "g-person-rhea-sample",
       "type": "Person",
-      "label": "Rosa Delgado",
+      "label": "Rhea Sample",
       "aliases": [
-        "Rosa"
+        "Rhea"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -334,59 +334,59 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "mateo",
+        "key": "maxim",
         "type": "Person",
-        "label": "Mateo Rossi",
+        "label": "Maxim Mockwell",
         "aliases": [],
-        "existingId": "g-person-mateo-rossi",
+        "existingId": "g-person-maxim-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m24-s003",
-            "quote": "I'm Mateo Rossi, solutions architect at Larkspur."
+            "quote": "I'm Maxim Mockwell, solutions architect at Larkspur."
           }
         ]
       },
       {
-        "key": "ben",
+        "key": "bram",
         "type": "Person",
-        "label": "Ben Adeyemi",
+        "label": "Bram Dummyson",
         "aliases": [],
-        "existingId": "g-person-ben-adeyemi",
+        "existingId": "g-person-bram-dummyson",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Ben Adeyemi (Varden Insurance)"
+            "quote": "Bram Dummyson (Varden Insurance)"
           }
         ]
       },
       {
-        "key": "rosa",
+        "key": "rhea",
         "type": "Person",
-        "label": "Rosa Delgado",
+        "label": "Rhea Sample",
         "aliases": [],
-        "existingId": "g-person-rosa-delgado",
+        "existingId": "g-person-rhea-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Rosa Delgado (Varden Insurance, first part)"
+            "quote": "Rhea Sample (Varden Insurance, first part)"
           }
         ]
       },
@@ -415,7 +415,7 @@
           {
             "source": "segment",
             "segmentId": "m24-s003",
-            "quote": "I'm Mateo Rossi, solutions architect at Larkspur."
+            "quote": "I'm Maxim Mockwell, solutions architect at Larkspur."
           }
         ]
       }
@@ -423,7 +423,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -432,13 +432,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Mateo Rossi (Larkspur Labs), Ben Adeyemi (Varden Insurance), Rosa Delgado (Varden Insurance, first part)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Maxim Mockwell (Larkspur Labs), Bram Dummyson (Varden Insurance), Rhea Sample (Varden Insurance, first part)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "mateo",
+        "from": "maxim",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -447,13 +447,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Mateo Rossi (Larkspur Labs), Ben Adeyemi (Varden Insurance), Rosa Delgado (Varden Insurance, first part)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Maxim Mockwell (Larkspur Labs), Bram Dummyson (Varden Insurance), Rhea Sample (Varden Insurance, first part)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "ben",
+        "from": "bram",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -462,13 +462,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Mateo Rossi (Larkspur Labs), Ben Adeyemi (Varden Insurance), Rosa Delgado (Varden Insurance, first part)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Maxim Mockwell (Larkspur Labs), Bram Dummyson (Varden Insurance), Rhea Sample (Varden Insurance, first part)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "rosa",
+        "from": "rhea",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -477,13 +477,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Mateo Rossi (Larkspur Labs), Ben Adeyemi (Varden Insurance), Rosa Delgado (Varden Insurance, first part)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Maxim Mockwell (Larkspur Labs), Bram Dummyson (Varden Insurance), Rhea Sample (Varden Insurance, first part)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "mateo",
+        "from": "maxim",
         "to": "larkspur",
         "validFrom": null,
         "validTo": null,
@@ -493,13 +493,13 @@
           {
             "source": "segment",
             "segmentId": "m24-s003",
-            "quote": "I'm Mateo Rossi, solutions architect at Larkspur."
+            "quote": "I'm Maxim Mockwell, solutions architect at Larkspur."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "mateo",
+        "from": "maxim",
         "to": "larkspur",
         "validFrom": null,
         "validTo": null,
@@ -511,7 +511,7 @@
           {
             "source": "segment",
             "segmentId": "m24-s003",
-            "quote": "I'm Mateo Rossi, solutions architect at Larkspur."
+            "quote": "I'm Maxim Mockwell, solutions architect at Larkspur."
           }
         ]
       },
@@ -575,10 +575,10 @@
       {
         "kind": "commitment",
         "subject": "portal",
-        "owner": "ben",
-        "counterparty": "mateo",
+        "owner": "bram",
+        "counterparty": "maxim",
         "title": "Provide sandbox access",
-        "statement": "Ben will provide sandbox access to the policy API by Friday.",
+        "statement": "Bram will provide sandbox access to the policy API by Friday.",
         "status": "open",
         "occurredAt": "2026-06-11",
         "dueAt": "2026-06-12",
@@ -595,10 +595,10 @@
       {
         "kind": "commitment",
         "subject": "portal",
-        "owner": "mateo",
+        "owner": "maxim",
         "counterparty": null,
         "title": "Integration spike report",
-        "statement": "Mateo will produce the integration spike report in three weeks.",
+        "statement": "Maxim will produce the integration spike report in three weeks.",
         "status": "open",
         "occurredAt": "2026-06-11",
         "dueAt": "2026-07-02",
@@ -615,10 +615,10 @@
       {
         "kind": "commitment",
         "subject": "portal",
-        "owner": "alex",
+        "owner": "alma",
         "counterparty": null,
         "title": "Cost breakdown in the readout",
-        "statement": "Alex will include a cost breakdown in the discovery readout.",
+        "statement": "Alma will include a cost breakdown in the discovery readout.",
         "status": "open",
         "occurredAt": "2026-06-11",
         "dueAt": null,

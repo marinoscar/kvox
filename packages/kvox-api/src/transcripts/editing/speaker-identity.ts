@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // "Do not increase the version if the change is when a speaker goes from
-// Speaker A to Oscar; only increase the version if I change from Oscar to Joe
+// Speaker A to Orlo; only increase the version if I change from Orlo to Jonty
 // or update the text." — the user's own words, and the whole requirement.
 //
 // The distinction they are drawing is real, not cosmetic. The provider hands
@@ -11,8 +11,8 @@
 // placeholder name, `Speaker A`. Replacing that placeholder with who the voice
 // actually belongs to is an IDENTIFICATION: it adds a fact the provider could
 // never have known, and it is equally true of every version of the transcript
-// — Oscar did not become Oscar at version 4, he was Oscar in the recording.
-// Renaming Oscar to Joe is different: it CORRECTS a claim a person already
+// — Orlo did not become Orlo at version 4, he was Orlo in the recording.
+// Renaming Orlo to Jonty is different: it CORRECTS a claim a person already
 // made, and a correction is exactly what the version history exists to record.
 //
 // So an identification is stored beside the version log rather than in it —
@@ -116,8 +116,8 @@ export function classifyRename(
  * Does this whole batch consist of nothing but identifications and no-op
  * renames, classified against `state`?
  *
- * ⚠ ALL OR NOTHING. A batch that also corrects a line, or renames Oscar to
- * Joe, is versioned anyway — the version bumps for the other op — so its
+ * ⚠ ALL OR NOTHING. A batch that also corrects a line, or renames Orlo to
+ * Jonty, is versioned anyway — the version bumps for the other op — so its
  * identifications ride along as ordinary recorded renames. Splitting one batch
  * across the two paths would make one user action land as two separate writes
  * with two separate failure modes.
@@ -127,7 +127,7 @@ export function classifyRename(
 export function isIdentificationBatch(state: EditingState, ops: readonly RecordedOp[]): boolean {
   if (ops.length === 0) return false;
 
-  // A working copy of the names, walked IN BATCH ORDER: `[A → Oscar, A → Joe]`
+  // A working copy of the names, walked IN BATCH ORDER: `[A → Orlo, A → Jonty]`
   // is an identification followed by a correction, and the second op must be
   // classified against the name the first one gave, exactly as the reducers
   // would see it.
@@ -212,7 +212,7 @@ export function parseSpeakerIdentities(json: unknown): Record<string, string> {
  *
  * Two consumers need "did the names change?" without the version moving: the
  * weak ETag on the two polling routes (a poller holding `W/"v7"` would
- * otherwise get a `304` forever and never see "Oscar"), and the export reuse
+ * otherwise get a `304` forever and never see "Orlo"), and the export reuse
  * hash (an export of v7 rendered before the naming would otherwise be handed
  * back after it). `null` for an empty map is what lets both keep their
  * pre-#323 values byte for byte for every transcript nobody has named a

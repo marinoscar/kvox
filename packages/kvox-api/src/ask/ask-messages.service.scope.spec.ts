@@ -46,7 +46,7 @@ function setup() {
   const prisma = {
     kgEntity: {
       findMany: async ({ where }: { where: { id: { in: string[] }; ownerId: string } }) =>
-        where.ownerId === OWNER ? where.id.in.filter((id) => id === ENTITY).map((id) => ({ id, label: 'Joe', type: 'Person' })) : [],
+        where.ownerId === OWNER ? where.id.in.filter((id) => id === ENTITY).map((id) => ({ id, label: 'Jonty', type: 'Person' })) : [],
     },
     kgEvidence: { findMany: async () => [] },
     kgItem: { findMany: async () => [] },
@@ -71,7 +71,7 @@ describe('AskMessagesService.post with a scope (GIC-17)', () => {
   it('answers 404 and writes nothing when a scope id is not readable by the asker', async () => {
     const { service, created, enqueued } = setup();
     const error = await service
-      .post(OWNER, CONV, { content: 'How is Joe involved?', scope: { entityIds: [FOREIGN] } })
+      .post(OWNER, CONV, { content: 'How is Jonty involved?', scope: { entityIds: [FOREIGN] } })
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(NotFoundException);
     expect((error as NotFoundException).message).toBe(ASK_SCOPE_NOT_FOUND);
@@ -81,7 +81,7 @@ describe('AskMessagesService.post with a scope (GIC-17)', () => {
 
   it('carries a readable scope in the job payload as ids only', async () => {
     const { service, enqueued } = setup();
-    await service.post(OWNER, CONV, { content: 'How is Joe involved?', scope: { entityIds: [ENTITY, ENTITY] } });
+    await service.post(OWNER, CONV, { content: 'How is Jonty involved?', scope: { entityIds: [ENTITY, ENTITY] } });
     expect(enqueued).toHaveLength(1);
     expect(enqueued[0].payload.scope).toEqual({ entityIds: [ENTITY], evidenceIds: [] });
   });

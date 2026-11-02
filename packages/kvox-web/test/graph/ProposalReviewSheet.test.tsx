@@ -8,7 +8,7 @@ import 'vitest-axe/extend-expect';
 import { ProposalReviewSheet } from '../../src/graph/ui/components/review/ProposalReviewSheet.js';
 import { invalidateGraphOntology } from '../../src/graph/headless/hooks/useGraphOntology.js';
 import {
-  EXISTING_TOM_ID,
+  EXISTING_TOBIAS_ID,
   ITEM,
   mockProposalDetail,
   PROPOSAL_ID,
@@ -223,7 +223,7 @@ describe('ProposalReviewSheet — states', () => {
     proposalMock.reset(mockProposalDetail('stale'));
     const { container } = renderSheet();
     expect(await screen.findByText(/Made from version 3; the note is now version 4\./)).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Send Sarah Chen to graph' })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'Send Sasha Example to graph' })).toBeEnabled();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 
@@ -233,7 +233,7 @@ describe('ProposalReviewSheet — states', () => {
     expect(await screen.findByText(/^Sent to graph/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Revert…' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Re-extract' })).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Send Sarah Chen to graph' })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Send Sasha Example to graph' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /Send to graph \(/ })).not.toBeInTheDocument();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
@@ -281,16 +281,16 @@ describe('ProposalReviewSheet — decisions reach #366 verbatim', () => {
   it('Reject sends { decision: "reject" } and the row unticks', async () => {
     renderSheet();
     await draftLoaded();
-    const { user, menu } = await rowMenu('Sarah Chen');
+    const { user, menu } = await rowMenu('Sasha Example');
     await user.click(within(menu).getByRole('menuitem', { name: 'Reject' }));
     await waitFor(() =>
       expect(lastRequest(/items\//)).toEqual({
         method: 'PATCH',
-        path: `/graph/proposals/${PROPOSAL_ID}/items/${ITEM.sarah}`,
+        path: `/graph/proposals/${PROPOSAL_ID}/items/${ITEM.sasha}`,
         body: { decision: 'reject' },
       }),
     );
-    expect(screen.getByRole('checkbox', { name: 'Send Sarah Chen to graph' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Send Sasha Example to graph' })).not.toBeChecked();
   });
 
   it('Undo decision sends { decision: "pending" }', async () => {
@@ -304,27 +304,27 @@ describe('ProposalReviewSheet — decisions reach #366 verbatim', () => {
   it('Not the same as sends distinctFrom', async () => {
     renderSheet();
     await draftLoaded();
-    const { user, menu } = await rowMenu('Tom');
-    await user.click(within(menu).getByRole('menuitem', { name: 'Not the same as Tom Baker' }));
+    const { user, menu } = await rowMenu('Tobias');
+    await user.click(within(menu).getByRole('menuitem', { name: 'Not the same as Tobias Dummyson' }));
     await waitFor(() =>
-      expect(lastRequest(/items\//)?.body).toEqual({ decision: 'pending', distinctFrom: [EXISTING_TOM_ID] }),
+      expect(lastRequest(/items\//)?.body).toEqual({ decision: 'pending', distinctFrom: [EXISTING_TOBIAS_ID] }),
     );
   });
 
   it('Link to existing on an entity sends merge_into + mergeIntoId', async () => {
     renderSheet();
     await draftLoaded();
-    const { user, menu } = await rowMenu('Tom');
+    const { user, menu } = await rowMenu('Tobias');
     await user.click(within(menu).getByRole('menuitem', { name: 'Link to existing…' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Link Tom to an existing entity' });
-    await user.type(within(dialog).getByRole('combobox', { name: 'Search your graph' }), 'Tom');
-    await user.click(await screen.findByRole('option', { name: /Tom Baker/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Link Tobias to an existing entity' });
+    await user.type(within(dialog).getByRole('combobox', { name: 'Search your graph' }), 'Tobias');
+    await user.click(await screen.findByRole('option', { name: /Tobias Dummyson/ }));
     await user.click(within(dialog).getByRole('button', { name: 'Link' }));
     await waitFor(() =>
       expect(lastRequest(/items\//)).toEqual({
         method: 'PATCH',
-        path: `/graph/proposals/${PROPOSAL_ID}/items/${ITEM.tom}`,
-        body: { decision: 'merge_into', mergeIntoId: EXISTING_TOM_ID },
+        path: `/graph/proposals/${PROPOSAL_ID}/items/${ITEM.tobias}`,
+        body: { decision: 'merge_into', mergeIntoId: EXISTING_TOBIAS_ID },
       }),
     );
   });
@@ -332,16 +332,16 @@ describe('ProposalReviewSheet — decisions reach #366 verbatim', () => {
   it('Link to existing on a relation sends relinkTo for one endpoint', async () => {
     renderSheet();
     await draftLoaded();
-    const { user, menu } = await rowMenu('Tom → works for → Org Lambda Robotics');
+    const { user, menu } = await rowMenu('Tobias → works for → Org Lambda Robotics');
     await user.click(within(menu).getByRole('menuitem', { name: 'Link to existing…' }));
-    const dialog = await screen.findByRole('dialog', { name: /Re-link Tom/ });
-    await user.type(within(dialog).getByRole('combobox', { name: 'Search your graph' }), 'Tom');
-    await user.click(await screen.findByRole('option', { name: /Tom Baker/ }));
+    const dialog = await screen.findByRole('dialog', { name: /Re-link Tobias/ });
+    await user.type(within(dialog).getByRole('combobox', { name: 'Search your graph' }), 'Tobias');
+    await user.click(await screen.findByRole('option', { name: /Tobias Dummyson/ }));
     await user.click(within(dialog).getByRole('button', { name: 'Link' }));
     await waitFor(() =>
       expect(lastRequest(/items\//)?.body).toEqual({
         decision: 'accept',
-        relinkTo: { field: 'from', target: { entityId: EXISTING_TOM_ID } },
+        relinkTo: { field: 'from', target: { entityId: EXISTING_TOBIAS_ID } },
       }),
     );
   });
@@ -355,7 +355,7 @@ describe('ProposalReviewSheet — decisions reach #366 verbatim', () => {
     const user = userEvent.setup();
     renderSheet();
     await draftLoaded();
-    const box = screen.getByRole('checkbox', { name: 'Send Sarah Chen to graph' });
+    const box = screen.getByRole('checkbox', { name: 'Send Sasha Example to graph' });
     await user.click(box);
     expect(await screen.findByText('This proposal changed in another tab')).toBeInTheDocument();
     await waitFor(() => expect(box).toBeChecked());
@@ -367,10 +367,10 @@ describe('ProposalReviewSheet — decisions reach #366 verbatim', () => {
     await draftLoaded();
     await user.click(screen.getByRole('button', { name: 'Accept all People' }));
     await waitFor(() =>
-      expect(lastRequest(/bulk$/)?.body).toEqual({ itemIds: [ITEM.sarah, ITEM.tom], decision: 'accept' }),
+      expect(lastRequest(/bulk$/)?.body).toEqual({ itemIds: [ITEM.sasha, ITEM.tobias], decision: 'accept' }),
     );
     await waitFor(() =>
-      expect(screen.getByRole('checkbox', { name: 'Send Tom to graph' })).toBeChecked(),
+      expect(screen.getByRole('checkbox', { name: 'Send Tobias to graph' })).toBeChecked(),
     );
   });
 

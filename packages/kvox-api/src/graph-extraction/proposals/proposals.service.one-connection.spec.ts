@@ -24,10 +24,10 @@ const TRANSCRIPT = '0c000000-0000-4000-8000-000000000001';
 const SEG = '0d000000-0000-4000-8000-000000000001';
 const ITEM = 'e0000000-0000-4000-8000-000000000001';
 const EVIDENCE = 'e0000000-0000-4000-8000-0000000000e1';
-const SEG_TEXT = "Hi, I'm Sarah Chen.";
+const SEG_TEXT = "Hi, I'm Sasha Example.";
 
 const user = { id: OWNER, email: 'o@example.test', roles: [], permissions: ['graph:read', 'graph:write'], isActive: true };
-const SEGMENT_SPAN = { source: 'segment' as const, segmentId: SEG, segmentRev: 3, charStart: 8, charEnd: 18, quote: 'Sarah Chen' };
+const SEGMENT_SPAN = { source: 'segment' as const, segmentId: SEG, segmentRev: 3, charStart: 8, charEnd: 21, quote: 'Sasha Example' };
 
 type Row = Record<string, any>;
 
@@ -50,7 +50,7 @@ function onePool() {
         {
           id: ITEM, kind: 'entity', origin: 'ai', decision: 'pending', editedPayload: null, resolution: null, mergeIntoId: null,
           distinctFrom: [], flags: [], committedRefId: null, sortOrder: 0,
-          payload: { ref: 'e1', type: 'Person', label: 'Sarah Chen', aliases: [], props: {}, occurredAt: null },
+          payload: { ref: 'e1', type: 'Person', label: 'Sasha Example', aliases: [], props: {}, occurredAt: null },
         },
       ]),
       update: jest.fn(async () => ({})),
@@ -113,7 +113,7 @@ describe('ProposalsService with a transcript-segment span on a one-connection po
     await expect(
       service.addItem(user, P, {
         kind: 'entity',
-        payload: { type: 'Person', label: 'Sarah Chen' },
+        payload: { type: 'Person', label: 'Sasha Example' },
         evidence: [SEGMENT_SPAN],
       }),
     ).resolves.toBeDefined();
@@ -160,7 +160,7 @@ describe('ProposalsService with a transcript-segment span on a one-connection po
       }),
     );
     await expect(
-      service.addItem(user, P, { kind: 'entity', payload: { type: 'Person', label: 'Sarah Chen' }, evidence: [SEGMENT_SPAN] }),
+      service.addItem(user, P, { kind: 'entity', payload: { type: 'Person', label: 'Sasha Example' }, evidence: [SEGMENT_SPAN] }),
     ).rejects.toThrow(/inside the transaction/);
   });
 });

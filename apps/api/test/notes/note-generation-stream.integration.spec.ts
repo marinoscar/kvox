@@ -166,7 +166,7 @@ describe('Note generation stream (#52)', () => {
 
     it('delivers ordered deltas whose concatenation is the final body exactly', async () => {
       const user = await createMockTestUser(context);
-      const body = '# Weekly sync\n\nWe ship on Friday.\n\n- Ana confirms the date.';
+      const body = '# Weekly sync\n\nWe ship on Friday.\n\n- Anders confirms the date.';
 
       prismaMock.note.findUnique.mockResolvedValue({
         id: NOTE_ID,

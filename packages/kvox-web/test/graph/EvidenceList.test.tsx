@@ -55,8 +55,8 @@ describe('EvidenceList', () => {
     const { container } = render(
       <EvidenceList evidence={[segmentEvidence({ segmentId: 'seg-4', startMs: 65_000 }), noteEvidence()]} />,
     );
-    expect(screen.getByText('“Sarah from Lambda will lead the Atlas migration.”')).toBeInTheDocument();
-    expect(screen.getByText('Oscar · 1:05')).toBeInTheDocument();
+    expect(screen.getByText('“Sasha from Lambda will lead the Atlas migration.”')).toBeInTheDocument();
+    expect(screen.getByText('Orlo · 1:05')).toBeInTheDocument();
     expect(screen.getByText('From the note')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open in transcript' })).toHaveAttribute(
       'href',
@@ -123,7 +123,7 @@ describe('EvidenceList', () => {
       charStart: null,
       charEnd: null,
       importObjectId: 'f0000000-0000-4000-8000-000000000001',
-      sourceIri: 'https://source.example/joe',
+      sourceIri: 'https://source.example/jonty',
     };
     render(<EvidenceList evidence={[imported]} onPlay={onPlay} onShowInNote={vi.fn()} />);
     expect(screen.getByText('“Imported from contacts.ttl”')).toBeInTheDocument();
@@ -172,7 +172,7 @@ describe('Evidence inside the sheet', () => {
       <ProposalReviewSheet open onClose={vi.fn()} source={{ noteId: 'n1' }} originTranscriptId="t1" noteBodyRef={noteBodyRef} />,
       { wrapperOptions: { user: graphUser } },
     );
-    const user = await openEvidence('Sarah Chen');
+    const user = await openEvidence('Sasha Example');
     await user.click(await screen.findByRole('button', { name: 'Play from 1:05' }));
     expect(audio.seek).toHaveBeenCalledWith(65_000);
     expect(audio.toggle).toHaveBeenCalledTimes(1);
@@ -198,7 +198,7 @@ describe('Evidence inside the sheet', () => {
       <ProposalReviewSheet open onClose={vi.fn()} source={{ noteId: 'n1' }} originTranscriptId="t1" />,
       { wrapperOptions: { user: graphUser } },
     );
-    await openEvidence('Sarah Chen');
+    await openEvidence('Sasha Example');
     expect(await screen.findByRole('link', { name: 'Open in transcript' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Play from/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Play the recording' })).not.toBeInTheDocument();

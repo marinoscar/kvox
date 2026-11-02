@@ -17,7 +17,7 @@
  * (or a malformed response slipping past `listGraphEntities`' shape check)
  * costs the Knowledge section only — never the transcripts and notes above
  * it. Before this boundary existed, a harness stub answering `{}` crashed
- * the whole app into the root `ErrorBoundary` (PR #415's visual regression).
+ * the whole app into the root `ErrorBoundary` (PR #415's regression).
  *
  * The "Ask" button (#380) opens `/ask`. It asks `GET /api/ai-tasks/config` only once
  * the section itself is on screen, and appears only when the answer says

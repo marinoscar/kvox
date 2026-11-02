@@ -109,7 +109,7 @@ export function fixtureSegment(
 export function fixtureDocument(overrides: Partial<ExportDocument> = {}): ExportDocument {
   const speakers = [
     fixtureSpeaker('spk_a', 'José Núñez', 0),
-    fixtureSpeaker('spk_b', 'Priya *Patel*', 1),
+    fixtureSpeaker('spk_b', 'Pia *Placeholder*', 1),
   ];
 
   const segments: EditableSegment[] = [
@@ -145,7 +145,7 @@ export function fixtureDocument(overrides: Partial<ExportDocument> = {}): Export
 export function longDocument(turns = 120): ExportDocument {
   const speakers = [
     fixtureSpeaker('spk_a', 'José Núñez', 0),
-    fixtureSpeaker('spk_b', 'Priya Patel', 1),
+    fixtureSpeaker('spk_b', 'Pia Placeholder', 1),
   ];
 
   const segments = Array.from({ length: turns }, (_, index) =>

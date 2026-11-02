@@ -210,67 +210,67 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     const t1 = await createTranscript(owner.id, ['A', 'B']);
     const t2 = await createTranscript(owner.id, ['C']);
 
-    // --- The owner names Speaker A "Sarah Chen". ------------------------------
-    await setIdentities(t1.transcriptId, { [t1.speakers.A]: 'Sarah Chen' });
+    // --- The owner names Speaker A "Sasha Example". ------------------------------
+    await setIdentities(t1.transcriptId, { [t1.speakers.A]: 'Sasha Example' });
     await expect(run(t1.transcriptId, owner.id)).resolves.toMatchObject({ linked: 1, created: 1, unlinked: 0 });
 
     let people = await persons(owner.id);
     expect(people).toHaveLength(1);
-    const sarah = people[0];
-    expect(sarah).toMatchObject({ label: 'Sarah Chen', reviewStatus: 'accepted' });
-    expect(sarah.aliases.map((a) => [a.alias, a.source])).toEqual([['Sarah Chen', 'speaker_naming']]);
+    const sasha = people[0];
+    expect(sasha).toMatchObject({ label: 'Sasha Example', reviewStatus: 'accepted' });
+    expect(sasha.aliases.map((a) => [a.alias, a.source])).toEqual([['Sasha Example', 'speaker_naming']]);
 
     let links = await edges(owner.id);
     expect(links).toHaveLength(1);
-    expect(links[0]).toMatchObject({ fromSpeakerId: t1.speakers.A, fromId: null, toId: sarah.id });
+    expect(links[0]).toMatchObject({ fromSpeakerId: t1.speakers.A, fromId: null, toId: sasha.id });
     expect(links[0].props).toEqual({ transcriptId: t1.transcriptId, speakerId: t1.speakers.A });
     // 4 segments, capped at 3 citations each.
-    await expect(evidenceCount('entity', sarah.id)).resolves.toBe(3);
+    await expect(evidenceCount('entity', sasha.id)).resolves.toBe(3);
     await expect(evidenceCount('relation', links[0].id)).resolves.toBe(3);
 
-    // --- Speaker C "Sarah Chen" in a different transcript → the same Person. --
-    await setIdentities(t2.transcriptId, { [t2.speakers.C]: 'sarah chen' });
+    // --- Speaker C "Sasha Example" in a different transcript → the same Person. --
+    await setIdentities(t2.transcriptId, { [t2.speakers.C]: 'sasha example' });
     await expect(run(t2.transcriptId, owner.id)).resolves.toMatchObject({ linked: 1, created: 0 });
     expect(await persons(owner.id)).toHaveLength(1);
     links = await edges(owner.id);
-    expect(links.map((e) => e.toId)).toEqual([sarah.id, sarah.id]);
+    expect(links.map((e) => e.toId)).toEqual([sasha.id, sasha.id]);
 
-    // --- Rename A → "Marcus Webb": the edge moves; Sarah keeps C's edge. ------
-    await setIdentities(t1.transcriptId, { [t1.speakers.A]: 'Marcus Webb' });
+    // --- Rename A → "Maddox Sample": the edge moves; Sasha keeps C's edge. ------
+    await setIdentities(t1.transcriptId, { [t1.speakers.A]: 'Maddox Sample' });
     await expect(run(t1.transcriptId, owner.id)).resolves.toMatchObject({ linked: 1, created: 1 });
     people = await persons(owner.id);
-    expect(people.map((p) => p.label)).toEqual(['Marcus Webb', 'Sarah Chen']);
-    const marcus = people[0];
+    expect(people.map((p) => p.label)).toEqual(['Maddox Sample', 'Sasha Example']);
+    const maddox = people[0];
     const aEdges = await prisma.kgRelation.findMany({ where: { fromSpeakerId: t1.speakers.A } });
     expect(aEdges).toHaveLength(1);
-    expect(aEdges[0].toId).toBe(marcus.id);
+    expect(aEdges[0].toId).toBe(maddox.id);
 
-    // --- Name B "Dana Lee", then rename to "Dana Leigh": the naming-only -------
+    // --- Name B "Darcy Fixture", then rename to "Darcy Mockwell": the naming-only -------
     // --- Person with no other ties is deleted with its aliases and evidence. --
-    await setIdentities(t1.transcriptId, { [t1.speakers.A]: 'Marcus Webb', [t1.speakers.B]: 'Dana Lee' });
+    await setIdentities(t1.transcriptId, { [t1.speakers.A]: 'Maddox Sample', [t1.speakers.B]: 'Darcy Fixture' });
     await run(t1.transcriptId, owner.id);
-    const dana = (await persons(owner.id)).find((p) => p.label === 'Dana Lee')!;
-    expect(dana).toBeDefined();
+    const darcy = (await persons(owner.id)).find((p) => p.label === 'Darcy Fixture')!;
+    expect(darcy).toBeDefined();
 
-    await setIdentities(t1.transcriptId, { [t1.speakers.A]: 'Marcus Webb', [t1.speakers.B]: 'Dana Leigh' });
+    await setIdentities(t1.transcriptId, { [t1.speakers.A]: 'Maddox Sample', [t1.speakers.B]: 'Darcy Mockwell' });
     await run(t1.transcriptId, owner.id);
-    await expect(prisma.kgEntity.findUnique({ where: { id: dana.id } })).resolves.toBeNull();
-    await expect(prisma.kgEntityAlias.count({ where: { entityId: dana.id } })).resolves.toBe(0);
-    await expect(evidenceCount('entity', dana.id)).resolves.toBe(0);
+    await expect(prisma.kgEntity.findUnique({ where: { id: darcy.id } })).resolves.toBeNull();
+    await expect(prisma.kgEntityAlias.count({ where: { entityId: darcy.id } })).resolves.toBe(0);
+    await expect(evidenceCount('entity', darcy.id)).resolves.toBe(0);
 
-    // --- Clear B: its edge goes, and so does the naming-only "Dana Leigh". ----
-    const leigh = (await persons(owner.id)).find((p) => p.label === 'Dana Leigh')!;
-    await setIdentities(t1.transcriptId, { [t1.speakers.A]: 'Marcus Webb' });
+    // --- Clear B: its edge goes, and so does the naming-only "Darcy Mockwell". ----
+    const darcyTwo = (await persons(owner.id)).find((p) => p.label === 'Darcy Mockwell')!;
+    await setIdentities(t1.transcriptId, { [t1.speakers.A]: 'Maddox Sample' });
     await expect(run(t1.transcriptId, owner.id)).resolves.toMatchObject({ linked: 0, unlinked: 1 });
     await expect(prisma.kgRelation.count({ where: { fromSpeakerId: t1.speakers.B } })).resolves.toBe(0);
-    await expect(prisma.kgEntity.findUnique({ where: { id: leigh.id } })).resolves.toBeNull();
+    await expect(prisma.kgEntity.findUnique({ where: { id: darcyTwo.id } })).resolves.toBeNull();
 
-    // --- Clear C: Sarah's last edge goes, but her evidence cites T1 — she ------
+    // --- Clear C: Sasha's last edge goes, but her evidence cites T1 — she ------
     // --- has become knowledge beyond T2's naming, so she is kept. -------------
     await setIdentities(t2.transcriptId, {});
     await run(t2.transcriptId, owner.id);
-    await expect(prisma.kgRelation.count({ where: { toId: sarah.id } })).resolves.toBe(0);
-    await expect(prisma.kgEntity.findUnique({ where: { id: sarah.id } })).resolves.not.toBeNull();
+    await expect(prisma.kgRelation.count({ where: { toId: sasha.id } })).resolves.toBe(0);
+    await expect(prisma.kgEntity.findUnique({ where: { id: sasha.id } })).resolves.not.toBeNull();
 
     // --- Audits carry ids, never a name. --------------------------------------
     const audits = await prisma.auditEvent.findMany({
@@ -278,7 +278,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     });
     expect(audits.length).toBeGreaterThanOrEqual(6);
     for (const audit of audits) {
-      expect(JSON.stringify(audit.meta)).not.toMatch(/Sarah|Marcus|Dana/i);
+      expect(JSON.stringify(audit.meta)).not.toMatch(/Sasha|Maddox|Darcy/i);
     }
   });
 
@@ -366,31 +366,31 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     const { service, drain } = editingService();
     const aEdge = () => prisma.kgRelation.findMany({ where: { fromSpeakerId: t.speakers.A } });
 
-    // --- Identify: Speaker A → "Sarah Chen" (unversioned, #323). --------------
-    await expect(rename(service, owner, t.transcriptId, t.speakers.A, 'Sarah Chen')).resolves.toMatchObject({
+    // --- Identify: Speaker A → "Sasha Example" (unversioned, #323). --------------
+    await expect(rename(service, owner, t.transcriptId, t.speakers.A, 'Sasha Example')).resolves.toMatchObject({
       version: 1,
     });
     expect((await drain()).map((e) => e.speakerIds)).toEqual([[t.speakers.A]]);
-    const sarah = (await persons(owner.id)).find((p) => p.label === 'Sarah Chen')!;
-    expect(sarah).toBeDefined();
-    expect((await aEdge()).map((e) => e.toId)).toEqual([sarah.id]);
+    const sasha = (await persons(owner.id)).find((p) => p.label === 'Sasha Example')!;
+    expect(sasha).toBeDefined();
+    expect((await aEdge()).map((e) => e.toId)).toEqual([sasha.id]);
 
-    // --- Rename: "Sarah Chen" → "Marcus Webb" is a VERSIONED correction. ------
-    // speaker_identities still says "Sarah Chen"; the live row says "Marcus
-    // Webb", and the live row is what the user sees.
-    await expect(rename(service, owner, t.transcriptId, t.speakers.A, 'Marcus Webb')).resolves.toMatchObject({
+    // --- Rename: "Sasha Example" → "Maddox Sample" is a VERSIONED correction. ------
+    // speaker_identities still says "Sasha Example"; the live row says "Maddox
+    // Sample", and the live row is what the user sees.
+    await expect(rename(service, owner, t.transcriptId, t.speakers.A, 'Maddox Sample')).resolves.toMatchObject({
       version: 2,
     });
     const identities = (await prisma.transcript.findUniqueOrThrow({ where: { id: t.transcriptId } }))
       .speakerIdentities;
-    expect(identities).toEqual({ [t.speakers.A]: 'Sarah Chen' });
+    expect(identities).toEqual({ [t.speakers.A]: 'Sasha Example' });
 
     expect((await drain()).map((e) => [e.actorUserId, e.speakerIds])).toEqual([[owner.id, [t.speakers.A]]]);
-    const marcus = (await persons(owner.id)).find((p) => p.label === 'Marcus Webb')!;
-    expect(marcus).toBeDefined();
-    expect((await aEdge()).map((e) => e.toId)).toEqual([marcus.id]);
-    // Sarah was a speaker-naming-only Person with no other ties: gone.
-    await expect(prisma.kgEntity.findUnique({ where: { id: sarah.id } })).resolves.toBeNull();
+    const maddox = (await persons(owner.id)).find((p) => p.label === 'Maddox Sample')!;
+    expect(maddox).toBeDefined();
+    expect((await aEdge()).map((e) => e.toId)).toEqual([maddox.id]);
+    // Sasha was a speaker-naming-only Person with no other ties: gone.
+    await expect(prisma.kgEntity.findUnique({ where: { id: sasha.id } })).resolves.toBeNull();
 
     // --- Clear: back to the placeholder (versioned, retires the identity). ----
     await expect(rename(service, owner, t.transcriptId, t.speakers.A, 'Speaker A')).resolves.toMatchObject({
@@ -398,7 +398,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     });
     expect((await drain()).map((e) => e.speakerIds)).toEqual([[t.speakers.A]]);
     await expect(aEdge()).resolves.toEqual([]);
-    await expect(prisma.kgEntity.findUnique({ where: { id: marcus.id } })).resolves.toBeNull();
+    await expect(prisma.kgEntity.findUnique({ where: { id: maddox.id } })).resolves.toBeNull();
     expect(await persons(owner.id)).toEqual([]);
   });
 
@@ -407,7 +407,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     const editor = await createUser('share-editor');
     const t = await createTranscript(owner.id, ['A']);
     await shareTranscript(prisma, { transcriptId: t.transcriptId, userId: editor.id, role: 'editor', grantedById: owner.id });
-    await setIdentities(t.transcriptId, { [t.speakers.A]: 'Sarah Chen' });
+    await setIdentities(t.transcriptId, { [t.speakers.A]: 'Sasha Example' });
 
     await expect(run(t.transcriptId, editor.id)).resolves.toMatchObject({ skipped: 'not_owner' });
     await expect(prisma.kgEntity.count({ where: { ownerId: { in: [owner.id, editor.id] } } })).resolves.toBe(0);
@@ -417,14 +417,14 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
   it('is a no-op for a deleted transcript, and for an owner without graph:write', async () => {
     const owner = await createUser('deleted');
     const t = await createTranscript(owner.id, ['A']);
-    await setIdentities(t.transcriptId, { [t.speakers.A]: 'Sarah Chen' });
+    await setIdentities(t.transcriptId, { [t.speakers.A]: 'Sasha Example' });
     await prisma.transcript.update({ where: { id: t.transcriptId }, data: { deletedAt: new Date() } });
     await expect(run(t.transcriptId, owner.id)).resolves.toMatchObject({ skipped: 'missing' });
     await expect(run(randomUUID(), owner.id)).resolves.toMatchObject({ skipped: 'missing' });
 
     const powerless = await createUser('no-perm', false);
     const t2 = await createTranscript(powerless.id, ['A']);
-    await setIdentities(t2.transcriptId, { [t2.speakers.A]: 'Sarah Chen' });
+    await setIdentities(t2.transcriptId, { [t2.speakers.A]: 'Sasha Example' });
     await expect(run(t2.transcriptId, powerless.id)).resolves.toMatchObject({ skipped: 'no_permission' });
 
     await expect(prisma.kgEntity.count({ where: { ownerId: { in: [owner.id, powerless.id] } } })).resolves.toBe(0);
@@ -433,12 +433,12 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
   it('converges: two concurrent runs produce the same end state as one', async () => {
     const owner = await createUser('concurrent');
     const t = await createTranscript(owner.id, ['A', 'B']);
-    await setIdentities(t.transcriptId, { [t.speakers.A]: 'Sarah Chen', [t.speakers.B]: 'Marcus Webb' });
+    await setIdentities(t.transcriptId, { [t.speakers.A]: 'Sasha Example', [t.speakers.B]: 'Maddox Sample' });
 
     await Promise.all([run(t.transcriptId, owner.id), run(t.transcriptId, owner.id)]);
     await run(t.transcriptId, owner.id);
 
-    expect((await persons(owner.id)).map((p) => p.label)).toEqual(['Marcus Webb', 'Sarah Chen']);
+    expect((await persons(owner.id)).map((p) => p.label)).toEqual(['Maddox Sample', 'Sasha Example']);
     const links = await edges(owner.id);
     expect(links).toHaveLength(2);
     for (const link of links) await expect(evidenceCount('relation', link.id)).resolves.toBe(3);
@@ -447,7 +447,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
   it('holds kg_relations_speaker_link_uniq_idx, and cascades the edge with its speaker', async () => {
     const owner = await createUser('uniq');
     const t = await createTranscript(owner.id, ['A']);
-    await setIdentities(t.transcriptId, { [t.speakers.A]: 'Sarah Chen' });
+    await setIdentities(t.transcriptId, { [t.speakers.A]: 'Sasha Example' });
     await run(t.transcriptId, owner.id);
     const [link] = await edges(owner.id);
 

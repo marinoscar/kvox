@@ -9,7 +9,7 @@ import { SearchTool, snippetToText } from './search.tool.js';
 // =============================================================================
 
 const KAPPA = uid(1);
-const SARAH = uid(2);
+const SASHA = uid(2);
 const T1 = uid(3);
 const N1 = uid(4);
 
@@ -86,13 +86,13 @@ describe('SearchTool', () => {
   });
 
   it('registers handles and returns a uuid-free shape', async () => {
-    const { tool } = build({ entities: [entity(KAPPA, 'Kappa'), entity(SARAH, 'Sarah', 'Person')], results: [transcriptHit, noteHit] });
+    const { tool } = build({ entities: [entity(KAPPA, 'Kappa'), entity(SASHA, 'Sasha', 'Person')], results: [transcriptHit, noteHit] });
     const ctx = makeCtx();
     const res = await tool.run(ctx, tool.input.parse({ query: 'Kappa' }));
     expect(res.data).toEqual({
       entities: [
         { ref: 'ent1', type: 'Organization', label: 'Kappa', aliases: ['KAPPA Corp'] },
-        { ref: 'ent2', type: 'Person', label: 'Sarah', aliases: ['KAPPA Corp'] },
+        { ref: 'ent2', type: 'Person', label: 'Sasha', aliases: ['KAPPA Corp'] },
       ],
       documents: [
         { ref: 'doc1', kind: 'transcript', title: 'Weekly sync', excerpt: 'we signed with Kappa & co <3', at: '2026-03-04', startMs: 61_000 },

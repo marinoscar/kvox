@@ -70,7 +70,7 @@ interface Options {
 
 function host(options: Options = {}): FakeKvoxWebHost {
   return createFakeKvoxWebHost({
-    viewer: { userId: 'u1', permissions: options.permissions ?? ALL, displayName: 'Ana Ruiz' },
+    viewer: { userId: 'u1', permissions: options.permissions ?? ALL, displayName: 'Anders Stubbs' },
     features: { graphEnabled: options.graphEnabled ?? true },
     routes: {
       'GET /notes/summary': noteSummary({ recent: [note()] }),
@@ -92,7 +92,7 @@ function host(options: Options = {}): FakeKvoxWebHost {
         typeCounts: {},
       },
       'GET /graph/entities': {
-        items: [{ id: 'e1', type: 'Person', label: 'Grace Hopper', aliases: [], mentionCount: 3, lastSeenAt: null }],
+        items: [{ id: 'e1', type: 'Person', label: 'Garnet Example', aliases: [], mentionCount: 3, lastSeenAt: null }],
         nextCursor: null,
       },
       ...options.routes,
@@ -132,7 +132,7 @@ describe('the knowledge-first Home', () => {
 
     const graph = await screen.findByRole('region', { name: 'Your graph' });
     expect(await within(graph).findByText('1,234 entities · 5,678 relations')).toBeInTheDocument();
-    expect(await within(graph).findByRole('link', { name: 'Grace Hopper' })).toHaveAttribute('href', '/graph/entities/e1');
+    expect(await within(graph).findByRole('link', { name: 'Garnet Example' })).toHaveAttribute('href', '/graph/entities/e1');
 
     const imports = screen.getByRole('region', { name: 'Recent imports' });
     expect(within(imports).getByRole('link', { name: 'Work notes' })).toHaveAttribute('href', '/notes/import-batches/batch-1');

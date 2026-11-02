@@ -13,7 +13,7 @@ import { setViewportWidth } from '../../src/core/testing/index.js';
 import { graphReader, graphWriter } from './graphTestUsers.js';
 import {
   KAPPA_ID,
-  JOE_ID,
+  JONTY_ID,
   SENSITIVE_FACT_STATEMENT,
   briefFixture,
   entityDetail,
@@ -32,7 +32,7 @@ import { clearEvidenceCache } from '../../src/graph/headless/hooks/useGraphEvide
 import type { DigestUnavailableReason, EntityBrief } from '../../src/graph/headless/clients/graph.js';
 
 /**
- * `/graph/entities/:id` — "everything about Joe" (#373), against MSW fixtures
+ * `/graph/entities/:id` — "everything about Jonty" (#373), against MSW fixtures
  * mirroring #370's read API and #372's brief.
  */
 
@@ -50,7 +50,7 @@ beforeEach(() => {
   });
 });
 
-function renderEntity(id = JOE_ID, user: MockUser = graphWriter) {
+function renderEntity(id = JONTY_ID, user: MockUser = graphWriter) {
   return render(
     <Routes>
       <Route path="/graph/entities/:id" element={<GraphEntityPage />} />
@@ -65,7 +65,7 @@ function useBrief(brief: EntityBrief) {
 }
 
 async function pageReady() {
-  await screen.findByRole('heading', { level: 1, name: 'Joe Rivera' });
+  await screen.findByRole('heading', { level: 1, name: 'Jonty Placeholder' });
   await screen.findByRole('heading', { level: 2, name: 'Brief' });
 }
 
@@ -76,7 +76,7 @@ describe('GraphEntityPage — header', () => {
 
     expect(screen.getByText('Person')).toBeInTheDocument();
     const aliases = screen.getByRole('list', { name: 'Also known as' });
-    expect(within(aliases).getByText('Joseph Rivera')).toBeInTheDocument();
+    expect(within(aliases).getByText('Juno Placeholder')).toBeInTheDocument();
     expect(screen.getByText(/14 mentions · 5 connections · 2 open commitments/)).toBeInTheDocument();
 
     await screen.findByRole('heading', { level: 2, name: 'Timeline' });
@@ -89,7 +89,7 @@ describe('GraphEntityPage — header', () => {
     server.use(
       http.get('*/api/graph/entities/:id', () =>
         HttpResponse.json({
-          data: entityDetail(JOE_ID, {
+          data: entityDetail(JONTY_ID, {
             aliases: ['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((alias, index) => ({
               id: `00000000-0000-4000-8000-00000000009${index}`,
               alias,
@@ -112,7 +112,7 @@ describe('GraphEntityPage — header', () => {
   });
 
   it('shows Edit only with graph:write', async () => {
-    renderEntity(JOE_ID, graphReader);
+    renderEntity(JONTY_ID, graphReader);
     await pageReady();
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /More actions for/ })).not.toBeInTheDocument();
@@ -143,14 +143,14 @@ describe('GraphEntityPage — edit', () => {
     server.use(
       http.patch('*/api/graph/entities/:id', async ({ request }) => {
         body = await request.json();
-        return HttpResponse.json({ data: { id: JOE_ID } });
+        return HttpResponse.json({ data: { id: JONTY_ID } });
       }),
     );
     renderEntity();
     await pageReady();
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
-    const dialog = await screen.findByRole('dialog', { name: /Edit Joe Rivera/ });
+    const dialog = await screen.findByRole('dialog', { name: /Edit Jonty Placeholder/ });
 
     // Person's `title` is retired in the shipped ontology (1.2.0, #440 — a role is a
     // HAS_ROLE prop now): a stored value is still shown, read-only — no per-type code.
@@ -161,17 +161,17 @@ describe('GraphEntityPage — edit', () => {
 
     const name = within(dialog).getByRole('textbox', { name: /Name/ });
     await user.clear(name);
-    await user.type(name, 'Joseph Rivera');
+    await user.type(name, 'Juno Placeholder');
     await user.type(within(dialog).getByRole('textbox', { name: 'Add another name' }), 'JR{Enter}');
 
-    const entityReads = requests.filter((r) => r.url.pathname.endsWith(`/entities/${JOE_ID}`)).length;
+    const entityReads = requests.filter((r) => r.url.pathname.endsWith(`/entities/${JONTY_ID}`)).length;
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(body).toEqual({ label: 'Joseph Rivera', addAliases: ['JR'] });
+    expect(body).toEqual({ label: 'Juno Placeholder', addAliases: ['JR'] });
     // Success refreshes the entity and the brief (the latter without marking a view).
     await waitFor(() =>
-      expect(requests.filter((r) => r.url.pathname.endsWith(`/entities/${JOE_ID}`)).length).toBeGreaterThan(entityReads),
+      expect(requests.filter((r) => r.url.pathname.endsWith(`/entities/${JONTY_ID}`)).length).toBeGreaterThan(entityReads),
     );
     const briefReads = requests.filter((r) => r.url.pathname.endsWith('/brief'));
     expect(briefReads.at(-1)?.url.searchParams.get('markViewed')).toBe('false');
@@ -183,14 +183,14 @@ describe('GraphEntityPage — edit', () => {
     server.use(
       http.patch('*/api/graph/entities/:id', async ({ request }) => {
         body = await request.json();
-        return HttpResponse.json({ data: { id: JOE_ID } });
+        return HttpResponse.json({ data: { id: JONTY_ID } });
       }),
     );
     renderEntity();
     await pageReady();
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
-    const dialog = await screen.findByRole('dialog', { name: /Edit Joe Rivera/ });
+    const dialog = await screen.findByRole('dialog', { name: /Edit Jonty Placeholder/ });
     await user.click(within(dialog).getByRole('button', { name: 'Clear retired value: Job title' }));
     expect(within(dialog).queryByRole('textbox', { name: 'Job title' })).not.toBeInTheDocument();
 
@@ -232,7 +232,7 @@ describe('GraphEntityPage — edit', () => {
     await pageReady();
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');
-    await user.type(within(dialog).getByRole('textbox', { name: 'Add another name' }), 'Joey{Enter}');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Add another name' }), 'Jonno{Enter}');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await within(dialog).findByText('This entity was merged.')).toBeInTheDocument();
   });
@@ -248,7 +248,7 @@ describe('GraphEntityPage — edit', () => {
   });
 
   it('buildEntityPatch clears a removed prop with null and diffs aliases', () => {
-    const entity = entityDetail(JOE_ID);
+    const entity = entityDetail(JONTY_ID);
     expect(
       buildEntityPatch(entity, {
         label: entity.label,
@@ -276,7 +276,7 @@ describe('GraphEntityPage — forget', () => {
       http.post('*/api/graph/entities/:id/forget', async ({ request }) => {
         body = await request.json();
         return HttpResponse.json(
-          { data: { jobId: 'job-1', entityId: JOE_ID, status: 'pending' } },
+          { data: { jobId: 'job-1', entityId: JONTY_ID, status: 'pending' } },
           { status: 202 },
         );
       }),
@@ -284,10 +284,10 @@ describe('GraphEntityPage — forget', () => {
     renderEntity();
     await pageReady();
 
-    await user.click(screen.getByRole('button', { name: 'More actions for Joe Rivera' }));
+    await user.click(screen.getByRole('button', { name: 'More actions for Jonty Placeholder' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Forget this person…' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Forget Joe Rivera?' });
+    const dialog = await screen.findByRole('dialog', { name: 'Forget Jonty Placeholder?' });
     expect(within(dialog).getByText(/Your recordings and notes are not changed/)).toBeInTheDocument();
     const confirm = within(dialog).getByRole('button', { name: 'Forget this person' });
     expect(confirm).toBeDisabled();
@@ -297,7 +297,7 @@ describe('GraphEntityPage — forget', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Entities' })).toBeInTheDocument();
     expect(body).toEqual({ confirmation: 'FORGET' });
-    expect(await screen.findByText('Forgetting Joe Rivera… this takes a few seconds')).toBeInTheDocument();
+    expect(await screen.findByText('Forgetting Jonty Placeholder… this takes a few seconds')).toBeInTheDocument();
   });
 
   it('is not offered for a non-Person', async () => {
@@ -362,7 +362,7 @@ describe('GraphEntityPage — brief', () => {
   it('shows the stored digest with its date, and never asks for anything but GETs', async () => {
     renderEntity();
     await pageReady();
-    expect(screen.getByText('Joe was promoted to VP Engineering in September.')).toBeInTheDocument();
+    expect(screen.getByText('Jonty was promoted to VP Engineering in September.')).toBeInTheDocument();
     expect(screen.getByText(/Summary as of/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Write summary/i })).not.toBeInTheDocument();
 
@@ -371,7 +371,7 @@ describe('GraphEntityPage — brief', () => {
     const briefPaths = new Set(
       requests.filter((r) => r.url.pathname.includes('/brief')).map((r) => r.url.pathname),
     );
-    expect([...briefPaths]).toEqual([`/api/graph/entities/${JOE_ID}/brief`]);
+    expect([...briefPaths]).toEqual([`/api/graph/entities/${JONTY_ID}/brief`]);
   });
 
   it('says "Updating summary…" while a digest is pending', async () => {
@@ -437,8 +437,8 @@ describe('GraphEntityPage — connections', () => {
     expect(within(section).getByRole('link', { name: 'Org Kappa' })).toHaveAttribute('href', `/graph/entities/${KAPPA_ID}`);
     const attended = within(section).getByRole('heading', { name: 'Attended' });
     expect(attended.nextElementSibling?.querySelectorAll('li')).toHaveLength(2);
-    // The item is the SOURCE of ASSIGNED_TO, so the group reads from Joe's side.
-    expect(within(section).getByRole('heading', { name: 'Assigned to Joe Rivera' })).toBeInTheDocument();
+    // The item is the SOURCE of ASSIGNED_TO, so the group reads from Jonty's side.
+    expect(within(section).getByRole('heading', { name: 'Assigned to Jonty Placeholder' })).toBeInTheDocument();
     expect(requests.find((r) => r.url.pathname.endsWith('/neighborhood'))?.url.searchParams.get('limit')).toBe('100');
   });
 
@@ -451,7 +451,7 @@ describe('GraphEntityPage — connections', () => {
     renderEntity();
     await pageReady();
     const link = await screen.findByRole('link', { name: 'open in Explorer' });
-    expect(link).toHaveAttribute('href', `/graph/explore?seed=${JOE_ID}`);
+    expect(link).toHaveAttribute('href', `/graph/explore?seed=${JONTY_ID}`);
   });
 });
 
@@ -525,7 +525,7 @@ describe('GraphEntityPage — mentions', () => {
 });
 
 describe('GraphEntityPage — the Ask slots (#381)', () => {
-  const CONVERSATION_ID = 'conv-joe';
+  const CONVERSATION_ID = 'conv-jonty';
 
   /** The host's panel, reduced to what the page hands it. */
   function StubAskPanel(props: GraphEntityAskPanelProps) {
@@ -579,7 +579,7 @@ describe('GraphEntityPage — the Ask slots (#381)', () => {
         <LocationProbe />
       </>,
       {
-        wrapperOptions: { route: `/graph/entities/${JOE_ID}${search}`, user: graphReader },
+        wrapperOptions: { route: `/graph/entities/${JONTY_ID}${search}`, user: graphReader },
         hostOptions: {
           features: { graphEnabled: 'graphEnabled' in options ? options.graphEnabled : true },
         },
@@ -592,30 +592,30 @@ describe('GraphEntityPage — the Ask slots (#381)', () => {
   it('hides the action while connected knowledge is off', async () => {
     renderWithAsk('', { graphEnabled: false });
     await pageReady();
-    expect(screen.queryByRole('button', { name: 'Ask about Joe Rivera' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ask about Jonty Placeholder' })).not.toBeInTheDocument();
   });
 
   it('hides the action when the host does not say (graphEnabled unknown)', async () => {
     renderWithAsk('', { graphEnabled: undefined });
     await pageReady();
-    expect(screen.queryByRole('button', { name: 'Ask about Joe Rivera' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ask about Jonty Placeholder' })).not.toBeInTheDocument();
   });
 
   it('offers no action when the host fills no slot', async () => {
     renderWithAsk('', { slots: undefined });
     await pageReady();
-    expect(screen.queryByRole('button', { name: 'Ask about Joe Rivera' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ask about Jonty Placeholder' })).not.toBeInTheDocument();
   });
 
   it('shows the action with connected knowledge on, and keeps ?ask in step with the panel', async () => {
     const user = userEvent.setup();
     renderWithAsk();
     await pageReady();
-    await user.click(await screen.findByRole('button', { name: 'Ask about Joe Rivera' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Ask about Joe Rivera' });
+    await user.click(await screen.findByRole('button', { name: 'Ask about Jonty Placeholder' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Ask about Jonty Placeholder' });
     expect(askParam()).toBe('1');
     expect(JSON.parse(within(dialog).getByTestId('panel-props').textContent ?? '{}')).toEqual({
-      entityId: JOE_ID,
+      entityId: JONTY_ID,
       entityType: 'Person',
       conversationId: null,
     });
@@ -629,7 +629,7 @@ describe('GraphEntityPage — the Ask slots (#381)', () => {
 
   it('opens the panel from ?ask on load, on the conversation it names', async () => {
     renderWithAsk(`?ask=${CONVERSATION_ID}`);
-    const dialog = await screen.findByRole('dialog', { name: 'Ask about Joe Rivera' });
+    const dialog = await screen.findByRole('dialog', { name: 'Ask about Jonty Placeholder' });
     expect(JSON.parse(within(dialog).getByTestId('panel-props').textContent ?? '{}')).toMatchObject({
       conversationId: CONVERSATION_ID,
     });

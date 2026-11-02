@@ -196,17 +196,17 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
 
   it('searches labels and aliases by trigram similarity', async () => {
     const { user, g } = await owner();
-    const sarah = await g.entity('Person', 'Sarah Chen', { aliases: ['S. Chen'] });
-    const bob = await g.entity('Person', 'Robert Tables', { aliases: ['Bobby Tables'] });
+    const sasha = await g.entity('Person', 'Sasha Example', { aliases: ['S. Example'] });
+    const bob = await g.entity('Person', 'Reeve Testcase', { aliases: ['Byron Demo'] });
     await g.entity('Organization', 'Org Kappa Holdings');
 
-    const byLabel = await list(user.id, { q: 'Sara Chen' });
-    expect(byLabel.items[0].id).toBe(sarah);
+    const byLabel = await list(user.id, { q: 'Sasa Example' });
+    expect(byLabel.items[0].id).toBe(sasha);
     expect(byLabel.nextCursor).toBeNull();
 
-    const byAlias = await list(user.id, { q: 'bobby' });
+    const byAlias = await list(user.id, { q: 'byron' });
     expect(byAlias.items.map((i) => i.id)).toEqual([bob]);
-    expect(byAlias.items[0].aliases).toEqual(['Bobby Tables']);
+    expect(byAlias.items[0].aliases).toEqual(['Byron Demo']);
 
     const substring = await list(user.id, { q: 'Hold' });
     expect(substring.items.map((i) => i.label)).toEqual(['Org Kappa Holdings']);
@@ -216,15 +216,15 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     const { user, g } = await owner();
     const { user: stranger } = await owner('b');
     const { transcript, speakerA, speakerB } = await g.transcript();
-    const sarah = await g.entity('Person', 'Sarah');
-    const joe = await g.entity('Person', 'Joe');
+    const sasha = await g.entity('Person', 'Sasha');
+    const jonty = await g.entity('Person', 'Jonty');
     await g.entity('Person', 'Unrelated');
     // #356's storage shape: IDENTIFIED_AS from a transcript speaker.
-    await g.relation('IDENTIFIED_AS', null, sarah, { fromSpeakerId: speakerA.id });
-    await g.relation('IDENTIFIED_AS', null, joe, { fromSpeakerId: speakerB.id, reviewStatus: 'unreviewed' });
+    await g.relation('IDENTIFIED_AS', null, sasha, { fromSpeakerId: speakerA.id });
+    await g.relation('IDENTIFIED_AS', null, jonty, { fromSpeakerId: speakerB.id, reviewStatus: 'unreviewed' });
 
     const page = await list(user.id, { transcriptId: transcript.id });
-    expect(page.items.map((i) => i.id)).toEqual([sarah]);
+    expect(page.items.map((i) => i.id)).toEqual([sasha]);
     expect(page.items[0].speakerIds).toEqual([speakerA.id]);
 
     await expect(list(stranger.id, { transcriptId: transcript.id })).rejects.toThrow(NotFoundException);
@@ -247,28 +247,28 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
       occurredAt: new Date('2026-04-10T00:00:00Z'),
       props: { noteId: note.id },
     });
-    const joe = await g.entity('Person', 'Joe', { aliases: ['Joseph'] });
+    const jonty = await g.entity('Person', 'Jonty', { aliases: ['Juno'] });
     const kappa = await g.entity('Organization', 'Kappa');
-    await g.evidence('entity', joe, { transcriptId: transcript.id, quote: 'Joe said' });
-    await g.evidence('entity', joe, { noteId: note.id, noteVersion: 1, quote: 'Joe wrote' });
-    await g.relation('WORKS_FOR', joe, kappa, { valid: '[2019-01-01,)', precision: 'year' });
-    await g.relation('WORKS_FOR', joe, kappa, { valid: '[2010-01-01,2012-01-01)', precision: 'year' }); // not valid now
-    await g.relation('ATTENDED', joe, meeting);
-    await g.item('commitment', { ownerPersonId: joe, status: 'open' });
-    await g.item('commitment', { counterpartyId: joe, status: 'done' });
-    await g.item('decision', { subjectId: joe });
-    await g.item('person_fact', { subjectId: joe, sensitivity: 'personal' });
-    await g.item('person_fact', { subjectId: joe, sensitivity: 'sensitive' });
-    await g.item('claim', { subjectId: joe, reviewStatus: 'unreviewed' });
-    await prisma.kgMention.create({ data: { ownerId: user.id, entityId: joe, noteId: note.id } });
-    await prisma.kgMention.create({ data: { ownerId: user.id, entityId: joe, transcriptId: transcript.id } });
-    await prisma.kgMention.create({ data: { ownerId: user.id, entityId: joe, transcriptId: transcript.id, status: 'ignored' } });
+    await g.evidence('entity', jonty, { transcriptId: transcript.id, quote: 'Jonty said' });
+    await g.evidence('entity', jonty, { noteId: note.id, noteVersion: 1, quote: 'Jonty wrote' });
+    await g.relation('WORKS_FOR', jonty, kappa, { valid: '[2019-01-01,)', precision: 'year' });
+    await g.relation('WORKS_FOR', jonty, kappa, { valid: '[2010-01-01,2012-01-01)', precision: 'year' }); // not valid now
+    await g.relation('ATTENDED', jonty, meeting);
+    await g.item('commitment', { ownerPersonId: jonty, status: 'open' });
+    await g.item('commitment', { counterpartyId: jonty, status: 'done' });
+    await g.item('decision', { subjectId: jonty });
+    await g.item('person_fact', { subjectId: jonty, sensitivity: 'personal' });
+    await g.item('person_fact', { subjectId: jonty, sensitivity: 'sensitive' });
+    await g.item('claim', { subjectId: jonty, reviewStatus: 'unreviewed' });
+    await prisma.kgMention.create({ data: { ownerId: user.id, entityId: jonty, noteId: note.id } });
+    await prisma.kgMention.create({ data: { ownerId: user.id, entityId: jonty, transcriptId: transcript.id } });
+    await prisma.kgMention.create({ data: { ownerId: user.id, entityId: jonty, transcriptId: transcript.id, status: 'ignored' } });
 
-    const detail = await reads.getEntity({ id: user.id }, joe);
+    const detail = await reads.getEntity({ id: user.id }, jonty);
     expect(detail).toMatchObject({
-      id: joe,
+      id: jonty,
       type: 'Person',
-      label: 'Joe',
+      label: 'Jonty',
       reviewStatus: 'accepted',
       firstSeenAt: '2026-03-02T00:00:00.000Z',
       lastSeenAt: '2026-04-10T00:00:00.000Z',
@@ -284,21 +284,21 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     expect(detail.counts.relationsByType).toEqual({ WORKS_FOR: 1, ATTENDED: 1 });
     expect(detail.counts.relationsByNeighborType).toEqual({ Organization: 1, Meeting: 1 });
     // Both aliases are inserted at the same instant, so the (createdAt, id) order between them is a uuid coin toss.
-    expect(detail.aliases.map((a) => a.alias).sort()).toEqual(['Joe', 'Joseph']);
+    expect(detail.aliases.map((a) => a.alias).sort()).toEqual(['Jonty', 'Juno']);
 
-    const summary = (await list(user.id, { type: 'Person' })).items.find((i) => i.id === joe)!;
-    expect(summary).toMatchObject({ mentionCount: 2, lastSeenAt: '2026-04-10T00:00:00.000Z', aliases: ['Joseph'] });
+    const summary = (await list(user.id, { type: 'Person' })).items.find((i) => i.id === jonty)!;
+    expect(summary).toMatchObject({ mentionCount: 2, lastSeenAt: '2026-04-10T00:00:00.000Z', aliases: ['Juno'] });
 
     const unreviewed = await g.entity('Person', 'Draft', { reviewStatus: 'unreviewed' });
     const rejected = await g.entity('Person', 'No', { reviewStatus: 'rejected' });
     const messages = await Promise.all(
       [
-        () => reads.getEntity({ id: other.id }, joe),
+        () => reads.getEntity({ id: other.id }, jonty),
         () => reads.getEntity({ id: user.id }, unreviewed),
         () => reads.getEntity({ id: user.id }, rejected),
         () => reads.getEntity({ id: user.id }, '00000000-0000-4000-8000-000000000000'),
-        () => reads.mentions({ id: other.id }, joe, { limit: 25 } as never),
-        () => timeline(other.id, joe),
+        () => reads.mentions({ id: other.id }, jonty, { limit: 25 } as never),
+        () => timeline(other.id, jonty),
       ].map((call) => call().then(() => null, (e: unknown) => e)),
     );
     for (const err of messages) {
@@ -307,11 +307,11 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     }
 
     // A merged tombstone is readable (#765): 200 with its survivor, so the UI can redirect.
-    const tombstone = await g.entity('Person', 'Joey', { reviewStatus: 'merged', mergedIntoId: joe });
+    const tombstone = await g.entity('Person', 'Jonno', { reviewStatus: 'merged', mergedIntoId: jonty });
     await expect(reads.getEntity({ id: user.id }, tombstone)).resolves.toMatchObject({
       id: tombstone,
       reviewStatus: 'merged',
-      mergedIntoId: joe,
+      mergedIntoId: jonty,
     });
     await expect(reads.getEntity({ id: other.id }, tombstone)).rejects.toBeInstanceOf(NotFoundException);
   });
@@ -319,23 +319,23 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
   it('groups relations by relation type and by the type at the other end, in both directions (GIC-11)', async () => {
     const { user, g } = await owner();
     const { user: other } = await owner('b');
-    const ana = await g.entity('Person', 'Ana');
-    const ben = await g.entity('Person', 'Ben');
+    const anders = await g.entity('Person', 'Anders');
+    const bram = await g.entity('Person', 'Bram');
     const cy = await g.entity('Person', 'Cy');
     const kappa = await g.entity('Organization', 'Kappa');
     const atlas = await g.entity('Project', 'Atlas');
-    await g.relation('REPORTS_TO', ana, ben); // out
-    await g.relation('REPORTS_TO', cy, ana); // in
-    await g.relation('WORKS_FOR', ana, kappa);
-    await g.relation('INVOLVED_IN', ana, atlas, { props: { role: 'stakeholder', stance: 'skeptical' } });
+    await g.relation('REPORTS_TO', anders, bram); // out
+    await g.relation('REPORTS_TO', cy, anders); // in
+    await g.relation('WORKS_FOR', anders, kappa);
+    await g.relation('INVOLVED_IN', anders, atlas, { props: { role: 'stakeholder', stance: 'skeptical' } });
     // None of these is counted: not valid now, not reviewed, rejected, or a merged-away end.
-    await g.relation('WORKS_FOR', ana, kappa, { valid: '[2010-01-01,2012-01-01)', precision: 'year' });
-    await g.relation('REPORTS_TO', ana, cy, { reviewStatus: 'unreviewed' });
-    await g.relation('REPORTS_TO', ana, ben, { reviewStatus: 'rejected' });
-    const gone = await g.entity('Person', 'Gone', { reviewStatus: 'merged', mergedIntoId: ben });
-    await g.relation('REPORTS_TO', ana, gone, { reviewStatus: 'accepted' });
+    await g.relation('WORKS_FOR', anders, kappa, { valid: '[2010-01-01,2012-01-01)', precision: 'year' });
+    await g.relation('REPORTS_TO', anders, cy, { reviewStatus: 'unreviewed' });
+    await g.relation('REPORTS_TO', anders, bram, { reviewStatus: 'rejected' });
+    const gone = await g.entity('Person', 'Gone', { reviewStatus: 'merged', mergedIntoId: bram });
+    await g.relation('REPORTS_TO', anders, gone, { reviewStatus: 'accepted' });
 
-    const detail = await reads.getEntity({ id: user.id }, ana);
+    const detail = await reads.getEntity({ id: user.id }, anders);
     expect(detail.counts.relations).toBe(4);
     expect(detail.counts.relationsByType).toEqual({ REPORTS_TO: 2, WORKS_FOR: 1, INVOLVED_IN: 1 });
     expect(detail.counts.relationsByNeighborType).toEqual({ Person: 2, Organization: 1, Project: 1 });
@@ -349,32 +349,32 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     const alone = await reads.getEntity({ id: user.id }, lone);
     expect(alone.counts.relationsByType).toEqual({});
     expect(alone.counts.relationsByNeighborType).toEqual({});
-    await expect(reads.getEntity({ id: other.id }, ana)).rejects.toThrow(NotFoundException);
+    await expect(reads.getEntity({ id: other.id }, anders)).rejects.toThrow(NotFoundException);
   });
 
   it('lists the citations of one subject newest source first, and never those of a sensitive item (GIC-11)', async () => {
     const { user, g } = await owner();
     const { user: other } = await owner('b');
-    const joe = await g.entity('Person', 'Joe');
+    const jonty = await g.entity('Person', 'Jonty');
     const kappa = await g.entity('Organization', 'Kappa');
-    const relation = await g.relation('WORKS_FOR', joe, kappa);
+    const relation = await g.relation('WORKS_FOR', jonty, kappa);
     const older = await g.note();
     const newer = await g.note();
     await prisma.note.update({ where: { id: older.id }, data: { createdAt: new Date('2026-01-01T00:00:00Z') } });
     await prisma.note.update({ where: { id: newer.id }, data: { createdAt: new Date('2026-06-01T00:00:00Z') } });
-    await g.evidence('relation', relation, { noteId: older.id, noteVersion: 1, quote: 'Joe joined Kappa' });
-    await g.evidence('relation', relation, { noteId: newer.id, noteVersion: 1, quote: 'Joe is still at Kappa' });
-    const claim = await g.item('claim', { subjectId: joe });
-    const personal = await g.item('person_fact', { subjectId: joe, sensitivity: 'personal' });
-    const sensitive = await g.item('person_fact', { subjectId: joe, sensitivity: 'sensitive' });
-    const unreviewed = await g.item('claim', { subjectId: joe, reviewStatus: 'unreviewed' });
+    await g.evidence('relation', relation, { noteId: older.id, noteVersion: 1, quote: 'Jonty joined Kappa' });
+    await g.evidence('relation', relation, { noteId: newer.id, noteVersion: 1, quote: 'Jonty is still at Kappa' });
+    const claim = await g.item('claim', { subjectId: jonty });
+    const personal = await g.item('person_fact', { subjectId: jonty, sensitivity: 'personal' });
+    const sensitive = await g.item('person_fact', { subjectId: jonty, sensitivity: 'sensitive' });
+    const unreviewed = await g.item('claim', { subjectId: jonty, reviewStatus: 'unreviewed' });
 
     const forRelation = await evidence.forSubject(user.id, 'relation', relation);
     // The relation's own seed row ('WORKS_FOR') plus the two notes; the newest source comes first.
-    expect(forRelation.map((link) => link.quote).slice(0, 2)).toEqual(['Joe is still at Kappa', 'Joe joined Kappa']);
+    expect(forRelation.map((link) => link.quote).slice(0, 2)).toEqual(['Jonty is still at Kappa', 'Jonty joined Kappa']);
     expect(forRelation.every((link) => link.subjectKind === 'relation' && link.subjectId === relation)).toBe(true);
 
-    expect((await evidence.forSubject(user.id, 'entity', joe)).map((link) => link.quote)).toEqual(['Joe']);
+    expect((await evidence.forSubject(user.id, 'entity', jonty)).map((link) => link.quote)).toEqual(['Jonty']);
     expect(await evidence.forSubject(user.id, 'item', claim)).toHaveLength(1);
     expect(await evidence.forSubject(user.id, 'item', personal)).toHaveLength(1);
 
@@ -388,7 +388,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
       [
         () => evidence.forSubject(user.id, 'item', unreviewed),
         () => evidence.forSubject(other.id, 'relation', relation),
-        () => evidence.forSubject(other.id, 'entity', joe),
+        () => evidence.forSubject(other.id, 'entity', jonty),
         () => evidence.forSubject(user.id, 'relation', '00000000-0000-4000-8000-000000000000'),
       ].map((call) => call().then(() => null, (e: unknown) => e)),
     );
@@ -403,39 +403,39 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
 
   it('orders the timeline union, applies as_of, flags superseded, hides sensitive facts', async () => {
     const { user, g } = await owner();
-    const joe = await g.entity('Person', 'Joe');
+    const jonty = await g.entity('Person', 'Jonty');
     const jane = await g.entity('Person', 'Jane');
     const will = await g.entity('Person', 'Will');
     const meeting = await g.entity('Meeting', 'Planning', { occurredAt: new Date('2025-06-01T00:00:00Z') });
-    const toJane = await g.relation('REPORTS_TO', joe, jane, {
+    const toJane = await g.relation('REPORTS_TO', jonty, jane, {
       valid: '[2020-01-01,2026-03-01)',
       precision: 'day',
       reviewStatus: 'superseded',
     });
-    const toWill = await g.relation('REPORTS_TO', joe, will, { valid: '[2026-03-01,)', precision: 'day' });
-    await g.relation('ATTENDED', joe, meeting);
-    const newer = await g.item('decision', { subjectId: joe, occurredAt: new Date('2026-05-01T00:00:00Z'), statement: 'v2' });
+    const toWill = await g.relation('REPORTS_TO', jonty, will, { valid: '[2026-03-01,)', precision: 'day' });
+    await g.relation('ATTENDED', jonty, meeting);
+    const newer = await g.item('decision', { subjectId: jonty, occurredAt: new Date('2026-05-01T00:00:00Z'), statement: 'v2' });
     const older = await g.item('decision', {
-      subjectId: joe,
+      subjectId: jonty,
       occurredAt: new Date('2025-01-01T00:00:00Z'),
       statement: 'v1',
       reviewStatus: 'superseded',
       supersededById: newer,
     });
-    const undated = await g.item('claim', { subjectId: joe, statement: 'undated' });
+    const undated = await g.item('claim', { subjectId: jonty, statement: 'undated' });
     const sensitive = await g.item('person_fact', {
-      subjectId: joe,
+      subjectId: jonty,
       sensitivity: 'sensitive',
       occurredAt: new Date('2024-01-01T00:00:00Z'),
     });
     const owed = await g.item('commitment', {
       ownerPersonId: will,
-      counterpartyId: joe,
+      counterpartyId: jonty,
       occurredAt: new Date('2026-04-01T00:00:00Z'),
       dueAt: new Date('2026-04-15T00:00:00Z'),
     });
 
-    const all = await timeline(user.id, joe, { as_of: '2026-09-01' });
+    const all = await timeline(user.id, jonty, { as_of: '2026-09-01' });
     expect(all.asOf).toBe('2026-09-01T00:00:00.000Z');
 
     const order = all.items.map((e) => e.id);
@@ -452,7 +452,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     const owedEvent = all.items.find((e) => e.id === owed)!;
     expect(owedEvent.item).toMatchObject({
       ownerPerson: { id: will, label: 'Will', type: 'Person' },
-      counterparty: { id: joe, label: 'Joe', type: 'Person' },
+      counterparty: { id: jonty, label: 'Jonty', type: 'Person' },
       dueAt: '2026-04-15T00:00:00.000Z',
     });
     const endEvent = all.items.find((e) => e.id === `rel:${toJane}:end`)!;
@@ -465,24 +465,24 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     expect(all.items.find((e) => e.id === meeting)).toMatchObject({ eventKind: 'meeting', meeting: { id: meeting, label: 'Planning' } });
 
     // as_of drops everything after it.
-    const then = await timeline(user.id, joe, { as_of: '2025-03-01' });
+    const then = await timeline(user.id, jonty, { as_of: '2025-03-01' });
     expect(then.items.map((e) => e.id)).toEqual([older, `rel:${toJane}:start`, undated]);
 
     // Sensitive facts only on request.
-    const withSensitive = await timeline(user.id, joe, { as_of: '2026-09-01', includeSensitive: true });
+    const withSensitive = await timeline(user.id, jonty, { as_of: '2026-09-01', includeSensitive: true });
     expect(withSensitive.items.map((e) => e.id)).toContain(sensitive);
 
     // kinds filter; unknown kind → 400.
-    const onlyRelations = await timeline(user.id, joe, { as_of: '2026-09-01', kinds: 'relation' });
+    const onlyRelations = await timeline(user.id, jonty, { as_of: '2026-09-01', kinds: 'relation' });
     expect(onlyRelations.items.every((e) => e.eventKind.startsWith('relation_'))).toBe(true);
     expect(onlyRelations.items).toHaveLength(3);
-    await expect(timeline(user.id, joe, { kinds: 'relation,gossip' })).rejects.toThrow(BadRequestException);
+    await expect(timeline(user.id, jonty, { kinds: 'relation,gossip' })).rejects.toThrow(BadRequestException);
 
     // Paging walks the same order, including across the NULLS LAST tail.
     const seen: string[] = [];
     let cursor: string | null | undefined;
     do {
-      const page = await timeline(user.id, joe, { as_of: '2026-09-01', limit: 3, ...(cursor ? { cursor } : {}) });
+      const page = await timeline(user.id, jonty, { as_of: '2026-09-01', limit: 3, ...(cursor ? { cursor } : {}) });
       seen.push(...page.items.map((e) => e.id));
       cursor = page.nextCursor;
     } while (cursor);
@@ -501,14 +501,14 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     const share = await shareTranscript(prisma, { transcriptId: transcript.id, userId: bob.id, role: 'viewer', grantedById: alice.id });
     const note = await bobGraph.note({ title: 'Prep', versions: 2 });
 
-    const person = await bobGraph.entity('Person', 'Sarah');
+    const person = await bobGraph.entity('Person', 'Sasha');
     const fromSegment = await bobGraph.evidence('entity', person, {
       transcriptId: transcript.id,
       segmentId: segment.id,
       segmentRev: 1,
       startMs: 1500,
       endMs: 4000,
-      quote: 'Sarah joined Kappa',
+      quote: 'Sasha joined Kappa',
     });
     const fromNote = await bobGraph.evidence('entity', person, {
       noteId: note.id,
@@ -562,7 +562,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     // Alice revokes the share: the link goes, the quote stays.
     await prisma.grant.delete({ where: { id: share.id } });
     const revoked = await evidence.getOne(bob.id, fromSegment.id);
-    expect(revoked.quote).toBe('Sarah joined Kappa');
+    expect(revoked.quote).toBe('Sasha joined Kappa');
     expect(revoked.source).toMatchObject({
       kind: 'segment',
       available: false,
@@ -588,7 +588,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
 
   it('pages mentions with a keyset cursor', async () => {
     const { user, g } = await owner();
-    const person = await g.entity('Person', 'Sarah');
+    const person = await g.entity('Person', 'Sasha');
     const transcripts = [];
     for (let i = 0; i < 3; i++) {
       const { transcript } = await g.transcript({ recordedAt: new Date(Date.UTC(2026, i, 1)) });

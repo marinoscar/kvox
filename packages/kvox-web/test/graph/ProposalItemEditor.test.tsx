@@ -38,8 +38,8 @@ function renderEditor(target: ProposalItem, mode: 'edit' | 'type' = 'edit', onto
 describe('ProposalItemEditor', () => {
   it('edits an entity from its ontology attributes and saves the whole payload', async () => {
     const user = userEvent.setup();
-    const { onSave, baseElement } = renderEditor(item(ITEM.sarah));
-    const dialog = screen.getByRole('dialog', { name: 'Edit Sarah Chen' });
+    const { onSave, baseElement } = renderEditor(item(ITEM.sasha));
+    const dialog = screen.getByRole('dialog', { name: 'Edit Sasha Example' });
     // `Job title` (key `title`) is the `work` domain's mixin on Person — never hand-coded.
     // Retired in 1.2.0 (#440): a stored value is still shown, read-only, and kept on save.
     const jobTitle = within(dialog).getByRole('textbox', { name: 'Job title' });
@@ -49,12 +49,12 @@ describe('ProposalItemEditor', () => {
 
     const name = within(dialog).getByRole('textbox', { name: 'Name' });
     await user.clear(name);
-    await user.type(name, 'Sarah C. Chen');
+    await user.type(name, 'Sasha E. Example');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(onSave).toHaveBeenCalledWith({
       ref: 'e1',
       type: 'Person',
-      label: 'Sarah C. Chen',
+      label: 'Sasha E. Example',
       aliases: [],
       props: { title: 'Head of Platform' },
       occurredAt: null,
@@ -63,8 +63,8 @@ describe('ProposalItemEditor', () => {
 
   it('clears a retired value by removing it from the saved payload (#442)', async () => {
     const user = userEvent.setup();
-    const { onSave } = renderEditor(item(ITEM.sarah));
-    const dialog = screen.getByRole('dialog', { name: 'Edit Sarah Chen' });
+    const { onSave } = renderEditor(item(ITEM.sasha));
+    const dialog = screen.getByRole('dialog', { name: 'Edit Sasha Example' });
     await user.click(within(dialog).getByRole('button', { name: 'Clear retired value: Job title' }));
     expect(within(dialog).queryByRole('textbox', { name: 'Job title' })).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
@@ -104,8 +104,8 @@ describe('ProposalItemEditor', () => {
 
   it('change type names the fields that will be dropped, and drops them', async () => {
     const user = userEvent.setup();
-    const { onSave } = renderEditor(item(ITEM.sarah), 'type');
-    const dialog = screen.getByRole('dialog', { name: 'Change type of Sarah Chen' });
+    const { onSave } = renderEditor(item(ITEM.sasha), 'type');
+    const dialog = screen.getByRole('dialog', { name: 'Change type of Sasha Example' });
     await user.click(within(dialog).getByRole('combobox', { name: 'Type' }));
     await user.click(await screen.findByRole('option', { name: 'Organization' }));
     expect(within(dialog).getByText('These fields will be dropped: Job title')).toBeInTheDocument();
@@ -116,7 +116,7 @@ describe('ProposalItemEditor', () => {
 
   it('maps a 400 details.issues onto the fields', async () => {
     const user = userEvent.setup();
-    const { onSave } = renderEditor(item(ITEM.sarah));
+    const { onSave } = renderEditor(item(ITEM.sasha));
     onSave.mockRejectedValueOnce(
       new KvoxApiError('Invalid payload', 400, 'BAD_REQUEST', {
         issues: [
@@ -135,7 +135,7 @@ describe('ProposalItemEditor', () => {
   it('edits a relation: type, validity, and endpoints through relink', async () => {
     const user = userEvent.setup();
     const { onRelink, onSave } = renderEditor(item(ITEM.worksFor));
-    const dialog = screen.getByRole('dialog', { name: /Edit Sarah Chen → works for/ });
+    const dialog = screen.getByRole('dialog', { name: /Edit Sasha Example → works for/ });
     expect(within(dialog).getByRole('combobox', { name: 'Relationship' })).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Valid from')).toHaveValue('2026-01-01');
     await user.click(within(dialog).getByRole('button', { name: 'Change To' }));

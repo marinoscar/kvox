@@ -20,8 +20,7 @@
  * returns the latest `kg.graph_layout` snapshot (#371) — clusters and 2-D
  * positions computed once on the server — with labels joined live. The page
  * draws it through the explorer's `GraphCanvas` (#374, reused, not forked)
- * with `layout="static"`: nothing on this page ever moves a node, which is
- * what makes the visual baselines deterministic.
+ * with `layout="static"`: nothing on this page ever moves a node.
  *
  * TWO LAYERS, ONE EXPLICIT TOGGLE (`?layer=clusters|nodes`): one node per
  * cluster, or every positioned entity (≤ 5,000) coloured by cluster. Selecting

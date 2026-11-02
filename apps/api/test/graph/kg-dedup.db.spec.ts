@@ -257,15 +257,15 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
   it('a promotion yields exactly one "Closes: …" row with the copy fields, never pre-checked', async () => {
     const user = await createUser();
     const note = await createNote(user.id);
-    const joe = await entity(user.id, 'Person', 'Joe');
+    const jonty = await entity(user.id, 'Person', 'Jonty');
     const kappa = await entity(user.id, 'Organization', 'Kappa');
-    const engineer = await relation(user.id, 'HAS_ROLE', joe, kappa, '[2019-01-01,)', 'year', { title: 'Engineer' });
+    const engineer = await relation(user.id, 'HAS_ROLE', jonty, kappa, '[2019-01-01,)', 'year', { title: 'Engineer' });
 
     const p = await proposal(user.id, note.id);
-    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
+    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(jonty) });
     await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Kappa'), { resolution: linked(kappa) });
     await row(p.id, user.id, 'relation', relPayload({ type: 'HAS_ROLE', props: { title: 'Staff Engineer' }, validFrom: '2026-03-01', precision: 'month' }), {
-      quote: 'Joe was promoted to Staff Engineer this month',
+      quote: 'Jonty was promoted to Staff Engineer this month',
     });
 
     const c = ctx(p.id, user.id, note.id);
@@ -276,7 +276,7 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     expect(closings[0].payload).toEqual({
       relationId: engineer,
       relationType: 'HAS_ROLE',
-      fromLabel: 'Joe',
+      fromLabel: 'Jonty',
       toLabel: 'Kappa',
       roleTitle: 'Engineer',
       previousValid: { from: '2019-01-01', to: null, precision: 'year' },
@@ -287,7 +287,7 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     });
     expect(closings[0].origin).toBe('ai');
     const copied = await prisma.kgEvidence.findMany({ where: { subjectKind: 'proposal_item', subjectId: closings[0].id } });
-    expect(copied.map((e) => e.quote)).toEqual(['Joe was promoted to Staff Engineer this month']);
+    expect(copied.map((e) => e.quote)).toEqual(['Jonty was promoted to Staff Engineer this month']);
     // Pre-check: the new edge is accepted, the closing never is.
     const decisions = precheck(items);
     expect(decisions[items.findIndex((i) => i.kind === 'relation')]).toBe('accept');
@@ -302,13 +302,13 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
   it('HAS_ROLE business unit (#440): a unit move under the same title closes the old role; a statement adding the unit is known', async () => {
     const user = await createUser();
     const note = await createNote(user.id);
-    const joe = await entity(user.id, 'Person', 'Joe');
+    const jonty = await entity(user.id, 'Person', 'Jonty');
     const orgbeta = await entity(user.id, 'Organization', 'Org Beta');
-    const supplyChain = await relation(user.id, 'HAS_ROLE', joe, orgbeta, '[2019-01-01,)', 'year', { title: 'VP', businessUnit: 'Supply Chain' });
+    const supplyChain = await relation(user.id, 'HAS_ROLE', jonty, orgbeta, '[2019-01-01,)', 'year', { title: 'VP', businessUnit: 'Supply Chain' });
 
     // A move to Finance, same title: a new fact that closes the Supply Chain role.
     const move = await proposal(user.id, note.id);
-    await row(move.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
+    await row(move.id, user.id, 'entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(jonty) });
     await row(move.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Org Beta'), { resolution: linked(orgbeta) });
     await row(move.id, user.id, 'relation', relPayload({ type: 'HAS_ROLE', props: { title: 'VP', businessUnit: 'Finance' }, validFrom: '2026-03-01', precision: 'month' }));
     await runAll(ctx(move.id, user.id, note.id));
@@ -336,12 +336,12 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
   it('a 2020 fact inside an accepted [2019, 2026) WORKS_FOR is known, never a closing', async () => {
     const user = await createUser();
     const note = await createNote(user.id);
-    const joe = await entity(user.id, 'Person', 'Joe');
+    const jonty = await entity(user.id, 'Person', 'Jonty');
     const kappa = await entity(user.id, 'Organization', 'Kappa');
-    const works = await relation(user.id, 'WORKS_FOR', joe, kappa, '[2019-01-01,2026-01-01)', 'year');
+    const works = await relation(user.id, 'WORKS_FOR', jonty, kappa, '[2019-01-01,2026-01-01)', 'year');
 
     const p = await proposal(user.id, note.id);
-    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
+    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(jonty) });
     await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Kappa'), { resolution: linked(kappa) });
     await row(p.id, user.id, 'relation', relPayload({ validFrom: '2020-01-01', precision: 'year' }));
 
@@ -354,17 +354,17 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     expect(precheck(items)[items.indexOf(rel)]).toBe('accept');
   });
 
-  it('symmetric (#383): a stored (Ana SPOUSE_OF Ben) makes a proposed (Ben SPOUSE_OF Ana) known; PARENT_OF stays directed', async () => {
+  it('symmetric (#383): a stored (Anders SPOUSE_OF Bram) makes a proposed (Bram SPOUSE_OF Anders) known; PARENT_OF stays directed', async () => {
     const user = await createUser();
     const note = await createNote(user.id);
-    const ana = await entity(user.id, 'Person', 'Ana');
-    const ben = await entity(user.id, 'Person', 'Ben');
-    const spouse = await relation(user.id, 'SPOUSE_OF', ana, ben, '[2015-01-01,)', 'year');
-    await relation(user.id, 'PARENT_OF', ana, ben, 'empty', 'unknown');
+    const anders = await entity(user.id, 'Person', 'Anders');
+    const bram = await entity(user.id, 'Person', 'Bram');
+    const spouse = await relation(user.id, 'SPOUSE_OF', anders, bram, '[2015-01-01,)', 'year');
+    await relation(user.id, 'PARENT_OF', anders, bram, 'empty', 'unknown');
 
     const p = await proposal(user.id, note.id);
-    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Ben'), { resolution: linked(ben) });
-    await row(p.id, user.id, 'entity', entityPayload('e2', 'Person', 'Ana'), { resolution: linked(ana) });
+    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Bram'), { resolution: linked(bram) });
+    await row(p.id, user.id, 'entity', entityPayload('e2', 'Person', 'Anders'), { resolution: linked(anders) });
     await row(p.id, user.id, 'relation', relPayload({ ref: 'r1', type: 'SPOUSE_OF' }));
     await row(p.id, user.id, 'relation', relPayload({ ref: 'r2', type: 'PARENT_OF' }));
 
@@ -381,13 +381,13 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
   it('an overlapping new WORKS_FOR is flagged overlaps and still proposed', async () => {
     const user = await createUser();
     const note = await createNote(user.id);
-    const joe = await entity(user.id, 'Person', 'Joe');
+    const jonty = await entity(user.id, 'Person', 'Jonty');
     const kappa = await entity(user.id, 'Organization', 'Kappa');
     const sigma = await entity(user.id, 'Organization', 'Org Sigma');
-    await relation(user.id, 'WORKS_FOR', joe, kappa, '[2019-01-01,2024-01-01)', 'year');
+    await relation(user.id, 'WORKS_FOR', jonty, kappa, '[2019-01-01,2024-01-01)', 'year');
 
     const p = await proposal(user.id, note.id);
-    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
+    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(jonty) });
     await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Org Sigma'), { resolution: linked(sigma) });
     await row(p.id, user.id, 'relation', relPayload({ validFrom: '2023-01-01', validTo: '2025-01-01', precision: 'year' }));
     await runAll(ctx(p.id, user.id, note.id));
@@ -399,16 +399,16 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
   it('a company change closes WORKS_FOR and lists the person’s open commitments', async () => {
     const user = await createUser();
     const note = await createNote(user.id);
-    const joe = await entity(user.id, 'Person', 'Joe');
+    const jonty = await entity(user.id, 'Person', 'Jonty');
     const kappa = await entity(user.id, 'Organization', 'Kappa');
     const sigma = await entity(user.id, 'Organization', 'Org Sigma');
     const project = await entity(user.id, 'Project', 'Vendor migration');
-    const works = await relation(user.id, 'WORKS_FOR', joe, kappa, '[2019-01-01,)', 'year');
-    const open = await item(user.id, { kind: 'commitment', subjectId: project, statement: 'Joe finishes the vendor migration.', status: 'open', ownerPersonId: joe });
-    await item(user.id, { kind: 'commitment', subjectId: project, statement: 'Joe files the old report.', status: 'done', ownerPersonId: joe });
+    const works = await relation(user.id, 'WORKS_FOR', jonty, kappa, '[2019-01-01,)', 'year');
+    const open = await item(user.id, { kind: 'commitment', subjectId: project, statement: 'Jonty finishes the vendor migration.', status: 'open', ownerPersonId: jonty });
+    await item(user.id, { kind: 'commitment', subjectId: project, statement: 'Jonty files the old report.', status: 'done', ownerPersonId: jonty });
 
     const p = await proposal(user.id, note.id);
-    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
+    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(jonty) });
     await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Org Sigma'), { resolution: linked(sigma) });
     await row(p.id, user.id, 'relation', relPayload({ validFrom: '2026-03-01', precision: 'month' }));
     await runAll(ctx(p.id, user.id, note.id));
@@ -421,7 +421,7 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
       toLabel: 'Kappa',
       roleTitle: null,
       closeAt: '2026-03-01',
-      affectedCommitments: [{ itemId: open, title: 'Joe finishes the vendor migration.', role: 'owner' }],
+      affectedCommitments: [{ itemId: open, title: 'Jonty finishes the vendor migration.', role: 'owner' }],
     });
   });
 
@@ -461,12 +461,12 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
   it('a restated identical fact is known by its statement hash, collapsed and pre-accepted', async () => {
     const user = await createUser();
     const note = await createNote(user.id);
-    const sarah = await entity(user.id, 'Person', 'Sarah');
-    const known = await item(user.id, { kind: 'claim', subjectId: sarah, statement: 'Sarah owns the vendor migration.' });
+    const sasha = await entity(user.id, 'Person', 'Sasha');
+    const known = await item(user.id, { kind: 'claim', subjectId: sasha, statement: 'Sasha owns the vendor migration.' });
 
     const p = await proposal(user.id, note.id);
-    await row(p.id, user.id, 'entity', entityPayload('e2', 'Person', 'Sarah'), { resolution: linked(sarah) });
-    await row(p.id, user.id, 'item', itemPayload({ kind: 'claim', statement: 'Sarah owns the vendor  migration!' }));
+    await row(p.id, user.id, 'entity', entityPayload('e2', 'Person', 'Sasha'), { resolution: linked(sasha) });
+    await row(p.id, user.id, 'item', itemPayload({ kind: 'claim', statement: 'Sasha owns the vendor  migration!' }));
     await runAll(ctx(p.id, user.id, note.id));
     const items = await rows(p.id);
     const claim = items.find((i) => i.kind === 'item')!;
@@ -479,30 +479,30 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     const user = await createUser();
     const noteA = await createNote(user.id);
     const noteB = await createNote(user.id);
-    const joe = await entity(user.id, 'Person', 'Joe');
+    const jonty = await entity(user.id, 'Person', 'Jonty');
     const kappa = await entity(user.id, 'Organization', 'Kappa');
-    const fact = itemPayload({ ref: 'f1', kind: 'person_fact', statement: 'Joe is training for a marathon.', subject: { ref: 'e1' }, sensitivity: 'personal' });
-    const claim = itemPayload({ ref: 'c1', kind: 'claim', statement: 'Joe runs the Kappa account.', subject: { ref: 'e1' } });
+    const fact = itemPayload({ ref: 'f1', kind: 'person_fact', statement: 'Jonty is training for a marathon.', subject: { ref: 'e1' }, sensitivity: 'personal' });
+    const claim = itemPayload({ ref: 'c1', kind: 'claim', statement: 'Jonty runs the Kappa account.', subject: { ref: 'e1' } });
 
     // Note A, committed: the person fact was rejected.
     const oldA = await proposal(user.id, noteA.id, 'committed');
-    await row(oldA.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
+    await row(oldA.id, user.id, 'entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(jonty) });
     await row(oldA.id, user.id, 'item', fact, { decision: 'reject' });
     // Note B, committed: the claim was rejected.
     const oldB = await proposal(user.id, noteB.id, 'committed');
-    await row(oldB.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
+    await row(oldB.id, user.id, 'entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(jonty) });
     await row(oldB.id, user.id, 'item', claim, { decision: 'reject' });
     // Note B, discarded: a WORKS_FOR was "rejected" — that "no" was never committed.
     const discarded = await proposal(user.id, noteB.id, 'discarded');
-    await row(discarded.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
+    await row(discarded.id, user.id, 'entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(jonty) });
     await row(discarded.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Kappa'), { resolution: linked(kappa) });
     await row(discarded.id, user.id, 'relation', relPayload({ type: 'ATTENDED' }), { decision: 'reject' });
 
     // Now note B is extracted again.
     const p = await proposal(user.id, noteB.id);
-    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
+    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(jonty) });
     await row(p.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Kappa'), { resolution: linked(kappa) });
-    await row(p.id, user.id, 'item', fact, { quote: 'Joe mentioned the marathon' });
+    await row(p.id, user.id, 'item', fact, { quote: 'Jonty mentioned the marathon' });
     await row(p.id, user.id, 'item', claim);
     await row(p.id, user.id, 'relation', relPayload({ type: 'ATTENDED' }));
     const c = ctx(p.id, user.id, noteB.id);
@@ -510,7 +510,7 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
 
     const items = await rows(p.id);
     expect(items.some((i) => (i.payload as { ref: string }).ref === 'f1')).toBe(false);
-    expect(await prisma.kgEvidence.count({ where: { ownerId: user.id, quote: 'Joe mentioned the marathon' } })).toBe(0);
+    expect(await prisma.kgEvidence.count({ where: { ownerId: user.id, quote: 'Jonty mentioned the marathon' } })).toBe(0);
     const c1 = items.find((i) => (i.payload as { ref: string }).ref === 'c1')!;
     expect(c1).toMatchObject({ flags: ['previously_rejected'], decision: 'reject' });
     const r1 = items.find((i) => i.kind === 'relation')!;

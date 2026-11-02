@@ -32,7 +32,7 @@ const RECORDING_WORDS = /record|audio|transcrib|microphone|upload a/i;
 
 function host(options: { transcription?: boolean; graphEnabled?: boolean; notes?: ReturnType<typeof noteSummary> } = {}): FakeKvoxWebHost {
   return createFakeKvoxWebHost({
-    viewer: { userId: 'u1', permissions: ALL_HOME_PERMISSIONS, displayName: 'Ana Ruiz' },
+    viewer: { userId: 'u1', permissions: ALL_HOME_PERMISSIONS, displayName: 'Anders Stubbs' },
     features: {
       graphEnabled: options.graphEnabled ?? false,
       ...(options.transcription === undefined ? {} : { transcription: options.transcription }),

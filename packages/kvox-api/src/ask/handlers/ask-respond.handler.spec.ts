@@ -69,7 +69,7 @@ const call = (id: string, name = 'search', args = '{"query":"kappa"}'): KvoxChat
 
   return { type: 'tool_call', id, name, arguments: parsed };
 };
-const LONG = 'Kappa is a client of yours and signed the renewal in August.[^ev1] It is led by Sarah.[^ent1]';
+const LONG = 'Kappa is a client of yours and signed the renewal in August.[^ev1] It is led by Sasha.[^ent1]';
 
 function payload(over: Partial<AskRespondPayload> = {}): AskRespondPayload {
   return {
@@ -460,22 +460,22 @@ describe('AskRespondHandler (#378)', () => {
     it('pre-registers a readable scope entity as ent1 and names it in the system prompt', async () => {
       const t = setup({
         scopeEntityId: ENTITY,
-        scopeEntity: { id: ENTITY, label: 'Sarah Chen', type: 'Person' },
-        scripts: [[text('Sarah leads the Atlas project, according to the notes you reviewed.[^ent1]'), done()]],
+        scopeEntity: { id: ENTITY, label: 'Sasha Example', type: 'Person' },
+        scripts: [[text('Sasha leads the Atlas project, according to the notes you reviewed.[^ent1]'), done()]],
       });
       await t.handler.process(job());
-      expect(t.requests[0].messages[0].content).toContain('This conversation is about Sarah Chen (Person), reference ent1.');
-      expect(t.final().citations).toEqual([expect.objectContaining({ marker: 'ent1', valid: true, id: ENTITY, label: 'Sarah Chen' })]);
+      expect(t.requests[0].messages[0].content).toContain('This conversation is about Sasha Example (Person), reference ent1.');
+      expect(t.final().citations).toEqual([expect.objectContaining({ marker: 'ent1', valid: true, id: ENTITY, label: 'Sasha Example' })]);
     });
 
     it('registers the selection of the turn as handles and names them as starting points (GIC-17)', async () => {
       const t = setup({
-        selectionEntities: [{ id: ENTITY, label: 'Joe', type: 'Person' }],
-        scripts: [[text('Joe is involved in the Product X rollout, per the notes you reviewed.[^ent1]'), done()]],
+        selectionEntities: [{ id: ENTITY, label: 'Jonty', type: 'Person' }],
+        scripts: [[text('Jonty is involved in the Product X rollout, per the notes you reviewed.[^ent1]'), done()]],
       });
       await t.handler.process(job(payload({ scope: { entityIds: [ENTITY] } })));
       const system = t.requests[0].messages[0].content as string;
-      expect(system).toContain('The user selected these on the graph before asking: ent1 (Joe, Person)');
+      expect(system).toContain('The user selected these on the graph before asking: ent1 (Jonty, Person)');
       expect(system).toContain('starting points only, not evidence');
       expect(system).not.toContain(ENTITY);
       expect(t.final().citations).toEqual([expect.objectContaining({ marker: 'ent1', valid: true, id: ENTITY })]);

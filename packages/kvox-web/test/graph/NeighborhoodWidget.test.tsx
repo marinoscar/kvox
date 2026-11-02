@@ -14,7 +14,7 @@ import {
 } from '../../src/graph/ui/components/NeighborhoodWidget.js';
 import { buildNeighborhoodGraph } from '../../src/graph/ui/components/explorer/NeighborhoodCanvas.js';
 import { GraphEntityPage } from '../../src/graph/ui/pages/GraphEntityPage.js';
-import { KAPPA_ID, JOE_ID, neighborhoodFixture } from './graphData.js';
+import { KAPPA_ID, JONTY_ID, neighborhoodFixture } from './graphData.js';
 import { server } from './msw-compat.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
 import { graphWriter } from './graphTestUsers.js';
@@ -63,12 +63,12 @@ beforeEach(() => {
   });
 });
 
-function renderWidget(route = `/graph/entities/${JOE_ID}`) {
+function renderWidget(route = `/graph/entities/${JONTY_ID}`) {
   return render(
     <Routes>
       <Route
         path="/graph/entities/:id"
-        element={<NeighborhoodWidget entityId={JOE_ID} entityLabel="Joe Rivera" />}
+        element={<NeighborhoodWidget entityId={JONTY_ID} entityLabel="Jonty Placeholder" />}
       />
       <Route path="/graph/explore" element={<h1>Explorer</h1>} />
     </Routes>,
@@ -87,9 +87,9 @@ describe('NeighborhoodWidget', () => {
     expect(neighbourhoodUrls[0].searchParams.get('limit')).toBe(String(NEIGHBORHOOD_WIDGET_LIMIT));
     expect(screen.getByRole('link', { name: 'Open in explorer' })).toHaveAttribute(
       'href',
-      explorerPathFor(JOE_ID),
+      explorerPathFor(JONTY_ID),
     );
-    expect(explorerPathFor(JOE_ID)).toBe(`/graph/explore?seed=${JOE_ID}`);
+    expect(explorerPathFor(JONTY_ID)).toBe(`/graph/explore?seed=${JONTY_ID}`);
     expect(canvas).toHaveAttribute('data-interactive', 'true');
     expect(canvas).toHaveAttribute('data-layout', 'forceatlas');
     expect(await axe(container, { rules: { 'color-contrast': { enabled: false } } })).toHaveNoViolations();
@@ -118,7 +118,7 @@ describe('NeighborhoodWidget', () => {
   });
 
   it('uses the static layout for ?layout=static', async () => {
-    renderWidget(`/graph/entities/${JOE_ID}?layout=static`);
+    renderWidget(`/graph/entities/${JONTY_ID}?layout=static`);
     expect(await screen.findByTestId('fake-canvas')).toHaveAttribute('data-layout', 'static');
   });
 
@@ -129,7 +129,7 @@ describe('NeighborhoodWidget', () => {
     const canvas = await screen.findByTestId('fake-canvas');
     expect(canvas).toHaveAttribute('data-interactive', 'false');
     const target = screen.getByTestId('neighborhood-tap-target');
-    expect(target).toHaveAttribute('href', explorerPathFor(JOE_ID));
+    expect(target).toHaveAttribute('href', explorerPathFor(JONTY_ID));
     expect(target).toHaveAttribute('aria-hidden', 'true');
     await user.click(target);
     expect(await screen.findByRole('heading', { name: 'Explorer' })).toBeInTheDocument();
@@ -168,7 +168,7 @@ describe('buildNeighborhoodGraph', () => {
   it('builds a deterministic graph with the entity at the centre', () => {
     const a = buildNeighborhoodGraph(neighborhoodFixture());
     const b = buildNeighborhoodGraph(neighborhoodFixture());
-    expect(a.getNodeAttributes(JOE_ID)).toMatchObject({ x: 0, y: 0 });
+    expect(a.getNodeAttributes(JONTY_ID)).toMatchObject({ x: 0, y: 0 });
     expect(a.nodes().map((id) => a.getNodeAttributes(id).x)).toEqual(
       b.nodes().map((id) => b.getNodeAttributes(id).x),
     );
@@ -181,7 +181,7 @@ describe('GraphEntityPage — the widget above the Connections list', () => {
       <Routes>
         <Route path="/graph/entities/:id" element={<GraphEntityPage />} />
       </Routes>,
-      { wrapperOptions: { route: `/graph/entities/${JOE_ID}`, user: graphWriter } },
+      { wrapperOptions: { route: `/graph/entities/${JONTY_ID}`, user: graphWriter } },
     );
     const widget = await screen.findByRole('heading', { name: 'Neighbourhood' });
     const connections = await screen.findByRole('heading', { name: 'Connections' });

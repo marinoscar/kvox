@@ -8,7 +8,7 @@ import 'vitest-axe/extend-expect';
 import { GuideGraphPanel } from '../../src/graph/ui/components/guide/GuideGraphPanel.js';
 import { forgetEntityLabels, rememberEntityLabel } from '../../src/graph/headless/utils/guidance.js';
 import type { UserGuidance } from '../../src/graph/headless/clients/graph.js';
-import { EXISTING_SARAH_ID, EXISTING_TOM_ID, mockGraphOntology } from './graphData.js';
+import { EXISTING_SASHA_ID, EXISTING_TOBIAS_ID, mockGraphOntology } from './graphData.js';
 import { render } from './helpers.js';
 
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
@@ -107,24 +107,24 @@ describe('GuideGraphPanel', () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChange={onChange} />);
-    await user.type(screen.getByRole('combobox', { name: 'Search your graph' }), 'Tom');
-    await user.click(await screen.findByRole('option', { name: /Tom Baker/ }));
-    expect((onChange.mock.calls.at(-1)![0] as UserGuidance).pinnedEntityIds).toEqual([EXISTING_TOM_ID]);
+    await user.type(screen.getByRole('combobox', { name: 'Search your graph' }), 'Tobias');
+    await user.click(await screen.findByRole('option', { name: /Tobias Dummyson/ }));
+    expect((onChange.mock.calls.at(-1)![0] as UserGuidance).pinnedEntityIds).toEqual([EXISTING_TOBIAS_ID]);
     const pinned = screen.getByRole('list', { name: 'Focused entities' });
-    const chip = within(pinned).getByRole('button', { name: /Tom Baker/ });
+    const chip = within(pinned).getByRole('button', { name: /Tobias Dummyson/ });
     chip.focus();
     await user.keyboard('{Backspace}');
     expect((onChange.mock.calls.at(-1)![0] as UserGuidance).pinnedEntityIds).toEqual([]);
   });
 
   it('highlights what the server refused', () => {
-    rememberEntityLabel(EXISTING_SARAH_ID, 'Sarah Chen');
+    rememberEntityLabel(EXISTING_SASHA_ID, 'Sasha Example');
     render(
       <Harness
-        initial={{ pinnedEntityIds: [EXISTING_SARAH_ID], instructions: '', entityTypes: ['Person', 'Vendor'] }}
-        invalid={{ unknownTypes: [], invalidPinnedIds: [EXISTING_SARAH_ID] }}
+        initial={{ pinnedEntityIds: [EXISTING_SASHA_ID], instructions: '', entityTypes: ['Person', 'Vendor'] }}
+        invalid={{ unknownTypes: [], invalidPinnedIds: [EXISTING_SASHA_ID] }}
       />,
     );
-    expect(screen.getByText('Sarah Chen (no longer in your graph)')).toBeInTheDocument();
+    expect(screen.getByText('Sasha Example (no longer in your graph)')).toBeInTheDocument();
   });
 });

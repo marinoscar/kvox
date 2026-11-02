@@ -206,7 +206,7 @@ describe('KgImportHandler', () => {
     await t.run();
     expect(t.state()).toMatchObject({ status: 'draft', stats: { sourceOntologyVersion: '1.0.0', migratedFrom: '1.0.0' } });
     const data = (t.prisma.kgProposalItem.createMany.mock.calls[0][0] as { data: Array<{ payload: { label?: string; props?: object } }> }).data;
-    expect(data.find((r) => r.payload.label === 'Joe Smith')?.payload.props).toEqual({});
+    expect(data.find((r) => r.payload.label === 'Jonty Sample')?.payload.props).toEqual({});
   });
 
   it.each([

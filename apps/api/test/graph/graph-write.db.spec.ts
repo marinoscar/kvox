@@ -122,7 +122,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
         startMs: 0,
         endMs: 1000,
         ordinal: 1000,
-        text: 'Sarah joined Kappa in 2019',
+        text: 'Sasha joined Kappa in 2019',
         words: [],
       },
     });
@@ -133,9 +133,9 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
     ({ noteId, noteVersion, charStart: 0, charEnd: 4, quote: 'Body' }) as EvidenceInput;
 
   const segmentEvidence = (transcriptId: string, segmentId: string): EvidenceInput =>
-    ({ transcriptId, segmentId, quote: 'Sarah joined Kappa' }) as EvidenceInput;
+    ({ transcriptId, segmentId, quote: 'Sasha joined Kappa' }) as EvidenceInput;
 
-  async function rawEntity(ownerId: string, reviewStatus: string, label = 'Sarah Chen') {
+  async function rawEntity(ownerId: string, reviewStatus: string, label = 'Sasha Example') {
     const id = randomUUID();
     await prisma.$executeRawUnsafe(
       `INSERT INTO kg_entities (id, owner_id, type, label, review_status, ontology_version, updated_at)
@@ -149,7 +149,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
   }
 
   /** An accepted Person with one citation, via the service. */
-  async function acceptedPerson(ownerId: string, noteId: string, label = 'Sarah Chen') {
+  async function acceptedPerson(ownerId: string, noteId: string, label = 'Sasha Example') {
     return prisma.$transaction((tx) =>
       write.createEntity(
         tx,
@@ -256,8 +256,8 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
     it('allows a merge that tombstones the loser and re-points its evidence to the survivor', async () => {
       const owner = await createUser('merge');
       const note = await createNote(owner.id);
-      const survivor = await acceptedPerson(owner.id, note.id, 'Sarah Chen');
-      const loser = await acceptedPerson(owner.id, note.id, 'S. Chen');
+      const survivor = await acceptedPerson(owner.id, note.id, 'Sasha Example');
+      const loser = await acceptedPerson(owner.id, note.id, 'S. Example');
 
       await prisma.$transaction([
         prisma.kgEntity.update({ where: { id: loser.id }, data: { reviewStatus: 'merged', mergedIntoId: survivor.id } }),
@@ -288,12 +288,12 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
           {
             ownerId: owner.id,
             type: 'Person',
-            label: 'Sarah Chen',
+            label: 'Sasha Example',
             reviewStatus: 'accepted',
             labelSource: 'speaker_naming',
             aliases: [
-              { alias: '  SARAH   chen! ', source: 'user' },
-              { alias: 'Sally', source: 'user' },
+              { alias: '  SASHA   example! ', source: 'user' },
+              { alias: 'Sabby', source: 'user' },
             ],
             evidence: [noteEvidence(note.id)],
           },
@@ -304,8 +304,8 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
       expect(entity.ontologyVersion).toBe(ONTOLOGY_VERSION);
       const aliases = await prisma.kgEntityAlias.findMany({ where: { entityId: entity.id }, orderBy: { alias: 'asc' } });
       expect(aliases.map((a) => [a.alias, a.normalized, a.source])).toEqual([
-        ['Sally', 'sally', 'user'],
-        ['Sarah Chen', normalizeAlias('Sarah Chen'), 'speaker_naming'],
+        ['Sabby', 'sabby', 'user'],
+        ['Sasha Example', normalizeAlias('Sasha Example'), 'speaker_naming'],
       ]);
     });
 
@@ -562,13 +562,13 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
           prisma.$transaction((tx) =>
             write.createEntity(
               tx,
-              { ownerId: owner.id, type: 'Person', label: 'Sarah', reviewStatus: 'accepted', labelSource: 'user', evidence: [evidence] },
+              { ownerId: owner.id, type: 'Person', label: 'Sasha', reviewStatus: 'accepted', labelSource: 'user', evidence: [evidence] },
               schema,
             ),
           );
 
         await expect(create(segmentEvidence(shared.transcript.id, shared.segment.id))).resolves.toMatchObject({
-          label: 'Sarah',
+          label: 'Sasha',
         });
 
         // A real segment, named under the wrong (but viewable) transcript.

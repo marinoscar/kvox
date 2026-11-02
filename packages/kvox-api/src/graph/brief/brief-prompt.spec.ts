@@ -42,7 +42,7 @@ describe('the digest prompt', () => {
     relations: [
       {
         typeLabel: 'Has role',
-        fromLabel: 'Sarah',
+        fromLabel: 'Sasha',
         toLabel: 'Kappa',
         title: 'Staff Engineer',
         validFrom: new Date('2026-02-01T00:00:00Z'),
@@ -68,7 +68,7 @@ describe('the digest prompt', () => {
     expect(prompt.userContent).toMatch(/^F1: Kappa is evaluating vendors$/m);
     expect(prompt.userContent).toMatch(/^F3: \[2026-03-04, decision\] Kappa chose the blue plan$/m);
     expect(prompt.userContent).toContain('F4: [2026-03-04, commitment] Send the contract (status: open, due 2026-04-01)');
-    expect(prompt.userContent).toContain('Sarah — Has role — Kappa (Staff Engineer), since 2026-02-01');
+    expect(prompt.userContent).toContain('Sasha — Has role — Kappa (Staff Engineer), since 2026-02-01');
   });
 
   it('contains no uuid anywhere', () => {

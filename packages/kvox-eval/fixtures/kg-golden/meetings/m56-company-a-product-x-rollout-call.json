@@ -9,13 +9,13 @@
     "product-x-rollout"
   ],
   "recordedAt": "2026-10-06T15:00:00Z",
-  "contextText": "Call with Joe from Company A ahead of the pilot review of the Product X rollout; notes only.",
+  "contextText": "Call with Jonty from Company A ahead of the pilot review of the Product X rollout; notes only.",
   "hasTranscript": false,
   "speakers": [],
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Company A Product X rollout call\n\n**Date:** October 6\n**Attendees:** Maya Ibsen, Joe Hartigan, Nadia Okoye\n\n## Summary\n\nI talked to Joe from Company A about the Product X rollout at Company A. Joe Hartigan works for Company A, a regional insurer, and sits on the group that will decide whether the rollout goes ahead. Company A is piloting Product X with a single claims team, and the call was meant to hear where Joe stands before the pilot review. The mood was constructive but careful.\n\n## Where Joe stands\n\nJoe is a stakeholder in the Product X rollout. He said he is skeptical about the Product X rollout, because the pilot users have not yet shown a time saving that justifies the price. He did not object to the pilot itself, only to widening it before the numbers are in. He asked for a plain comparison of hours saved against the cost per seat.\n\n## The pilot and the product\n\nCompany A is piloting Product X with a single claims team of about twelve people. Product X is offered by Org Beta, and the pilot runs on the trial licences Org Beta granted for ninety days. The Product X rollout concerns Product X itself and the question of licensing cost. The claims team uses it mostly for drafting letters and summarising long case files.\n\n## What is blocking\n\n- The licence budget isn't approved, so the rollout cannot move past the pilot until finance signs it off. Joe called it the first thing that has to be settled.\n- Joe expects the licensing cost to be the main subject of the next review, ahead of any question about quality.\n\n## Other attendees\n\nNadia Okoye from the IT team at Company A joined for the last ten minutes and only took notes. She did not state a position on the rollout. Her team will help with the licence assignment if the budget is approved.\n\n## Next steps\n\nMaya will send Joe the pilot usage summary after the second month closes. The group meets again once the pilot review has taken place, and the summary of this call goes to the programme office.\n"
+    "body": "# Company A Product X rollout call\n\n**Date:** October 6\n**Attendees:** Mercer Stubbs, Jonty Fixture, Nell Mockwell\n\n## Summary\n\nI talked to Jonty from Company A about the Product X rollout at Company A. Jonty Fixture works for Company A, a regional insurer, and sits on the group that will decide whether the rollout goes ahead. Company A is piloting Product X with a single claims team, and the call was meant to hear where Jonty stands before the pilot review. The mood was constructive but careful.\n\n## Where Jonty stands\n\nJonty is a stakeholder in the Product X rollout. He said he is skeptical about the Product X rollout, because the pilot users have not yet shown a time saving that justifies the price. He did not object to the pilot itself, only to widening it before the numbers are in. He asked for a plain comparison of hours saved against the cost per seat.\n\n## The pilot and the product\n\nCompany A is piloting Product X with a single claims team of about twelve people. Product X is offered by Org Beta, and the pilot runs on the trial licences Org Beta granted for ninety days. The Product X rollout concerns Product X itself and the question of licensing cost. The claims team uses it mostly for drafting letters and summarising long case files.\n\n## What is blocking\n\n- The licence budget isn't approved, so the rollout cannot move past the pilot until finance signs it off. Jonty called it the first thing that has to be settled.\n- Jonty expects the licensing cost to be the main subject of the next review, ahead of any question about quality.\n\n## Other attendees\n\nNell Mockwell from the IT team at Company A joined for the last ten minutes and only took notes. She did not state a position on the rollout. Her team will help with the licence assignment if the budget is approved.\n\n## Next steps\n\nMercer will send Jonty the pilot usage summary after the second month closes. The group meets again once the pilot review has taken place, and the summary of this call goes to the programme office.\n"
   },
   "knownEntities": [
     {
@@ -45,46 +45,46 @@
         ]
       },
       {
-        "key": "maya",
+        "key": "mercer",
         "type": "Person",
-        "label": "Maya Ibsen",
+        "label": "Mercer Stubbs",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Maya Ibsen, Joe Hartigan, Nadia Okoye"
+            "quote": "Mercer Stubbs, Jonty Fixture, Nell Mockwell"
           }
         ]
       },
       {
-        "key": "joe",
+        "key": "jonty",
         "type": "Person",
-        "label": "Joe Hartigan",
+        "label": "Jonty Fixture",
         "aliases": [
-          "Joe"
+          "Jonty"
         ],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Joe Hartigan works for Company A"
+            "quote": "Jonty Fixture works for Company A"
           }
         ]
       },
       {
-        "key": "nadia",
+        "key": "nell",
         "type": "Person",
-        "label": "Nadia Okoye",
+        "label": "Nell Mockwell",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Nadia Okoye from the IT team at Company A"
+            "quote": "Nell Mockwell from the IT team at Company A"
           }
         ]
       },
@@ -98,7 +98,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Joe Hartigan works for Company A"
+            "quote": "Jonty Fixture works for Company A"
           }
         ]
       },
@@ -142,7 +142,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "I talked to Joe from Company A about the Product X rollout at Company A"
+            "quote": "I talked to Jonty from Company A about the Product X rollout at Company A"
           }
         ]
       },
@@ -164,7 +164,7 @@
     "relations": [
       {
         "type": "WORKS_FOR",
-        "from": "joe",
+        "from": "jonty",
         "to": "companya",
         "validFrom": null,
         "validTo": null,
@@ -173,13 +173,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Joe Hartigan works for Company A"
+            "quote": "Jonty Fixture works for Company A"
           }
         ]
       },
       {
         "type": "INVOLVED_IN",
-        "from": "joe",
+        "from": "jonty",
         "to": "rollout",
         "validFrom": null,
         "validTo": null,
@@ -191,7 +191,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Joe is a stakeholder in the Product X rollout"
+            "quote": "Jonty is a stakeholder in the Product X rollout"
           },
           {
             "source": "note",
@@ -287,7 +287,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "I talked to Joe from Company A about the Product X rollout"
+            "quote": "I talked to Jonty from Company A about the Product X rollout"
           }
         ]
       },
@@ -302,7 +302,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Joe expects the licensing cost to be the main subject of the next review"
+            "quote": "Jonty expects the licensing cost to be the main subject of the next review"
           }
         ]
       }
@@ -332,11 +332,11 @@
       },
       {
         "kind": "commitment",
-        "subject": "joe",
-        "owner": "maya",
-        "counterparty": "joe",
-        "title": "Send Joe the pilot usage summary",
-        "statement": "Maya will send Joe the pilot usage summary after the second month closes.",
+        "subject": "jonty",
+        "owner": "mercer",
+        "counterparty": "jonty",
+        "title": "Send Jonty the pilot usage summary",
+        "statement": "Mercer will send Jonty the pilot usage summary after the second month closes.",
         "status": "open",
         "occurredAt": "2026-10-06",
         "dueAt": null,
@@ -346,7 +346,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Maya will send Joe the pilot usage summary after the second month closes"
+            "quote": "Mercer will send Jonty the pilot usage summary after the second month closes"
           }
         ]
       }
@@ -354,7 +354,7 @@
     "negatives": [
       {
         "quote": "She did not state a position on the rollout",
-        "why": "Nadia Okoye took notes and stated no role and no position, so no INVOLVED_IN and no stance may be proposed for her."
+        "why": "Nell Mockwell took notes and stated no role and no position, so no INVOLVED_IN and no stance may be proposed for her."
       }
     ]
   }

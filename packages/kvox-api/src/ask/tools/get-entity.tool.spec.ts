@@ -7,7 +7,7 @@ import { GetEntityTool } from './get-entity.tool.js';
 // definition, entity_ref values as handles, uuids dropped, counts reshaped.
 // =============================================================================
 
-const SARAH = uid(1);
+const SASHA = uid(1);
 const KAPPA = uid(2);
 const FOREIGN = uid(3);
 
@@ -42,13 +42,13 @@ const schema = {
 
 function detail(props: Record<string, unknown>) {
   return {
-    id: SARAH,
+    id: SASHA,
     type: 'Person',
-    label: 'Sarah',
+    label: 'Sasha',
     props,
     aliases: [
-      { id: uid(10), alias: 'Sarah', source: 'extraction' },
-      { id: uid(11), alias: 'S. Chen', source: 'user' },
+      { id: uid(10), alias: 'Sasha', source: 'extraction' },
+      { id: uid(11), alias: 'S. Example', source: 'user' },
     ],
     occurredAt: null,
     reviewStatus: 'accepted',
@@ -90,17 +90,17 @@ describe('GetEntityTool', () => {
   it('maps the detail, dropping sensitive and (by default) personal attributes', async () => {
     const { tool, graphRead, prisma } = build(PROPS);
     const ctx = makeCtx();
-    const handle = seedEntity(ctx, SARAH, 'Sarah');
+    const handle = seedEntity(ctx, SASHA, 'Sasha');
     const res = await tool.run(ctx, tool.input.parse({ entity: handle }));
-    expect(graphRead.getEntity).toHaveBeenCalledWith(ctx.user, SARAH);
+    expect(graphRead.getEntity).toHaveBeenCalledWith(ctx.user, SASHA);
     expect(prisma.kgEntity.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ ownerId: ctx.user.id, mergedIntoId: null }) }),
     );
     expect(res.data).toEqual({
       ref: 'ent1',
       type: 'Person',
-      label: 'Sarah',
-      aliases: ['S. Chen'],
+      label: 'Sasha',
+      aliases: ['S. Example'],
       attributes: {
         'Job title': 'CTO',
         Employer: { ref: 'ent2', label: 'Kappa', type: 'Organization' },
@@ -111,7 +111,7 @@ describe('GetEntityTool', () => {
       firstSeen: '2026-01-02',
       lastSeen: '2026-09-01',
     });
-    expect(res.summary).toBe('Looked up Sarah (Person)');
+    expect(res.summary).toBe('Looked up Sasha (Person)');
     expect(JSON.stringify(res.data)).not.toContain('Lisbon');
     expect(JSON.stringify(res.data)).not.toContain('private');
     expectNoUuid(res.data);
@@ -128,7 +128,7 @@ describe('GetEntityTool', () => {
       const { tool, graphRead } = build({});
       graphRead.getEntity.mockResolvedValueOnce({ ...detail({}), ...instants });
       const ctx = makeCtx(timeZone ? { timeZone } : {});
-      const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SARAH, 'Sarah') }));
+      const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SASHA, 'Sasha') }));
       expect(res.data).toMatchObject({ firstSeen: day, lastSeen: day });
     }
   });
@@ -136,7 +136,7 @@ describe('GetEntityTool', () => {
   it('shows personal attributes only with the opt-in — never sensitive ones', async () => {
     const { tool } = build(PROPS);
     const ctx = makeCtx({ personalFactsAllowed: true });
-    const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SARAH) }));
+    const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SASHA) }));
     const attributes = (res.data as { attributes: Record<string, unknown> }).attributes;
     expect(attributes['Home town']).toBe('Lisbon');
     expect(attributes.Diagnosis).toBeUndefined();
@@ -144,9 +144,9 @@ describe('GetEntityTool', () => {
 
   it('refuses a personal-domain entity without the opt-in (#383)', async () => {
     const { tool, graphRead } = build({});
-    graphRead.getEntity.mockResolvedValueOnce({ ...detail({}), type: 'Milestone', label: "Ivy's 5th birthday" });
+    graphRead.getEntity.mockResolvedValueOnce({ ...detail({}), type: 'Milestone', label: "Ivo's 5th birthday" });
     const ctx = makeCtx();
-    await expect(tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SARAH, 'x') }))).rejects.toThrow(AskToolError);
+    await expect(tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SASHA, 'x') }))).rejects.toThrow(AskToolError);
   });
 
   it('refuses a handle this turn did not issue', async () => {

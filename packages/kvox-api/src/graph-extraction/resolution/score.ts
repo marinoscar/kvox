@@ -23,7 +23,7 @@
 //
 // AMBIGUITY: when the runner-up is within 0.05 of the best, the best is capped
 // just below the auto-link threshold and flagged `ambiguous` — two plausible
-// "Sarah"s are a question for a person, never a coin flip.
+// "Sasha"s are a question for a person, never a coin flip.
 // =============================================================================
 
 export type NameArm = 'alias_exact' | 'trigram' | 'vector';

@@ -160,9 +160,9 @@ describe('install.sh root-aware KVOX_HOME / KVOX_BIN_DIR defaults (#226, commit 
   });
 
   it('non-root, no overrides -> $HOME/.kvox and $HOME/.local/bin', () => {
-    const { home, binDir } = runDefaultsBlock(1000, '/home/oscar');
-    expect(home).toBe('/home/oscar/.kvox');
-    expect(binDir).toBe('/home/oscar/.local/bin');
+    const { home, binDir } = runDefaultsBlock(1000, '/home/user');
+    expect(home).toBe('/home/user/.kvox');
+    expect(binDir).toBe('/home/user/.local/bin');
   });
 
   it('root WITH an explicit KVOX_BIN_DIR -> the explicit value wins (the bootstrap-vps.sh case)', () => {
@@ -184,18 +184,18 @@ describe('install.sh root-aware KVOX_HOME / KVOX_BIN_DIR defaults (#226, commit 
   });
 
   it('non-root WITH an explicit KVOX_BIN_DIR -> the explicit value wins', () => {
-    const { home, binDir } = runDefaultsBlock(1000, '/home/oscar', {
+    const { home, binDir } = runDefaultsBlock(1000, '/home/user', {
       KVOX_BIN_DIR: '/opt/custom/bin',
     });
     expect(binDir).toBe('/opt/custom/bin');
-    expect(home).toBe('/home/oscar/.kvox');
+    expect(home).toBe('/home/user/.kvox');
   });
 
   it('an explicit KVOX_HOME also wins, on both branches', () => {
     const rootResult = runDefaultsBlock(0, '/root', { KVOX_HOME: '/custom/root/home' });
     expect(rootResult.home).toBe('/custom/root/home');
 
-    const userResult = runDefaultsBlock(1000, '/home/oscar', { KVOX_HOME: '/custom/user/home' });
+    const userResult = runDefaultsBlock(1000, '/home/user', { KVOX_HOME: '/custom/user/home' });
     expect(userResult.home).toBe('/custom/user/home');
   });
 });

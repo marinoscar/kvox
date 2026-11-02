@@ -35,7 +35,7 @@ const EMAIL_PREFIX = 'kg-extract-test';
 const ANSWER = {
   meeting: { topics: ['throughput'] },
   entities: [
-    { ref: 'e1', type: 'Person', label: 'Sarah Chen', aliases: [], props: {}, evidence: [{ source: 's1', quote: "I'm Sarah Chen" }] },
+    { ref: 'e1', type: 'Person', label: 'Sasha Example', aliases: [], props: {}, evidence: [{ source: 's1', quote: "I'm Sasha Example" }] },
     { ref: 'e2', type: 'Organization', label: 'Org Lambda Robotics', aliases: ['NWR'], props: { website: null }, evidence: [{ source: 's1', quote: 'Org Lambda Robotics' }] },
     { ref: 'e3', type: 'Project', label: 'Invented', aliases: [], props: {}, evidence: [{ source: 's42', quote: 'never handed out' }] },
   ],
@@ -46,7 +46,7 @@ const ANSWER = {
     {
       kind: 'commitment',
       title: 'Send proposal',
-      statement: 'Sarah will send the updated proposal by Friday.',
+      statement: 'Sasha will send the updated proposal by Friday.',
       subject: 'e2',
       owner: 'e1',
       counterparty: null,
@@ -168,18 +168,18 @@ describeWithDb('kg.extract (real Postgres)', () => {
       data: { ownerId: user.id, title: 'Kickoff call', sourceObjectId: source.id, provider: 'assemblyai' },
     });
     const speakerA = await prisma.transcriptSpeaker.create({
-      data: { transcriptId: transcript.id, label: 'A', displayName: 'Sarah Chen', colorIndex: 0 },
+      data: { transcriptId: transcript.id, label: 'A', displayName: 'Sasha Example', colorIndex: 0 },
     });
     const speakerB = await prisma.transcriptSpeaker.create({
       data: { transcriptId: transcript.id, label: 'B', displayName: 'Speaker B', colorIndex: 1 },
     });
     const s1 = await prisma.transcriptSegment.create({
-      data: { transcriptId: transcript.id, speakerId: speakerA.id, startMs: 0, endMs: 4000, ordinal: 1000, text: "Hi, I'm Sarah Chen, VP of Operations at Org Lambda Robotics.", words: [] },
+      data: { transcriptId: transcript.id, speakerId: speakerA.id, startMs: 0, endMs: 4000, ordinal: 1000, text: "Hi, I'm Sasha Example, VP of Operations at Org Lambda Robotics.", words: [] },
     });
     const s2 = await prisma.transcriptSegment.create({
-      data: { transcriptId: transcript.id, speakerId: speakerB.id, startMs: 4000, endMs: 8000, ordinal: 2000, text: 'Great. Sarah, can you send the proposal?', words: [] },
+      data: { transcriptId: transcript.id, speakerId: speakerB.id, startMs: 4000, endMs: 8000, ordinal: 2000, text: 'Great. Sasha, can you send the proposal?', words: [] },
     });
-    const body = '# Kickoff\n\nSarah will send the updated proposal by Friday.';
+    const body = '# Kickoff\n\nSasha will send the updated proposal by Friday.';
     const note = await prisma.note.create({
       data: { ownerId: user.id, title: 'Kickoff', body, status: 'ready', sourceType: 'transcript', sourceTranscriptId: transcript.id, currentVersion: 1 },
     });
@@ -211,7 +211,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
     const proposal = await prisma.kgProposal.findUniqueOrThrow({ where: { id: out.proposal.id } });
     expect(proposal.status).toBe('draft');
     expect(proposal.systemPrompt).toContain('## Entity types');
-    expect(proposal.userContent).toContain("s1 [00:00:00] Sarah Chen: Hi, I'm Sarah Chen");
+    expect(proposal.userContent).toContain("s1 [00:00:00] Sasha Example: Hi, I'm Sasha Example");
     expect(proposal.stats).toEqual(
       expect.objectContaining({
         phase: 'ready',
@@ -242,7 +242,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
     const person = items[1];
     const personEvidence = evidence.find((e) => e.subjectId === person.id)!;
     expect(personEvidence).toEqual(expect.objectContaining({ transcriptId: f.transcript.id, segmentId: f.s1.id, segmentRev: 1, startMs: 0, endMs: 4000 }));
-    expect(f.s1.text.slice(personEvidence.charStart!, personEvidence.charEnd!)).toBe("I'm Sarah Chen");
+    expect(f.s1.text.slice(personEvidence.charStart!, personEvidence.charEnd!)).toBe("I'm Sasha Example");
 
     // The commitment: one whole-segment cite (not located) + one note cite.
     const commitment = items[4];

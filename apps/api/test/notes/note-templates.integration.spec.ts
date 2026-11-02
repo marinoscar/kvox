@@ -101,7 +101,7 @@ describe('Note templates (#50)', () => {
     jest.clearAllMocks();
 
     sources.resolve.mockResolvedValue({
-      text: '**Ana** · 00:00\n\nWe should ship on Friday.',
+      text: '**Anders** · 00:00\n\nWe should ship on Friday.',
       describe: 'transcript at version 3',
     });
 

@@ -2,7 +2,7 @@ import { ProposalStageRegistry } from '../extraction/proposal-stage.js';
 import { FakeProposalDb, NOTE, OWNER, entityPayload, linked } from '../__fixtures__/dedup-fakes.js';
 import { RejectionMemoryStage } from './rejection-memory.stage.js';
 
-const JOE = 'aaaaaaaa-0000-4000-8000-000000000001';
+const JONTY = 'aaaaaaaa-0000-4000-8000-000000000001';
 const KAPPA = 'aaaaaaaa-0000-4000-8000-000000000002';
 const OLD = 'eeeeeeee-0000-4000-8000-000000000001';
 
@@ -31,7 +31,7 @@ function fact(ref: string, hash: string, over: Record<string, unknown> = {}): Re
 
 function build() {
   const db = new FakeProposalDb();
-  db.add('entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(JOE) });
+  db.add('entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(JONTY) });
   const registry = new ProposalStageRegistry();
   const stage = new RejectionMemoryStage(registry);
   stage.onModuleInit();
@@ -46,7 +46,7 @@ describe('rejection-memory stage', () => {
   it('removes a person fact the owner rejected in any committed proposal, evidence and all', async () => {
     const { db, stage } = build();
     const rejected = db.add('item', fact('p1', 'h-rejected'));
-    db.cite(rejected, 'Joe has a new hobby');
+    db.cite(rejected, 'Jonty has a new hobby');
     db.add('item', fact('p2', 'h-fresh'));
     db.rejectedPersonFactHashes = ['h-rejected'];
     const ctx = db.ctx();
@@ -77,12 +77,12 @@ describe('rejection-memory stage', () => {
     db.add('relation', { ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { entityId: KAPPA }, props: {}, validFrom: null, validTo: null, precision: 'unknown' });
     db.add('item', { ...fact('c1', 'h-claim'), kind: 'claim' });
     db.add('item', { ...fact('c2', 'h-other'), kind: 'claim' });
-    // The earlier proposal's own entity row became JOE (committed), and it
+    // The earlier proposal's own entity row became JONTY (committed), and it
     // rejected the WORKS_FOR and the claim.
     db.pastRows = [
-      { proposalId: OLD, kind: 'entity', payload: entityPayload('x7', 'Person', 'Joseph'), resolution: linked(null), committedRefId: JOE, mergeIntoId: null },
+      { proposalId: OLD, kind: 'entity', payload: entityPayload('x7', 'Person', 'Juno'), resolution: linked(null), committedRefId: JONTY, mergeIntoId: null },
       { proposalId: OLD, kind: 'relation', payload: { ref: 'r9', type: 'WORKS_FOR', from: { ref: 'x7' }, to: { entityId: KAPPA }, props: {} }, resolution: null, committedRefId: null, mergeIntoId: null },
-      { proposalId: OLD, kind: 'item', payload: { kind: 'claim', subject: { entityId: JOE }, statementHash: 'h-claim' }, resolution: null, committedRefId: null, mergeIntoId: null },
+      { proposalId: OLD, kind: 'item', payload: { kind: 'claim', subject: { entityId: JONTY }, statementHash: 'h-claim' }, resolution: null, committedRefId: null, mergeIntoId: null },
     ];
     const ctx = db.ctx();
     await stage.run(ctx);
@@ -114,8 +114,8 @@ describe('rejection-memory stage', () => {
     db.add('relation', rel('r2', { role: 'stakeholder', stance: 'supportive' }));
     db.add('item', { ...fact('k1', 'h-risk'), kind: 'risk', subject: { entityId: PROJECT }, status: 'open', props: { riskKind: 'blocker' } });
     db.pastRows = [
-      { proposalId: OLD, kind: 'entity', payload: entityPayload('x7', 'Person', 'Joe'), resolution: linked(null), committedRefId: JOE, mergeIntoId: null },
-      // The reviewer said no to Joe being skeptical, and to the risk.
+      { proposalId: OLD, kind: 'entity', payload: entityPayload('x7', 'Person', 'Jonty'), resolution: linked(null), committedRefId: JONTY, mergeIntoId: null },
+      // The reviewer said no to Jonty being skeptical, and to the risk.
       { proposalId: OLD, kind: 'relation', payload: { ref: 'r9', type: 'INVOLVED_IN', from: { ref: 'x7' }, to: { entityId: PROJECT }, props: { role: 'stakeholder', stance: 'skeptical' } }, resolution: null, committedRefId: null, mergeIntoId: null },
       { proposalId: OLD, kind: 'item', payload: { kind: 'risk', subject: { entityId: PROJECT }, statementHash: 'h-risk' }, resolution: null, committedRefId: null, mergeIntoId: null },
     ];

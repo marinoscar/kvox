@@ -40,7 +40,7 @@
 // `unordered` and the page offers to remove it.
 //
 // EVIDENCE. The relation carries one server-authored `ManualEvidence` — the
-// owner as the source, "Set by hand: Jenny Kim reports to Mark Chen" — so the
+// owner as the source, "Set by hand: Jarek Stubbs reports to Marta Sample" — so the
 // deferred `kg_assert_has_evidence` trigger holds at COMMIT.
 //
 // REMOVE = A CORRECTION. `GraphWriteService.retractRelation`: the row becomes

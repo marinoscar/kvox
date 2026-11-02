@@ -3,8 +3,8 @@
 // =============================================================================
 //
 // A citation whose source is THE OWNER, stating a fact by hand on an entity
-// page (§8's manual-edit exception) — "Set by hand: Jenny Kim reports to Mark
-// Chen". It has no transcript, note or import anchor, so it can never pass
+// page (§8's manual-edit exception) — "Set by hand: Jarek Stubbs reports to Marta
+// Sample". It has no transcript, note or import anchor, so it can never pass
 // `evidenceInputSchema` (which demands one) and it never goes through
 // `EvidenceValidator`: there is nothing to prove readable.
 //

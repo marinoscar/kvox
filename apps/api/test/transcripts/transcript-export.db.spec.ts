@@ -289,7 +289,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
 
     const speakerIds: string[] = [];
 
-    for (const [index, displayName] of ['José Núñez', 'Priya Patel'].entries()) {
+    for (const [index, displayName] of ['José Núñez', 'Pia Placeholder'].entries()) {
       const speaker = await prisma.transcriptSpeaker.create({
         data: {
           transcriptId: transcript.id,
@@ -501,7 +501,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
       expect(parsed.transcript.provider).toEqual({ id: 'assemblyai', model: 'best' });
       expect(parsed.transcript.speakers.map((speaker) => speaker.displayName)).toEqual([
         'José Núñez',
-        'Priya Patel',
+        'Pia Placeholder',
       ]);
       expect(parsed.transcript.segments).toHaveLength(4);
       expect(parsed.transcript.segments[0].words).toHaveLength(3);

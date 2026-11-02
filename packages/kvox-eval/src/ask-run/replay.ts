@@ -19,7 +19,7 @@
 //
 // What it checks: citation validity < 1 for the planted answer (with `ev99`
 // invalid) and 1.0 for the other five, every turn `complete`, and the leak
-// gate: the graph's `sensitive` PersonFact (Marcus Webb's shellfish allergy)
+// gate: the graph's `sensitive` PersonFact (Maddox Sample's shellfish allergy)
 // never reaches a captured request or an answer.
 // =============================================================================
 
@@ -100,11 +100,11 @@ export const ASK_REPLAY_SCENARIOS: readonly AskReplayScenario[] = Object.freeze(
   {
     id: 'r1',
     title: 'search → get_entity → cites [^ent1]: valid, citation validity 1.0',
-    question: 'Who does Sarah Chen work for?',
+    question: 'Who does Sasha Example work for?',
     steps: [
-      { toolCalls: [call('c1', 'search', { query: 'Sarah Chen', scope: 'entities', limit: null })] },
+      { toolCalls: [call('c1', 'search', { query: 'Sasha Example', scope: 'entities', limit: null })] },
       { toolCalls: [call('c2', 'get_entity', { entity: 'ent1' })] },
-      { answer: 'Sarah Chen works for Org Lambda Robotics.[^ent1]' },
+      { answer: 'Sasha Example works for Org Lambda Robotics.[^ent1]' },
     ],
     expected: { allValid: true, invalidMarkers: [] },
   },
@@ -134,10 +134,10 @@ export const ASK_REPLAY_SCENARIOS: readonly AskReplayScenario[] = Object.freeze(
   {
     id: 'r4',
     title: 'a not-found question: search returns nothing, the answer cites nothing (citation validity vacuously 1.0)',
-    question: 'What did Jamie Fontaine decide about the Meridian project?',
+    question: 'What did Jalen Mockwell decide about the Meridian project?',
     steps: [
-      { toolCalls: [call('c1', 'search', { query: 'Jamie Fontaine', scope: 'all', limit: null })] },
-      { answer: "I couldn't find Jamie Fontaine or a Meridian project in your graph." },
+      { toolCalls: [call('c1', 'search', { query: 'Jalen Mockwell', scope: 'all', limit: null })] },
+      { answer: "I couldn't find Jalen Mockwell or a Meridian project in your graph." },
     ],
     expected: { allValid: true, invalidMarkers: [], citationCount: 0 },
   },
@@ -146,10 +146,10 @@ export const ASK_REPLAY_SCENARIOS: readonly AskReplayScenario[] = Object.freeze(
     title: 'cites entity + evidence together, all valid: citation validity 1.0',
     question: 'Who runs the northern depots cutover, and what is the evidence?',
     steps: [
-      { toolCalls: [call('c1', 'search', { query: 'Marcus Webb', scope: 'entities', limit: null })] },
+      { toolCalls: [call('c1', 'search', { query: 'Maddox Sample', scope: 'entities', limit: null })] },
       { toolCalls: [call('c2', 'get_entity', { entity: 'ent1' })] },
       { toolCalls: [call('c3', 'evidence', { subject: 'ent1', limit: 3 })] },
-      { answer: 'Marcus Webb is involved.[^ent1] See here.[^ev1]' },
+      { answer: 'Maddox Sample is involved.[^ent1] See here.[^ev1]' },
     ],
     expected: { allValid: true, invalidMarkers: [] },
   },

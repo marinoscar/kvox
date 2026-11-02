@@ -52,7 +52,7 @@ export const askHandlers = [
     const summary = askSummary({
       id,
       title: body.title ?? null,
-      scopeEntity: body.scopeEntityId ? { id: body.scopeEntityId, label: 'Joe Rivera', type: 'Person' } : null,
+      scopeEntity: body.scopeEntityId ? { id: body.scopeEntityId, label: 'Jonty Placeholder', type: 'Person' } : null,
       updatedAt: '2026-09-26T09:00:00.000Z',
       createdAt: '2026-09-26T09:00:00.000Z',
     });

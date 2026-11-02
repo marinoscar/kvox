@@ -14,7 +14,7 @@ import {
 } from '../../src/graph/ui/components/explorer/fullGraphModel.js';
 import { createExplorerState, mergeSlice } from '../../src/graph/ui/components/explorer/explorerModel.js';
 import { FULL_VIEW_LABEL_THRESHOLD, DEFAULT_BUDGETS, COMPACT_BUDGETS, fullViewBudgets } from '../../src/graph/ui/components/explorer/shell/explorerBudgets.js';
-import { KAPPA_ID, ANA_ID, JOE_ID, LONE_ID, gid, overviewEdges, overviewNodes } from './graphData.js';
+import { KAPPA_ID, ANDERS_ID, JONTY_ID, LONE_ID, gid, overviewEdges, overviewNodes } from './graphData.js';
 
 /** The full view's pure model (#768): no React, no sigma. */
 describe('buildFullGraphState', () => {
@@ -24,27 +24,27 @@ describe('buildFullGraphState', () => {
     expect(state.graph.order).toBe(overviewNodes.length);
     expect(state.graph.size).toBe(overviewEdges.length);
     expect(state.seedIds).toEqual([]);
-    const joe = state.graph.getNodeAttributes(JOE_ID);
-    expect([joe.x, joe.y]).toEqual([-330, 60]);
-    expect(joe.entityType).toBe('Person');
-    expect(joe.nodeKind).toBe('entity');
-    expect(joe.image).toMatch(/^data:/);
+    const jonty = state.graph.getNodeAttributes(JONTY_ID);
+    expect([jonty.x, jonty.y]).toEqual([-330, 60]);
+    expect(jonty.entityType).toBe('Person');
+    expect(jonty.nodeKind).toBe('entity');
+    expect(jonty.image).toMatch(/^data:/);
     // Straight, thin edges with the relation type kept apart from sigma's program name.
     const edge = state.graph.getEdgeAttributes(overviewEdges[0].id);
     expect(edge).toMatchObject({ type: 'arrow', relationType: 'WORKS_FOR', curvature: 0 });
   });
 
   it('marks the owner\'s own node from the overview (#778)', () => {
-    const nodes = overviewNodes.map((node) => (node.id === ANA_ID ? { ...node, isSelf: true } : node));
+    const nodes = overviewNodes.map((node) => (node.id === ANDERS_ID ? { ...node, isSelf: true } : node));
     const state = buildFullGraphState({ nodes, edges: overviewEdges });
-    expect(state.graph.getNodeAttribute(ANA_ID, 'isSelf')).toBe(true);
-    expect(state.graph.getNodeAttribute(JOE_ID, 'isSelf')).toBeUndefined();
+    expect(state.graph.getNodeAttribute(ANDERS_ID, 'isSelf')).toBe(true);
+    expect(state.graph.getNodeAttribute(JONTY_ID, 'isSelf')).toBeUndefined();
   });
 
   it('skips an edge whose end is not returned, and a duplicate node', () => {
     const state = buildFullGraphState({
       nodes: [...overviewNodes, overviewNodes[0]],
-      edges: [...overviewEdges, { id: gid(9999), source: JOE_ID, target: gid(123456), type: 'KNOWS' }],
+      edges: [...overviewEdges, { id: gid(9999), source: JONTY_ID, target: gid(123456), type: 'KNOWS' }],
     });
     expect(state.graph.order).toBe(overviewNodes.length);
     expect(state.graph.hasEdge(gid(9999))).toBe(false);
@@ -78,7 +78,7 @@ describe('buildFullGraphState', () => {
     const state = buildFullGraphState({ nodes: overviewNodes, edges: [] });
     const forced = state.graph.filterNodes((_id, attrs) => attrs.forceLabel === true);
     expect(forced.length).toBe(Math.min(FULL_VIEW_FORCED_LABELS, overviewNodes.length));
-    expect(topDegreeIds(overviewNodes, 2)).toEqual(new Set([KAPPA_ID, JOE_ID]));
+    expect(topDegreeIds(overviewNodes, 2)).toEqual(new Set([KAPPA_ID, JONTY_ID]));
   });
 
   it('sizes by degree, clamped', () => {
@@ -92,7 +92,7 @@ describe('fullViewListRows', () => {
   it('lists the best connected first, at most the limit', () => {
     const state = buildFullGraphState({ nodes: overviewNodes, edges: [] });
     const rows = fullViewListRows(state, 3);
-    expect(rows.map((r) => r.id)).toEqual([JOE_ID, KAPPA_ID, rows[2].id]);
+    expect(rows.map((r) => r.id)).toEqual([JONTY_ID, KAPPA_ID, rows[2].id]);
     expect(rows).toHaveLength(3);
     expect(fullViewListRows(state).at(-1)!.id).toBe(LONE_ID);
   });
@@ -111,20 +111,20 @@ describe('timeHiddenIds', () => {
   it('hides what is not active, keeps the kept ids, and hides nothing while activity is unknown', () => {
     const state = createExplorerState();
     mergeSlice(state, {
-      seedIds: [JOE_ID],
+      seedIds: [JONTY_ID],
       asOf: '2026-09-26T00:00:00.000Z',
       nodes: [
-        { id: JOE_ID, nodeKind: 'entity', type: 'Person', label: 'Joe', depth: 0, degree: 2, status: null, occurredAt: null },
-        { id: ANA_ID, nodeKind: 'entity', type: 'Person', label: 'Ana', depth: 1, degree: 1, status: null, occurredAt: null },
+        { id: JONTY_ID, nodeKind: 'entity', type: 'Person', label: 'Jonty', depth: 0, degree: 2, status: null, occurredAt: null },
+        { id: ANDERS_ID, nodeKind: 'entity', type: 'Person', label: 'Anders', depth: 1, degree: 1, status: null, occurredAt: null },
         { id: KAPPA_ID, nodeKind: 'entity', type: 'Organization', label: 'Kappa', depth: 1, degree: 1, status: null, occurredAt: null },
       ],
       edges: [],
       truncated: false,
       cap: 300,
     });
-    const ids = [JOE_ID, ANA_ID, KAPPA_ID];
+    const ids = [JONTY_ID, ANDERS_ID, KAPPA_ID];
     expect(timeHiddenIds(state, ids, null, new Set()).size).toBe(0);
-    expect(timeHiddenIds(state, ids, new Set([ANA_ID]), new Set([JOE_ID]))).toEqual(new Set([KAPPA_ID]));
+    expect(timeHiddenIds(state, ids, new Set([ANDERS_ID]), new Set([JONTY_ID]))).toEqual(new Set([KAPPA_ID]));
   });
 });
 

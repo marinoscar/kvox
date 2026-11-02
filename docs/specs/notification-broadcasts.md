@@ -18,7 +18,7 @@
 > narrowing-only channel selection and `notifyNow()`, #322 the broadcast email
 > and browser templates, #323 the `admin.broadcast.start` /
 > `admin.broadcast.chunk` fan-out handlers, #324 the admin API, #325 the
-> admin page, composer and visual baselines). Database-level tests for the
+> admin page and composer). Database-level tests for the
 > claim compare-and-swap and the audience under concurrency are tracked
 > separately as #326 — see [Verification](#11-verification).
 >
@@ -36,8 +36,7 @@
 > `apps/api/src/email/templates/broadcast.email.ts`,
 > `apps/api/src/notifications/channels/email-notification.channel.ts` and
 > `browser-notification.channel.ts` (the `EVENT_EMAIL_TEMPLATES` /
-> `EVENT_BROWSER_TEMPLATES` registrations), and `.github/workflows/
-> visual-baselines.yml`. The admin page (`apps/web/src/pages/Admin/
+> `EVENT_BROWSER_TEMPLATES` registrations). The admin page (`apps/web/src/pages/Admin/
 > BroadcastsPage.tsx`, `components/admin/BroadcastComposer.tsx`,
 > `services/broadcasts.ts`) is #325's slice of this epic and is described here
 > at the level of what the API contract requires of it; it is being built in

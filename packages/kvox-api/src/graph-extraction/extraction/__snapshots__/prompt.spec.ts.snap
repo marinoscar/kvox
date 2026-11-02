@@ -21,7 +21,7 @@ exports[`assembleExtractionPrompt (#363) matches the snapshot of a small context
 ### Person (Person)
 A human being: one specific, individual person named or unambiguously identified in the source.
 - Never a role ("the CIO"), never a team, never an organization acting collectively.
-- Positive: "Sarah Chen"; "the Kappa CIO whose name was given as Marcus Webb."
+- Positive: "Sasha Example"; "the Kappa CIO whose name was given as Maddox Sample."
 - Negative: "the data team at OAC" is an Organization, or a Person if and only if one specific human is meant.
 - Negative: "whoever's on call" names no specific human, so there is nothing to create.
 
@@ -70,22 +70,22 @@ Background the note's author wrote for this meeting. Treat it as authoritative: 
 Kickoff with Lambda about the pilot.
 
 # Known entities
-k1 | Person | Sarah Chen | aka: Sarah, S. Chen | Org Lambda Robotics
+k1 | Person | Sasha Example | aka: Sasha, S. Example | Org Lambda Robotics
 
 # Speakers
-A = Sarah Chen (k1)
+A = Sasha Example (k1)
 B = unidentified
 
 # Note (version 2)
 # Pilot kickoff
 
-Sarah Chen (Org Lambda Robotics) sponsors the pick-path pilot.
+Sasha Example (Org Lambda Robotics) sponsors the pick-path pilot.
 
 - Decision: use Postgres.
-- Sarah will send the updated proposal by Friday.
+- Sasha will send the updated proposal by Friday.
 
 # Transcript
-s1 [00:00:00] Sarah Chen: Hi everyone, I'm Sarah Chen, VP of Operations at Org Lambda Robotics.",
+s1 [00:00:00] Sasha Example: Hi everyone, I'm Sasha Example, VP of Operations at Org Lambda Robotics.",
 }
 `;
 
@@ -103,9 +103,9 @@ exports[`assembleExtractionPrompt (#363) matches the snapshot of the core + work
 8. Mark a person fact's \`sensitivity\` honestly: \`sensitive\` means health, legal, financial or similarly weighty personal information.
 9. A role, a team mentioned only in passing, or a recurring topic is not an entity. Follow each type's disambiguation lines below; put recurring topics in \`meeting.topics\` instead.
 10. Read the Context first. Every person, company, business unit and role it states is in scope even if the transcript never says it; propose them citing \`C\`, and prefer the Context's spelling of a name over the transcript's.
-11. Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity), and their role and business unit there as HAS_ROLE to the same Organization with \`title\` and \`businessUnit\` whenever the Context, note or transcript states them — e.g. "Joe, VP of Supply Chain at Org Beta" is Joe WORKS_FOR Org Beta and Joe HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.
+11. Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity), and their role and business unit there as HAS_ROLE to the same Organization with \`title\` and \`businessUnit\` whenever the Context, note or transcript states them — e.g. "Jonty, VP of Supply Chain at Org Beta" is Jonty WORKS_FOR Org Beta and Jonty HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.
 12. Keep Project, Topic and Product apart: a Project is an effort with an owner and an expected end, a Topic is a recurring subject with neither, a Product is a named thing an organization buys, uses or offers; "Product X rollout" is a Project, "licensing cost" is a Topic, "Product X" is a Product. Never fold two of them into one row.
-13. Worked example: "Joe from Company A said he's skeptical about the Product X rollout; Company A is piloting Product X; the licence budget isn't approved." proposes the entities Person Joe, Organization Company A, Organization Org Beta, Product Product X, Project Product X rollout; the relations Joe WORKS_FOR Company A; Joe INVOLVED_IN Product X rollout {role: stakeholder, stance: skeptical}; Company A USES Product X {stage: piloting}; Product X OFFERED_BY Org Beta; Product X rollout CONCERNS Product X; the fact Risk "licence budget not approved" {riskKind: blocker} about Product X rollout. Propose a stance only when the source states one, as Joe's "skeptical" here; a person with no stated position gets no stance.
+13. Worked example: "Jonty from Company A said he's skeptical about the Product X rollout; Company A is piloting Product X; the licence budget isn't approved." proposes the entities Person Jonty, Organization Company A, Organization Org Beta, Product Product X, Project Product X rollout; the relations Jonty WORKS_FOR Company A; Jonty INVOLVED_IN Product X rollout {role: stakeholder, stance: skeptical}; Company A USES Product X {stage: piloting}; Product X OFFERED_BY Org Beta; Product X rollout CONCERNS Product X; the fact Risk "licence budget not approved" {riskKind: blocker} about Product X rollout. Propose a stance only when the source states one, as Jonty's "skeptical" here; a person with no stated position gets no stance.
 14. Propose at most 28 entities, 28 relations and 24 facts. If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.
 
 ## Entity types
@@ -113,7 +113,7 @@ exports[`assembleExtractionPrompt (#363) matches the snapshot of the core + work
 ### Person (Person)
 A human being: one specific, individual person named or unambiguously identified in the source.
 - Never a role ("the CIO"), never a team, never an organization acting collectively.
-- Positive: "Sarah Chen"; "the Kappa CIO whose name was given as Marcus Webb."
+- Positive: "Sasha Example"; "the Kappa CIO whose name was given as Maddox Sample."
 - Negative: "the data team at OAC" is an Organization, or a Person if and only if one specific human is meant.
 - Negative: "whoever's on call" names no specific human, so there is nothing to create.
 
@@ -177,7 +177,7 @@ A statement about a Person as an individual rather than about their work: an int
 - Health, legal, financial or similarly weighty personal information is sensitive and must be marked so.
 
 ### Commitment (Commitment)
-A task with an owner and, optionally, a counterparty and a due date, stated or clearly implied by the source, e.g. "Sarah will send the updated proposal by Friday".
+A task with an owner and, optionally, a counterparty and a due date, stated or clearly implied by the source, e.g. "Sasha will send the updated proposal by Friday".
 - No owner named or clearly implied means it is not a Commitment: "we should probably look into that" is a Claim at most, or nothing.
 - Never force-fit a sentence into a Commitment because it sounds task-shaped.
 
@@ -201,8 +201,8 @@ Attributes:
 
 ## Relation types
 - BROADER: Topic → Topic — A topic that is a narrower part of a broader theme: "licensing cost" BROADER "AI governance" rolls the narrower topic up into the theme.
-- WORKS_FOR: Person → Organization, temporal — A person is employed by, or works on behalf of, an organization — the one way a person's employer is recorded: "Joe works for Org Beta" is Joe WORKS_FOR Org Beta (an Organization); his role and business unit there are a HAS_ROLE to the same Organization.
-- HAS_ROLE: Person → Organization, temporal — A person holds a titled role, optionally within a business unit, at an organization for a period of time: "Joe, VP of Supply Chain at Org Beta" is Joe HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.
+- WORKS_FOR: Person → Organization, temporal — A person is employed by, or works on behalf of, an organization — the one way a person's employer is recorded: "Jonty works for Org Beta" is Jonty WORKS_FOR Org Beta (an Organization); his role and business unit there are a HAS_ROLE to the same Organization.
+- HAS_ROLE: Person → Organization, temporal — A person holds a titled role, optionally within a business unit, at an organization for a period of time: "Jonty, VP of Supply Chain at Org Beta" is Jonty HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.
   - title (text): The job title the person holds in this role, e.g. "Staff Engineer".
   - businessUnit (text): The business unit, division, practice or department within the organization this role sits in, e.g. "Supply Chain", only if the source states it.
 - REPORTS_TO: Person → Person, temporal — A person reports to another person, their manager, for a period of time.
@@ -211,7 +211,7 @@ Attributes:
 - ORGANIZED: Person → Meeting — A person convened or hosted a meeting: "Person A set up the review" is Person A ORGANIZED the review meeting. Only when the source says who called or hosted it; being present is ATTENDED, and the organizer also attended is recorded with a separate ATTENDED.
 - DISCUSSED: Meeting → Project|Topic|Product|Organization — A meeting discussed a project, topic, product or organization as a substantive subject.
 - PART_OF: Project|Meeting|Topic|Organization → Organization|Project — A project belongs to an organization, a meeting belongs to a project, a topic is scoped under a project, or an organization is a sub-unit of a larger one ("the data team at Org Alpha" is part of Org Alpha). An organization is never PART_OF itself.
-- INVOLVED_IN: Person → Project|Opportunity, temporal — A person has a stated role in a project or an opportunity, and optionally a stance toward it: "Joe is the budget approver for the Product X rollout and is skeptical of it" is Joe INVOLVED_IN Product X rollout {role: approver, stance: skeptical}. Assigned tasks are Commitments with ASSIGNED_TO; attending one meeting about a project is ATTENDED + DISCUSSED, not INVOLVED_IN unless the source states a role. Set role only to the role the source states or clearly implies; if no role is stated, do not create INVOLVED_IN. Set stance only when the source states it or the person's position is unmistakably implied (an explicit objection, endorsement or refusal). Never infer stance from tone, a single question, or silence; when in doubt, omit it.
+- INVOLVED_IN: Person → Project|Opportunity, temporal — A person has a stated role in a project or an opportunity, and optionally a stance toward it: "Jonty is the budget approver for the Product X rollout and is skeptical of it" is Jonty INVOLVED_IN Product X rollout {role: approver, stance: skeptical}. Assigned tasks are Commitments with ASSIGNED_TO; attending one meeting about a project is ATTENDED + DISCUSSED, not INVOLVED_IN unless the source states a role. Set role only to the role the source states or clearly implies; if no role is stated, do not create INVOLVED_IN. Set stance only when the source states it or the person's position is unmistakably implied (an explicit objection, endorsement or refusal). Never infer stance from tone, a single question, or silence; when in doubt, omit it.
   - role (select, sponsor|owner|lead|contributor|stakeholder|approver|end_user|advisor|decision_maker|influencer|evaluator|account_lead): The role the person plays in the project or opportunity, as the source states it. decision_maker signs off, influencer sways the decision without signing, evaluator assesses the options, account_lead owns the relationship with the client.
   - stance (select, champion|supportive|neutral|skeptical|resistant): The person's position toward the project, only when the source states it or it is unmistakably implied; never inferred from tone alone.
 - USES: Organization|Project → Product, temporal — An organization or a project adopts, evaluates or runs a product, at a stage: "Company A is piloting Product X" is Company A USES Product X {stage: piloting}. A move to a later stage (piloting to adopted) is a new USES with the new stage, which closes the earlier one; never edit the old stage. The vendor of the product is OFFERED_BY, not USES; a project about a product without adopting it is CONCERNS. Set stage only when the source states it; "evaluating" is for a stated assessment, not for a passing mention.
@@ -225,7 +225,7 @@ Attributes:
 - WITH_CLIENT: Opportunity → Organization, temporal — The client an opportunity is being pursued with: "the Product X renewal with Org Alpha" is the renewal WITH_CLIENT Org Alpha. An opportunity has one current client; the vendor side that pursues it is PURSUED_BY.
 - PURSUED_BY: Opportunity → Organization, temporal — The organization that is going after an opportunity: "Org Beta is pursuing the Product X renewal" is the renewal PURSUED_BY Org Beta. Several organizations may pursue one together; a rival bidding for it is COMPETING_FOR, not PURSUED_BY.
 - COMPETING_FOR: Organization → Opportunity, temporal — An organization is a rival bidder for an opportunity: "Org Gamma is also bidding on the Product X renewal" is Org Gamma COMPETING_FOR the renewal. Only when the source says the organization is bidding or in the running; the organization already pursuing it is PURSUED_BY.
-- KNOWS_ABOUT: Person → Topic|Product — A person has expertise in a topic or product: "Maria is our expert on AI governance" is Maria KNOWS_ABOUT AI governance {level: expert}. Hobbies and lasting private interests are not KNOWS_ABOUT. Set level only when the source states it ("expert", "hands-on", "just heard of it"); attending a meeting about a topic does not make someone know about it.
+- KNOWS_ABOUT: Person → Topic|Product — A person has expertise in a topic or product: "Maren is our expert on AI governance" is Maren KNOWS_ABOUT AI governance {level: expert}. Hobbies and lasting private interests are not KNOWS_ABOUT. Set level only when the source states it ("expert", "hands-on", "just heard of it"); attending a meeting about a topic does not make someone know about it.
   - level (select, aware|practitioner|expert): How deep the knowledge is, only if the source states it.
 
 ## Fact kinds

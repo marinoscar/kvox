@@ -8,13 +8,13 @@
     "promotion"
   ],
   "recordedAt": "2026-05-28T09:00:00Z",
-  "contextText": "Quarterly review of all accounts with Hana and Priya. Not recorded.",
+  "contextText": "Quarterly review of all accounts with Hazel and Pia. Not recorded.",
   "hasTranscript": false,
   "speakers": [],
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Quarterly account review\n\n**Date:** May 28\n**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Priya Raman (Larkspur Labs)\n\n## Summary\n\nQuarterly review of every Larkspur Labs client account, covering revenue, staffing and risk. Alex reports to Hana for account matters, so Hana chaired.\n\n## Accounts\n\n- **Org Lambda Robotics** — the strongest account this quarter. Lambda account revenue is up 30 percent over plan, driven by the pilot extension to Building 5.\n- **Halden Freight** — the migration continues without Ravi; JJ now owns the depot integrations. The southern depots cutover is planned for June.\n- **Corvid Health** — designs are signed off and the build is starting at the first walk-in clinic.\n- **Solvane Energy** — integration kickoff went well; demo targeted for early July.\n- **Gullwing Payments** — the discovery gate is close; Felix wants numbers before the build decision.\n- **Varden Insurance** — discovery is under way; Rosa will be out for two weeks in June.\n\n## Decisions\n\n- Larkspur **will not bid on Varden's phase two infrastructure work**; the team lacks the mainframe skills and Hana does not want to subcontract it.\n- The hiring freeze is over; Priya can open two engineering reqs.\n\n## Staffing\n\n- Hana becomes a partner at Larkspur Labs from July. The announcement goes out internally next week.\n- Priya will be on medical leave for two weeks in July. JJ covers engineering management while she is out.\n\n## Action items\n\n- **Hana Sato** — draft the Q3 staffing plan by June 10, including cover for Priya's leave.\n- **Priya Raman** — open two engineering reqs this week.\n- **Alex Rivera** — prepare a one-page account health summary for the partner meeting.\n\n## Risks\n\n- Lambda now represents a large share of revenue; Hana wants a second anchor client before the end of the year.\n"
+    "body": "# Quarterly account review\n\n**Date:** May 28\n**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Pia Sample (Larkspur Labs)\n\n## Summary\n\nQuarterly review of every Larkspur Labs client account, covering revenue, staffing and risk. Alma reports to Hazel for account matters, so Hazel chaired.\n\n## Accounts\n\n- **Org Lambda Robotics** — the strongest account this quarter. Lambda account revenue is up 30 percent over plan, driven by the pilot extension to Building 5.\n- **Halden Freight** — the migration continues without Rafferty; JD now owns the depot integrations. The southern depots cutover is planned for June.\n- **Corvid Health** — designs are signed off and the build is starting at the first walk-in clinic.\n- **Solvane Energy** — integration kickoff went well; demo targeted for early July.\n- **Gullwing Payments** — the discovery gate is close; Florian wants numbers before the build decision.\n- **Varden Insurance** — discovery is under way; Rhea will be out for two weeks in June.\n\n## Decisions\n\n- Larkspur **will not bid on Varden's phase two infrastructure work**; the team lacks the mainframe skills and Hazel does not want to subcontract it.\n- The hiring freeze is over; Pia can open two engineering reqs.\n\n## Staffing\n\n- Hazel becomes a partner at Larkspur Labs from July. The announcement goes out internally next week.\n- Pia will be on medical leave for two weeks in July. JD covers engineering management while she is out.\n\n## Action items\n\n- **Hazel Placeholder** — draft the Q3 staffing plan by June 10, including cover for Pia's leave.\n- **Pia Sample** — open two engineering reqs this week.\n- **Alma Mockwell** — prepare a one-page account health summary for the partner meeting.\n\n## Risks\n\n- Lambda now represents a large share of revenue; Hazel wants a second anchor client before the end of the year.\n"
   },
   "knownEntities": [
     {
@@ -49,11 +49,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -81,11 +81,11 @@
       ]
     },
     {
-      "id": "g-person-hana-sato",
+      "id": "g-person-hazel-placeholder",
       "type": "Person",
-      "label": "Hana Sato",
+      "label": "Hazel Placeholder",
       "aliases": [
-        "Hana"
+        "Hazel"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -94,12 +94,12 @@
       ]
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -113,11 +113,11 @@
       ]
     },
     {
-      "id": "g-person-priya-raman",
+      "id": "g-person-pia-sample",
       "type": "Person",
-      "label": "Priya Raman",
+      "label": "Pia Sample",
       "aliases": [
-        "Priya"
+        "Pia"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -146,44 +146,44 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "hana",
+        "key": "hazel",
         "type": "Person",
-        "label": "Hana Sato",
+        "label": "Hazel Placeholder",
         "aliases": [],
-        "existingId": "g-person-hana-sato",
+        "existingId": "g-person-hazel-placeholder",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Hana Sato (Larkspur Labs)"
+            "quote": "Hazel Placeholder (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "priya",
+        "key": "pia",
         "type": "Person",
-        "label": "Priya Raman",
+        "label": "Pia Sample",
         "aliases": [],
-        "existingId": "g-person-priya-raman",
+        "existingId": "g-person-pia-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Priya Raman (Larkspur Labs)"
+            "quote": "Pia Sample (Larkspur Labs)"
           }
         ]
       },
@@ -233,7 +233,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -242,13 +242,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Priya Raman (Larkspur Labs)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Pia Sample (Larkspur Labs)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "hana",
+        "from": "hazel",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -257,13 +257,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Priya Raman (Larkspur Labs)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Pia Sample (Larkspur Labs)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "priya",
+        "from": "pia",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -272,14 +272,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Priya Raman (Larkspur Labs)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Pia Sample (Larkspur Labs)"
           }
         ]
       },
       {
         "type": "REPORTS_TO",
-        "from": "alex",
-        "to": "hana",
+        "from": "alma",
+        "to": "hazel",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -287,13 +287,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex reports to Hana for account matters"
+            "quote": "Alma reports to Hazel for account matters"
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "hana",
+        "from": "hazel",
         "to": "larkspur",
         "validFrom": "2026-07-01",
         "validTo": null,
@@ -304,7 +304,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Hana becomes a partner at Larkspur Labs from July."
+            "quote": "Hazel becomes a partner at Larkspur Labs from July."
           }
         ]
       }
@@ -354,7 +354,7 @@
         "owner": null,
         "counterparty": null,
         "title": "Hiring freeze over, open two reqs",
-        "statement": "The hiring freeze is over and Priya can open two engineering reqs.",
+        "statement": "The hiring freeze is over and Pia can open two engineering reqs.",
         "status": null,
         "occurredAt": "2026-05-28",
         "dueAt": null,
@@ -363,17 +363,17 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "The hiring freeze is over; Priya can open two engineering reqs."
+            "quote": "The hiring freeze is over; Pia can open two engineering reqs."
           }
         ]
       },
       {
         "kind": "commitment",
         "subject": "larkspur",
-        "owner": "hana",
+        "owner": "hazel",
         "counterparty": null,
         "title": "Draft Q3 staffing plan",
-        "statement": "Hana will draft the Q3 staffing plan by June 10, including cover for Priya's leave.",
+        "statement": "Hazel will draft the Q3 staffing plan by June 10, including cover for Pia's leave.",
         "status": "open",
         "occurredAt": "2026-05-28",
         "dueAt": "2026-06-10",
@@ -382,17 +382,17 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "draft the Q3 staffing plan by June 10, including cover for Priya's leave."
+            "quote": "draft the Q3 staffing plan by June 10, including cover for Pia's leave."
           }
         ]
       },
       {
         "kind": "commitment",
         "subject": "larkspur",
-        "owner": "priya",
+        "owner": "pia",
         "counterparty": null,
         "title": "Open two engineering reqs",
-        "statement": "Priya will open two engineering reqs this week.",
+        "statement": "Pia will open two engineering reqs this week.",
         "status": "open",
         "occurredAt": "2026-05-28",
         "dueAt": null,
@@ -408,10 +408,10 @@
       {
         "kind": "commitment",
         "subject": "larkspur",
-        "owner": "alex",
-        "counterparty": "hana",
+        "owner": "alma",
+        "counterparty": "hazel",
         "title": "Account health summary",
-        "statement": "Alex will prepare a one-page account health summary for the partner meeting.",
+        "statement": "Alma will prepare a one-page account health summary for the partner meeting.",
         "status": "open",
         "occurredAt": "2026-05-28",
         "dueAt": null,
@@ -426,11 +426,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "priya",
+        "subject": "pia",
         "owner": null,
         "counterparty": null,
         "title": "Medical leave in July",
-        "statement": "Priya will be on medical leave for two weeks in July.",
+        "statement": "Pia will be on medical leave for two weeks in July.",
         "status": null,
         "occurredAt": "2026-05-28",
         "dueAt": null,
@@ -439,7 +439,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Priya will be on medical leave for two weeks in July."
+            "quote": "Pia will be on medical leave for two weeks in July."
           }
         ]
       }

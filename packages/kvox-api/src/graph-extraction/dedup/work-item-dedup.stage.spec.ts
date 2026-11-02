@@ -10,7 +10,7 @@ import { WorkItemDedupStage } from './work-item-dedup.stage.js';
 import { KvoxRateLimitError } from '../../ports/index.js';
 
 const SCHEMA = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
-const JOE = 'aaaaaaaa-0000-4000-8000-000000000001';
+const JONTY = 'aaaaaaaa-0000-4000-8000-000000000001';
 const KAPPA = 'aaaaaaaa-0000-4000-8000-000000000002';
 const PILOT = 'aaaaaaaa-0000-4000-8000-000000000003';
 const OLD_A = 'bbbbbbbb-0000-4000-8000-00000000000a';
@@ -68,7 +68,7 @@ function build(options: {
   schema?: typeof SCHEMA;
 } = {}) {
   const db = new FakeProposalDb();
-  db.add('entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(JOE) });
+  db.add('entity', entityPayload('e1', 'Person', 'Jonty'), { resolution: linked(JONTY) });
   db.add('entity', entityPayload('e2', 'Project', 'The Pilot'), { resolution: linked(PILOT) });
   db.add('entity', entityPayload('e3', 'Project', 'Brand new'), { resolution: linked(null) });
 
@@ -155,10 +155,10 @@ describe('work-item-dedup stage', () => {
 
   it('a commitment restated with a new due date → same + changes.dueAt', async () => {
     const { db, stage } = build({
-      candidates: { 'Sarah ships the migration by May.': [candidate(OLD_A, 0.95)] },
+      candidates: { 'Sasha ships the migration by May.': [candidate(OLD_A, 0.95)] },
       verdicts: (pairs) => new Map(pairs.map((p) => [p.pairId, v('same', { dueAt: '2026-05-01' })])),
     });
-    db.add('item', itemPayload('c1', { kind: 'commitment', statement: 'Sarah ships the migration by May.', owner: { ref: 'e1' } }));
+    db.add('item', itemPayload('c1', { kind: 'commitment', statement: 'Sasha ships the migration by May.', owner: { ref: 'e1' } }));
     await stage.run(db.ctx());
     const row = db.byRef('c1');
     expect(row.payload.dedup).toMatchObject({ verdict: 'same', targetItemId: OLD_A, changes: { dueAt: '2026-05-01' } });
@@ -251,7 +251,7 @@ describe('work-item-dedup stage', () => {
     const edge = (valid: TemporalEdge['valid'], type = 'WORKS_FOR'): TemporalEdge => ({
       id: 'cccccccc-0000-4000-8000-000000000001',
       type,
-      fromId: JOE,
+      fromId: JONTY,
       toId: KAPPA,
       props: {},
       valid,
@@ -292,24 +292,24 @@ describe('work-item-dedup stage', () => {
 
     describe('symmetric relations (#383)', () => {
       const PERSONAL = computeEffectiveSchema({ enabledDomains: ['core', 'work', 'personal'], userAttributes: [] });
-      const BEN = 'aaaaaaaa-0000-4000-8000-0000000000b2';
-      // Stored the other way round: (Ben, Joe).
-      const reversed = (type: string): TemporalEdge => ({ ...edge(null, type), fromId: BEN, toId: JOE });
+      const BRAM = 'aaaaaaaa-0000-4000-8000-0000000000b2';
+      // Stored the other way round: (Bram, Jonty).
+      const reversed = (type: string): TemporalEdge => ({ ...edge(null, type), fromId: BRAM, toId: JONTY });
 
       it('loads edges from both ends and finds (B SPOUSE_OF A) known for a proposed (A SPOUSE_OF B)', async () => {
         const { db, stage, graph } = build({ schema: PERSONAL, edges: [reversed('SPOUSE_OF')] });
-        db.add('relation', rel({ type: 'SPOUSE_OF', to: { entityId: BEN }, validFrom: null, precision: 'unknown' }));
+        db.add('relation', rel({ type: 'SPOUSE_OF', to: { entityId: BRAM }, validFrom: null, precision: 'unknown' }));
         await stage.run(db.ctx());
-        expect(graph.liveEdges).toHaveBeenCalledWith(OWNER, 'SPOUSE_OF', JOE, true);
+        expect(graph.liveEdges).toHaveBeenCalledWith(OWNER, 'SPOUSE_OF', JONTY, true);
         expect(db.byRef('r1').payload.dedup).toMatchObject({ verdict: 'known', targetRelationId: 'cccccccc-0000-4000-8000-000000000001' });
         expect(db.byRef('r1').flags).toEqual(['known']);
       });
 
       it('keeps PARENT_OF directed: a reversed edge is not the same fact', async () => {
         const { db, stage, graph } = build({ schema: PERSONAL, edges: [reversed('PARENT_OF')] });
-        db.add('relation', rel({ type: 'PARENT_OF', to: { entityId: BEN }, validFrom: null, precision: 'unknown' }));
+        db.add('relation', rel({ type: 'PARENT_OF', to: { entityId: BRAM }, validFrom: null, precision: 'unknown' }));
         await stage.run(db.ctx());
-        expect(graph.liveEdges).toHaveBeenCalledWith(OWNER, 'PARENT_OF', JOE, false);
+        expect(graph.liveEdges).toHaveBeenCalledWith(OWNER, 'PARENT_OF', JONTY, false);
         expect(db.byRef('r1').payload.dedup).toMatchObject({ verdict: 'new', targetRelationId: null });
       });
     });

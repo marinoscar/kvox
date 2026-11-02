@@ -460,7 +460,7 @@ export class TranscriptsService {
    * from.
    *
    * ⚠ THE VERSION IS NOT ENOUGH ON ITS OWN ANY MORE (#323). Naming "Speaker A"
-   * as "Oscar" changes this response's `speakers` without moving
+   * as "Orlo" changes this response's `speakers` without moving
    * `currentVersion`, so a validator built from the version alone would answer
    * a polling editor `304` forever and they would never see the name. The
    * identities map comes off the SAME row the access check already read, so
@@ -1107,7 +1107,7 @@ export function parseRecordedAt(value: string, now: Date): Date {
  * then the address.
  *
  * ONE DEFINITION, used by both the batch path and the detail path, so a
- * transcript cannot be labelled "Ana" in a list and by an email address when
+ * transcript cannot be labelled "Anders" in a list and by an email address when
  * opened. The address fallback is reached only for an account that has never
  * had a name at all — see `transcriptListItemSchema.ownerName` for why that is
  * an acceptable disclosure and an empty string is not.

@@ -48,7 +48,7 @@ const messageRow = (overrides: Partial<AskMessageRow> = {}): AskMessageRow => ({
   id: MSG,
   conversationId: CONV,
   role: 'assistant',
-  content: 'Sarah owns it.[^ev1]',
+  content: 'Sasha owns it.[^ev1]',
   status: 'complete',
   toolCalls: [],
   citations: [],
@@ -70,7 +70,7 @@ describe('citation markers', () => {
   });
 
   it('previews: markers stripped, whitespace collapsed, capped at 140 with an ellipsis', () => {
-    expect(previewText('  Sarah[^ev1]\n\n owns   Atlas[^ent2]. ')).toBe('Sarah owns Atlas.');
+    expect(previewText('  Sasha[^ev1]\n\n owns   Atlas[^ent2]. ')).toBe('Sasha owns Atlas.');
     const long = previewText('word '.repeat(100));
     expect(long).not.toBeNull();
     expect(long!.length).toBeLessThanOrEqual(140);
@@ -87,12 +87,12 @@ describe('citation markers', () => {
 
 describe('toAskConversationSummary', () => {
   it('maps title, timestamps, running and a null scope; conforms to the wire schema', () => {
-    const s = toAskConversationSummary(summaryRow({ running: true, preview: 'It is Sarah.[^ev3]' }));
+    const s = toAskConversationSummary(summaryRow({ running: true, preview: 'It is Sasha.[^ev3]' }));
     expect(s).toEqual({
       id: CONV,
       title: 'Who owns Atlas?',
       scopeEntity: null,
-      lastMessagePreview: 'It is Sarah.',
+      lastMessagePreview: 'It is Sasha.',
       running: true,
       createdAt: '2026-09-01T10:00:00.000Z',
       updatedAt: '2026-09-02T10:00:00.000Z',
@@ -102,10 +102,10 @@ describe('toAskConversationSummary', () => {
 
   it('carries the live scope entity, and a null title before the first message', () => {
     const s = toAskConversationSummary(
-      summaryRow({ title: null, scopeId: ENTITY, scopeLabel: 'Sarah Chen', scopeType: 'Person' }),
+      summaryRow({ title: null, scopeId: ENTITY, scopeLabel: 'Sasha Example', scopeType: 'Person' }),
     );
     expect(s.title).toBeNull();
-    expect(s.scopeEntity).toEqual({ id: ENTITY, label: 'Sarah Chen', type: 'Person' });
+    expect(s.scopeEntity).toEqual({ id: ENTITY, label: 'Sasha Example', type: 'Person' });
     expect(s.running).toBe(false);
   });
 });
@@ -126,7 +126,7 @@ describe('toAskMessage', () => {
     expect(m.createdAt).toBe('2026-09-02T10:00:00.000Z');
     expect(m.toolCalls).toHaveLength(1);
     expect(m.citations[0].marker).toBe('ev1');
-    expect(m.content).toBe('Sarah owns it.[^ev1]'); // the stored text keeps its markers
+    expect(m.content).toBe('Sasha owns it.[^ev1]'); // the stored text keeps its markers
   });
 
   it('drops malformed JSONB elements rather than failing the read', () => {
@@ -216,7 +216,7 @@ describe('AskConversationsService', () => {
 
   it('create: an entity forgotten between the check and the insert is the entity 404, not a 500', async () => {
     const { service, prisma, graphAccess } = harness();
-    graphAccess.require.mockResolvedValue({ id: ENTITY, label: 'Sarah', type: 'Person' });
+    graphAccess.require.mockResolvedValue({ id: ENTITY, label: 'Sasha', type: 'Person' });
     // The driver's foreign-key violation, as the generated client raises it (a duck-typed `code`).
     prisma.askConversation.create.mockRejectedValue(Object.assign(new Error('fk'), { code: 'P2003' }));
 

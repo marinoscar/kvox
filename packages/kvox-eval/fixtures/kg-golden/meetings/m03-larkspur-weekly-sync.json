@@ -13,22 +13,22 @@
     {
       "id": "m03-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m03-spk-b",
       "label": "B",
-      "displayName": "Priya Raman"
+      "displayName": "Pia Sample"
     },
     {
       "id": "m03-spk-c",
       "label": "C",
-      "displayName": "Hana Sato"
+      "displayName": "Hazel Placeholder"
     },
     {
       "id": "m03-spk-d",
       "label": "D",
-      "displayName": "Nadia Brooks"
+      "displayName": "Nell Fixture"
     }
   ],
   "segments": [
@@ -86,7 +86,7 @@
       "startMs": 33220,
       "endMs": 39520,
       "rev": 1,
-      "text": "Great. Accounts then. Lambda is fine, the pilot kicked off well and Sarah seems happy."
+      "text": "Great. Accounts then. Lambda is fine, the pilot kicked off well and Sasha seems happy."
     },
     {
       "id": "m03-s008",
@@ -94,7 +94,7 @@
       "startMs": 39770,
       "endMs": 47210,
       "rev": 1,
-      "text": "Agreed. Halden is also moving, JJ is on the migration and the license deadline is keeping everyone focused."
+      "text": "Agreed. Halden is also moving, JD is on the migration and the license deadline is keeping everyone focused."
     },
     {
       "id": "m03-s009",
@@ -118,7 +118,7 @@
       "startMs": 59800,
       "endMs": 65720,
       "rev": 1,
-      "text": "Let's make sure it doesn't grow faster than we can staff it. Nadia, Corvid?"
+      "text": "Let's make sure it doesn't grow faster than we can staff it. Nell, Corvid?"
     },
     {
       "id": "m03-s012",
@@ -150,7 +150,7 @@
       "startMs": 81440,
       "endMs": 88120,
       "rev": 1,
-      "text": "And Nadia, as your manager I'm happy to review them too before they go to Alex."
+      "text": "And Nell, as your manager I'm happy to review them too before they go to Alma."
     },
     {
       "id": "m03-s016",
@@ -190,7 +190,7 @@
       "startMs": 111530,
       "endMs": 114410,
       "rev": 1,
-      "text": "Hana, anything from the commercial side?"
+      "text": "Hazel, anything from the commercial side?"
     },
     {
       "id": "m03-s021",
@@ -222,7 +222,7 @@
       "startMs": 135070,
       "endMs": 137950,
       "rev": 1,
-      "text": "I'll ask Elif for them today."
+      "text": "I'll ask Elowen for them today."
     },
     {
       "id": "m03-s025",
@@ -235,7 +235,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Larkspur weekly delivery sync\n\n**Date:** January 22\n**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks\n\n## Summary\n\nInternal weekly sync covering the meeting slot, account health across Lambda, Halden and Corvid, staffing, and a recurring tooling topic.\n\n## Decisions\n\n- The weekly delivery sync moves to **Wednesday mornings**, starting next week, because Mondays collide with client steering calls.\n\n## Accounts\n\n- **Org Lambda Robotics** — the pick-path pilot kicked off well and Sarah seems happy.\n- **Halden Freight** — JJ is on the migration; the license deadline is keeping everyone focused.\n- **Corvid Health** — the intake discovery workshop is next week.\n\n## Staffing\n\nLarkspur is under a hiring freeze until March, with no new reqs until then. Hana flagged that this could hurt if the Corvid work grows.\n\n## Action items\n\n- **Nadia Brooks** — share the first intake wireframes with Alex before the Corvid workshop, by Tuesday.\n- **Hana Sato** — ask Elif at Corvid for their brand guidelines today.\n\n## Other topics\n\n- AI code review came up again in the engineering channel; it resurfaces every few weeks. Nobody took it on — \"we should probably look into that at some point\", but not this month.\n- Hana will be slower on email on Friday mornings while she trains for the Lisbon half marathon.\n"
+    "body": "# Larkspur weekly delivery sync\n\n**Date:** January 22\n**Attendees:** Alma Mockwell, Pia Sample, Hazel Placeholder, Nell Fixture\n\n## Summary\n\nInternal weekly sync covering the meeting slot, account health across Lambda, Halden and Corvid, staffing, and a recurring tooling topic.\n\n## Decisions\n\n- The weekly delivery sync moves to **Wednesday mornings**, starting next week, because Mondays collide with client steering calls.\n\n## Accounts\n\n- **Org Lambda Robotics** — the pick-path pilot kicked off well and Sasha seems happy.\n- **Halden Freight** — JD is on the migration; the license deadline is keeping everyone focused.\n- **Corvid Health** — the intake discovery workshop is next week.\n\n## Staffing\n\nLarkspur is under a hiring freeze until March, with no new reqs until then. Hazel flagged that this could hurt if the Corvid work grows.\n\n## Action items\n\n- **Nell Fixture** — share the first intake wireframes with Alma before the Corvid workshop, by Tuesday.\n- **Hazel Placeholder** — ask Elowen at Corvid for their brand guidelines today.\n\n## Other topics\n\n- AI code review came up again in the engineering channel; it resurfaces every few weeks. Nobody took it on — \"we should probably look into that at some point\", but not this month.\n- Hazel will be slower on email on Friday mornings while she trains for the Lisbon half marathon.\n"
   },
   "knownEntities": [
     {
@@ -259,11 +259,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -273,41 +273,41 @@
       ]
     },
     {
-      "id": "g-person-elif-kaya",
+      "id": "g-person-elowen-sample",
       "type": "Person",
-      "label": "Elif Kaya",
+      "label": "Elowen Sample",
       "aliases": [
-        "Elif"
+        "Elowen"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-hana-sato",
+      "id": "g-person-hazel-placeholder",
       "type": "Person",
-      "label": "Hana Sato",
+      "label": "Hazel Placeholder",
       "aliases": [
-        "Hana"
+        "Hazel"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-nadia-brooks",
+      "id": "g-person-nell-fixture",
       "type": "Person",
-      "label": "Nadia Brooks",
+      "label": "Nell Fixture",
       "aliases": [
-        "Nadia"
+        "Nell"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-priya-raman",
+      "id": "g-person-pia-sample",
       "type": "Person",
-      "label": "Priya Raman",
+      "label": "Pia Sample",
       "aliases": [
-        "Priya"
+        "Pia"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -332,58 +332,58 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera"
+            "quote": "**Attendees:** Alma Mockwell"
           }
         ]
       },
       {
-        "key": "priya",
+        "key": "pia",
         "type": "Person",
-        "label": "Priya Raman",
+        "label": "Pia Sample",
         "aliases": [],
-        "existingId": "g-person-priya-raman",
+        "existingId": "g-person-pia-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Priya Raman"
+            "quote": "Pia Sample"
           }
         ]
       },
       {
-        "key": "hana",
+        "key": "hazel",
         "type": "Person",
-        "label": "Hana Sato",
+        "label": "Hazel Placeholder",
         "aliases": [],
-        "existingId": "g-person-hana-sato",
+        "existingId": "g-person-hazel-placeholder",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Hana Sato"
+            "quote": "Hazel Placeholder"
           }
         ]
       },
       {
-        "key": "nadia",
+        "key": "nell",
         "type": "Person",
-        "label": "Nadia Brooks",
+        "label": "Nell Fixture",
         "aliases": [],
-        "existingId": "g-person-nadia-brooks",
+        "existingId": "g-person-nell-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Nadia Brooks"
+            "quote": "Nell Fixture"
           }
         ]
       },
@@ -405,7 +405,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -414,13 +414,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks"
+            "quote": "**Attendees:** Alma Mockwell, Pia Sample, Hazel Placeholder, Nell Fixture"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "priya",
+        "from": "pia",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -429,13 +429,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks"
+            "quote": "**Attendees:** Alma Mockwell, Pia Sample, Hazel Placeholder, Nell Fixture"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "hana",
+        "from": "hazel",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -444,13 +444,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks"
+            "quote": "**Attendees:** Alma Mockwell, Pia Sample, Hazel Placeholder, Nell Fixture"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "nadia",
+        "from": "nell",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -459,14 +459,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks"
+            "quote": "**Attendees:** Alma Mockwell, Pia Sample, Hazel Placeholder, Nell Fixture"
           }
         ]
       },
       {
         "type": "REPORTS_TO",
-        "from": "nadia",
-        "to": "priya",
+        "from": "nell",
+        "to": "pia",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -475,7 +475,7 @@
           {
             "source": "segment",
             "segmentId": "m03-s015",
-            "quote": "Nadia, as your manager I'm happy to review them too"
+            "quote": "Nell, as your manager I'm happy to review them too"
           }
         ]
       }
@@ -523,11 +523,11 @@
       },
       {
         "kind": "commitment",
-        "subject": "nadia",
-        "owner": "nadia",
-        "counterparty": "alex",
+        "subject": "nell",
+        "owner": "nell",
+        "counterparty": "alma",
         "title": "Share intake wireframes",
-        "statement": "Nadia will share the first intake wireframes with Alex before the Corvid workshop, by Tuesday.",
+        "statement": "Nell will share the first intake wireframes with Alma before the Corvid workshop, by Tuesday.",
         "status": "open",
         "occurredAt": "2026-01-22",
         "dueAt": "2026-01-27",
@@ -549,10 +549,10 @@
       {
         "kind": "commitment",
         "subject": "g-org-corvid-health",
-        "owner": "hana",
+        "owner": "hazel",
         "counterparty": null,
-        "title": "Ask Elif for Corvid brand guidelines",
-        "statement": "Hana will ask Elif at Corvid for their brand guidelines today.",
+        "title": "Ask Elowen for Corvid brand guidelines",
+        "statement": "Hazel will ask Elowen at Corvid for their brand guidelines today.",
         "status": "open",
         "occurredAt": "2026-01-22",
         "dueAt": "2026-01-22",
@@ -562,17 +562,17 @@
           {
             "source": "segment",
             "segmentId": "m03-s024",
-            "quote": "I'll ask Elif for them today."
+            "quote": "I'll ask Elowen for them today."
           }
         ]
       },
       {
         "kind": "person_fact",
-        "subject": "hana",
+        "subject": "hazel",
         "owner": null,
         "counterparty": null,
         "title": "Training for the Lisbon half marathon",
-        "statement": "Hana is training for the Lisbon half marathon, with long runs on Friday mornings.",
+        "statement": "Hazel is training for the Lisbon half marathon, with long runs on Friday mornings.",
         "status": null,
         "occurredAt": "2026-01-22",
         "dueAt": null,

@@ -65,7 +65,7 @@ function renderHero(ui: React.ReactElement, user = homeUser) {
 
 describe('firstNameOf', () => {
   it('takes the word before the first space', () => {
-    expect(firstNameOf('Ana Ruiz')).toBe('Ana');
+    expect(firstNameOf('Anders Stubbs')).toBe('Anders');
   });
 
   it('returns a single-word name unchanged', () => {
@@ -73,7 +73,7 @@ describe('firstNameOf', () => {
   });
 
   it('ignores surrounding whitespace', () => {
-    expect(firstNameOf('   Ana   Ruiz  ')).toBe('Ana');
+    expect(firstNameOf('   Anders   Stubbs  ')).toBe('Anders');
   });
 
   it('returns null for null', () => {
@@ -96,9 +96,9 @@ describe('firstNameOf', () => {
 
 describe('HomeHero', () => {
   it('greets the user by their first name only', () => {
-    renderHero(<WebHero displayName="Ana Ruiz" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders Stubbs" transcriptionAvailable />);
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Hi, Ana' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Hi, Anders' })).toBeInTheDocument();
   });
 
   it('greets a user with no display name without a dangling comma', () => {
@@ -108,41 +108,41 @@ describe('HomeHero', () => {
   });
 
   it('renders the greeting as the page h1', () => {
-    renderHero(<WebHero displayName="Ana Ruiz" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders Stubbs" transcriptionAvailable />);
 
-    expect(screen.getByRole('heading', { name: 'Hi, Ana' }).tagName).toBe('H1');
+    expect(screen.getByRole('heading', { name: 'Hi, Anders' }).tagName).toBe('H1');
   });
 
   // The point of the whole `TAGLINE` export: the assertion reads the shared
   // constant rather than the current wording, so a fork that rewrites its
   // promise keeps this green and a component that hardcodes one goes red.
   it('renders the tagline from the shared identity file', () => {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     expect(screen.getByText(TAGLINE)).toBeInTheDocument();
   });
 
   it('does not restate the tagline as a literal anywhere in the component', () => {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     // Exactly one node carries it — a second would mean a hardcoded copy.
     expect(screen.getAllByText(TAGLINE)).toHaveLength(1);
   });
 
   it('labels its section with the greeting', () => {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
-    expect(screen.getByRole('region', { name: 'Hi, Ana' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Hi, Anders' })).toBeInTheDocument();
   });
 
   it('no longer says "Welcome back"', () => {
-    renderHero(<WebHero displayName="Ana Ruiz" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders Stubbs" transcriptionAvailable />);
 
     expect(screen.queryByText(/welcome back/i)).not.toBeInTheDocument();
   });
 
   it('has no accessibility violations', async () => {
-    const { container } = renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    const { container } = renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
@@ -150,14 +150,14 @@ describe('HomeHero', () => {
 
 describe('HomeHero — the New transcript button', () => {
   it('offers New transcript when transcription is available', () => {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     expect(screen.getByRole('button', { name: 'New transcript' })).toBeEnabled();
   });
 
   it('navigates to the New-transcript flow when pressed', async () => {
     const user = userEvent.setup();
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     await user.click(screen.getByRole('button', { name: 'New transcript' }));
 
@@ -168,7 +168,7 @@ describe('HomeHero — the New transcript button', () => {
     // No button rather than a disabled one: `/transcripts/new` is guarded on
     // exactly this permission, so a disabled control would advertise something
     // they will never be able to do.
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />, {
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />, {
       ...mockUser,
       permissions: ['user_settings:read'],
     });
@@ -177,20 +177,20 @@ describe('HomeHero — the New transcript button', () => {
   });
 
   it('disables the button when transcription is not configured', () => {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable={false} />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable={false} />);
 
     expect(screen.getByRole('button', { name: 'New transcript' })).toBeDisabled();
   });
 
   it('explains why the button is disabled', () => {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable={false} />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable={false} />);
 
     expect(screen.getByText(/transcription is not set up for this workspace yet/i))
       .toBeInTheDocument();
   });
 
   it('ties the explanation to the disabled button with aria-describedby', () => {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable={false} />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable={false} />);
 
     const button = screen.getByRole('button', { name: 'New transcript' });
     const describedBy = button.getAttribute('aria-describedby');
@@ -204,7 +204,7 @@ describe('HomeHero — the New transcript button', () => {
     // A half-second of "not set up yet" before the probe answers is a lie the
     // user has time to read.
     renderHero(
-      <WebHero displayName="Ana" transcriptionAvailable={false} isCheckingTranscription />,
+      <WebHero displayName="Anders" transcriptionAvailable={false} isCheckingTranscription />,
     );
 
     expect(screen.queryByText(/transcription is not set up/i)).not.toBeInTheDocument();
@@ -212,7 +212,7 @@ describe('HomeHero — the New transcript button', () => {
 
   it('still keeps the button disabled while the probe is in flight', () => {
     renderHero(
-      <WebHero displayName="Ana" transcriptionAvailable={false} isCheckingTranscription />,
+      <WebHero displayName="Anders" transcriptionAvailable={false} isCheckingTranscription />,
     );
 
     expect(screen.getByRole('button', { name: 'New transcript' })).toBeDisabled();
@@ -237,7 +237,7 @@ describe('HomeHero — the New transcript button', () => {
     // Gated on the permission the transcription settings controller enforces,
     // not on the admin role — offering a link that redirects straight back is
     // worse than not offering it.
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable={false} />, homeUser);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable={false} />, homeUser);
 
     expect(screen.queryByRole('button', { name: 'Set up transcription' })).not.toBeInTheDocument();
   });
@@ -264,7 +264,7 @@ describe('HomeHero — the New transcript button', () => {
 
 describe('HomeHero — the New note button', () => {
   it('offers New note to a caller that may create one', () => {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable canCreateNote />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable canCreateNote />);
 
     expect(screen.getByRole('button', { name: 'New note' })).toBeEnabled();
   });
@@ -274,7 +274,7 @@ describe('HomeHero — the New note button', () => {
     // `App.tsx` registers — the two affordances must never disagree about
     // where "new note" is.
     const user = userEvent.setup();
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable canCreateNote />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable canCreateNote />);
 
     await user.click(screen.getByRole('button', { name: 'New note' }));
 
@@ -286,7 +286,7 @@ describe('HomeHero — the New note button', () => {
     // treats a missing `transcripts:write`: `/notes/new` is guarded on
     // `notes:write`, so a disabled control would advertise something the
     // router would bounce them off.
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable canCreateNote={false} />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable canCreateNote={false} />);
 
     expect(screen.queryByRole('button', { name: 'New note' })).not.toBeInTheDocument();
   });
@@ -294,7 +294,7 @@ describe('HomeHero — the New note button', () => {
   it('defaults to hiding it when the prop is omitted altogether', () => {
     // Default-DENY. A forgotten prop must cost an action, never manufacture
     // one the API would refuse.
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     expect(screen.queryByRole('button', { name: 'New note' })).not.toBeInTheDocument();
   });
@@ -302,7 +302,7 @@ describe('HomeHero — the New note button', () => {
   it('keeps New transcript as the primary action and New note as the secondary', () => {
     // The hero must still have ONE obvious first move; two filled buttons side
     // by side is a hero with none.
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable canCreateNote />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable canCreateNote />);
 
     expect(screen.getByRole('button', { name: 'New transcript' })).toHaveClass(
       'MuiButton-contained',
@@ -319,7 +319,7 @@ describe('HomeHero — the New note button', () => {
     // reason these two are in this order (see `HomeHero`'s header). Asserting
     // the full list is what makes a future reshuffle of any of the three fail
     // here rather than silently.
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable canCreateNote />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable canCreateNote />);
 
     const buttons = screen
       .getAllByRole('button')
@@ -330,7 +330,7 @@ describe('HomeHero — the New note button', () => {
   });
 
   it('names the two actions distinctly', () => {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable canCreateNote />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable canCreateNote />);
 
     expect(screen.getByRole('button', { name: 'New transcript' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New note' })).toBeInTheDocument();
@@ -340,7 +340,7 @@ describe('HomeHero — the New note button', () => {
     // The two gates are independent: a deployment with no speech-to-text
     // provider can still generate a note from an uploaded document, which is
     // most of the point of putting this action here at all.
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable={false} canCreateNote />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable={false} canCreateNote />);
 
     expect(screen.getByRole('button', { name: 'New note' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'New transcript' })).toBeDisabled();
@@ -349,7 +349,7 @@ describe('HomeHero — the New note button', () => {
   it('still offers New note to a user who cannot create a transcript', () => {
     // `NewTranscriptButton` renders nothing at all for them, so New note is
     // the only action left in the hero — and it is a real one.
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable canCreateNote />, {
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable canCreateNote />, {
       ...mockUser,
       permissions: ['user_settings:read'],
     });
@@ -360,7 +360,7 @@ describe('HomeHero — the New note button', () => {
 
   it('has no accessibility violations with both actions present', async () => {
     const { container } = renderHero(
-      <WebHero displayName="Ana" transcriptionAvailable canCreateNote />,
+      <WebHero displayName="Anders" transcriptionAvailable canCreateNote />,
     );
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
@@ -426,7 +426,7 @@ describe('HomeHero — the search field', () => {
   }
 
   it('renders a named search field', () => {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable canCreateNote />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable canCreateNote />);
 
     expect(field()).toBeInTheDocument();
   });
@@ -434,7 +434,7 @@ describe('HomeHero — the search field', () => {
   it('renders a search landmark around it', () => {
     // A `search` landmark, so the control a returning user most wants is
     // jumpable-to rather than scrolled-to.
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     expect(screen.getByRole('search')).toBeInTheDocument();
   });
@@ -442,7 +442,7 @@ describe('HomeHero — the search field', () => {
   it('names the submit button distinctly from the field', () => {
     // Two identically-named controls would be two indistinguishable entries in
     // a screen reader's forms list.
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Search' })).toHaveAttribute('type', 'submit');
@@ -452,7 +452,7 @@ describe('HomeHero — the search field', () => {
     // A REAL form: Enter works because it is a form, not because of an
     // `onKeyDown` handler.
     const user = userEvent.setup();
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     await user.type(field(), 'standup{Enter}');
 
@@ -461,7 +461,7 @@ describe('HomeHero — the search field', () => {
 
   it('navigates when the submit button is clicked', async () => {
     const user = userEvent.setup();
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     await user.type(field(), 'standup');
     await user.click(screen.getByRole('button', { name: 'Search' }));
@@ -471,7 +471,7 @@ describe('HomeHero — the search field', () => {
 
   it('does not navigate when the term is empty', async () => {
     const user = userEvent.setup();
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     await user.click(field());
     await user.keyboard('{Enter}');
@@ -482,7 +482,7 @@ describe('HomeHero — the search field', () => {
 
   it('does not navigate when the term is only whitespace', async () => {
     const user = userEvent.setup();
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     await user.type(field(), '   {Enter}');
     await user.click(screen.getByRole('button', { name: 'Search' }));
@@ -492,7 +492,7 @@ describe('HomeHero — the search field', () => {
 
   it('trims the term before navigating', async () => {
     const user = userEvent.setup();
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     await user.type(field(), '  standup  {Enter}');
 
@@ -503,7 +503,7 @@ describe('HomeHero — the search field', () => {
     // The end-to-end version of the `searchPathFor` cases above: an unencoded
     // `&` or `#` would silently search for a prefix of what was typed.
     const user = userEvent.setup();
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     await user.type(field(), 'budget & scope #4{Enter}');
 
@@ -515,7 +515,7 @@ describe('HomeHero — the search field', () => {
     // navigate per keystroke would be the dropdown this component's header
     // rejects, wearing a different bug.
     const user = userEvent.setup();
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />);
 
     await user.type(field(), 'standup');
 
@@ -527,7 +527,7 @@ describe('HomeHero — the search field', () => {
     // `/transcripts` is gated on exactly this string, so a field that
     // navigates somewhere the router bounces them off is worse than no field —
     // the same argument `NewTranscriptButton` makes about `transcripts:write`.
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable />, {
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable />, {
       ...mockUser,
       permissions: ['user_settings:read'],
     });
@@ -537,7 +537,7 @@ describe('HomeHero — the search field', () => {
   });
 
   it('names the field, the submit button and both actions distinctly', async () => {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable canCreateNote />);
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable canCreateNote />);
 
     expect(screen.getByRole('searchbox', { name: 'Search transcripts' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
@@ -547,7 +547,7 @@ describe('HomeHero — the search field', () => {
 
   it('has no accessibility violations with the field and both actions present', async () => {
     const { container } = renderHero(
-      <WebHero displayName="Ana" transcriptionAvailable canCreateNote />,
+      <WebHero displayName="Anders" transcriptionAvailable canCreateNote />,
     );
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
@@ -556,7 +556,7 @@ describe('HomeHero — the search field', () => {
   it('has no accessibility violations once a term has been typed', async () => {
     const user = userEvent.setup();
     const { container } = renderHero(
-      <WebHero displayName="Ana" transcriptionAvailable canCreateNote />,
+      <WebHero displayName="Anders" transcriptionAvailable canCreateNote />,
     );
 
     await user.type(field(), 'standup');
@@ -634,8 +634,8 @@ function cssOf(element: HTMLElement): ElementCss {
 
 describe('HomeHero — the greeting survives a long blocked-state sentence (#563)', () => {
   function renderBlocked() {
-    renderHero(<WebHero displayName="Ana" transcriptionAvailable={false} canCreateNote />);
-    const heading = screen.getByRole('heading', { level: 1, name: 'Hi, Ana' });
+    renderHero(<WebHero displayName="Anders" transcriptionAvailable={false} canCreateNote />);
+    const heading = screen.getByRole('heading', { level: 1, name: 'Hi, Anders' });
     const explanation = screen.getByText(/transcription is not set up for this workspace yet/i);
     const greetingColumn = heading.parentElement as HTMLElement;
     // button -> NewTranscriptButton's wrapper -> the actions container.

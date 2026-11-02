@@ -18,24 +18,9 @@ Then rebuild. For everything rendered at runtime that is the whole change —
 every surface below derives from these constants rather than restating them, so
 nothing else needs editing and nothing can be missed.
 
-Three caveats, all real:
+Two caveats, all real:
 
-1. **Regenerate the visual baselines.** The app name is rendered into the
-   pixel baselines under `tests/visual/specs/**/*-snapshots/`, and that suite
-   runs at `maxDiffPixels: 4` — effectively zero tolerance. Baselines are only
-   ever regenerated inside the pinned container (see
-   `tests/visual/playwright.config.ts` for why a local browser is not
-   acceptable):
-
-   ```bash
-   docker run --rm -it -v "$PWD":/w -w /w mcr.microsoft.com/playwright:v1.62.1-noble \
-     npx playwright test --config=tests/visual/playwright.config.ts --update-snapshots
-   ```
-
-   Seven of the eleven baselines are `fullPage` shots that include the AppBar
-   wordmark; the rail-scoped and drill-down ones are unaffected.
-
-2. **`THEME_COLOR` does not reach the icons on its own.** The files under
+1. **`THEME_COLOR` does not reach the icons on its own.** The files under
    `apps/web/public/icons/` are committed PIXELS, so editing the constant
    restyles the application and leaves every icon on the old colour. Re-run the
    generator — see [Brand icons](#brand-icons) below.
@@ -51,7 +36,7 @@ Three caveats, all real:
    just on the Home Screen icon — a more visible miss than it looks, since a
    notification is the one surface a user sees without the app open at all.
 
-3. **The name is not the only identity string.** These are deliberately
+2. **The name is not the only identity string.** These are deliberately
    separate and are *not* derived from `APP_NAME`:
    - `CLI_NAME` (`cliName` in `identity.json`, `kvox`) — the executable name,
      which also seeds the config directory and the env-var prefix. `apps/cli/src/app.ts`
@@ -160,7 +145,7 @@ blank.
 The trap is what stays green while that is broken: `tsc --noEmit`, the whole
 Vitest suite, and `vite build` all pass, because Rollup's commonjs plugin and
 Vitest's interop each handle the file unaided. **Only the dev server breaks.**
-`apps/web/vite.config.ts` and `apps/web/visual/vite.config.ts` both carry the
+`apps/web/vite.config.ts` carries the
 line for this reason — see #164.
 
 ## Ontology subpath
@@ -195,7 +180,7 @@ Dockerfiles build the contract inside the image, and CI builds it right after
 
 Consumed via the `./ontology` subpath export (`packages/shared/package.json`'s
 `exports` map: `@app/shared/ontology` ⇒ `packages/shared/ontology/index.js`/
-`.d.ts`). `apps/web/vite.config.ts` and `apps/web/visual/vite.config.ts` list
+`.d.ts`). `apps/web/vite.config.ts` lists
 `@app/shared`, `@app/shared/ontology`, `@marinoscar/kvox-contract` and
 `@marinoscar/kvox-contract/ontology` in `optimizeDeps.include`: the same
 symlinked-workspace, CommonJS-under-Vite trap the [Vite

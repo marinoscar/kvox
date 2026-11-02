@@ -16,27 +16,27 @@
     {
       "id": "m02-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m02-spk-b",
       "label": "B",
-      "displayName": "Marcus Webb"
+      "displayName": "Maddox Sample"
     },
     {
       "id": "m02-spk-c",
       "label": "C",
-      "displayName": "Sarah Okonkwo"
+      "displayName": "Sasha Fixture"
     },
     {
       "id": "m02-spk-d",
       "label": "D",
-      "displayName": "Ravi Menon"
+      "displayName": "Rafferty Fixture"
     },
     {
       "id": "m02-spk-e",
       "label": "E",
-      "displayName": "Jonah Jiménez"
+      "displayName": "Jovan Démo"
     }
   ],
   "segments": [
@@ -54,7 +54,7 @@
       "startMs": 7310,
       "endMs": 15130,
       "rev": 1,
-      "text": "Before we start, for anyone new, I'm Marcus Webb, CIO at Halden Freight. Sarah and Ravi are with me."
+      "text": "Before we start, for anyone new, I'm Maddox Sample, CIO at Halden Freight. Sasha and Rafferty are with me."
     },
     {
       "id": "m02-s003",
@@ -62,7 +62,7 @@
       "startMs": 15380,
       "endMs": 20920,
       "rev": 1,
-      "text": "Sarah Okonkwo, I lead procurement here, so contracts and licensing come through me."
+      "text": "Sasha Fixture, I lead procurement here, so contracts and licensing come through me."
     },
     {
       "id": "m02-s004",
@@ -70,7 +70,7 @@
       "startMs": 21170,
       "endMs": 29750,
       "rev": 1,
-      "text": "Ravi Menon, integration lead. I've been at Halden since 2019, so I know where most of the old integrations are buried."
+      "text": "Rafferty Fixture, integration lead. I've been at Halden since 2019, so I know where most of the old integrations are buried."
     },
     {
       "id": "m02-s005",
@@ -78,7 +78,7 @@
       "startMs": 30000,
       "endMs": 34400,
       "rev": 1,
-      "text": "And JJ from our side will lead the migration engineering."
+      "text": "And JD from our side will lead the migration engineering."
     },
     {
       "id": "m02-s006",
@@ -142,7 +142,7 @@
       "startMs": 77840,
       "endMs": 79200,
       "rev": 1,
-      "text": "Sarah, licensing?"
+      "text": "Sasha, licensing?"
     },
     {
       "id": "m02-s014",
@@ -166,7 +166,7 @@
       "startMs": 95590,
       "endMs": 99230,
       "rev": 1,
-      "text": "Understood. JJ, what's realistic for a dry run?"
+      "text": "Understood. JD, what's realistic for a dry run?"
     },
     {
       "id": "m02-s017",
@@ -182,7 +182,7 @@
       "startMs": 106030,
       "endMs": 110050,
       "rev": 1,
-      "text": "Good. Ravi, what do you need to give JJ?"
+      "text": "Good. Rafferty, what do you need to give JD?"
     },
     {
       "id": "m02-s019",
@@ -246,7 +246,7 @@
       "startMs": 153110,
       "endMs": 155610,
       "rev": 1,
-      "text": "Noted, thanks Marcus. Anything else?"
+      "text": "Noted, thanks Maddox. Anything else?"
     },
     {
       "id": "m02-s027",
@@ -267,7 +267,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Halden route optimizer migration planning\n\n**Date:** January 15\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)\n\n## Summary\n\nPlanning session for migrating Halden Freight off its legacy route optimizer. Marcus Webb (CIO) sponsors the work; Sarah Okonkwo leads procurement and owns licensing; Ravi Menon is the integration lead and has been at Halden since 2019. JJ leads migration engineering for Larkspur.\n\n## Decisions\n\n- **Carrier data migrates first**, driver schedules afterwards. Carrier data is smaller and slower-changing, and driver schedules touch payroll, so they wait until the new system is trusted.\n\n## Key facts\n\n- The current optimizer license expires at the end of April. Sarah and Marcus both treat this as a hard deadline; the renewal quote was described as absurd.\n- Any new vendor terms must go through Sarah before anyone signs.\n\n## Action items\n\n- **JJ** — have the migration scripts ready for a full dry run in three weeks.\n- **Ravi Menon** — export the last two years of historical routes, including depot codes, by Friday.\n\n## Open questions\n\n- Cutover weekend support: Marcus suggested that whoever's on call that weekend can watch the cutover. Alex would still like a named contact; to be settled closer to the date.\n\n## Notes\n\n- Marcus mostly works out of the Rotterdam office now, so in-person meetings would be there.\n"
+    "body": "# Halden route optimizer migration planning\n\n**Date:** January 15\n**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Sasha Fixture (Halden Freight), Rafferty Fixture (Halden Freight)\n\n## Summary\n\nPlanning session for migrating Halden Freight off its legacy route optimizer. Maddox Sample (CIO) sponsors the work; Sasha Fixture leads procurement and owns licensing; Rafferty Fixture is the integration lead and has been at Halden since 2019. JD leads migration engineering for Larkspur.\n\n## Decisions\n\n- **Carrier data migrates first**, driver schedules afterwards. Carrier data is smaller and slower-changing, and driver schedules touch payroll, so they wait until the new system is trusted.\n\n## Key facts\n\n- The current optimizer license expires at the end of April. Sasha and Maddox both treat this as a hard deadline; the renewal quote was described as absurd.\n- Any new vendor terms must go through Sasha before anyone signs.\n\n## Action items\n\n- **JD** — have the migration scripts ready for a full dry run in three weeks.\n- **Rafferty Fixture** — export the last two years of historical routes, including depot codes, by Friday.\n\n## Open questions\n\n- Cutover weekend support: Maddox suggested that whoever's on call that weekend can watch the cutover. Alma would still like a named contact; to be settled closer to the date.\n\n## Notes\n\n- Maddox mostly works out of the Rotterdam office now, so in-person meetings would be there.\n"
   },
   "knownEntities": [
     {
@@ -291,11 +291,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -304,22 +304,22 @@
       ]
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-marcus-webb",
+      "id": "g-person-maddox-sample",
       "type": "Person",
-      "label": "Marcus Webb",
+      "label": "Maddox Sample",
       "aliases": [
-        "Marcus"
+        "Maddox"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -327,11 +327,11 @@
       ]
     },
     {
-      "id": "g-person-ravi-menon",
+      "id": "g-person-rafferty-fixture",
       "type": "Person",
-      "label": "Ravi Menon",
+      "label": "Rafferty Fixture",
       "aliases": [
-        "Ravi"
+        "Rafferty"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -339,11 +339,11 @@
       ]
     },
     {
-      "id": "g-person-sarah-chen",
+      "id": "g-person-sasha-example",
       "type": "Person",
-      "label": "Sarah Chen",
+      "label": "Sasha Example",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -351,11 +351,11 @@
       ]
     },
     {
-      "id": "g-person-sarah-okonkwo",
+      "id": "g-person-sasha-fixture",
       "type": "Person",
-      "label": "Sarah Okonkwo",
+      "label": "Sasha Fixture",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -388,78 +388,78 @@
         ]
       },
       {
-        "key": "marcus",
+        "key": "maddox",
         "type": "Person",
-        "label": "Marcus Webb",
+        "label": "Maddox Sample",
         "aliases": [],
-        "existingId": "g-person-marcus-webb",
+        "existingId": "g-person-maddox-sample",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m02-s002",
-            "quote": "I'm Marcus Webb, CIO at Halden Freight"
+            "quote": "I'm Maddox Sample, CIO at Halden Freight"
           }
         ]
       },
       {
-        "key": "sarahO",
+        "key": "sashaO",
         "type": "Person",
-        "label": "Sarah Okonkwo",
+        "label": "Sasha Fixture",
         "aliases": [],
-        "existingId": "g-person-sarah-okonkwo",
+        "existingId": "g-person-sasha-fixture",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m02-s003",
-            "quote": "Sarah Okonkwo, I lead procurement here"
+            "quote": "Sasha Fixture, I lead procurement here"
           }
         ]
       },
       {
-        "key": "ravi",
+        "key": "rafferty",
         "type": "Person",
-        "label": "Ravi Menon",
+        "label": "Rafferty Fixture",
         "aliases": [],
-        "existingId": "g-person-ravi-menon",
+        "existingId": "g-person-rafferty-fixture",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m02-s004",
-            "quote": "Ravi Menon, integration lead."
+            "quote": "Rafferty Fixture, integration lead."
           }
         ]
       },
       {
         "key": "jj",
         "type": "Person",
-        "label": "Jonah Jiménez",
+        "label": "Jovan Démo",
         "aliases": [
-          "JJ"
+          "JD"
         ],
-        "existingId": "g-person-jonah-jimenez",
+        "existingId": "g-person-jovan-demo",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m02-s005",
-            "quote": "And JJ from our side will lead the migration engineering."
+            "quote": "And JD from our side will lead the migration engineering."
           }
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
@@ -474,7 +474,7 @@
           {
             "source": "segment",
             "segmentId": "m02-s002",
-            "quote": "I'm Marcus Webb, CIO at Halden Freight"
+            "quote": "I'm Maddox Sample, CIO at Halden Freight"
           }
         ]
       },
@@ -497,7 +497,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -506,7 +506,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Sasha Fixture (Halden Freight), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
@@ -521,13 +521,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Sasha Fixture (Halden Freight), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "marcus",
+        "from": "maddox",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -536,13 +536,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Sasha Fixture (Halden Freight), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sarahO",
+        "from": "sashaO",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -551,13 +551,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Sasha Fixture (Halden Freight), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -566,13 +566,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Maddox Sample (Halden Freight), Sasha Fixture (Halden Freight), Rafferty Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "marcus",
+        "from": "maddox",
         "to": "halden",
         "validFrom": null,
         "validTo": null,
@@ -584,13 +584,13 @@
           {
             "source": "segment",
             "segmentId": "m02-s002",
-            "quote": "I'm Marcus Webb, CIO at Halden Freight"
+            "quote": "I'm Maddox Sample, CIO at Halden Freight"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "sarahO",
+        "from": "sashaO",
         "to": "halden",
         "validFrom": null,
         "validTo": null,
@@ -599,13 +599,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Sarah Okonkwo (Halden Freight)"
+            "quote": "Sasha Fixture (Halden Freight)"
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "sarahO",
+        "from": "sashaO",
         "to": "halden",
         "validFrom": null,
         "validTo": null,
@@ -617,13 +617,13 @@
           {
             "source": "segment",
             "segmentId": "m02-s003",
-            "quote": "Sarah Okonkwo, I lead procurement here"
+            "quote": "Sasha Fixture, I lead procurement here"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "halden",
         "validFrom": "2019-01-01",
         "validTo": null,
@@ -639,7 +639,7 @@
       },
       {
         "type": "HAS_ROLE",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "halden",
         "validFrom": null,
         "validTo": null,
@@ -651,7 +651,7 @@
           {
             "source": "segment",
             "segmentId": "m02-s004",
-            "quote": "Ravi Menon, integration lead."
+            "quote": "Rafferty Fixture, integration lead."
           }
         ]
       },
@@ -666,7 +666,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "JJ (Larkspur Labs)"
+            "quote": "JD (Larkspur Labs)"
           }
         ]
       },
@@ -749,7 +749,7 @@
         "owner": "jj",
         "counterparty": null,
         "title": "Migration scripts ready for dry run",
-        "statement": "JJ will have the migration scripts ready for a full dry run in three weeks.",
+        "statement": "JD will have the migration scripts ready for a full dry run in three weeks.",
         "status": "open",
         "occurredAt": "2026-01-15",
         "dueAt": "2026-02-05",
@@ -766,10 +766,10 @@
       {
         "kind": "commitment",
         "subject": "migration",
-        "owner": "ravi",
+        "owner": "rafferty",
         "counterparty": "jj",
         "title": "Export historical routes",
-        "statement": "Ravi will export the last two years of historical routes, including depot codes, by Friday.",
+        "statement": "Rafferty will export the last two years of historical routes, including depot codes, by Friday.",
         "status": "open",
         "occurredAt": "2026-01-15",
         "dueAt": "2026-01-16",
@@ -785,11 +785,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "marcus",
+        "subject": "maddox",
         "owner": null,
         "counterparty": null,
         "title": "Works from the Rotterdam office",
-        "statement": "Marcus mostly works out of the Rotterdam office.",
+        "statement": "Maddox mostly works out of the Rotterdam office.",
         "status": null,
         "occurredAt": "2026-01-15",
         "dueAt": null,

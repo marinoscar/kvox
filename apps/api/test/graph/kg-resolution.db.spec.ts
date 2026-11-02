@@ -145,26 +145,26 @@ describeWithDb('entity resolution (real Postgres)', () => {
 
   it('finds the exact-alias, trigram and vector arms, same type, live only', async () => {
     const user = await createUser();
-    const sarah = await entity(user.id, 'Person', 'Sarah Chen', ['S. Chen']);
-    const org = await entity(user.id, 'Organization', 'Sarah Chen Consulting');
-    const tom = await entity(user.id, 'Person', 'Tom Hale');
-    const gone = await entity(user.id, 'Person', 'Sarah Chen');
+    const sasha = await entity(user.id, 'Person', 'Sasha Example', ['S. Example']);
+    const org = await entity(user.id, 'Organization', 'Sasha Example Consulting');
+    const tobias = await entity(user.id, 'Person', 'Tobias Fixture');
+    const gone = await entity(user.id, 'Person', 'Sasha Example');
     await prisma.kgEntity.update({ where: { id: gone }, data: { reviewStatus: 'rejected' } });
 
     // Alias exact (normalized with #355's normalizer).
-    const exact = await candidates.forMention(user.id, { type: 'Person', label: 's. chen', aliases: [] });
-    expect(exact.map((c) => [c.entityId, c.aliasExact])).toEqual([[sarah, true]]);
+    const exact = await candidates.forMention(user.id, { type: 'Person', label: 's. example', aliases: [] });
+    expect(exact.map((c) => [c.entityId, c.aliasExact])).toEqual([[sasha, true]]);
 
     // A misspelling: pg_trgm, never the exact arm; the organization is another type.
-    const fuzzy = await candidates.forMention(user.id, { type: 'Person', label: 'Sara Chen', aliases: [] });
-    expect(fuzzy.map((c) => c.entityId)).toEqual([sarah]);
+    const fuzzy = await candidates.forMention(user.id, { type: 'Person', label: 'Sasa Example', aliases: [] });
+    expect(fuzzy.map((c) => c.entityId)).toEqual([sasha]);
     expect(fuzzy[0].aliasExact).toBe(false);
     expect(fuzzy[0].trigram).toBeGreaterThanOrEqual(0.4);
     expect(fuzzy.some((c) => c.entityId === org)).toBe(false);
 
     // HNSW kNN with fixed vectors: nearest first, same model only.
-    await setVector(sarah, vec(1, 0.1));
-    await setVector(tom, vec(7));
+    await setVector(sasha, vec(1, 0.1));
+    await setVector(tobias, vec(7));
     const near = await candidates.forMention(user.id, {
       type: 'Person',
       label: 'Zed',
@@ -172,7 +172,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
       vector: { values: vec(1), model: MODEL },
     });
     const bySim = [...near].sort((a, b) => (b.cosine ?? 0) - (a.cosine ?? 0));
-    expect(bySim[0].entityId).toBe(sarah);
+    expect(bySim[0].entityId).toBe(sasha);
     expect(bySim[0].cosine).toBeGreaterThan(0.99);
     const otherModel = await candidates.forMention(user.id, {
       type: 'Person',
@@ -185,9 +185,9 @@ describeWithDb('entity resolution (real Postgres)', () => {
 
   it('never proposes a confirmed distinct pair again', async () => {
     const user = await createUser();
-    const a = await entity(user.id, 'Person', 'Sarah Chen');
-    const b = await entity(user.id, 'Person', 'Sarah Chen', ['Sarah C.']);
-    const before = await candidates.forMention(user.id, { type: 'Person', label: 'Sarah Chen', aliases: [], excludeIds: [a] });
+    const a = await entity(user.id, 'Person', 'Sasha Example');
+    const b = await entity(user.id, 'Person', 'Sasha Example', ['Sasha C.']);
+    const before = await candidates.forMention(user.id, { type: 'Person', label: 'Sasha Example', aliases: [], excludeIds: [a] });
     expect(before.map((c) => c.entityId)).toEqual([b]);
 
     const recorded = await prisma.$transaction((tx) => distinct.record(tx, user.id, b, a));
@@ -195,15 +195,15 @@ describeWithDb('entity resolution (real Postgres)', () => {
     expect(recorded.aId < recorded.bId).toBe(true);
     expect((await prisma.$transaction((tx) => distinct.record(tx, user.id, a, b))).created).toBe(false);
 
-    const after = await candidates.forMention(user.id, { type: 'Person', label: 'Sarah Chen', aliases: [], excludeIds: [a] });
+    const after = await candidates.forMention(user.id, { type: 'Person', label: 'Sasha Example', aliases: [], excludeIds: [a] });
     expect(after).toEqual([]);
   });
 
-  it('resolves "Sarah Chen" in a second meeting — exact alias, same organization — above 0.90', async () => {
+  it('resolves "Sasha Example" in a second meeting — exact alias, same organization — above 0.90', async () => {
     const user = await createUser();
-    const sarah = await entity(user.id, 'Person', 'Sarah Chen');
+    const sasha = await entity(user.id, 'Person', 'Sasha Example');
     const lambda = await entity(user.id, 'Organization', 'Org Lambda Robotics');
-    await relation(user.id, 'WORKS_FOR', sarah, lambda);
+    await relation(user.id, 'WORKS_FOR', sasha, lambda);
 
     const outcomes = await resolution.rankMentions(
       user.id,
@@ -211,7 +211,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
         {
           key: 'm',
           type: 'Person',
-          label: 'Sarah Chen',
+          label: 'Sasha Example',
           aliases: [],
           context: { ...emptyContext(), orgNames: new Set(['org lambda robotics']) },
         },
@@ -219,7 +219,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
       GRAPH_PREFERENCE_DEFAULTS.resolution,
     );
     const top = outcomes.get('m')!.candidates[0];
-    expect(top.entityId).toBe(sarah);
+    expect(top.entityId).toBe(sasha);
     expect(top.score).toBeGreaterThanOrEqual(0.9);
     expect(top.signals).toEqual(expect.arrayContaining(['alias_exact', 'org_co_mention', 'recent']));
     expect(outcomes.get('m')!.band).toBe('link');
@@ -246,10 +246,10 @@ describeWithDb('entity resolution (real Postgres)', () => {
   async function mergeFixture() {
     const user = await createUser();
     const note = await prisma.note.create({ data: { ownerId: user.id, title: 'M', body: 'b', status: 'ready', sourceType: 'document' } });
-    const s = await entity(user.id, 'Person', 'Sarah Chen', ['Sarah']);
-    const m = await entity(user.id, 'Person', 'S. Chen', ['Sarah']); // 'sarah' collides and stays behind
+    const s = await entity(user.id, 'Person', 'Sasha Example', ['Sasha']);
+    const m = await entity(user.id, 'Person', 'S. Example', ['Sasha']); // 'sasha' collides and stays behind
     const org = await entity(user.id, 'Organization', 'Lambda');
-    const x = await entity(user.id, 'Person', 'Tom Hale');
+    const x = await entity(user.id, 'Person', 'Tobias Fixture');
     const meeting = await entity(user.id, 'Meeting', 'Weekly');
     const ids = {
       sWorks: await relation(user.id, 'WORKS_FOR', s, org),
@@ -296,9 +296,9 @@ describeWithDb('entity resolution (real Postgres)', () => {
     expect(mid.evidence.filter((e) => e.subjectKind === 'entity' && e.subjectId === f.m)).toHaveLength(0);
     // The collapsed duplicate's evidence moved onto the kept relation.
     expect(mid.evidence.filter((e) => e.subjectId === f.ids.sWorks)).toHaveLength(2);
-    // Aliases: 's chen' moved, 'sarah' stayed on the tombstone (the survivor has it), label added.
+    // Aliases: 's example' moved, 'sasha' stayed on the tombstone (the survivor has it), label added.
     expect(mid.aliases.filter((a) => a.entityId === f.s).map((a) => a.normalized).sort()).toEqual(
-      [normalizeAlias('S. Chen'), 'sarah', 'sarah chen'].sort(),
+      [normalizeAlias('S. Example'), 'sasha', 'sasha example'].sort(),
     );
     // Distinct pairs: (m, x) → (s, x); (m, s) dropped.
     const [pa, pb] = [f.s, f.x].sort();
@@ -306,7 +306,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
 
     const reversed = await merges.reverse({ ownerId: f.user.id, mergeId: merged.merge.id, actorId: f.user.id });
     expect(reversed.skipped).toEqual([]);
-    expect(reversed.restored).toMatchObject({ id: f.m, type: 'Person', label: 'S. Chen' });
+    expect(reversed.restored).toMatchObject({ id: f.m, type: 'Person', label: 'S. Example' });
     expect(await snapshot(f.user.id)).toEqual(before);
 
     await expect(merges.reverse({ ownerId: f.user.id, mergeId: merged.merge.id, actorId: f.user.id })).rejects.toMatchObject({ status: 404 });
@@ -316,7 +316,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
   // endpoints and `valid` — and the survivor inherits what it lacked.
   async function roleFixture() {
     const user = await createUser();
-    const s = await entity(user.id, 'Person', 'Joe Doe');
+    const s = await entity(user.id, 'Person', 'Jonty Doe');
     const m = await entity(user.id, 'Person', 'J. Doe');
     const org = await entity(user.id, 'Organization', 'Org Beta');
     const ids = {
@@ -372,7 +372,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
   it('refuses to reverse once the survivor was itself merged (409 revert_conflict)', async () => {
     const f = await mergeFixture();
     const first = await merges.merge({ ownerId: f.user.id, mergedId: f.m, survivorId: f.s, actorId: f.user.id, source: 'manual' });
-    const third = await entity(f.user.id, 'Person', 'Sarah Chen-Li');
+    const third = await entity(f.user.id, 'Person', 'Sasha Example-Li');
     await merges.merge({ ownerId: f.user.id, mergedId: f.s, survivorId: third, actorId: f.user.id, source: 'manual' });
 
     await expect(merges.reverse({ ownerId: f.user.id, mergeId: first.merge.id, actorId: f.user.id })).rejects.toMatchObject({

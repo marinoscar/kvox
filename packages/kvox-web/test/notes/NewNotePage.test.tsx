@@ -363,12 +363,12 @@ describe('NewNotePage — the three source pickers', () => {
 
     await user.type(
       screen.getByLabelText('Context (optional)'),
-      'Ana and Ben, the quarterly review.',
+      'Anders and Bram, the quarterly review.',
     );
     await user.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => expect(createdBodies).toHaveLength(1));
-    expect(createdBodies[0].contextText).toBe('Ana and Ben, the quarterly review.');
+    expect(createdBodies[0].contextText).toBe('Anders and Bram, the quarterly review.');
   });
 
   it('lets the template be chosen, and sends the chosen one', async () => {

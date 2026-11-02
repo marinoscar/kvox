@@ -148,7 +148,7 @@ describe('EvidenceTool', () => {
       id: uid(33),
       subjectKind: 'relation',
       subjectId: REL,
-      quote: 'Set by hand: Jenny Kim reports to Mark Chen',
+      quote: 'Set by hand: Jarek Stubbs reports to Marta Sample',
       createdAt: '2026-09-01T00:00:00.000Z',
       source: { kind: 'manual', available: true, href: null },
     };
@@ -159,7 +159,7 @@ describe('EvidenceTool', () => {
     expect(res.data).toEqual([
       {
         ref: 'ev1',
-        quote: 'Set by hand: Jenny Kim reports to Mark Chen',
+        quote: 'Set by hand: Jarek Stubbs reports to Marta Sample',
         source: { kind: 'manual', title: 'Set by hand', at: null, startMs: null },
         available: true,
       },

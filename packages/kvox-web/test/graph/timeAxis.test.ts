@@ -120,7 +120,7 @@ const activity: GraphActivityResponse = {
     { start: '2026-03-01', total: 5, byType: { Person: 1, Project: 4 } },
   ],
   byEntity: {
-    joe: [
+    jonty: [
       { start: '2026-01-01', count: 2 },
       { start: '2026-03-01', count: 1 },
     ],
@@ -128,13 +128,13 @@ const activity: GraphActivityResponse = {
       { start: '2026-01-01', count: 1 },
       { start: '2026-03-01', count: 4 },
     ],
-    ana: [{ start: '2026-03-01', count: 1 }],
+    anders: [{ start: '2026-03-01', count: 1 }],
   },
 };
 
 describe('the TimeBar model', () => {
   it('builds one column per bucket, empty ones included, with the selection overlaid', () => {
-    const columns = buildColumns(activity, [day('2026-01-01'), day('2026-05-01')], 'month', ['joe', 'ana']);
+    const columns = buildColumns(activity, [day('2026-01-01'), day('2026-05-01')], 'month', ['jonty', 'anders']);
     expect(columns.map((c) => formatDay(c.start))).toEqual(['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01']);
     expect(columns.map((c) => c.total)).toEqual([3, 0, 5, 0]);
     expect(columns.map((c) => c.overlay)).toEqual([2, 0, 2, 0]);
@@ -147,16 +147,16 @@ describe('the TimeBar model', () => {
   });
 
   it('finds the entities with evidence in a window by bucket overlap', () => {
-    expect([...activeEntities(activity, day('2026-03-01'), day('2026-04-01'))].sort()).toEqual(['ana', 'joe', 'productx']);
+    expect([...activeEntities(activity, day('2026-03-01'), day('2026-04-01'))].sort()).toEqual(['anders', 'jonty', 'productx']);
     expect([...activeEntities(activity, day('2026-02-01'), day('2026-03-01'))]).toEqual([]);
-    expect([...activeInRange(activity, { from: '2026-01-01', to: '2026-02-01' })!].sort()).toEqual(['joe', 'productx']);
+    expect([...activeInRange(activity, { from: '2026-01-01', to: '2026-02-01' })!].sort()).toEqual(['jonty', 'productx']);
     // A window inside a month still overlaps that month's bucket.
-    expect(activeEntities(activity, day('2026-03-20'), day('2026-03-21')).has('ana')).toBe(true);
+    expect(activeEntities(activity, day('2026-03-20'), day('2026-03-21')).has('anders')).toBe(true);
   });
 
   it('dims the visible nodes outside the active set, and nothing when everything would dim', () => {
-    const visible = ['joe', 'productx', 'ana', 'ghost'];
-    expect([...dimmedFrom(visible, new Set(['joe']))!].sort()).toEqual(['ana', 'ghost', 'productx']);
+    const visible = ['jonty', 'productx', 'anders', 'ghost'];
+    expect([...dimmedFrom(visible, new Set(['jonty']))!].sort()).toEqual(['anders', 'ghost', 'productx']);
     expect(dimmedFrom(visible, null)).toBeNull();
     expect(dimmedFrom(visible, new Set())).toBeNull();
   });

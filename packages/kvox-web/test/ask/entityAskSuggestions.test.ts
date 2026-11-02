@@ -5,10 +5,10 @@ import { entityAskSuggestions } from '../../src/ask/headless/index.js';
 /** The entity panel's suggested questions, per entity type (#381). */
 describe('entityAskSuggestions', () => {
   it('asks a Person about commitments, role and the last discussion', () => {
-    expect(entityAskSuggestions({ label: 'Joe Rivera', type: 'Person' })).toEqual([
-      'What has Joe Rivera committed to?',
-      "How has Joe Rivera's role changed?",
-      'What did we last discuss with Joe Rivera?',
+    expect(entityAskSuggestions({ label: 'Jonty Placeholder', type: 'Person' })).toEqual([
+      'What has Jonty Placeholder committed to?',
+      "How has Jonty Placeholder's role changed?",
+      'What did we last discuss with Jonty Placeholder?',
     ]);
   });
 
@@ -33,6 +33,6 @@ describe('entityAskSuggestions', () => {
   });
 
   it('trims the label', () => {
-    expect(entityAskSuggestions({ label: '  Joe  ', type: 'Person' })[0]).toBe('What has Joe committed to?');
+    expect(entityAskSuggestions({ label: '  Jonty  ', type: 'Person' })[0]).toBe('What has Jonty committed to?');
   });
 });

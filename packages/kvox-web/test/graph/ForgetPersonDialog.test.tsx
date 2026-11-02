@@ -16,7 +16,7 @@ function renderDialog(features: { transcription?: boolean } = {}) {
     features: { graphEnabled: true, ...features },
   });
   return renderWithKvoxHost(
-    <ForgetPersonDialog open entityId="e1" label="Grace Hopper" onClose={() => undefined} onForgotten={() => undefined} />,
+    <ForgetPersonDialog open entityId="e1" label="Garnet Example" onClose={() => undefined} onForgotten={() => undefined} />,
     host,
   );
 }

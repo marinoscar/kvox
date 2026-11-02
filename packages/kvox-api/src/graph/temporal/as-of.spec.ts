@@ -15,7 +15,7 @@ const r = (from: string | null, to: string | null): ValidRange => ({
 function edge(over: Partial<TemporalEdge> & Pick<TemporalEdge, 'id'>): TemporalEdge {
   return {
     type: 'REPORTS_TO',
-    fromId: 'joe',
+    fromId: 'jonty',
     toId: 'jane',
     props: {},
     valid: null,
@@ -28,7 +28,7 @@ function edge(over: Partial<TemporalEdge> & Pick<TemporalEdge, 'id'>): TemporalE
 const ids = (edges: TemporalEdge[]) => edges.map((e) => e.id);
 
 describe('edgesAsOf — manager change (§5.4 worked example)', () => {
-  // Joe REPORTS_TO Jane [2020-01-01, 2026-03-01); from March 2026, Will.
+  // Jonty REPORTS_TO Jane [2020-01-01, 2026-03-01); from March 2026, Will.
   const jane = edge({
     id: 'jane',
     toId: 'jane',

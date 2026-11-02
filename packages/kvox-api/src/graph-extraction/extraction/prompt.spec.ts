@@ -61,7 +61,7 @@ describe('the # You section (#778)', () => {
   });
 
   it('is dropped when the chosen entity is no longer live', () => {
-    const gone = known(OWNER, 'Person', 'Avery Example', { reviewStatus: 'merged', mergedIntoId: IDS.sarah });
+    const gone = known(OWNER, 'Person', 'Avery Example', { reviewStatus: 'merged', mergedIntoId: IDS.sasha });
     expect(makeContext({ self: gone }).self).toBeNull();
   });
 });
@@ -113,11 +113,11 @@ describe('assembleExtractionPrompt (#363)', () => {
 
   it('renders known entities, speakers and transcript lines in the documented shapes', () => {
     const { userContent } = assembleExtractionPrompt(makeContext());
-    expect(userContent).toContain('k1 | Person | Sarah Chen | aka: Sarah, S. Chen | Org Lambda Robotics');
-    expect(userContent).toContain('A = Sarah Chen (k1)');
+    expect(userContent).toContain('k1 | Person | Sasha Example | aka: Sasha, S. Example | Org Lambda Robotics');
+    expect(userContent).toContain('A = Sasha Example (k1)');
     expect(userContent).toContain('B = unidentified');
     expect(userContent).toContain('# Note (version 2)');
-    expect(userContent).toContain("s3 [00:12:03] Sarah Chen: I'll send the updated proposal by Friday.");
+    expect(userContent).toContain("s3 [00:12:03] Sasha Example: I'll send the updated proposal by Friday.");
   });
 
   it('adds the guidance section only when there is guidance, with the instructions fenced', () => {
@@ -214,12 +214,12 @@ describe('assembleExtractionPrompt (#363)', () => {
 
   it('puts the Context in its own section after # Meeting, framed and verbatim, citable as C', () => {
     const input = makeInput();
-    input.note.contextText = '  Avery – OAC, Consulting, Managing Director\nSarah is our sponsor.  ';
+    input.note.contextText = '  Avery – OAC, Consulting, Managing Director\nSasha is our sponsor.  ';
     const { userContent } = assembleExtractionPrompt(buildExtractionContext(input));
     expect(CONTEXT_FRAMING).toContain('Cite it as `C`.');
     expect(userContent).toContain(
       `# Meeting\nDate: 2026-03-02\nTitle: Pilot kickoff call\n\n${HEADING_CONTEXT}\n${CONTEXT_FRAMING}\n` +
-        'Avery – OAC, Consulting, Managing Director\nSarah is our sponsor.\n\n# Known entities',
+        'Avery – OAC, Consulting, Managing Director\nSasha is our sponsor.\n\n# Known entities',
     );
     // No longer a one-line meeting field.
     expect(userContent).not.toContain('Context: ');
@@ -249,7 +249,7 @@ describe('assembleExtractionPrompt (#363)', () => {
     const { systemPrompt } = assembleExtractionPrompt(makeContext());
     expect(systemPrompt).toContain(
       "11. Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity), and their role and business unit there as HAS_ROLE to the same Organization with `title` and `businessUnit` whenever the Context, note or transcript states them — " +
-        'e.g. "Joe, VP of Supply Chain at Org Beta" is Joe WORKS_FOR Org Beta and Joe HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.',
+        'e.g. "Jonty, VP of Supply Chain at Org Beta" is Jonty WORKS_FOR Org Beta and Jonty HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.',
     );
     // A company, unit or role is never a Person attribute (#440): the retired
     // Person.title is not offered, and nothing asks for a `company`.
@@ -273,14 +273,14 @@ describe('assembleExtractionPrompt (#363)', () => {
     ).toBeNull();
     // WORKS_FOR alone: the employer only.
     expect(only(['WORKS_FOR'])).toBe(
-      "Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity) whenever the Context, note or transcript states it — e.g. \"Joe works for Org Beta\" is Joe WORKS_FOR Org Beta.",
+      "Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity) whenever the Context, note or transcript states it — e.g. \"Jonty works for Org Beta\" is Jonty WORKS_FOR Org Beta.",
     );
     // HAS_ROLE alone: the role and unit only.
     expect(only(['HAS_ROLE'])).toBe(
       "Record each person's role and business unit at a company as HAS_ROLE from the person to that company's Organization (create the Organization if it is not a known entity), with `title` and `businessUnit` whenever the Context, note or transcript states them — " +
-        'e.g. "Joe, VP of Supply Chain at Org Beta" is Joe HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.',
+        'e.g. "Jonty, VP of Supply Chain at Org Beta" is Jonty HAS_ROLE Org Beta {title: "VP", businessUnit: "Supply Chain"}.',
     );
-    expect(only(['WORKS_FOR', 'HAS_ROLE'])).toContain('Joe WORKS_FOR Org Beta and Joe HAS_ROLE Org Beta');
+    expect(only(['WORKS_FOR', 'HAS_ROLE'])).toContain('Jonty WORKS_FOR Org Beta and Jonty HAS_ROLE Org Beta');
   });
 
   it('keeps the rule numbers sequential whichever optional rules are present', () => {
@@ -333,19 +333,19 @@ describe('assembleExtractionPrompt (#363)', () => {
     expect(subjectBoundaryRule(makeContext({ effectiveSchema: schemaFor(['core']) }))).toBeNull();
   });
 
-  it('adds the Joe / Company A / Product X example once, with the role, stance and stage vocabulary the registry offers', () => {
+  it('adds the Jonty / Company A / Product X example once, with the role, stance and stage vocabulary the registry offers', () => {
     const { systemPrompt } = assembleExtractionPrompt(makeContext());
     expect(systemPrompt.split('Worked example:')).toHaveLength(2);
     const example = stakeholderExampleRule(makeContext())!;
-    expect(example).toContain('"Joe from Company A said he\'s skeptical about the Product X rollout; Company A is piloting Product X; the licence budget isn\'t approved."');
+    expect(example).toContain('"Jonty from Company A said he\'s skeptical about the Product X rollout; Company A is piloting Product X; the licence budget isn\'t approved."');
     for (const row of [
-      'Person Joe',
+      'Person Jonty',
       'Organization Company A',
       'Organization Org Beta',
       'Product Product X',
       'Project Product X rollout',
-      'Joe WORKS_FOR Company A',
-      'Joe INVOLVED_IN Product X rollout {role: stakeholder, stance: skeptical}',
+      'Jonty WORKS_FOR Company A',
+      'Jonty INVOLVED_IN Product X rollout {role: stakeholder, stance: skeptical}',
       'Company A USES Product X {stage: piloting}',
       'Product X OFFERED_BY Org Beta',
       'Product X rollout CONCERNS Product X',

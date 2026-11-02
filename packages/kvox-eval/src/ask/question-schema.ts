@@ -60,7 +60,7 @@ export const askEvalExpectedSchema = z.object({
   /**
    * Every inner group must be satisfied by a case-insensitive SUBSTRING match
    * somewhere in the answer text; within a group, any one alternative is
-   * enough (synonyms/phrasing variants). `[["Sarah Chen","Sarah"]]` is one
+   * enough (synonyms/phrasing variants). `[["Sasha Example","Sasha"]]` is one
    * group with two acceptable spellings.
    */
   answerAll: z.array(z.array(z.string()).min(1)).default([]),

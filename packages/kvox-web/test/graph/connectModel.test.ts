@@ -45,8 +45,8 @@ function response(over: Partial<GraphConnectResponse> = {}): GraphConnectRespons
       seedIds: [P1],
       asOf: '2026-01-01T00:00:00.000Z',
       nodes: [
-        node(P1, 'Joe', 'Person'),
-        node(P2, 'Ana', 'Person'),
+        node(P1, 'Jonty', 'Person'),
+        node(P2, 'Anders', 'Person'),
         node(PROD, 'Product X', 'Product'),
         node(RISK, 'Vendor lock-in', 'Risk'),
         node(ORG, 'Company A', 'Organization'),
@@ -95,7 +95,7 @@ describe('summarySentence', () => {
 describe('sharedRows, bridgeRows and sharedIdSet', () => {
   it('turns the shared entities into rows with the input titles, in the API order', () => {
     const rows = sharedRows(response());
-    expect(rows.map((r) => r.label)).toEqual(['Joe', 'Ana', 'Product X', 'Vendor lock-in']);
+    expect(rows.map((r) => r.label)).toEqual(['Jonty', 'Anders', 'Product X', 'Vendor lock-in']);
     expect(rows[0]).toMatchObject({ coverage: 2, mentionCount: 6, type: 'Person' });
     expect(rows[0].inputTitles).toEqual(['Company A call', 'Org Beta call']);
   });
@@ -107,7 +107,7 @@ describe('sharedRows, bridgeRows and sharedIdSet', () => {
 
   it('labels every node along a bridge', () => {
     const [bridge] = bridgeRows(response());
-    expect(bridge.labels).toEqual(['Company A', 'Joe']);
+    expect(bridge.labels).toEqual(['Company A', 'Jonty']);
     expect(bridge.fromTitle).toBe('Company A call');
     expect(bridge.toTitle).toBe('Org Beta call');
   });

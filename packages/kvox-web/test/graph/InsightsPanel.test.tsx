@@ -19,7 +19,7 @@ import {
   themeSeeds,
   tieSeeds,
 } from '../../src/graph/ui/components/explorer/insights/insightsModel.js';
-import { ANA_ID, ATLAS_ID, SIGMA_ID, JOE_ID, RISK_ID, KAPPA_ID, insightsFixture } from './graphData.js';
+import { ANDERS_ID, ATLAS_ID, SIGMA_ID, JONTY_ID, RISK_ID, KAPPA_ID, insightsFixture } from './graphData.js';
 import { graphReader, graphWriter } from './graphTestUsers.js';
 import { render } from './helpers.js';
 import { HttpResponse, http, server } from './msw-compat.js';
@@ -59,16 +59,16 @@ describe('insightsModel', () => {
 
   it('seeds a connector with itself and the top members of both clusters it joins, and rings those', () => {
     const seeds = connectorSeeds(data.connectors[0], data.themes);
-    expect(seeds.focusId).toBe(JOE_ID);
-    expect(seeds.seedIds[0]).toBe(JOE_ID);
+    expect(seeds.focusId).toBe(JONTY_ID);
+    expect(seeds.seedIds[0]).toBe(JONTY_ID);
     expect(seeds.markIds).toContain(KAPPA_ID);
     expect(seeds.markIds).toContain(SIGMA_ID);
-    expect(seeds.markIds).not.toContain(JOE_ID);
+    expect(seeds.markIds).not.toContain(JONTY_ID);
     expect(seeds.seedIds.length).toBeLessThanOrEqual(10);
   });
 
   it('seeds a tie with both ends and a risk with the item itself', () => {
-    expect(tieSeeds(data.fadingTies[0]).seedIds).toEqual([JOE_ID, ANA_ID]);
+    expect(tieSeeds(data.fadingTies[0]).seedIds).toEqual([JONTY_ID, ANDERS_ID]);
     expect(riskSeeds(data.openRisks[0])).toEqual({ seedIds: [RISK_ID], focusId: RISK_ID, markIds: [] });
   });
 
@@ -94,9 +94,9 @@ describe('InsightsPanel', () => {
     for (const name of ['Connectors', 'Rising', 'Fading ties', 'Open risks']) {
       expect(screen.getByRole('button', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
     }
-    expect(screen.getByText('Joe Rivera connects the Org Kappa group and the Org Sigma group.')).toBeInTheDocument();
+    expect(screen.getByText('Jonty Placeholder connects the Org Kappa group and the Org Sigma group.')).toBeInTheDocument();
     expect(screen.getByText('Came up in 5 conversations in the last 30 days, up from 1 before.')).toBeInTheDocument();
-    expect(screen.getByText("You haven't discussed Joe Rivera with Ana Diaz since May 1, 2026.")).toBeInTheDocument();
+    expect(screen.getByText("You haven't discussed Jonty Placeholder with Anders Placeholder since May 1, 2026.")).toBeInTheDocument();
     expect(screen.getByText('Legal review')).toBeInTheDocument();
     expect(screen.getByText('High')).toBeInTheDocument();
     expect(screen.queryByText(/0\.42/)).not.toBeInTheDocument();
@@ -115,9 +115,9 @@ describe('InsightsPanel', () => {
     const user = userEvent.setup();
     const { onSelect } = renderPanel();
     const section = (await screen.findByRole('region', { name: /^Connectors/ })) as HTMLElement;
-    await user.click(within(section).getByRole('button', { name: /Joe Rivera/ }));
+    await user.click(within(section).getByRole('button', { name: /Jonty Placeholder/ }));
     const seeds = onSelect.mock.calls[0][0];
-    expect(seeds.focusId).toBe(JOE_ID);
+    expect(seeds.focusId).toBe(JONTY_ID);
     expect(seeds.markIds).toEqual(expect.arrayContaining([KAPPA_ID, SIGMA_ID]));
   });
 
@@ -125,16 +125,16 @@ describe('InsightsPanel', () => {
     const user = userEvent.setup();
     const { onSelect } = renderPanel();
     const section = (await screen.findByRole('region', { name: /^Rising/ })) as HTMLElement;
-    await user.click(within(section).getByRole('button', { name: /Ana Diaz/ }));
-    expect(onSelect.mock.calls[0][0]).toEqual({ seedIds: [ANA_ID], focusId: ANA_ID, markIds: [] });
+    await user.click(within(section).getByRole('button', { name: /Anders Placeholder/ }));
+    expect(onSelect.mock.calls[0][0]).toEqual({ seedIds: [ANDERS_ID], focusId: ANDERS_ID, markIds: [] });
   });
 
   it('a fading tie opens both ends', async () => {
     const user = userEvent.setup();
     const { onSelect } = renderPanel();
     const section = (await screen.findByRole('region', { name: /^Fading ties/ })) as HTMLElement;
-    await user.click(within(section).getByRole('button', { name: /Joe Rivera and Ana Diaz/ }));
-    expect(onSelect.mock.calls[0][0].seedIds).toEqual([JOE_ID, ANA_ID]);
+    await user.click(within(section).getByRole('button', { name: /Jonty Placeholder and Anders Placeholder/ }));
+    expect(onSelect.mock.calls[0][0].seedIds).toEqual([JONTY_ID, ANDERS_ID]);
   });
 
   it('a risk opens the risk', async () => {
@@ -220,7 +220,7 @@ describe('InsightsPanel', () => {
     renderPanel({ inputModality: 'touch' });
     const toggle = await screen.findByRole('button', { name: /Rising/ });
     expect(getComputedStyle(toggle).minHeight).toBe('44px');
-    const item = screen.getAllByRole('button', { name: /Ana Diaz/ })[0];
+    const item = screen.getAllByRole('button', { name: /Anders Placeholder/ })[0];
     expect(getComputedStyle(item).minHeight).toBe('44px');
     expect(getComputedStyle(screen.getByRole('button', { name: '90 days' })).minHeight).toBe('44px');
   });

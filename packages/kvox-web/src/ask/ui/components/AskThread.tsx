@@ -42,7 +42,7 @@ export interface AskThreadProps {
   onRetry?: (content: string) => void;
   /** Disable "Try again" (a turn is running, or a send is in flight). */
   retryDisabled?: boolean;
-  /** Expand every answer's tool steps (visual baselines). */
+  /** Expand every answer's tool steps (tests and screenshots). */
   stepsDefaultExpanded?: boolean;
   /** Styles for the scroll container. */
   sx?: SxProps<Theme>;

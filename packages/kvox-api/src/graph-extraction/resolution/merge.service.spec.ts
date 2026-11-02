@@ -110,7 +110,7 @@ function scriptedMerge(dupProps: Record<string, unknown>, keptProps: Record<stri
       if (sql.includes('FROM kg_entities')) {
         return [
           { id: M, type: 'Person', label: 'J. Doe', props: {}, ...mergedState },
-          { id: S, type: 'Person', label: 'Joe Doe', props: {}, review_status: 'accepted', merged_into_id: null },
+          { id: S, type: 'Person', label: 'Jonty Doe', props: {}, review_status: 'accepted', merged_into_id: null },
         ];
       }
       if (sql.includes('UPDATE kg_relations SET from_id')) return [{ id: DUP }];

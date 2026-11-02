@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { graphEdgeSchema, graphNodeSchema } from '../src/graph/graph-read.js';
 
 const ID = '00000000-0000-4000-8000-00000000000a';
-const node = { id: ID, nodeKind: 'entity', type: 'Person', label: 'Ana', depth: 0, degree: 1, status: null, occurredAt: null };
+const node = { id: ID, nodeKind: 'entity', type: 'Person', label: 'Anders', depth: 0, degree: 1, status: null, occurredAt: null };
 const edge = { id: 'r1', type: 'DISCUSSED', source: ID, target: ID, valid: null, confidence: null, virtual: false, props: {} };
 
 describe('graph slice enrichment (GIC-10)', () => {

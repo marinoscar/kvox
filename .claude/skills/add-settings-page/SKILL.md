@@ -31,4 +31,4 @@ Rationale and accessibility: `docs/specs/settings-ui.md` (`grep -n '^#' <file>`,
 cd apps/web && npm run typecheck && npm run test:run
 ```
 
-The registry suites must pass: `apps/web/src/__tests__/config/settingsRegistry.test.ts` and `apps/web/src/__tests__/config/userSettingsSections.test.ts`; add a card-specific test beside them when the card has special gating. Add component and hook tests. Check phone width and desktop width. Flag the card for the docs agent (settings inventory in `docs/specs/settings-ui.md`). A card with a new `permission` string also needs it in `DEFAULT_PERMISSIONS` of `apps/web/visual/main.tsx`.
+The registry suites must pass: `apps/web/src/__tests__/config/settingsRegistry.test.ts` and `apps/web/src/__tests__/config/userSettingsSections.test.ts`; add a card-specific test beside them when the card has special gating. Add component and hook tests. Check phone width and desktop width. Flag the card for the docs agent (settings inventory in `docs/specs/settings-ui.md`).

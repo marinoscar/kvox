@@ -87,10 +87,10 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
 
   async function content(ownerId: string) {
     const note = await prisma.note.create({
-      data: { ownerId, title: 'Standup', body: 'Sarah will send the deck', status: 'ready', sourceType: 'document' },
+      data: { ownerId, title: 'Standup', body: 'Sasha will send the deck', status: 'ready', sourceType: 'document' },
     });
     await prisma.noteVersion.create({
-      data: { noteId: note.id, version: 1, kind: 'edit', body: 'Sarah will send the deck' },
+      data: { noteId: note.id, version: 1, kind: 'edit', body: 'Sasha will send the deck' },
     });
     const source = await createStorageObject(prisma, {
       data: {
@@ -115,7 +115,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
         startMs: 0,
         endMs: 1000,
         ordinal: 1000,
-        text: 'Sarah joined Kappa in 2019',
+        text: 'Sasha joined Kappa in 2019',
         words: [],
       },
     });
@@ -132,8 +132,8 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
   ) {
     return tx.kgEvidence.createMany({
       data: [
-        { ownerId, subjectKind, subjectId, transcriptId: c.transcript.id, segmentId: c.segment.id, quote: 'Sarah joined Kappa' },
-        { ownerId, subjectKind, subjectId, noteId: c.note.id, noteVersion: 1, charStart: 0, charEnd: 5, quote: 'Sarah' },
+        { ownerId, subjectKind, subjectId, transcriptId: c.transcript.id, segmentId: c.segment.id, quote: 'Sasha joined Kappa' },
+        { ownerId, subjectKind, subjectId, noteId: c.note.id, noteVersion: 1, charStart: 0, charEnd: 5, quote: 'Sasha' },
       ],
     });
   }
@@ -162,23 +162,23 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
     await prisma.$transaction(async (tx) => {
       await tx.kgEntity.createMany({
         data: [
-          { id: ids.p, ownerId, type: 'Person', label: 'Sarah Chen', ontologyVersion: v },
+          { id: ids.p, ownerId, type: 'Person', label: 'Sasha Example', ontologyVersion: v },
           { id: ids.org, ownerId, type: 'Organization', label: 'Kappa', ontologyVersion: v },
-          { id: ids.q, ownerId, type: 'Person', label: 'Tom Hale', ontologyVersion: v },
+          { id: ids.q, ownerId, type: 'Person', label: 'Tobias Fixture', ontologyVersion: v },
         ],
       });
       await tx.kgEntity.create({
-        data: { id: ids.pPrime, ownerId, type: 'Person', label: 'S. Chen', reviewStatus: 'merged', mergedIntoId: ids.p, ontologyVersion: v },
+        data: { id: ids.pPrime, ownerId, type: 'Person', label: 'S. Example', reviewStatus: 'merged', mergedIntoId: ids.p, ontologyVersion: v },
       });
       for (const id of [ids.p, ids.pPrime, ids.org, ids.q]) await cite(tx, ownerId, 'entity', id, c);
 
       await tx.kgEntityAlias.createMany({
         data: [
-          { entityId: ids.p, ownerId, alias: 'Sarah Chen', normalized: 'sarah chen', source: 'extraction' },
-          { entityId: ids.p, ownerId, alias: 'Sarah', normalized: 'sarah', source: 'user' },
-          { entityId: ids.p, ownerId, alias: 'SC', normalized: 'sc', source: 'user' },
-          { entityId: ids.pPrime, ownerId, alias: 'S. Chen', normalized: 's chen', source: 'extraction' },
-          { entityId: ids.q, ownerId, alias: 'Tom Hale', normalized: 'tom hale', source: 'extraction' },
+          { entityId: ids.p, ownerId, alias: 'Sasha Example', normalized: 'sasha example', source: 'extraction' },
+          { entityId: ids.p, ownerId, alias: 'Sasha', normalized: 'sasha', source: 'user' },
+          { entityId: ids.p, ownerId, alias: 'SE', normalized: 'se', source: 'user' },
+          { entityId: ids.pPrime, ownerId, alias: 'S. Example', normalized: 's example', source: 'extraction' },
+          { entityId: ids.q, ownerId, alias: 'Tobias Fixture', normalized: 'tobias fixture', source: 'extraction' },
           { entityId: ids.org, ownerId, alias: 'Kappa', normalized: 'kappa', source: 'extraction' },
         ],
       });
@@ -194,14 +194,14 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
 
       await tx.kgItem.createMany({
         data: [
-          { id: ids.claim, ownerId, kind: 'claim', subjectId: ids.p, statement: 'Sarah is CTO', status: 'open', statementHash: 'h1', ontologyVersion: v },
-          { id: ids.ownerCommitment, ownerId, kind: 'commitment', ownerPersonId: ids.p, statement: 'Sarah sends the deck', status: 'open', statementHash: 'h2', ontologyVersion: v },
-          { id: ids.counterpartyCommitment, ownerId, kind: 'commitment', ownerPersonId: ids.q, counterpartyId: ids.p, statement: 'Tom calls Sarah', status: 'open', statementHash: 'h3', ontologyVersion: v },
+          { id: ids.claim, ownerId, kind: 'claim', subjectId: ids.p, statement: 'Sasha is CTO', status: 'open', statementHash: 'h1', ontologyVersion: v },
+          { id: ids.ownerCommitment, ownerId, kind: 'commitment', ownerPersonId: ids.p, statement: 'Sasha sends the deck', status: 'open', statementHash: 'h2', ontologyVersion: v },
+          { id: ids.counterpartyCommitment, ownerId, kind: 'commitment', ownerPersonId: ids.q, counterpartyId: ids.p, statement: 'Tobias calls Sasha', status: 'open', statementHash: 'h3', ontologyVersion: v },
         ],
       });
       // An item about Q that merely superseded-points at P's claim survives.
       await tx.kgItem.create({
-        data: { id: ids.survivorItem, ownerId, kind: 'claim', subjectId: ids.q, statement: 'Tom is VP', status: 'open', statementHash: 'h4', reviewStatus: 'superseded', supersededById: ids.claim, ontologyVersion: v },
+        data: { id: ids.survivorItem, ownerId, kind: 'claim', subjectId: ids.q, statement: 'Tobias is VP', status: 'open', statementHash: 'h4', reviewStatus: 'superseded', supersededById: ids.claim, ontologyVersion: v },
       });
       for (const id of [ids.claim, ids.ownerCommitment, ids.counterpartyCommitment, ids.survivorItem]) {
         await cite(tx, ownerId, 'item', id, c);
@@ -217,7 +217,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
       ],
     });
     await prisma.kgEntityDigest.create({
-      data: { entityId: ids.p, ownerId, summary: 'Sarah…', citations: [], coversUntil: new Date(), model: 'm', generatedAt: new Date() },
+      data: { entityId: ids.p, ownerId, summary: 'Sasha…', citations: [], coversUntil: new Date(), model: 'm', generatedAt: new Date() },
     });
     await prisma.kgEntityView.create({ data: { userId: ownerId, entityId: ids.p, lastViewedAt: new Date() } });
     await prisma.kgEntityView.create({ data: { userId: ownerId, entityId: ids.q, lastViewedAt: new Date() } });
@@ -234,18 +234,18 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
       data: { id: ids.draft, ownerId, kind: 'extraction', status: 'draft', noteId: c.note.id, noteVersion: 1 },
     });
     const draftItems = await Promise.all([
-      prisma.kgProposalItem.create({ data: { proposalId: ids.draft, kind: 'entity', payload: { label: 'Sarah', existingEntityId: ids.p } } }),
+      prisma.kgProposalItem.create({ data: { proposalId: ids.draft, kind: 'entity', payload: { label: 'Sasha', existingEntityId: ids.p } } }),
       prisma.kgProposalItem.create({ data: { proposalId: ids.draft, kind: 'relation', payload: { type: 'WORKS_FOR', from: { entityId: ids.p }, to: { entityId: ids.org } } } }),
       prisma.kgProposalItem.create({ data: { proposalId: ids.draft, kind: 'entity', payload: { label: 'S' }, resolution: { ref: ids.pPrime } } }),
       prisma.kgProposalItem.create({ data: { proposalId: ids.draft, kind: 'entity', payload: { label: 'Sar' }, resolution: { candidates: [{ entityId: ids.org }, { entityId: ids.pPrime }] } } }),
-      prisma.kgProposalItem.create({ data: { proposalId: ids.draft, kind: 'entity', payload: { label: 'Sarah C' }, decision: 'merge_into', mergeIntoId: ids.p } }),
+      prisma.kgProposalItem.create({ data: { proposalId: ids.draft, kind: 'entity', payload: { label: 'Sasha C' }, decision: 'merge_into', mergeIntoId: ids.p } }),
       prisma.kgProposalItem.create({ data: { proposalId: ids.draft, kind: 'item', payload: { statement: 'x' }, editedPayload: { nested: [{ owner: { entityId: ids.p } }] } } }),
     ]);
     await prisma.kgProposalItem.create({
       data: { id: ids.unrelatedDraftItem, proposalId: ids.draft, kind: 'entity', payload: { label: 'Kappa', existingEntityId: ids.org }, distinctFrom: [ids.p, ids.org] },
     });
     await prisma.kgEvidence.create({
-      data: { ownerId, subjectKind: 'proposal_item', subjectId: draftItems[0].id, noteId: c.note.id, noteVersion: 1, quote: 'Sarah' },
+      data: { ownerId, subjectKind: 'proposal_item', subjectId: draftItems[0].id, noteId: c.note.id, noteVersion: 1, quote: 'Sasha' },
     });
 
     // A COMMITTED proposal is history: its items survive.
@@ -253,7 +253,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
       data: { id: ids.committed, ownerId, kind: 'extraction', status: 'committed', noteId: c.note.id, noteVersion: 1 },
     });
     await prisma.kgProposalItem.create({
-      data: { id: ids.committedItem, proposalId: ids.committed, kind: 'entity', payload: { label: 'Sarah', existingEntityId: ids.p } },
+      data: { id: ids.committedItem, proposalId: ids.committed, kind: 'entity', payload: { label: 'Sasha', existingEntityId: ids.p } },
     });
 
     return { c, ids, draftItemIds: draftItems.map((i) => i.id) };

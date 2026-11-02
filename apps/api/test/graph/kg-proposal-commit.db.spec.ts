@@ -69,19 +69,19 @@ describeWithDb('graph proposal commit (real Postgres)', () => {
     expect(await orphans(prisma, f.ownerId)).toEqual([]);
 
     // The linked entity learned the proposed label; the pending Project was not created.
-    const aliases = await prisma.kgEntityAlias.findMany({ where: { entityId: f.existing.sarah }, select: { alias: true } });
-    expect(aliases.map((a) => a.alias).sort()).toEqual(['S. Chen', 'Sarah Chen']);
+    const aliases = await prisma.kgEntityAlias.findMany({ where: { entityId: f.existing.sasha }, select: { alias: true } });
+    expect(aliases.map((a) => a.alias).sort()).toEqual(['S. Example', 'Sasha Example']);
     expect(await prisma.kgEntity.count({ where: { ownerId: f.ownerId, type: 'Project' } })).toBe(0);
 
     // Items per #365: the new commitment names its owner and meeting columns; `known` only cites.
     const items = await prisma.kgProposalItem.findMany({ where: { proposalId: f.proposal.id } });
     const ref = (key: string) => items.find((i) => i.id === f.itemIds[key])!.committedRefId;
-    expect(ref('e1')).toBe(f.existing.sarah);
+    expect(ref('e1')).toBe(f.existing.sasha);
     expect(ref('i2')).toBe(f.existing.claim);
     expect(ref('i3')).toBe(f.existing.commitment);
     expect(ref('e3')).toBeNull();
     const created = await prisma.kgItem.findUniqueOrThrow({ where: { id: ref('i1')! } });
-    expect(created).toEqual(expect.objectContaining({ kind: 'commitment', ownerPersonId: f.existing.sarah, meetingId: ref('meeting'), status: 'open' }));
+    expect(created).toEqual(expect.objectContaining({ kind: 'commitment', ownerPersonId: f.existing.sasha, meetingId: ref('meeting'), status: 'open' }));
     expect(await prisma.kgEvidence.count({ where: { subjectKind: 'item', subjectId: f.existing.claim } })).toBe(2);
 
     // `same` applied the due-date change.
@@ -168,7 +168,7 @@ describeWithDb('graph proposal commit (real Postgres)', () => {
 
     const added = await services.proposals.addItem(f.caller, f.proposal.id, {
       kind: 'relation',
-      payload: { type: 'WORKS_FOR', from: { entityId: f.existing.sarah }, to: { ref: 'e2' }, props: {}, validFrom: null, validTo: null, precision: 'unknown' },
+      payload: { type: 'WORKS_FOR', from: { entityId: f.existing.sasha }, to: { ref: 'e2' }, props: {}, validFrom: null, validTo: null, precision: 'unknown' },
       evidence: [
         { source: 'note', noteVersion: 1, charStart, charEnd: charStart + quote.length, quote: `  ${quote} ` },
         { source: 'segment', segmentId: f.segment.id, segmentRev: 1, charStart: segStart, charEnd: segStart + segQuote.length, quote: segQuote },
@@ -180,7 +180,7 @@ describeWithDb('graph proposal commit (real Postgres)', () => {
     expect(added.item.evidence).toHaveLength(2);
     expect(added.item.evidence).toEqual(expect.arrayContaining([
       expect.objectContaining({ source: 'note', stale: false }),
-      expect.objectContaining({ source: 'segment', transcriptId: f.transcript.id, startMs: 0, endMs: 4000, speakerName: 'Sarah Chen', stale: false }),
+      expect.objectContaining({ source: 'segment', transcriptId: f.transcript.id, startMs: 0, endMs: 4000, speakerName: 'Sasha Example', stale: false }),
     ]));
 
     // A stale version, a stale rev, a mismatched quote.

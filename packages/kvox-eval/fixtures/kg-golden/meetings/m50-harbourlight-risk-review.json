@@ -13,7 +13,7 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Harbourlight ledger migration risk review\n\n**Date:** August 4\n**Attendees:** Imogen Farrow, Teodor Blanc, Priya Lindqvist\n\n## Summary\n\nQuillfeather Credit Union is moving its core ledger onto a new platform under the Harbourlight migration project. This session walked through what could stop or slow the move before a cutover date is proposed to the board. The mood was cautious: the technical build is ahead of plan, but several outside dependencies are not.\n\n## Where the build stands\n\nThe new ledger passed its functional tests last week, and the data mapping for customer accounts is complete. Imogen reported that the loan products are the only area still being mapped, and that this is on schedule. The team has been working in two-week cycles and the board expects a recommendation on the cutover window at its next meeting.\n\n## Concerns raised\n\n- Security sign-off for the new ledger has not been given, and cutover cannot be scheduled until it is. Teodor called this the biggest single blocker, because the security team has not yet started its review.\n- Data residency rules could block hosting the archive in the second region, because the regulator has not confirmed that archived records may leave the country. Priya said legal is reviewing regional options, which may remove the problem.\n- The test environment goes down for two hours every night, which slows the regression runs and has already cost the team about a day this month.\n\n## Background\n\nQuillfeather Credit Union has about two hundred thousand members and runs its branches on the old ledger today. The old platform is stable but its vendor has announced the end of its support window, which is the reason for the project. The team was reminded that the member communication plan is separate from this review and is tracked elsewhere.\n\n## Next steps\n\nThe group will meet again once the security team has confirmed when its review will start. The summary of this session goes to the programme office for the monthly report.\n"
+    "body": "# Harbourlight ledger migration risk review\n\n**Date:** August 4\n**Attendees:** Imani Testcase, Tamsin Testcase, Pia Fixture\n\n## Summary\n\nQuillfeather Credit Union is moving its core ledger onto a new platform under the Harbourlight migration project. This session walked through what could stop or slow the move before a cutover date is proposed to the board. The mood was cautious: the technical build is ahead of plan, but several outside dependencies are not.\n\n## Where the build stands\n\nThe new ledger passed its functional tests last week, and the data mapping for customer accounts is complete. Imani reported that the loan products are the only area still being mapped, and that this is on schedule. The team has been working in two-week cycles and the board expects a recommendation on the cutover window at its next meeting.\n\n## Concerns raised\n\n- Security sign-off for the new ledger has not been given, and cutover cannot be scheduled until it is. Tamsin called this the biggest single blocker, because the security team has not yet started its review.\n- Data residency rules could block hosting the archive in the second region, because the regulator has not confirmed that archived records may leave the country. Pia said legal is reviewing regional options, which may remove the problem.\n- The test environment goes down for two hours every night, which slows the regression runs and has already cost the team about a day this month.\n\n## Background\n\nQuillfeather Credit Union has about two hundred thousand members and runs its branches on the old ledger today. The old platform is stable but its vendor has announced the end of its support window, which is the reason for the project. The team was reminded that the member communication plan is separate from this review and is tracked elsewhere.\n\n## Next steps\n\nThe group will meet again once the security team has confirmed when its review will start. The summary of this session goes to the programme office for the monthly report.\n"
   },
   "knownEntities": [
     {
@@ -51,44 +51,44 @@
         ]
       },
       {
-        "key": "imogen",
+        "key": "imani",
         "type": "Person",
-        "label": "Imogen Farrow",
+        "label": "Imani Testcase",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+            "quote": "Imani Testcase, Tamsin Testcase, Pia Fixture"
           }
         ]
       },
       {
-        "key": "teodor",
+        "key": "tamsin",
         "type": "Person",
-        "label": "Teodor Blanc",
+        "label": "Tamsin Testcase",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+            "quote": "Imani Testcase, Tamsin Testcase, Pia Fixture"
           }
         ]
       },
       {
-        "key": "priya",
+        "key": "pia",
         "type": "Person",
-        "label": "Priya Lindqvist",
+        "label": "Pia Fixture",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+            "quote": "Imani Testcase, Tamsin Testcase, Pia Fixture"
           }
         ]
       },

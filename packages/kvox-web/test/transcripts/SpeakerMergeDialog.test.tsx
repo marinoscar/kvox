@@ -9,14 +9,14 @@ import {
 } from '../../src/transcripts/ui/components/SpeakerMergeDialog.js';
 import type { TranscriptSpeaker } from '../../src/transcripts/headless/clients/transcripts.js';
 
-const ANA: TranscriptSpeaker = {
+const ANDERS: TranscriptSpeaker = {
   id: 'sp1',
   label: 'A',
-  displayName: 'Ana',
+  displayName: 'Anders',
   colorIndex: 0,
   rev: 1,
 };
-const BEN: TranscriptSpeaker = {
+const BRAM: TranscriptSpeaker = {
   id: 'sp2',
   label: 'B',
   displayName: 'Speaker 3',
@@ -76,7 +76,7 @@ describe('SpeakerMergeDialog', () => {
     render(
       <SpeakerMergeDialog
         open
-        selected={[ANA, BEN]}
+        selected={[ANDERS, BRAM]}
         segmentCounts={counts}
         order={ORDER}
         onClose={vi.fn()}
@@ -95,7 +95,7 @@ describe('SpeakerMergeDialog', () => {
     render(
       <SpeakerMergeDialog
         open
-        selected={[ANA, BEN]}
+        selected={[ANDERS, BRAM]}
         segmentCounts={counts}
         order={ORDER}
         onClose={vi.fn()}
@@ -122,7 +122,7 @@ describe('SpeakerMergeDialog', () => {
     render(
       <SpeakerMergeDialog
         open
-        selected={[ANA, BEN, CAI]}
+        selected={[ANDERS, BRAM, CAI]}
         segmentCounts={counts}
         order={ORDER}
         onClose={vi.fn()}
@@ -143,7 +143,7 @@ describe('SpeakerMergeDialog', () => {
     const { container } = render(
       <SpeakerMergeDialog
         open
-        selected={[ANA]}
+        selected={[ANDERS]}
         segmentCounts={counts}
         order={ORDER}
         onClose={vi.fn()}

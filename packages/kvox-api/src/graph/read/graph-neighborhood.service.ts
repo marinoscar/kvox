@@ -9,7 +9,7 @@
 // THE WALK IS ONE RECURSIVE CTE, bounded in the database:
 //
 //   - `hops` ≤ 2 (§9.1). A walk never continues THROUGH an item node: an item
-//     reached at depth 1 is a leaf (§9.1 — "Joe's commitments", not "everyone
+//     reached at depth 1 is a leaf (§9.1 — "Jonty's commitments", not "everyone
 //     else those commitments mention").
 //   - Each step looks up its neighbours with a LATERAL subquery per edge kind,
 //     keyed on the node id, so the work is driven by §10's

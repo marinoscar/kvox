@@ -112,7 +112,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
         reviewStatus: 'unreviewed',
         ownerId,
         type: overrides.type ?? 'person',
-        label: overrides.label ?? 'Sarah Chen',
+        label: overrides.label ?? 'Sasha Example',
         ontologyVersion: 'test-v1',
       },
     });
@@ -367,7 +367,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
 
     it('allows an IDENTIFIED_AS relation with from_speaker_id only, and cascades on speaker deletion', async () => {
       const owner = await createUser('relation-speaker-ok');
-      const to = await createEntity(owner.id, { label: 'Sarah Chen' });
+      const to = await createEntity(owner.id, { label: 'Sasha Example' });
       const source = await createStorageObject(prisma, {
         data: {
           name: 'r.m4a',
@@ -852,13 +852,13 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       const owner = await createUser('explain-trgm');
       const entity = await createEntity(owner.id);
       await prisma.kgEntityAlias.create({
-        data: { entityId: entity.id, ownerId: owner.id, alias: 'Sarah Chen', normalized: 'sarah chen', source: 'user' },
+        data: { entityId: entity.id, ownerId: owner.id, alias: 'Sasha Example', normalized: 'sasha example', source: 'user' },
       });
 
       await prisma.$executeRaw`SET enable_seqscan = off`;
       try {
         const rows = await prisma.$queryRaw<Array<{ plan: string }>>`
-          EXPLAIN SELECT * FROM "kg_entity_aliases" WHERE "normalized" % 'sarah chen'
+          EXPLAIN SELECT * FROM "kg_entity_aliases" WHERE "normalized" % 'sasha example'
         `;
         const plan = rows.map((r) => Object.values(r)[0]).join('\n');
         expect(plan).toContain('kg_entity_aliases_normalized_trgm_idx');
@@ -943,7 +943,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       const owner = await createUser('owner-cascade');
       const entity = await createEntity(owner.id);
       const alias = await prisma.kgEntityAlias.create({
-        data: { entityId: entity.id, ownerId: owner.id, alias: 'S. Chen', normalized: 's chen', source: 'user' },
+        data: { entityId: entity.id, ownerId: owner.id, alias: 'S. Example', normalized: 's example', source: 'user' },
       });
       const to = await createEntity(owner.id, { label: 'Org Kappa', type: 'organization' });
       const relation = await prisma.kgRelation.create({

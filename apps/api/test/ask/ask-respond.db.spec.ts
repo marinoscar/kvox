@@ -85,12 +85,12 @@ describeWithDb('ask.respond (real Postgres)', () => {
 
   it('answers a full turn: tool steps, validated citations, tokens, and the title', async () => {
     const { user, g } = await owner('turn');
-    const sarah = await g.entity('Person', 'Sarah Chen');
-    await g.item('decision', { subjectId: sarah, statement: 'Hire Sarah as design lead', occurredAt: new Date('2026-09-01T00:00:00Z') });
-    await g.item('person_fact', { subjectId: sarah, statement: 'Health detail nobody may see', sensitivity: 'sensitive' });
+    const sasha = await g.entity('Person', 'Sasha Example');
+    await g.item('decision', { subjectId: sasha, statement: 'Hire Sasha as design lead', occurredAt: new Date('2026-09-01T00:00:00Z') });
+    await g.item('person_fact', { subjectId: sasha, statement: 'Health detail nobody may see', sensitivity: 'sensitive' });
     const conv = await conversation(user.id);
 
-    const posted = await service.post(user.id, conv.id, { content: 'What   did we decide about Sarah Chen?' });
+    const posted = await service.post(user.id, conv.id, { content: 'What   did we decide about Sasha Example?' });
     expect(posted.userMessage).toMatchObject({ role: 'user', status: 'complete' });
     expect(posted.assistantMessage).toMatchObject({ role: 'assistant', status: 'pending', model: 'gpt-test', provider: 'openai' });
     const job = await jobFor(posted.assistantMessage.id);
@@ -98,7 +98,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
 
     stream.enqueue([
       text('Searching.'),
-      toolCall('c1', 'search', '{"query":"Sarah Chen","scope":"entities","limit":null}'),
+      toolCall('c1', 'search', '{"query":"Sasha Example","scope":"entities","limit":null}'),
       done('tool_calls', 100, 10),
     ]);
     stream.enqueue([
@@ -106,7 +106,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
       done('tool_calls', 200, 10),
     ]);
     stream.enqueue([
-      text('You decided to hire Sarah Chen as design lead.[^itm1] She is in your graph.[^ent1] '),
+      text('You decided to hire Sasha Example as design lead.[^itm1] She is in your graph.[^ent1] '),
       text('Nothing else.[^ev99]'),
       done('stop', 300, 30),
     ]);
@@ -130,7 +130,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
     const citations = row.citations as Array<Record<string, unknown>>;
     expect(citations).toEqual([
       expect.objectContaining({ marker: 'itm1', kind: 'evidence', valid: true, via: { kind: 'item', id: expect.any(String) } }),
-      expect.objectContaining({ marker: 'ent1', kind: 'entity', valid: true, id: sarah, label: 'Sarah Chen' }),
+      expect.objectContaining({ marker: 'ent1', kind: 'entity', valid: true, id: sasha, label: 'Sasha Example' }),
       expect.objectContaining({ marker: 'ev99', valid: false, id: null }),
     ]);
     const itemEvidence = await prisma.kgEvidence.findFirstOrThrow({
@@ -141,7 +141,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
     // §15: a sensitive PersonFact never left the deployment.
     expect(stream.requests).toHaveLength(3);
     expect(JSON.stringify(stream.requests)).not.toContain('Health detail');
-    expect(JSON.stringify(stream.requests)).not.toMatch(new RegExp(sarah));
+    expect(JSON.stringify(stream.requests)).not.toMatch(new RegExp(sasha));
 
     // One platform call per model round trip, each for the graph agent under THIS job
     // (the platform records one usage row per call from that scope).
@@ -156,7 +156,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
     expect(stream.requests.every((r) => r.tools.length === 8)).toBe(true);
 
     const conv2 = await prisma.askConversation.findUniqueOrThrow({ where: { id: conv.id } });
-    expect(conv2.title).toBe('What did we decide about Sarah Chen?');
+    expect(conv2.title).toBe('What did we decide about Sasha Example?');
   });
 
   it('lets exactly one of two concurrent questions through (409 ask_turn_running, index-enforced)', async () => {

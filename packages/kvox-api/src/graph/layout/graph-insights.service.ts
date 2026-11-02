@@ -383,7 +383,7 @@ export class GraphInsightsService {
   }
 }
 
-/** "Joe connects the Product X group and the Finance group." */
+/** "Jonty connects the Product X group and the Finance group." */
 export function connectorReason(label: string, groups: string[]): string {
   if (groups.length >= 3) {
     return `${label} connects the ${groups[0]} group, the ${groups[1]} group and ${groups.length - 2} more.`;

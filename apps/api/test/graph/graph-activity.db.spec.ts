@@ -69,25 +69,25 @@ describeWithDb('GraphActivityService (real Postgres)', () => {
 
   it('buckets entity and relation evidence by month, stacked by type, and per entity', async () => {
     const { user, g } = await owner();
-    const joe = await g.entity('Person', 'Joe');
+    const jonty = await g.entity('Person', 'Jonty');
     const proj = await g.entity('Project', 'Product X');
-    const rel = await g.relation('INVOLVED_IN', joe, proj);
-    await dateEvidence(joe, '2026-01-10T12:00:00Z');
+    const rel = await g.relation('INVOLVED_IN', jonty, proj);
+    await dateEvidence(jonty, '2026-01-10T12:00:00Z');
     await dateEvidence(proj, '2026-02-03T12:00:00Z');
     await dateEvidence(rel, '2026-02-20T12:00:00Z');
-    // A second citation of Joe, dated by its NOTE (the meeting date wins over created_at).
+    // A second citation of Jonty, dated by its NOTE (the meeting date wins over created_at).
     const note = await g.note();
     await prisma.$executeRaw`UPDATE notes SET created_at = '2026-02-14T00:00:00Z'::timestamptz WHERE id = ${note.id}::uuid`;
-    await g.evidence('entity', joe, { noteId: note.id, noteVersion: 1 });
+    await g.evidence('entity', jonty, { noteId: note.id, noteVersion: 1 });
 
-    const res = await activity(user.id, [joe, proj]);
+    const res = await activity(user.id, [jonty, proj]);
     expect(res.bucket).toBe('month');
     expect(res.series).toEqual([
       { start: '2026-01-01', total: 1, byType: { Person: 1 } },
-      // Feb: proj entity (Project), Joe's note citation (Person), the relation counts for BOTH ends.
+      // Feb: proj entity (Project), Jonty's note citation (Person), the relation counts for BOTH ends.
       { start: '2026-02-01', total: 4, byType: { Person: 2, Project: 2 } },
     ]);
-    expect(res.byEntity[joe]).toEqual([
+    expect(res.byEntity[jonty]).toEqual([
       { start: '2026-01-01', count: 1 },
       { start: '2026-02-01', count: 2 },
     ]);
@@ -97,13 +97,13 @@ describeWithDb('GraphActivityService (real Postgres)', () => {
 
   it('counts a relation only when both ends are requested', async () => {
     const { user, g } = await owner();
-    const joe = await g.entity('Person', 'Joe');
+    const jonty = await g.entity('Person', 'Jonty');
     const proj = await g.entity('Project', 'Product X');
-    const rel = await g.relation('INVOLVED_IN', joe, proj);
-    await dateEvidence(joe, '2026-03-05T00:00:00Z');
+    const rel = await g.relation('INVOLVED_IN', jonty, proj);
+    await dateEvidence(jonty, '2026-03-05T00:00:00Z');
     await dateEvidence(proj, '2026-03-05T00:00:00Z');
     await dateEvidence(rel, '2026-03-05T00:00:00Z');
-    const one = await activity(user.id, [joe]);
+    const one = await activity(user.id, [jonty]);
     expect(one.series).toEqual([{ start: '2026-03-01', total: 1, byType: { Person: 1 } }]);
   });
 
@@ -178,16 +178,16 @@ describeWithDb('GraphActivityService (real Postgres)', () => {
 
   it('excludes sensitive person facts and unreadable relations; a readable item counts as its kind', async () => {
     const { user, g } = await owner();
-    const joe = await g.entity('Person', 'Joe');
+    const jonty = await g.entity('Person', 'Jonty');
     const proj = await g.entity('Project', 'Product X');
-    const sensitive = await g.item('person_fact', { sensitivity: 'sensitive', subjectId: joe });
-    const decision = await g.item('decision', { subjectId: joe });
-    const rejected = await g.relation('INVOLVED_IN', joe, proj, { reviewStatus: 'rejected' });
-    for (const id of [joe, proj, decision, rejected]) await dateEvidence(id, '2026-04-01T00:00:00Z');
+    const sensitive = await g.item('person_fact', { sensitivity: 'sensitive', subjectId: jonty });
+    const decision = await g.item('decision', { subjectId: jonty });
+    const rejected = await g.relation('INVOLVED_IN', jonty, proj, { reviewStatus: 'rejected' });
+    for (const id of [jonty, proj, decision, rejected]) await dateEvidence(id, '2026-04-01T00:00:00Z');
 
     // Naming the sensitive fact is the shared 404, never a count.
-    await expect(activity(user.id, [joe, sensitive])).rejects.toBeInstanceOf(NotFoundException);
-    const res = await activity(user.id, [joe, proj, decision]);
+    await expect(activity(user.id, [jonty, sensitive])).rejects.toBeInstanceOf(NotFoundException);
+    const res = await activity(user.id, [jonty, proj, decision]);
     expect(res.series).toEqual([{ start: '2026-04-01', total: 3, byType: { Person: 1, Project: 1, decision: 1 } }]);
   });
 

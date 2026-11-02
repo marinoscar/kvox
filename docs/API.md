@@ -3507,7 +3507,7 @@ at the same version are semantically, not byte-for-byte, equivalent:
 `updatedAt` moves when a poll writes `lastPolledAt`, and the version does not
 identify that.
 
-Naming an AI-detected speaker for the first time ("Speaker A" → "Oscar")
+Naming an AI-detected speaker for the first time ("Speaker A" → "Orlo")
 changes this response's `speakers` without moving `currentVersion` — it is an
 identification, not a version (see `POST /operations` below) — so the
 validator carries a **fingerprint**: the first twelve hex digits of a SHA-256
@@ -3664,15 +3664,15 @@ a split's `newSegmentId` and resolved `atWordIndex`, a `speaker.create`'s
 the same seams.
 
 **A batch made only of `speaker.rename` ops that each identify a
-still-placeholder speaker ("Speaker A" → "Oscar"), or change nothing, does
+still-placeholder speaker ("Speaker A" → "Orlo"), or change nothing, does
 not create a version** (issue #323). Naming a speaker is metadata about the
 recording, not a correction of it, so it is written straight to the live
 speaker and to `speakerIdentities`, without bumping `currentVersion`, `rev`,
 or the version history. The response's `version` equals the transcript's
 **current** version, unchanged, and `summary` reads `"Named Speaker A as
-Oscar"` (joined with `; ` for more than one) or `"No changes"`. Such a batch is
+Orlo"` (joined with `; ` for more than one) or `"No changes"`. Such a batch is
 still audited, as `transcript.speaker_identified`. Renaming an
-already-identified speaker ("Oscar" → "Joe") is an ordinary correction and
+already-identified speaker ("Orlo" → "Jonty") is an ordinary correction and
 stays versioned as before, and any batch mixing an identification with
 another op — including a text edit — is one version, exactly like any other
 mixed batch. Stale-`rev` conflicts on this path answer the identical `409`
@@ -3887,8 +3887,8 @@ scoped by `transcriptId`, which *is* the authorisation.
 #### Name Checks
 
 AI-assisted detection of speech-recognition errors in names — epic #326.
-After a speaker is renamed "Oscar," the transcript text still says what the
-provider heard: "Skar," "Oh scar." A name check finds spans that are probably
+After a speaker is renamed "Orlo," the transcript text still says what the
+provider heard: "Rolo," "Or low." A name check finds spans that are probably
 a mis-hearing of a known name and **proposes** a fix; nothing in the
 transcript changes until a proposal is accepted. Full design — the phonetic
 retrieval pass, the optional thorough discovery pass, LLM adjudication and
@@ -3908,7 +3908,7 @@ and its cost `estimate`.
 
 **Request:**
 ```json
-{ "mode": "standard", "terms": ["Aurelia"], "speakerIds": ["…"] }
+{ "mode": "standard", "terms": ["Avalon"], "speakerIds": ["…"] }
 ```
 
 `mode` is `standard` (verifies phonetic candidates only) or `thorough`
@@ -3950,8 +3950,8 @@ while `run.status` is `pending` or `running`.
     "run": { "id": "…", "mode": "standard", "status": "ready", "suggestionCount": 3, "…": "…" },
     "suggestions": [
       {
-        "id": "…", "segmentId": "…", "original": "Oh scar", "replacement": "Oscar",
-        "confidence": 0.94, "source": "phonetic", "preview": "…said Oh scar was right…", "stale": false
+        "id": "…", "segmentId": "…", "original": "Or low", "replacement": "Orlo",
+        "confidence": 0.94, "source": "phonetic", "preview": "…said Or low was right…", "stale": false
       }
     ],
     "counts": { "pending": 3, "accepted": 0, "rejected": 0, "stale": 0 }
@@ -5994,7 +5994,7 @@ attempt — a half-applied import must surface as failed, never resume):
    for that node, else `"Imported from <filename>"`. Committing copies it onto
    the graph row, so the no-orphans rule holds for imported rows too.
 6. **Resolve** — every proposal stage runs, resolution first: an imported
-   "Joe Smith" links to your existing Joe exactly like an extracted mention.
+   "Jonty Sample" links to your existing Jonty exactly like an extracted mention.
    Adjudication spends your own AI key when your preferences ask for it; with
    no key the match stays a candidate, flagged, not pre-checked.
 7. Pre-check, then `draft`. Any failure above sets `status: "failed"` and
@@ -6021,7 +6021,7 @@ and `sourceIri`. Its `stats`:
       "label": "Nickname",
       "count": 12,
       "subjectTypes": ["Person"],
-      "sampleValues": ["Joey", "Mo", "Sam"],
+      "sampleValues": ["Jonno", "Mo", "Sam"],
       "suggestedKind": "text",
       "status": "offered"
     }
@@ -6070,9 +6070,9 @@ body must change something.
 **Request:**
 ```json
 {
-  "label": "Sarah Chen-Li",
+  "label": "Sasha Example-Li",
   "props": { "title": "CTO", "u_k3v9x0a1bq": null },
-  "addAliases": ["Sally"],
+  "addAliases": ["Sabby"],
   "removeAliasIds": ["7c9e6679-7425-40de-944b-e07fc1f90ae7"]
 }
 ```
@@ -6099,15 +6099,15 @@ digest also only while `ai.graphEnabled` is on.
   "data": {
     "id": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
     "type": "Person",
-    "label": "Sarah Chen-Li",
+    "label": "Sasha Example-Li",
     "props": { "title": "CTO" },
     "reviewStatus": "edited",
     "mergedIntoId": null,
     "occurredAt": null,
     "ontologyVersion": "1.0.0",
     "aliases": [
-      { "id": "…", "alias": "Sarah Chen", "normalized": "sarah chen", "source": "extraction", "createdAt": "2026-09-20T10:00:00.000Z" },
-      { "id": "…", "alias": "Sarah Chen-Li", "normalized": "sarah chen-li", "source": "user", "createdAt": "2026-09-26T12:00:00.000Z" }
+      { "id": "…", "alias": "Sasha Example", "normalized": "sasha example", "source": "extraction", "createdAt": "2026-09-20T10:00:00.000Z" },
+      { "id": "…", "alias": "Sasha Example-Li", "normalized": "sasha example-li", "source": "user", "createdAt": "2026-09-26T12:00:00.000Z" }
     ],
     "createdAt": "2026-09-20T10:00:00.000Z",
     "updatedAt": "2026-09-26T12:00:00.000Z"
@@ -6456,7 +6456,7 @@ recorded for the reverse. Audited `graph.entity_merged`
 ```json
 { "data": {
   "merge": { "id": "…", "survivorId": "…", "mergedId": "…", "createdAt": "2026-09-26T12:00:00.000Z" },
-  "survivor": { "id": "…", "type": "Person", "label": "Sarah Chen", "aliasCount": 4 }
+  "survivor": { "id": "…", "type": "Person", "label": "Sasha Example", "aliasCount": 4 }
 } }
 ```
 **Errors:** `400` the same id twice, an unknown body key, or two different
@@ -6471,7 +6471,7 @@ The entities merged **into** `:id`, newest merge first. Requires `graph:read`;
 **Response:** `200`
 ```json
 { "data": { "merges": [
-  { "mergeId": "…", "mergedEntity": { "id": "…", "label": "S. Chen", "type": "Person" },
+  { "mergeId": "…", "mergedEntity": { "id": "…", "label": "S. Example", "type": "Person" },
     "createdAt": "2026-09-26T12:00:00.000Z", "reversedAt": null, "reversible": true }
 ] } }
 ```
@@ -6671,8 +6671,8 @@ is set only on a `known` relation row whose props would add to the stored
 relation it matched — e.g. `{ "businessUnit": "Consulting" }`, also spelled
 into `display.subtitle` as `adds Business unit: Consulting` — and is `null`
 otherwise. `display` is rendered by the
-server — `"Sarah Chen → works for → Org Lambda Robotics"`, `"Commitment · Sarah
-Chen · due Mar 10, 2026"`, `"Closes: Sarah Chen works for OldCo, 2019 → Mar
+server — `"Sasha Example → works for → Org Lambda Robotics"`, `"Commitment · Sasha
+Example · due Mar 10, 2026"`, `"Closes: Sasha Example works for OldCo, 2019 → Mar
 2026"` — so a client never re-derives it. Each `evidence` entry is `{ id,
 source: segment|note|import, transcriptId, segmentId, segmentRev, startMs, endMs,
 noteId, noteVersion, charStart, charEnd, quote, importObjectId, sourceIri,
@@ -6708,10 +6708,10 @@ Record one decision:
 
 ```json
 { "decision": "edit",
-  "editedPayload": { "type": "Person", "label": "Sarah Chen", "aliases": [], "props": {} },
+  "editedPayload": { "type": "Person", "label": "Sasha Example", "aliases": [], "props": {} },
   "relinkTo": { "field": "to", "target": { "entityId": "…" } },
   "distinctFrom": ["…"],
-  "evidence": { "add": [{ "source": "note", "noteVersion": 4, "charStart": 120, "charEnd": 131, "quote": "Sarah Chen" }], "remove": ["…"] } }
+  "evidence": { "add": [{ "source": "note", "noteVersion": 4, "charStart": 120, "charEnd": 131, "quote": "Sasha Example" }], "remove": ["…"] } }
 ```
 
 - `accept` takes the payload (keeping an earlier edit); `edit` requires the
@@ -6768,7 +6768,7 @@ Add what the extraction missed, from a text selection:
 { "kind": "relation",
   "payload": { "type": "WORKS_FOR", "from": { "ref": "e1" }, "to": { "entityId": "…" },
                "validFrom": null, "validTo": null, "precision": "unknown" },
-  "evidence": [{ "source": "segment", "segmentId": "…", "segmentRev": 2, "charStart": 8, "charEnd": 18, "quote": "Sarah Chen" }] }
+  "evidence": [{ "source": "segment", "segmentId": "…", "segmentRev": 2, "charStart": 8, "charEnd": 18, "quote": "Sasha Example" }] }
 ```
 
 The server assigns the row's `ref` (`u1`, `u2`, …), marks it `origin: "user"`
@@ -7067,8 +7067,8 @@ meetings (every entity type in your effective ontology), keyset-paginated by `ne
       {
         "id": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
         "type": "Person",
-        "label": "Sarah Chen-Li",
-        "aliases": ["Sarah Chen"],
+        "label": "Sasha Example-Li",
+        "aliases": ["Sasha Example"],
         "mentionCount": 4,
         "lastSeenAt": "2026-09-20T10:00:00.000Z",
         "speakerIds": ["A"]
@@ -7108,9 +7108,9 @@ counted).
   "data": {
     "id": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
     "type": "Person",
-    "label": "Sarah Chen-Li",
+    "label": "Sasha Example-Li",
     "props": { "title": "CTO" },
-    "aliases": [{ "id": "…", "alias": "Sarah Chen", "source": "extraction" }],
+    "aliases": [{ "id": "…", "alias": "Sasha Example", "source": "extraction" }],
     "occurredAt": null,
     "reviewStatus": "edited",
     "ontologyVersion": "1.0.0",
@@ -7227,7 +7227,7 @@ documents your own graph cites for this entity.
     },
     "digest": {
       "statements": [
-        { "text": "Sarah Chen-Li was promoted to CTO.", "evidenceIds": ["e1a2b3c4-…"] }
+        { "text": "Sasha Example-Li was promoted to CTO.", "evidenceIds": ["e1a2b3c4-…"] }
       ],
       "coversUntil": "2026-09-01T00:00:00.000Z",
       "generatedAt": "2026-09-01T00:05:00.000Z",
@@ -7242,7 +7242,7 @@ documents your own graph cites for this entity.
           "itemId": "9a2e…", "kind": "commitment", "title": null,
           "statement": "Ship the Q3 pricing memo", "occurredAt": "2026-09-01T00:00:00.000Z",
           "precision": "day", "status": "open", "dueAt": "2026-09-15T00:00:00.000Z",
-          "ownerPerson": { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person" },
+          "ownerPerson": { "id": "0b6f…", "label": "Sasha Example-Li", "type": "Person" },
           "counterparty": null, "superseded": false, "evidenceIds": ["e1a2b3c4-…"]
         }
       ],
@@ -7253,7 +7253,7 @@ documents your own graph cites for this entity.
         {
           "relationId": "3c1f…", "type": "HAS_ROLE", "change": "started",
           "at": "2026-09-01T00:00:00.000Z", "precision": "day",
-          "person": { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person" },
+          "person": { "id": "0b6f…", "label": "Sasha Example-Li", "type": "Person" },
           "other": { "id": "…", "label": "Org Kappa", "type": "Organization" },
           "title": "CTO", "evidenceIds": ["e1a2b3c4-…"]
         }
@@ -7318,7 +7318,7 @@ Query: `hops` (1 or 2, default 1), `types`, `relationTypes`, `as_of`,
     "seedIds": ["0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11"],
     "asOf": "2026-09-26T12:00:00.000Z",
     "nodes": [
-      { "id": "0b6f…", "nodeKind": "entity", "type": "Person", "label": "Sarah Chen-Li", "depth": 0, "degree": 6, "status": null, "occurredAt": null, "mentionCount": 14, "lastSeenAt": "2026-09-20T10:00:00.000Z" },
+      { "id": "0b6f…", "nodeKind": "entity", "type": "Person", "label": "Sasha Example-Li", "depth": 0, "degree": 6, "status": null, "occurredAt": null, "mentionCount": 14, "lastSeenAt": "2026-09-20T10:00:00.000Z" },
       { "id": "9a2e…", "nodeKind": "item", "type": "commitment", "label": "Ship the Q3 pricing memo", "depth": 1, "degree": 1, "status": "open", "occurredAt": "2026-09-01T00:00:00.000Z", "lastSeenAt": "2026-09-02T09:00:00.000Z" }
     ],
     "edges": [
@@ -7348,7 +7348,7 @@ merged · `503` `graph_query_timeout`.
 ##### GET /graph/paths
 
 The top `k` evidence-weighted paths between two nodes, with the graph slice
-they cover — the answer to "how is Joe connected to the Product X rollout?"
+they cover — the answer to "how is Jonty connected to the Product X rollout?"
 (GIC-12, #673). A synchronous read with the neighbourhood's 3 s budget, not a
 queue job.
 
@@ -7392,7 +7392,7 @@ Query: `from`, `to` (uuids, required, different), `k` (1–5, default 3),
     "slice": {
       "seedIds": ["0b6f…", "4a9e…"],
       "asOf": "2026-10-21T12:00:00.000Z",
-      "nodes": [ { "id": "0b6f…", "nodeKind": "entity", "type": "Person", "label": "Joe", "depth": 0, "degree": 6, "status": null, "occurredAt": null, "mentionCount": 14, "lastSeenAt": "2026-10-20T10:00:00.000Z" } ],
+      "nodes": [ { "id": "0b6f…", "nodeKind": "entity", "type": "Person", "label": "Jonty", "depth": 0, "degree": 6, "status": null, "occurredAt": null, "mentionCount": 14, "lastSeenAt": "2026-10-20T10:00:00.000Z" } ],
       "edges": [ { "id": "3c1f…", "type": "ATTENDED", "source": "0b6f…", "target": "4a9e…", "valid": null, "confidence": 0.92, "virtual": false, "props": {}, "evidenceCount": 1, "lastEvidenceAt": "2026-10-20T10:00:00.000Z" } ],
       "truncated": false,
       "cap": 300
@@ -7563,7 +7563,7 @@ Query: `as_of`, `kinds`, `includeSensitive` (`true`/`false`, default
           "id": "9a2e…", "kind": "commitment", "title": null,
           "statement": "Ship the Q3 pricing memo", "status": "open",
           "dueAt": "2026-09-15T00:00:00.000Z",
-          "ownerPerson": { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person" },
+          "ownerPerson": { "id": "0b6f…", "label": "Sasha Example-Li", "type": "Person" },
           "counterparty": null, "sensitivity": null,
           "superseded": false, "supersededById": null
         },
@@ -7653,8 +7653,8 @@ transcript share), `available` is `false` and there is no link — but the
 
 A citation you made BY HAND (a manager, employer or role set on an entity
 page, #586) has no document: `source` is `{ "kind": "manual", "available":
-true, "href": null }` and `quote` says what was set ("Set by hand: Jenny Kim
-reports to Mark Chen").
+true, "href": null }` and `quote` says what was set ("Set by hand: Jarek Stubbs
+reports to Marta Sample").
 
 **Errors:** `401` · `403` without `graph:read` · `404` no such evidence, or
 not yours.
@@ -7736,19 +7736,19 @@ no state that answers anything else.
     "clusters": [
       {
         "id": 0,
-        "label": "Sarah Chen-Li",
+        "label": "Sasha Example-Li",
         "labelEntityId": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
         "size": 9,
         "x": 12.4, "y": -3.1, "radius": 8.2,
         "typeCounts": { "Person": 3, "Project": 2, "Commitment": 4 },
         "memberSample": [
-          { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person", "degree": 6 }
+          { "id": "0b6f…", "label": "Sasha Example-Li", "type": "Person", "degree": 6 }
         ]
       }
     ],
     "clusterEdges": [{ "a": 0, "b": 1, "weight": 3 }],
     "nodes": [
-      { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person", "x": 11.9, "y": -2.7, "clusterId": 0, "degree": 6 }
+      { "id": "0b6f…", "label": "Sasha Example-Li", "type": "Person", "x": 11.9, "y": -2.7, "clusterId": 0, "degree": 6 }
     ],
     "nodesTruncated": false,
     "typeCounts": { "Person": 3, "Project": 2 }
@@ -7812,21 +7812,21 @@ never contribute, and no quote text is returned.
     "stale": false, "tooLarge": false, "connectorsReady": true,
     "themes": [
       { "clusterId": 0, "label": "Org Kappa", "labelEntityId": "0b6f…", "size": 12,
-        "typeCounts": { "Person": 7 }, "memberSample": [{ "id": "0b6f…", "label": "Joe Rivera", "type": "Person", "degree": 5 }] }
+        "typeCounts": { "Person": 7 }, "memberSample": [{ "id": "0b6f…", "label": "Jonty Placeholder", "type": "Person", "degree": 5 }] }
     ],
     "connectors": [
-      { "entity": { "id": "0b6f…", "label": "Joe Rivera", "type": "Person" }, "score": 0.42,
+      { "entity": { "id": "0b6f…", "label": "Jonty Placeholder", "type": "Person" }, "score": 0.42,
         "clusters": [{ "id": 0, "label": "Org Kappa" }, { "id": 1, "label": "Org Sigma" }],
-        "reason": "Joe Rivera connects the Org Kappa group and the Org Sigma group." }
+        "reason": "Jonty Placeholder connects the Org Kappa group and the Org Sigma group." }
     ],
     "rising": [
-      { "entity": { "id": "1c2d…", "label": "Ana Diaz", "type": "Person" }, "count": 5, "previous": 1,
+      { "entity": { "id": "1c2d…", "label": "Anders Placeholder", "type": "Person" }, "count": 5, "previous": 1,
         "reason": "Came up in 5 conversations in the last 30 days, up from 1 before." }
     ],
     "fadingTies": [
-      { "from": { "id": "0b6f…", "label": "Joe Rivera", "type": "Person" }, "to": { "id": "1c2d…", "label": "Ana Diaz", "type": "Person" },
+      { "from": { "id": "0b6f…", "label": "Jonty Placeholder", "type": "Person" }, "to": { "id": "1c2d…", "label": "Anders Placeholder", "type": "Person" },
         "relationTypes": ["KNOWS"], "lastEvidenceAt": "2026-05-01T00:00:00.000Z", "evidenceBefore": 4,
-        "reason": "You haven't discussed Joe Rivera with Ana Diaz since May 1, 2026." }
+        "reason": "You haven't discussed Jonty Placeholder with Anders Placeholder since May 1, 2026." }
     ],
     "openRisks": [
       { "id": "9a8b…", "title": "Legal review", "statement": "Legal has not signed off", "severity": "high",
@@ -7866,7 +7866,7 @@ issues):
 {
   "id": "…", "conversationId": "…",
   "role": "assistant",
-  "content": "Sarah leads Atlas.[^ev1]",
+  "content": "Sasha leads Atlas.[^ev1]",
   "status": "complete",
   "toolCalls": [
     { "index": 0, "name": "search", "arguments": { "q": "Atlas" },
@@ -7923,8 +7923,8 @@ entity (the entity page's Ask panel).
       {
         "id": "…",
         "title": "Who owns Atlas?",
-        "scopeEntity": { "id": "…", "label": "Sarah Chen", "type": "Person" },
-        "lastMessagePreview": "Sarah leads Atlas.",
+        "scopeEntity": { "id": "…", "label": "Sasha Example", "type": "Person" },
+        "lastMessagePreview": "Sasha leads Atlas.",
         "running": false,
         "createdAt": "2026-09-26T09:59:00.000Z",
         "updatedAt": "2026-09-26T10:00:00.000Z"
@@ -8000,7 +8000,7 @@ characters).
 
 **Optional `scope`** (GIC-17, #678; the explorer's "Ask about this selection"):
 ```json
-{ "content": "How is Joe involved?", "scope": { "entityIds": ["<uuid>"], "evidenceIds": ["<uuid>"] } }
+{ "content": "How is Jonty involved?", "scope": { "entityIds": ["<uuid>"], "evidenceIds": ["<uuid>"] } }
 ```
 Both lists are optional, at most **50** ids each. They are **starting handles,
 never evidence**: the turn names the selected entities, and the entity, item or

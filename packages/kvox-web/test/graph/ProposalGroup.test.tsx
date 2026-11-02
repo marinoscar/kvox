@@ -41,19 +41,19 @@ describe('ProposalGroup', () => {
     const user = userEvent.setup();
     const { onBulk, group } = renderGroup('Person');
     await user.click(screen.getByRole('button', { name: 'Accept all People' }));
-    expect(onBulk).toHaveBeenLastCalledWith(group, [ITEM.sarah, ITEM.tom], 'accept');
+    expect(onBulk).toHaveBeenLastCalledWith(group, [ITEM.sasha, ITEM.tobias], 'accept');
     await user.click(screen.getByRole('button', { name: 'Reject all People' }));
-    expect(onBulk).toHaveBeenLastCalledWith(group, [ITEM.sarah, ITEM.tom], 'reject');
+    expect(onBulk).toHaveBeenLastCalledWith(group, [ITEM.sasha, ITEM.tobias], 'reject');
   });
 
   it('collapses known rows under "Already in your graph"', async () => {
     const user = userEvent.setup();
     renderGroup('Person');
-    expect(screen.queryByText('Ana Ruiz')).not.toBeInTheDocument();
+    expect(screen.queryByText('Anders Stubbs')).not.toBeInTheDocument();
     const disclosure = screen.getByRole('button', { name: 'Already in your graph (1)' });
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
     await user.click(disclosure);
-    expect(await screen.findByText('Ana Ruiz')).toBeInTheDocument();
+    expect(await screen.findByText('Anders Stubbs')).toBeInTheDocument();
     expect(disclosure).toHaveAttribute('aria-expanded', 'true');
   });
 

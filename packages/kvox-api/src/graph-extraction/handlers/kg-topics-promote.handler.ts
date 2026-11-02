@@ -143,7 +143,7 @@ export function conceptKey(normalized: string): string {
 type Decision = ReturnType<typeof decide>;
 
 /**
- * A Topic is its name: there is no second "Sarah" to tell apart by context. So a string that is
+ * A Topic is its name: there is no second "Sasha" to tell apart by context. So a string that is
  * exactly an existing Topic's label or alias (after normalization) links to it even though the
  * generic score leaves an exact name alone in the middle band, UNLESS the adjudicator ruled it a
  * different thing, or the match is ambiguous between two Topics. Without this a topic already in

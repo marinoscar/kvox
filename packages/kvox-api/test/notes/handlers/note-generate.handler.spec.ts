@@ -129,7 +129,7 @@ function harness(options: {
 
   const sources = {
     resolve: jest.fn().mockResolvedValue({
-      text: options.sourceText ?? 'Ana: we ship on Friday.',
+      text: options.sourceText ?? 'Anders: we ship on Friday.',
       describe: 'transcript transcript-1 at version 7',
       sourceVersion: 7,
     }),
@@ -282,12 +282,12 @@ describe('NoteGenerateHandler — a successful generation', () => {
   });
 
   it('sends the template in the system role and the source in the user role', async () => {
-    const { handler, ai } = harness({ sourceText: 'Ana: we ship on Friday.' });
+    const { handler, ai } = harness({ sourceText: 'Anders: we ship on Friday.' });
 
     await handler.process(job());
 
     expect(streamRequest(ai).system).toContain('Write meeting notes.');
-    expect(streamRequest(ai).user).toContain('Ana: we ship on Friday.');
+    expect(streamRequest(ai).user).toContain('Anders: we ship on Friday.');
   });
 
   it('passes the template\'s bodyFormat into assemblePrompt as templateBodyFormat', async () => {
@@ -564,7 +564,7 @@ describe('NoteGenerateHandler — the per-user throttle key', () => {
 
 describe('NoteGenerateHandler — recordContext (#307)', () => {
   it('records the EXACT system/user prompt the port receives, plus sourceVersion', async () => {
-    const { handler, ai, generations } = harness({ sourceText: 'Ana: we ship on Friday.' });
+    const { handler, ai, generations } = harness({ sourceText: 'Anders: we ship on Friday.' });
 
     await handler.process(job());
 

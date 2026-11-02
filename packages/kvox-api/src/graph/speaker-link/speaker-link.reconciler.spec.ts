@@ -43,7 +43,7 @@ function setup(opts: {
     transcript: {
       findUnique: jest.fn().mockResolvedValue(
         opts.transcript === undefined
-          ? { ownerId: OWNER, speakerIdentities: { [SPEAKER_A]: 'Sarah Chen' }, deletedAt: null }
+          ? { ownerId: OWNER, speakerIdentities: { [SPEAKER_A]: 'Sasha Example' }, deletedAt: null }
           : opts.transcript,
       ),
     },
@@ -214,7 +214,7 @@ describe('SpeakerLinkReconciler', () => {
       expect(entity).toMatchObject({
         ownerId: OWNER,
         type: 'Person',
-        label: 'Sarah Chen',
+        label: 'Sasha Example',
         reviewStatus: 'accepted',
         labelSource: 'speaker_naming',
       });
@@ -247,39 +247,39 @@ describe('SpeakerLinkReconciler', () => {
         }),
       ]);
       // Never the name.
-      expect(JSON.stringify(s.audits())).not.toContain('Sarah');
+      expect(JSON.stringify(s.audits())).not.toContain('Sasha');
     });
 
     it('links to the one existing Person carrying the name, creating nothing', async () => {
-      const s = setup({ persons: [{ id: 'p-sarah', label: 'Sarah Chen' }] });
+      const s = setup({ persons: [{ id: 'p-sasha', label: 'Sasha Example' }] });
       const summary = await s.run();
 
       expect(s.write.createEntity).not.toHaveBeenCalled();
       expect(s.write.addAliases).not.toHaveBeenCalled();
-      expect(s.write.createRelation.mock.calls[0][1]).toMatchObject({ toId: 'p-sarah' });
+      expect(s.write.createRelation.mock.calls[0][1]).toMatchObject({ toId: 'p-sasha' });
       expect(summary).toMatchObject({ linked: 1, created: 0, createdPersonIds: [] });
       expect(s.audits()[0].meta).toEqual({
         transcriptId: TRANSCRIPT,
         speakerId: SPEAKER_A,
-        personId: 'p-sarah',
+        personId: 'p-sasha',
         createdPerson: false,
       });
     });
 
     it('adds the spelling as a speaker_naming alias when it matched through a differently spelled alias', async () => {
-      const s = setup({ persons: [{ id: 'p-sarah', label: 'S. Chen', aliases: ['sarah  chen!'] }] });
+      const s = setup({ persons: [{ id: 'p-sasha', label: 'S. Example', aliases: ['sasha  example!'] }] });
       await s.run();
-      expect(s.write.addAliases).toHaveBeenCalledWith(expect.anything(), OWNER, 'p-sarah', [
-        { alias: 'Sarah Chen', source: 'speaker_naming' },
+      expect(s.write.addAliases).toHaveBeenCalledWith(expect.anything(), OWNER, 'p-sasha', [
+        { alias: 'Sasha Example', source: 'speaker_naming' },
       ]);
     });
 
     it('picks deterministically among several matching Persons and records the ambiguity', async () => {
       const s = setup({
         persons: [
-          { id: 'p-1', label: 'Sarah Chen', identified: 1, updatedAt: new Date('2026-03-01') },
-          { id: 'p-2', label: 'Sarah Chen', identified: 3, updatedAt: new Date('2026-01-01') },
-          { id: 'p-3', label: 'sarah chen', identified: 3, updatedAt: new Date('2026-02-01') },
+          { id: 'p-1', label: 'Sasha Example', identified: 1, updatedAt: new Date('2026-03-01') },
+          { id: 'p-2', label: 'Sasha Example', identified: 3, updatedAt: new Date('2026-01-01') },
+          { id: 'p-3', label: 'sasha example', identified: 3, updatedAt: new Date('2026-02-01') },
         ],
       });
       await s.run();
@@ -288,7 +288,7 @@ describe('SpeakerLinkReconciler', () => {
     });
 
     it('does nothing when the edge already points at a live Person with that name', async () => {
-      const s = setup({ edges: [{ id: 'e-1', speakerId: SPEAKER_A, personId: 'p-sarah', label: 'Sarah Chen' }] });
+      const s = setup({ edges: [{ id: 'e-1', speakerId: SPEAKER_A, personId: 'p-sasha', label: 'Sasha Example' }] });
       const summary = await s.run();
       expect(summary).toMatchObject({ linked: 0, created: 0, unlinked: 0 });
       noWrites(s);
@@ -309,8 +309,8 @@ describe('SpeakerLinkReconciler', () => {
   });
 
   describe('a renamed speaker', () => {
-    const renamed = { ownerId: OWNER, speakerIdentities: { [SPEAKER_A]: 'Marcus Webb' }, deletedAt: null };
-    const oldEdge = { id: 'e-old', speakerId: SPEAKER_A, personId: 'p-sarah', label: 'Sarah Chen' };
+    const renamed = { ownerId: OWNER, speakerIdentities: { [SPEAKER_A]: 'Maddox Sample' }, deletedAt: null };
+    const oldEdge = { id: 'e-old', speakerId: SPEAKER_A, personId: 'p-sasha', label: 'Sasha Example' };
 
     it('re-points the edge, deleting the stale one with its evidence first', async () => {
       const s = setup({ transcript: renamed, edges: [oldEdge] });
@@ -328,9 +328,9 @@ describe('SpeakerLinkReconciler', () => {
     it('deletes the old Person when it was a speaker-naming-only Person with no other ties', async () => {
       const s = setup({ transcript: renamed, edges: [oldEdge] });
       await s.run();
-      expect(s.tx.kgEvidence.deleteMany).toHaveBeenCalledWith({ where: { subjectKind: 'entity', subjectId: 'p-sarah' } });
-      expect(s.tx.kgEntityAlias.deleteMany).toHaveBeenCalledWith({ where: { entityId: 'p-sarah' } });
-      expect(s.tx.kgEntity.delete).toHaveBeenCalledWith({ where: { id: 'p-sarah' } });
+      expect(s.tx.kgEvidence.deleteMany).toHaveBeenCalledWith({ where: { subjectKind: 'entity', subjectId: 'p-sasha' } });
+      expect(s.tx.kgEntityAlias.deleteMany).toHaveBeenCalledWith({ where: { entityId: 'p-sasha' } });
+      expect(s.tx.kgEntity.delete).toHaveBeenCalledWith({ where: { id: 'p-sasha' } });
     });
 
     it.each([
@@ -353,13 +353,13 @@ describe('SpeakerLinkReconciler', () => {
   describe('a versioned rename, read from the live row (#405)', () => {
     it('re-points the edge to the live name even though speaker_identities still holds the old one', async () => {
       const s = setup({
-        transcript: { ownerId: OWNER, speakerIdentities: { [SPEAKER_A]: 'Sarah Chen' }, deletedAt: null },
-        liveNames: { [SPEAKER_A]: 'Marcus Webb' },
-        edges: [{ id: 'e-old', speakerId: SPEAKER_A, personId: 'p-sarah', label: 'Sarah Chen' }],
+        transcript: { ownerId: OWNER, speakerIdentities: { [SPEAKER_A]: 'Sasha Example' }, deletedAt: null },
+        liveNames: { [SPEAKER_A]: 'Maddox Sample' },
+        edges: [{ id: 'e-old', speakerId: SPEAKER_A, personId: 'p-sasha', label: 'Sasha Example' }],
       });
       const summary = await s.run();
 
-      expect(s.write.createEntity.mock.calls[0][1]).toMatchObject({ label: 'Marcus Webb' });
+      expect(s.write.createEntity.mock.calls[0][1]).toMatchObject({ label: 'Maddox Sample' });
       expect(s.tx.kgRelation.delete).toHaveBeenCalledWith({ where: { id: 'e-old' } });
       expect(summary).toMatchObject({ linked: 1, created: 1, unlinked: 0 });
     });
@@ -368,7 +368,7 @@ describe('SpeakerLinkReconciler', () => {
       const s = setup({
         transcript: { ownerId: OWNER, speakerIdentities: {}, deletedAt: null },
         liveNames: { [SPEAKER_A]: `Speaker ${SPEAKER_A}` },
-        edges: [{ id: 'e-1', speakerId: SPEAKER_A, personId: 'p-sarah', label: 'Sarah Chen' }],
+        edges: [{ id: 'e-1', speakerId: SPEAKER_A, personId: 'p-sasha', label: 'Sasha Example' }],
       });
       expect(await s.run()).toMatchObject({ linked: 0, unlinked: 1 });
     });
@@ -378,18 +378,18 @@ describe('SpeakerLinkReconciler', () => {
     it('removes the edge, audits the unlink, and applies the same cleanup rule', async () => {
       const s = setup({
         transcript: { ownerId: OWNER, speakerIdentities: {}, deletedAt: null },
-        edges: [{ id: 'e-1', speakerId: SPEAKER_A, personId: 'p-sarah', label: 'Sarah Chen' }],
+        edges: [{ id: 'e-1', speakerId: SPEAKER_A, personId: 'p-sasha', label: 'Sasha Example' }],
       });
       const summary = await s.run();
 
       expect(summary).toMatchObject({ linked: 0, created: 0, unlinked: 1 });
       expect(s.tx.kgRelation.delete).toHaveBeenCalledWith({ where: { id: 'e-1' } });
-      expect(s.tx.kgEntity.delete).toHaveBeenCalledWith({ where: { id: 'p-sarah' } });
+      expect(s.tx.kgEntity.delete).toHaveBeenCalledWith({ where: { id: 'p-sasha' } });
       expect(s.write.createRelation).not.toHaveBeenCalled();
       expect(s.audits()).toEqual([
         expect.objectContaining({
           action: SPEAKER_UNLINKED_ACTION,
-          meta: { transcriptId: TRANSCRIPT, speakerId: SPEAKER_A, removedPersonId: 'p-sarah' },
+          meta: { transcriptId: TRANSCRIPT, speakerId: SPEAKER_A, removedPersonId: 'p-sasha' },
         }),
       ]);
     });
@@ -401,20 +401,20 @@ describe('effectiveSpeakerNames (#405)', () => {
 
   it('overlays an identity only on a speaker still on its placeholder', () => {
     const names = effectiveSpeakerNames(
-      [speaker('a', 'A', 'Speaker A'), speaker('b', 'B', 'Joe')],
-      { a: 'Oscar', b: 'Oscar' },
+      [speaker('a', 'A', 'Speaker A'), speaker('b', 'B', 'Jonty')],
+      { a: 'Orlo', b: 'Orlo' },
     );
-    // `b` was renamed Oscar → Joe through the versioned path: the correction
+    // `b` was renamed Orlo → Jonty through the versioned path: the correction
     // recorded in the live row outranks the stale identity, as in materialize().
-    expect(Object.fromEntries(names)).toEqual({ a: 'Oscar', b: 'Joe' });
+    expect(Object.fromEntries(names)).toEqual({ a: 'Orlo', b: 'Jonty' });
   });
 
   it('reads a live name that has no identity entry (a versioned rename, a created speaker)', () => {
     const names = effectiveSpeakerNames(
-      [speaker('a', 'A', 'Marcus Webb'), speaker('c', null, 'Guest')],
+      [speaker('a', 'A', 'Maddox Sample'), speaker('c', null, 'Guest')],
       {},
     );
-    expect(Object.fromEntries(names)).toEqual({ a: 'Marcus Webb', c: 'Guest' });
+    expect(Object.fromEntries(names)).toEqual({ a: 'Maddox Sample', c: 'Guest' });
   });
 
   it('gives a placeholder speaker no name', () => {

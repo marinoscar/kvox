@@ -22,10 +22,10 @@ import type { ScenarioRecording } from '../src/graph-scenario.js';
 //   -> proposal -> bulk accept -> POST /api/graph/proposals/:id/commit
 //   (GraphWriteService)
 //
-// Then one fact NO meeting states — who Joe reports to — is set BY HAND on his
+// Then one fact NO meeting states — who Jonty reports to — is set BY HAND on his
 // entity page (step 9, `POST /api/graph/entities/:id/relations`, #586), through
 // the same GraphWriteService, cited by the owner ("Set by hand"), and Ask
-// answers "meetings with Joe's boss" from it.
+// answers "meetings with Jonty's boss" from it.
 //
 // No test statement inserts, updates or deletes a kg_* row to build the graph;
 // the only SQL is read-only assertions and one refused transaction at the very
@@ -229,7 +229,7 @@ describe('the graph and Ask on the bare host, end to end', () => {
 
   it('2. reads the committed graph back over HTTP: 3 people, 2 meetings, who reports to whom, who attended', async () => {
     const persons = await json(await api('/api/graph/entities?type=Person'));
-    expect(persons.items.map((e: { label: string }) => e.label).sort()).toEqual(['Jenny Kim', 'Joe Park', 'Maria Lopez']);
+    expect(persons.items.map((e: { label: string }) => e.label).sort()).toEqual(['Jarek Stubbs', 'Jonty Mockwell', 'Maren Fixture']);
     for (const e of persons.items as Array<{ id: string; label: string }>) people.set(e.label, e.id);
 
     const meetings = await json(await api('/api/graph/entities?type=Meeting'));
@@ -240,19 +240,19 @@ describe('the graph and Ask on the bare host, end to end', () => {
       SELECT r.type::text AS type, f.label AS from_label, t.label AS to_label
         FROM kg_relations r JOIN kg_entities f ON f.id = r.from_id JOIN kg_entities t ON t.id = r.to_id
        ORDER BY r.type::text, f.label, t.label`;
-    expect(relations.filter((r) => r.type === 'REPORTS_TO')).toEqual([{ type: 'REPORTS_TO', from_label: 'Jenny Kim', to_label: 'Maria Lopez' }]);
+    expect(relations.filter((r) => r.type === 'REPORTS_TO')).toEqual([{ type: 'REPORTS_TO', from_label: 'Jarek Stubbs', to_label: 'Maren Fixture' }]);
     expect(relations.filter((r) => r.type === 'ATTENDED').map((r) => `${r.from_label} > ${r.to_label}`)).toEqual([
-      `Jenny Kim > ${STANDUP.title}`,
-      `Jenny Kim > ${WEEKLY_SYNC.title}`,
-      `Joe Park > ${STANDUP.title}`,
-      `Joe Park > ${WEEKLY_SYNC.title}`,
-      `Maria Lopez > ${WEEKLY_SYNC.title}`,
+      `Jarek Stubbs > ${STANDUP.title}`,
+      `Jarek Stubbs > ${WEEKLY_SYNC.title}`,
+      `Jonty Mockwell > ${STANDUP.title}`,
+      `Jonty Mockwell > ${WEEKLY_SYNC.title}`,
+      `Maren Fixture > ${WEEKLY_SYNC.title}`,
     ]);
     expect(relations).toHaveLength(6);
 
     // One entity per person (the standup linked to the sync's people), readable by id.
-    const brief = await json(await api(`/api/graph/entities/${people.get('Joe Park')}`));
-    expect(brief.label).toBe('Joe Park');
+    const brief = await json(await api(`/api/graph/entities/${people.get('Jonty Mockwell')}`));
+    expect(brief.label).toBe('Jonty Mockwell');
 
     const commitments = await host.prisma.$queryRaw<Array<{ title: string; status: string }>>`
       SELECT title, status::text AS status FROM kg_items WHERE kind::text = 'commitment' ORDER BY title`;
@@ -333,20 +333,20 @@ describe('the graph and Ask on the bare host, end to end', () => {
     expect(await succeeded('kg.graph_layout')).toBe(3);
   });
 
-  it('7. answers "What are the action items from Joe?": search, then list_commitments for his open ones', async () => {
+  it('7. answers "What are the action items from Jonty?": search, then list_commitments for his open ones', async () => {
     const answer = await ask(ASK_QUESTIONS.actionItems);
     expect(answer.status).toBe('complete');
 
     expect(answer.toolCalls.map((c) => c.name)).toEqual(['search', 'list_commitments']);
     expect(answer.toolCalls.every((c) => c.error === null)).toBe(true);
     const [search, list] = answer.toolCalls;
-    expect(search.arguments).toEqual({ query: 'Joe' });
+    expect(search.arguments).toEqual({ query: 'Jonty' });
     // The entity argument is the handle the search gave the Person; the citation of that handle names him.
     const handle = list.arguments.entity as string;
     expect(handle).toMatch(/^ent\d+$/);
     expect(list.arguments).toEqual({ entity: handle, direction: 'owned_by', status: 'open' });
-    expect(list.summary).toBe('Listed 1 open commitment for Joe Park');
-    expect(answer.citations.find((c) => c.marker === handle)).toMatchObject({ kind: 'entity', label: 'Joe Park', valid: true });
+    expect(list.summary).toBe('Listed 1 open commitment for Jonty Mockwell');
+    expect(answer.citations.find((c) => c.marker === handle)).toMatchObject({ kind: 'entity', label: 'Jonty Mockwell', valid: true });
 
     expect(answer.content).toContain('Send the budget draft');
     expect(answer.content).not.toContain('vendor review');
@@ -357,24 +357,24 @@ describe('the graph and Ask on the bare host, end to end', () => {
     expect(answer.citations.filter((c) => c.kind === 'evidence').map((c) => c.label)).toEqual([WEEKLY_SYNC.title]);
   });
 
-  it('8. answers "What meetings have we had with Jenny\'s boss?": search, neighbors over REPORTS_TO, timeline of the boss', async () => {
+  it('8. answers "What meetings have we had with Jarek\'s boss?": search, neighbors over REPORTS_TO, timeline of the boss', async () => {
     const answer = await ask(ASK_QUESTIONS.bossMeetings);
     expect(answer.status).toBe('complete');
 
     expect(answer.toolCalls.map((c) => c.name)).toEqual(['search', 'neighbors', 'timeline']);
     expect(answer.toolCalls.every((c) => c.error === null)).toBe(true);
     const [search, neighbors, timeline] = answer.toolCalls;
-    expect(search.arguments).toEqual({ query: 'Jenny' });
+    expect(search.arguments).toEqual({ query: 'Jarek' });
     expect(neighbors.arguments).toEqual({ entity: neighbors.arguments.entity, relationTypes: ['REPORTS_TO'] });
     expect(neighbors.arguments.entity).toMatch(/^ent\d+$/);
-    expect(neighbors.summary).toContain('Jenny Kim');
-    // The timeline is of the boss the neighbours step found, not of Jenny.
+    expect(neighbors.summary).toContain('Jarek Stubbs');
+    // The timeline is of the boss the neighbours step found, not of Jarek.
     expect(timeline.arguments).toEqual({ entity: timeline.arguments.entity, kinds: ['meeting'] });
     expect(timeline.arguments.entity).toMatch(/^ent\d+$/);
     expect(timeline.arguments.entity).not.toBe(neighbors.arguments.entity);
-    expect(timeline.summary).toBe('Timeline of Maria Lopez · 1 event');
+    expect(timeline.summary).toBe('Timeline of Maren Fixture · 1 event');
 
-    expect(answer.content).toContain('Maria Lopez');
+    expect(answer.content).toContain('Maren Fixture');
     expect(answer.content).toContain(WEEKLY_SYNC.title);
     expect(answer.content).not.toContain(STANDUP.title);
     expect(answer.content).not.toContain('standup');
@@ -384,60 +384,60 @@ describe('the graph and Ask on the bare host, end to end', () => {
     expect(answer.citations.filter((c) => c.kind === 'evidence').every((c) => c.label === WEEKLY_SYNC.title)).toBe(true);
   });
 
-  it('9. a manager set by hand (no meeting states it) answers "meetings with Joe\'s boss", cited "Set by hand"', async () => {
-    const joe = people.get('Joe Park') as string;
-    const maria = people.get('Maria Lopez') as string;
-    const jenny = people.get('Jenny Kim') as string;
+  it('9. a manager set by hand (no meeting states it) answers "meetings with Jonty\'s boss", cited "Set by hand"', async () => {
+    const jonty = people.get('Jonty Mockwell') as string;
+    const maren = people.get('Maren Fixture') as string;
+    const jarek = people.get('Jarek Stubbs') as string;
 
-    // Before: nothing says who Joe reports to.
+    // Before: nothing says who Jonty reports to.
     const before = await ask(ASK_QUESTIONS.manualBossMeetings);
     expect(before.toolCalls.map((c) => c.name)).toEqual(['search', 'neighbors']);
-    expect(before.content).toContain('could not find who Joe Park');
+    expect(before.content).toContain('could not find who Jonty Mockwell');
 
     // Set by hand, from 1 January: one relation through GraphWriteService, one manual evidence row.
     const set = await json(
-      await api(`/api/graph/entities/${joe}/relations`, { method: 'POST', json: { type: 'REPORTS_TO', toId: maria, validFrom: '2026-01-01' } }),
+      await api(`/api/graph/entities/${jonty}/relations`, { method: 'POST', json: { type: 'REPORTS_TO', toId: maren, validFrom: '2026-01-01' } }),
     );
     expect(set).toMatchObject({ created: true, closedRelationIds: [], flags: [] });
-    expect(set.relation).toMatchObject({ type: 'REPORTS_TO', fromId: joe, toId: maria, reviewStatus: 'edited' });
+    expect(set.relation).toMatchObject({ type: 'REPORTS_TO', fromId: jonty, toId: maren, reviewStatus: 'edited' });
     expect(set.relation.valid).toEqual({ from: '2026-01-01T00:00:00.000Z', to: null, precision: 'day' });
-    const joeMaria: string = set.relation.id;
+    const jontyMaren: string = set.relation.id;
     const evidence = await host.prisma.$queryRaw<Array<{ id: string; quote: string; source_iri: string | null; anchors: number }>>`
       SELECT id::text AS id, quote, source_iri,
              (num_nonnulls(transcript_id, segment_id, note_id, import_object_id))::int AS anchors
-        FROM kg_evidence WHERE subject_kind::text = 'relation' AND subject_id = ${joeMaria}::uuid`;
+        FROM kg_evidence WHERE subject_kind::text = 'relation' AND subject_id = ${jontyMaren}::uuid`;
     expect(evidence).toEqual([
-      { id: set.evidenceId, quote: 'Set by hand: Joe Park reports to Maria Lopez', source_iri: 'urn:kvox:evidence:manual', anchors: 0 },
+      { id: set.evidenceId, quote: 'Set by hand: Jonty Mockwell reports to Maren Fixture', source_iri: 'urn:kvox:evidence:manual', anchors: 0 },
     ]);
     const link = await json(await api(`/api/graph/evidence/${set.evidenceId}`));
     expect(link.source).toEqual({ kind: 'manual', available: true, href: null });
 
     // A new manager closes the open edge at its start (the commit's closing rule); removing the
     // new one as wrong retracts it and reopens what it closed.
-    const next = await json(await api(`/api/graph/entities/${joe}/relations`, { method: 'POST', json: { type: 'REPORTS_TO', toId: jenny } }));
-    expect(next.closedRelationIds).toEqual([joeMaria]);
+    const next = await json(await api(`/api/graph/entities/${jonty}/relations`, { method: 'POST', json: { type: 'REPORTS_TO', toId: jarek } }));
+    expect(next.closedRelationIds).toEqual([jontyMaren]);
     const closed = await host.prisma.$queryRaw<Array<{ open: boolean; superseded_by_id: string | null }>>`
-      SELECT upper_inf(valid) AS open, superseded_by_id::text AS superseded_by_id FROM kg_relations WHERE id = ${joeMaria}::uuid`;
+      SELECT upper_inf(valid) AS open, superseded_by_id::text AS superseded_by_id FROM kg_relations WHERE id = ${jontyMaren}::uuid`;
     expect(closed).toEqual([{ open: false, superseded_by_id: next.relation.id }]);
-    const removed = await json(await api(`/api/graph/entities/${joe}/relations/${next.relation.id}`, { method: 'DELETE' }));
-    expect(removed).toEqual({ relationId: next.relation.id, reviewStatus: 'rejected', reopenedRelationIds: [joeMaria] });
+    const removed = await json(await api(`/api/graph/entities/${jonty}/relations/${next.relation.id}`, { method: 'DELETE' }));
+    expect(removed).toEqual({ relationId: next.relation.id, reviewStatus: 'rejected', reopenedRelationIds: [jontyMaren] });
     const reopened = await host.prisma.$queryRaw<Array<{ open: boolean; superseded_by_id: string | null }>>`
-      SELECT upper_inf(valid) AS open, superseded_by_id::text AS superseded_by_id FROM kg_relations WHERE id = ${joeMaria}::uuid`;
+      SELECT upper_inf(valid) AS open, superseded_by_id::text AS superseded_by_id FROM kg_relations WHERE id = ${jontyMaren}::uuid`;
     expect(reopened).toEqual([{ open: true, superseded_by_id: null }]);
     // A relation that does not start at the entity named in the path is not found there.
-    expect((await api(`/api/graph/entities/${maria}/relations/${joeMaria}`, { method: 'DELETE' })).status).toBe(404);
+    expect((await api(`/api/graph/entities/${maren}/relations/${jontyMaren}`, { method: 'DELETE' })).status).toBe(404);
 
     // Every manual edit carries evidence: still no orphan.
     expect(await orphans('kg_relations', 'relation')).toBe(0);
 
-    // After: Ask follows the manual REPORTS_TO to Maria, and her meeting.
+    // After: Ask follows the manual REPORTS_TO to Maren, and her meeting.
     const answer = await ask(ASK_QUESTIONS.manualBossMeetings);
     expect(answer.status).toBe('complete');
     expect(answer.toolCalls.map((c) => c.name)).toEqual(['search', 'neighbors', 'timeline']);
     expect(answer.toolCalls.every((c) => c.error === null)).toBe(true);
-    expect(answer.toolCalls[2].summary).toBe('Timeline of Maria Lopez · 1 event');
-    expect(answer.content).toContain('Joe Park');
-    expect(answer.content).toContain('Maria Lopez');
+    expect(answer.toolCalls[2].summary).toBe('Timeline of Maren Fixture · 1 event');
+    expect(answer.content).toContain('Jonty Mockwell');
+    expect(answer.content).toContain('Maren Fixture');
     expect(answer.content).toContain(WEEKLY_SYNC.title);
     expect(answer.content).not.toContain(STANDUP.title);
     expect(answer.citations.every((c) => c.valid)).toBe(true);
@@ -464,12 +464,12 @@ describe('the graph and Ask on the bare host, end to end', () => {
     await drain();
     const done = await json(await api(`/api/graph/exports/${exportId}`));
     expect(done.status).toBe('ready');
-    // Six relations from the meetings, plus Joe's manager set by hand (step 9); the retracted one is not exported.
+    // Six relations from the meetings, plus Jonty's manager set by hand (step 9); the retracted one is not exported.
     expect(done.stats).toMatchObject({ entities: 5, relations: 7, items: 2, excludedSensitive: 0 });
 
     const turtle = await (await fetch(done.downloadUrl)).text();
-    expect(turtle).toContain('Maria Lopez');
-    expect(turtle).toContain('Weekly sync with Maria Lopez');
+    expect(turtle).toContain('Maren Fixture');
+    expect(turtle).toContain('Weekly sync with Maren Fixture');
 
     const form = new FormData();
     form.append('file', new Blob([turtle], { type: 'text/turtle' }), 'graph.ttl');
@@ -511,7 +511,7 @@ describe('the graph and Ask on the bare host, end to end', () => {
 
   it('11b. adds and decides a transcript-segment span on a draft proposal, then commits it (#615: the span origin is resolved before the transaction)', { timeout: 120_000 }, async () => {
     const standup = seeded[1];
-    const joe = people.get('Joe Park') as string;
+    const jonty = people.get('Jonty Mockwell') as string;
 
     // A second extraction of the standup note: a fresh draft proposal whose note's origin is the standup transcript.
     const requested = await json(await api(`/api/graph/notes/${standup.noteId}/extract`, { method: 'POST', json: {} }), 202);
@@ -531,7 +531,7 @@ describe('the graph and Ask on the bare host, end to end', () => {
       select: { id: true, rev: true, text: true },
     });
     expect(segment, 'the standup transcript has segments').not.toBeNull();
-    const quote = 'Joe Park';
+    const quote = 'Jonty Mockwell';
     const charStart = segment!.text.indexOf(quote);
     expect(charStart).toBeGreaterThanOrEqual(0);
     const span = { source: 'segment' as const, segmentId: segment!.id, segmentRev: segment!.rev, charStart, charEnd: charStart + quote.length, quote };
@@ -540,7 +540,7 @@ describe('the graph and Ask on the bare host, end to end', () => {
     const added = await json(
       await guarded(`/api/graph/proposals/${proposalId}/items`, {
         method: 'POST',
-        json: { kind: 'entity', payload: { type: 'Person', label: 'Joe Park' }, existingEntityId: joe, evidence: [span] },
+        json: { kind: 'entity', payload: { type: 'Person', label: 'Jonty Mockwell' }, existingEntityId: jonty, evidence: [span] },
       }),
       201,
     );
@@ -598,14 +598,14 @@ describe('the graph and Ask on the bare host, end to end', () => {
   });
 
   it('11d. reads a neighbourhood that holds the owner\'s own Person (#805: the self identity is resolved before the transaction)', { timeout: 120_000 }, async () => {
-    const joe = people.get('Joe Park') as string;
+    const jonty = people.get('Jonty Mockwell') as string;
     const { KVOX_SETTINGS } = load('@marinoscar/kvox-api/ports') as typeof import('@marinoscar/kvox-api/ports');
     const { LOCAL_USER_ID } = load('../dist/seed.js') as typeof import('../src/seed.js');
     const settings = host.resolve(KVOX_SETTINGS as never) as import('@marinoscar/kvox-api/ports').KvoxSettingsPort;
-    await settings.patchUser(LOCAL_USER_ID, 'graph', { self: { entityId: joe } } as never);
+    await settings.patchUser(LOCAL_USER_ID, 'graph', { self: { entityId: jonty } } as never);
     try {
-      const slice = await json(await guarded(`/api/graph/entities/${joe}/neighborhood`));
-      const self = (slice.nodes as Array<{ id: string; isSelf?: boolean }>).find((n) => n.id === joe);
+      const slice = await json(await guarded(`/api/graph/entities/${jonty}/neighborhood`));
+      const self = (slice.nodes as Array<{ id: string; isSelf?: boolean }>).find((n) => n.id === jonty);
       expect(self?.isSelf).toBe(true);
     } finally {
       await settings.patchUser(LOCAL_USER_ID, 'graph', { self: { entityId: null } } as never);
@@ -614,14 +614,14 @@ describe('the graph and Ask on the bare host, end to end', () => {
 
   it('12. refuses at COMMIT a transaction that strips an accepted entity of its evidence (the trigger, proven)', async () => {
     // LAST on purpose: on PGlite the socket drops the connection after this SQL error.
-    const joe = people.get('Joe Park') as string;
-    const before = await host.prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM kg_evidence WHERE subject_id = ${joe}::uuid`;
+    const jonty = people.get('Jonty Mockwell') as string;
+    const before = await host.prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM kg_evidence WHERE subject_id = ${jonty}::uuid`;
     expect(before[0].n).toBeGreaterThan(0);
 
     let refusal: unknown;
     try {
       await host.prisma.$transaction(async (tx) => {
-        await tx.$executeRaw`DELETE FROM kg_evidence WHERE subject_kind::text = 'entity' AND subject_id = ${joe}::uuid`;
+        await tx.$executeRaw`DELETE FROM kg_evidence WHERE subject_kind::text = 'entity' AND subject_id = ${jonty}::uuid`;
       });
     } catch (error) {
       refusal = error;
@@ -633,7 +633,7 @@ describe('the graph and Ask on the bare host, end to end', () => {
     let after: Array<{ n: number }> | undefined;
     for (let attempt = 0; attempt < 3 && !after; attempt += 1) {
       try {
-        after = await host.prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM kg_evidence WHERE subject_id = ${joe}::uuid`;
+        after = await host.prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM kg_evidence WHERE subject_id = ${jonty}::uuid`;
       } catch {
         /* Connection terminated unexpectedly: retry */
       }

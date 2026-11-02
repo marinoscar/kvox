@@ -15,7 +15,7 @@
 //
 // Design decisions, each pinned in `duplicate-names.spec.ts`:
 //   - containment needs the shorter name to be at least `MIN_CONTAINED_CHARS`
-//     long: "al" inside "al pacino" is noise, "avery" inside "avery example" is not;
+//     long: "al" inside "alden stubbs" is noise, "avery" inside "avery example" is not;
 //   - a name made only of stopwords never matches;
 //   - initials may drop the stopwords ("and", "&", "of", "the") or keep them
 //     ("boa" / "bureau of alpha").

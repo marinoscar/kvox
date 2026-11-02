@@ -55,8 +55,7 @@
  * EVERY EDITING PROP IS OPTIONAL, AND THE READ PATH IS UNCHANGED WITHOUT THEM
  * =============================================================================
  *
- * A viewer (and the history page's read-only preview, and the visual harness's
- * reader baselines) renders this component with none of them, and gets exactly
+ * A viewer (and the history page's read-only preview) renders this component with none of them, and gets exactly
  * the component #30 shipped: no buttons, no `role="button"` on the text, no
  * edit affordance to tab through. `editable` is not a styling flag — it decides
  * whether the interactive elements EXIST, because a disabled control a screen

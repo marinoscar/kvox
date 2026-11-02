@@ -123,7 +123,7 @@ async function caught(promise: Promise<unknown>): Promise<unknown> {
 const baseEntity = {
   ownerId: OWNER,
   type: 'Person',
-  label: 'Sarah Chen',
+  label: 'Sasha Example',
   reviewStatus: 'accepted' as const,
   labelSource: 'extraction' as const,
   evidence,
@@ -205,8 +205,8 @@ describe('GraphWriteService', () => {
           ...baseEntity,
           props: { title: 'CTO' },
           aliases: [
-            { alias: 'SARAH  CHEN!', source: 'user' },
-            { alias: 'Sally', source: 'user' },
+            { alias: 'SASHA  EXAMPLE!', source: 'user' },
+            { alias: 'Sabby', source: 'user' },
           ],
         },
         schema,
@@ -215,14 +215,14 @@ describe('GraphWriteService', () => {
       expect(tx.kgEntity.create.mock.calls[0][0].data).toMatchObject({
         ownerId: OWNER,
         type: 'Person',
-        label: 'Sarah Chen',
+        label: 'Sasha Example',
         props: { title: 'CTO' },
         ontologyVersion: expect.any(String),
       });
       const aliases = tx.kgEntityAlias.createMany.mock.calls[0][0].data;
       expect(aliases).toEqual([
-        expect.objectContaining({ alias: 'Sarah Chen', normalized: 'sarah chen', source: 'extraction' }),
-        expect.objectContaining({ alias: 'Sally', normalized: 'sally', source: 'user' }),
+        expect.objectContaining({ alias: 'Sasha Example', normalized: 'sasha example', source: 'extraction' }),
+        expect.objectContaining({ alias: 'Sabby', normalized: 'sabby', source: 'user' }),
       ]);
       expect(tx.kgEvidence.createMany.mock.calls[0][0].data).toEqual([
         expect.objectContaining({ ownerId: OWNER, subjectKind: 'entity', subjectId: 'new-entity', quote: 'x' }),
@@ -558,16 +558,16 @@ describe('GraphWriteService', () => {
     it('skips aliases whose normalized form already exists', async () => {
       const { service, tx, asTx } = setup();
       tx.kgEntity.findFirst.mockResolvedValue({ id: PERSON });
-      tx.kgEntityAlias.findMany.mockResolvedValue([{ normalized: 'sally' }]);
+      tx.kgEntityAlias.findMany.mockResolvedValue([{ normalized: 'sabby' }]);
 
       await service.addAliases(asTx, OWNER, PERSON, [
-        { alias: 'SALLY', source: 'user' },
-        { alias: 'Dr. Chen', source: 'user' },
-        { alias: 'dr. chen ', source: 'user' },
+        { alias: 'SABBY', source: 'user' },
+        { alias: 'Dr. Example', source: 'user' },
+        { alias: 'dr. example ', source: 'user' },
       ]);
 
       expect(tx.kgEntityAlias.createManyAndReturn.mock.calls[0][0].data).toEqual([
-        expect.objectContaining({ alias: 'Dr. Chen', normalized: 'dr. chen' }),
+        expect.objectContaining({ alias: 'Dr. Example', normalized: 'dr. example' }),
       ]);
     });
   });
@@ -622,7 +622,7 @@ describe('GraphWriteService', () => {
       id: PERSON,
       ownerId: OWNER,
       type: 'Person',
-      label: 'Sarah Chen',
+      label: 'Sasha Example',
       props: { title: 'CTO' },
       reviewStatus: 'accepted',
     };
@@ -638,15 +638,15 @@ describe('GraphWriteService', () => {
       const { service, tx, asTx } = setup();
       tx.kgEntity.findFirst.mockResolvedValue(current);
 
-      const result = await service.updateEntityDetailed(asTx, OWNER, PERSON, { label: 'Sarah Chen-Li' }, schema);
+      const result = await service.updateEntityDetailed(asTx, OWNER, PERSON, { label: 'Sasha Example-Li' }, schema);
 
       expect(tx.kgEntityAlias.createMany.mock.calls[0][0].data).toEqual([
-        expect.objectContaining({ alias: 'Sarah Chen-Li', source: 'user' }),
-        expect.objectContaining({ alias: 'Sarah Chen', source: 'user' }),
+        expect.objectContaining({ alias: 'Sasha Example-Li', source: 'user' }),
+        expect.objectContaining({ alias: 'Sasha Example', source: 'user' }),
       ]);
       expect(tx.kgEntity.update).toHaveBeenCalledWith({
         where: { id: PERSON },
-        data: { label: 'Sarah Chen-Li', reviewStatus: 'edited' },
+        data: { label: 'Sasha Example-Li', reviewStatus: 'edited' },
       });
       expect(result).toMatchObject({ labelChanged: true, changedKeys: [], changed: true });
     });
@@ -671,7 +671,7 @@ describe('GraphWriteService', () => {
         asTx,
         OWNER,
         PERSON,
-        { label: 'Sarah Chen', props: { title: 'CTO' } },
+        { label: 'Sasha Example', props: { title: 'CTO' } },
         schema,
       );
       expect(result.changed).toBe(false);
@@ -681,7 +681,7 @@ describe('GraphWriteService', () => {
     it('refuses removing the alias that is the current label', async () => {
       const { service, tx, asTx } = setup();
       tx.kgEntity.findFirst.mockResolvedValue(current);
-      tx.kgEntityAlias.findMany.mockResolvedValue([{ id: 'a1', normalized: 'sarah chen' }]);
+      tx.kgEntityAlias.findMany.mockResolvedValue([{ id: 'a1', normalized: 'sasha example' }]);
       await expect(
         service.updateEntityDetailed(asTx, OWNER, PERSON, { removeAliasIds: ['a1'] }, schema),
       ).rejects.toBeInstanceOf(GraphValidationError);
@@ -701,7 +701,7 @@ describe('GraphWriteService', () => {
   // ===========================================================================
 
   describe('manual evidence (#586)', () => {
-    const manual = () => new ManualEvidence('  Set by hand: Sarah Chen works for Kappa  ');
+    const manual = () => new ManualEvidence('  Set by hand: Sasha Example works for Kappa  ');
 
     it('createRelation stores a ManualEvidence with no anchor and the reserved IRI, without the validator', async () => {
       const { service, tx, asTx, validator } = setup();
@@ -711,7 +711,7 @@ describe('GraphWriteService', () => {
         expect.objectContaining({
           subjectKind: 'relation',
           subjectId: 'new-relation',
-          quote: 'Set by hand: Sarah Chen works for Kappa',
+          quote: 'Set by hand: Sasha Example works for Kappa',
           sourceIri: MANUAL_EVIDENCE_SOURCE_IRI,
           transcriptId: null,
           segmentId: null,

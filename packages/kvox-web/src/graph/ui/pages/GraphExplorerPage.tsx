@@ -21,7 +21,7 @@
  * URL STATE: `seed`, `asOf` (YYYY-MM-DD), `types` (the SELECTED node types — the
  * type chips are "select to show", #764: absent means all, a list means only those, seeds
  * included), `relTypes` (the SHOWN relation types — absent means all, GIC-17),
- * `view=list`, `layout=force|concentric|static` (static: tests/visual only), `lens` (the lens
+ * `view=list`, `layout=force|concentric|static` (static: for tests), `lens` (the lens
  * last applied), `focus` (the focused node; the one param that adds a browser history entry),
  * `sel`/`tab` (the inspector), `cluster`, and `from`/`to` (the one Time control, #768: absent =
  * All time). The URL is the source of truth for all of them; a control writes the URL and an

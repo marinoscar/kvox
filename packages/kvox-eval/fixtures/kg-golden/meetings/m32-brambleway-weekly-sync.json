@@ -13,17 +13,17 @@
     {
       "id": "m32-spk-a",
       "label": "A",
-      "displayName": "Nina Castellanos"
+      "displayName": "Nico Sample"
     },
     {
       "id": "m32-spk-b",
       "label": "B",
-      "displayName": "Oliver Brandt"
+      "displayName": "Osric Testcase"
     },
     {
       "id": "m32-spk-c",
       "label": "C",
-      "displayName": "Sam Kowalski"
+      "displayName": "Sabin Stubbs"
     }
   ],
   "segments": [
@@ -121,7 +121,7 @@
       "startMs": 73590,
       "endMs": 78675,
       "rev": 1,
-      "text": "Right, leave. Oliver, you had something booked?"
+      "text": "Right, leave. Osric, you had something booked?"
     },
     {
       "id": "m32-s013",
@@ -129,7 +129,7 @@
       "startMs": 78975,
       "endMs": 85545,
       "rev": 1,
-      "text": "Yes. Maya and I are finally taking the Lisbon trip we postponed last year."
+      "text": "Yes. Mercer and I are finally taking the Lisbon trip we postponed last year."
     },
     {
       "id": "m32-s014",
@@ -153,7 +153,7 @@
       "startMs": 97660,
       "endMs": 103185,
       "rev": 1,
-      "text": "Maya's your wife, right? I met her at the studio party."
+      "text": "Mercer's your wife, right? I met her at the studio party."
     },
     {
       "id": "m32-s017",
@@ -169,7 +169,7 @@
       "startMs": 111235,
       "endMs": 118080,
       "rev": 1,
-      "text": "Good for you both. So Oliver is out June 12 to June 20. Sam, anything from you?"
+      "text": "Good for you both. So Osric is out June 12 to June 20. Sabin, anything from you?"
     },
     {
       "id": "m32-s019",
@@ -185,7 +185,7 @@
       "startMs": 123655,
       "endMs": 130280,
       "rev": 1,
-      "text": "Okay. Oliver, can you hand the Harbourline test notes to Sam before you go?"
+      "text": "Okay. Osric, can you hand the Harbourline test notes to Sabin before you go?"
     },
     {
       "id": "m32-s021",
@@ -206,7 +206,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Brambleway studio weekly sync\n\n**Date:** May 4\n**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski\n\n## Summary\n\nShort internal sync at Brambleway Studio covering the first round of Harbourline usability testing, next week's client workshop, and summer leave so cover can be planned.\n\n## Harbourline\n\n- The onboarding flows went into usability testing on Friday. Participants struggled with the account-linking step: three out of five skipped the linking screen completely.\n- The account-linking screen needs a rethink before the next round of testing.\n- Sam is flying to Rotterdam on Tuesday for the Harbourline workshop, back Wednesday night. This is a client work trip; he will take the prototype on a tablet with an offline build.\n\n## Action items\n\n- **Sam Kowalski** — send the Harbourline workshop agenda by Friday.\n- **Oliver Brandt** — write a handover of the Harbourline test notes for Sam the week before his leave.\n\n## Leave and cover\n\n- Oliver and his wife Maya are taking the Lisbon trip they postponed last year, flying out June 12 and returning June 20. It is their first holiday on their own since the kids were born.\n- Oliver is therefore out from June 12 to June 20, and Sam covers Harbourline while he is away.\n- No other leave was raised; Sam's only time away is the Rotterdam day for work.\n\n## Next steps\n\nNina will confirm the cover plan in the studio calendar, and the team reviews the reworked linking screen at the next sync before it goes back to Harbourline for a second round of testing.\n"
+    "body": "# Brambleway studio weekly sync\n\n**Date:** May 4\n**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs\n\n## Summary\n\nShort internal sync at Brambleway Studio covering the first round of Harbourline usability testing, next week's client workshop, and summer leave so cover can be planned.\n\n## Harbourline\n\n- The onboarding flows went into usability testing on Friday. Participants struggled with the account-linking step: three out of five skipped the linking screen completely.\n- The account-linking screen needs a rethink before the next round of testing.\n- Sabin is flying to Rotterdam on Tuesday for the Harbourline workshop, back Wednesday night. This is a client work trip; he will take the prototype on a tablet with an offline build.\n\n## Action items\n\n- **Sabin Stubbs** — send the Harbourline workshop agenda by Friday.\n- **Osric Testcase** — write a handover of the Harbourline test notes for Sabin the week before his leave.\n\n## Leave and cover\n\n- Osric and his wife Mercer are taking the Lisbon trip they postponed last year, flying out June 12 and returning June 20. It is their first holiday on their own since the kids were born.\n- Osric is therefore out from June 12 to June 20, and Sabin covers Harbourline while he is away.\n- No other leave was raised; Sabin's only time away is the Rotterdam day for work.\n\n## Next steps\n\nNico will confirm the cover plan in the studio calendar, and the team reviews the reworked linking screen at the next sync before it goes back to Harbourline for a second round of testing.\n"
   },
   "knownEntities": [],
   "knownRelations": [],
@@ -227,53 +227,53 @@
         ]
       },
       {
-        "key": "nina",
+        "key": "nico",
         "type": "Person",
-        "label": "Nina Castellanos",
+        "label": "Nico Sample",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
-        "key": "oliver",
+        "key": "osric",
         "type": "Person",
-        "label": "Oliver Brandt",
+        "label": "Osric Testcase",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
-        "key": "sam",
+        "key": "sabin",
         "type": "Person",
-        "label": "Sam Kowalski",
+        "label": "Sabin Stubbs",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
-        "key": "maya",
+        "key": "mercer",
         "type": "Person",
-        "label": "Maya Brandt",
+        "label": "Mercer Sample",
         "aliases": [
-          "Maya"
+          "Mercer"
         ],
         "existingId": null,
         "props": {},
@@ -281,11 +281,11 @@
           {
             "source": "segment",
             "segmentId": "m32-s016",
-            "quote": "Maya's your wife, right?"
+            "quote": "Mercer's your wife, right?"
           },
           {
             "source": "note",
-            "quote": "Oliver and his wife Maya"
+            "quote": "Osric and his wife Mercer"
           }
         ]
       },
@@ -344,7 +344,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "nina",
+        "from": "nico",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -353,13 +353,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "oliver",
+        "from": "osric",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -368,13 +368,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sam",
+        "from": "sabin",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -383,14 +383,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase, Sabin Stubbs"
           }
         ]
       },
       {
         "type": "SPOUSE_OF",
-        "from": "oliver",
-        "to": "maya",
+        "from": "osric",
+        "to": "mercer",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -403,13 +403,13 @@
           },
           {
             "source": "note",
-            "quote": "Oliver and his wife Maya"
+            "quote": "Osric and his wife Mercer"
           }
         ]
       },
       {
         "type": "TRAVELED_ON",
-        "from": "oliver",
+        "from": "osric",
         "to": "lisbon",
         "validFrom": null,
         "validTo": null,
@@ -419,13 +419,13 @@
           {
             "source": "segment",
             "segmentId": "m32-s013",
-            "quote": "Maya and I are finally taking the Lisbon trip we postponed last year."
+            "quote": "Mercer and I are finally taking the Lisbon trip we postponed last year."
           }
         ]
       },
       {
         "type": "TRAVELED_ON",
-        "from": "maya",
+        "from": "mercer",
         "to": "lisbon",
         "validFrom": null,
         "validTo": null,
@@ -435,7 +435,7 @@
           {
             "source": "segment",
             "segmentId": "m32-s013",
-            "quote": "Maya and I are finally taking the Lisbon trip we postponed last year."
+            "quote": "Mercer and I are finally taking the Lisbon trip we postponed last year."
           }
         ]
       }
@@ -444,10 +444,10 @@
       {
         "kind": "commitment",
         "subject": "harbourline",
-        "owner": "sam",
+        "owner": "sabin",
         "counterparty": null,
         "title": "Send the Harbourline workshop agenda",
-        "statement": "Sam will send the Harbourline workshop agenda by Friday.",
+        "statement": "Sabin will send the Harbourline workshop agenda by Friday.",
         "status": "open",
         "occurredAt": "2026-05-04",
         "dueAt": "2026-05-08",

@@ -39,12 +39,12 @@ function split(quads: ImportQuad[], defs: UserAttributeDef[] = []) {
 describe('splitUnknownProperties', () => {
   it('offers and removes an undeclared property; declared ones stay', () => {
     const quads = [
-      q('s:joe', `${RDF}type`, iri(`${NS}Person`)),
-      q('s:joe', `${RDFS}label`, lit('Joe')),
-      q('s:joe', `${PROV}wasDerivedFrom`, iri('s:src')),
-      q('s:joe', `${CRM}nickname`, lit('Joey')),
-      q('s:joe', `${CRM}nickname`, lit('J')),
-      q('s:joe', 'https://schema.org/jobTitle', lit('CTO')),
+      q('s:jonty', `${RDF}type`, iri(`${NS}Person`)),
+      q('s:jonty', `${RDFS}label`, lit('Jonty')),
+      q('s:jonty', `${PROV}wasDerivedFrom`, iri('s:src')),
+      q('s:jonty', `${CRM}nickname`, lit('Jonno')),
+      q('s:jonty', `${CRM}nickname`, lit('J')),
+      q('s:jonty', 'https://schema.org/jobTitle', lit('CTO')),
     ];
     const result = split(quads);
     expect(result.quads.map((x) => x.p)).not.toContain(`${CRM}nickname`);
@@ -56,13 +56,13 @@ describe('splitUnknownProperties', () => {
         label: null,
         count: 2,
         subjectTypes: ['Person'],
-        sampleValues: ['Joey', 'J'],
+        sampleValues: ['Jonno', 'J'],
         suggestedKind: 'text',
         status: 'offered',
       },
     ]);
-    expect([...(result.pending.get(offerIdFor(`${CRM}nickname`))?.get('N:s:joe') ?? [])]).toEqual([
-      { v: 'Joey', d: `${XSD}string` },
+    expect([...(result.pending.get(offerIdFor(`${CRM}nickname`))?.get('N:s:jonty') ?? [])]).toEqual([
+      { v: 'Jonno', d: `${XSD}string` },
       { v: 'J', d: `${XSD}string` },
     ]);
   });
@@ -100,7 +100,7 @@ describe('splitUnknownProperties', () => {
 
   it('truncates samples to 80 characters and keeps at most three', () => {
     const long = 'x'.repeat(100);
-    const quads = [q('s:joe', `${RDF}type`, iri(`${NS}Person`)), ...['a', 'b', 'c', long].map((v) => q('s:joe', `${CRM}n`, lit(v)))];
+    const quads = [q('s:jonty', `${RDF}type`, iri(`${NS}Person`)), ...['a', 'b', 'c', long].map((v) => q('s:jonty', `${CRM}n`, lit(v)))];
     const offer = split(quads).offers[0];
     expect(offer.sampleValues).toHaveLength(3);
     expect(split([quads[0], quads[4]]).offers[0].sampleValues[0]).toHaveLength(80);

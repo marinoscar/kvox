@@ -94,7 +94,7 @@ describeWithDb('kg.migrate (real Postgres)', () => {
       // A 1.1.0 Project with startDate: the rename targets rows below 1.1.0 only.
       alreadyPast: await entity(ownerId, 'Project', '1.1.0', { startDate: '2026-03-04' }),
       // Unrelated type.
-      person: await entity(ownerId, 'Person', '1.0.0', {}, 'Sarah'),
+      person: await entity(ownerId, 'Person', '1.0.0', {}, 'Sasha'),
     };
   }
 

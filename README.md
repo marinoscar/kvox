@@ -177,7 +177,7 @@ kvox/
     shared/     Workspace package shared by api/web/cli
   docs/         Specifications, runbooks and architecture notes
   infra/        Compose overlays, Nginx and OpenTelemetry configuration
-  tests/        End-to-end and visual regression suites
+  tests/        End-to-end suite
 ```
 
 ## Tests

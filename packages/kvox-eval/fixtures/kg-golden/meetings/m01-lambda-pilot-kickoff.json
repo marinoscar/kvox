@@ -8,28 +8,28 @@
     "negative-role"
   ],
   "recordedAt": "2026-01-08T15:00:00Z",
-  "contextText": "Kickoff for the pick-path optimisation pilot with Org Lambda Robotics. Sarah is our exec sponsor.",
+  "contextText": "Kickoff for the pick-path optimisation pilot with Org Lambda Robotics. Sasha is our exec sponsor.",
   "hasTranscript": true,
   "speakers": [
     {
       "id": "m01-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m01-spk-b",
       "label": "B",
-      "displayName": "Sarah Chen"
+      "displayName": "Sasha Example"
     },
     {
       "id": "m01-spk-c",
       "label": "C",
-      "displayName": "Tomás Aguilar"
+      "displayName": "Tobín Dummyson"
     },
     {
       "id": "m01-spk-d",
       "label": "D",
-      "displayName": "Priya Raman"
+      "displayName": "Pia Sample"
     }
   ],
   "segments": [
@@ -47,7 +47,7 @@
       "startMs": 11870,
       "endMs": 19690,
       "rev": 1,
-      "text": "Great. For the record, I'm Sarah Chen, VP of Operations at Org Lambda Robotics. I'm sponsoring this on our side."
+      "text": "Great. For the record, I'm Sasha Example, VP of Operations at Org Lambda Robotics. I'm sponsoring this on our side."
     },
     {
       "id": "m01-s003",
@@ -55,7 +55,7 @@
       "startMs": 19940,
       "endMs": 27380,
       "rev": 1,
-      "text": "And I'm Tomás Aguilar, I'm an engineer on the warehouse systems team. I'll be the day-to-day technical contact."
+      "text": "And I'm Tobín Dummyson, I'm an engineer on the warehouse systems team. I'll be the day-to-day technical contact."
     },
     {
       "id": "m01-s004",
@@ -63,7 +63,7 @@
       "startMs": 27630,
       "endMs": 33550,
       "rev": 1,
-      "text": "Priya Raman, engineering manager at Larkspur. I'll be staffing the team from our side."
+      "text": "Pia Sample, engineering manager at Larkspur. I'll be staffing the team from our side."
     },
     {
       "id": "m01-s005",
@@ -135,7 +135,7 @@
       "startMs": 92280,
       "endMs": 100480,
       "rev": 1,
-      "text": "Which brings me to data. Sarah, can your team get us the current floor plans and the shelf location export?"
+      "text": "Which brings me to data. Sasha, can your team get us the current floor plans and the shelf location export?"
     },
     {
       "id": "m01-s014",
@@ -151,7 +151,7 @@
       "startMs": 106520,
       "endMs": 109400,
       "rev": 1,
-      "text": "Thank you. Priya, on our side?"
+      "text": "Thank you. Pia, on our side?"
     },
     {
       "id": "m01-s016",
@@ -159,7 +159,7 @@
       "startMs": 109650,
       "endMs": 118610,
       "rev": 1,
-      "text": "I'll staff two engineers on this from the start of February. JJ is one of them, the other I'll confirm this week."
+      "text": "I'll staff two engineers on this from the start of February. JD is one of them, the other I'll confirm this week."
     },
     {
       "id": "m01-s017",
@@ -223,7 +223,7 @@
       "startMs": 166230,
       "endMs": 169870,
       "rev": 1,
-      "text": "Of course. Tomás, you'll be on every update."
+      "text": "Of course. Tobín, you'll be on every update."
     },
     {
       "id": "m01-s025",
@@ -239,7 +239,7 @@
       "startMs": 177050,
       "endMs": 181070,
       "rev": 1,
-      "text": "Tomás can route those. He knows who to ask."
+      "text": "Tobín can route those. He knows who to ask."
     },
     {
       "id": "m01-s027",
@@ -252,7 +252,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Lambda pick-path pilot kickoff\n\n**Date:** January 8\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics)\n\n## Summary\n\nKickoff for the pick-path pilot with Org Lambda Robotics. The goal is to show that re-ordering pick paths based on the live order mix reduces picker walking distance. Sarah Chen, VP of Operations, is the executive sponsor; Tomás Aguilar, an engineer on the warehouse systems team, is the day-to-day technical contact.\n\n## Decisions\n\n- The pilot will run in **Building 3 only**, Lambda's most predictable site with the newest shelving and cleaner location data.\n- The team will work from data exports for the first month rather than connecting to the warehouse management system directly.\n\n## Timeline\n\nSarah confirmed that the pilot is scheduled for Q1; this is what appears in Lambda's operating plan and what their board has seen. Priya considers Q1 tight but achievable if floor data arrives early.\n\n## Action items\n\n- **Sarah Chen** — send the Building 3 floor plans and shelf location export by next Tuesday.\n- **Priya Raman** — staff two engineers on the pilot from the start of February (JJ plus one more, to be confirmed this week).\n- **Alex Rivera** — send a short written update every Friday, copying Tomás.\n\n## Notes\n\n- Any direct integration with the warehouse management system will eventually need sign-off from Lambda's CIO, which takes weeks, so the plan avoids it for now.\n- Sarah prefers a short written update every Friday over another recurring call.\n- Tomás will route security questions to the right people at Lambda.\n"
+    "body": "# Lambda pick-path pilot kickoff\n\n**Date:** January 8\n**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics)\n\n## Summary\n\nKickoff for the pick-path pilot with Org Lambda Robotics. The goal is to show that re-ordering pick paths based on the live order mix reduces picker walking distance. Sasha Example, VP of Operations, is the executive sponsor; Tobín Dummyson, an engineer on the warehouse systems team, is the day-to-day technical contact.\n\n## Decisions\n\n- The pilot will run in **Building 3 only**, Lambda's most predictable site with the newest shelving and cleaner location data.\n- The team will work from data exports for the first month rather than connecting to the warehouse management system directly.\n\n## Timeline\n\nSasha confirmed that the pilot is scheduled for Q1; this is what appears in Lambda's operating plan and what their board has seen. Pia considers Q1 tight but achievable if floor data arrives early.\n\n## Action items\n\n- **Sasha Example** — send the Building 3 floor plans and shelf location export by next Tuesday.\n- **Pia Sample** — staff two engineers on the pilot from the start of February (JD plus one more, to be confirmed this week).\n- **Alma Mockwell** — send a short written update every Friday, copying Tobín.\n\n## Notes\n\n- Any direct integration with the warehouse management system will eventually need sign-off from Lambda's CIO, which takes weeks, so the plan avoids it for now.\n- Sasha prefers a short written update every Friday over another recurring call.\n- Tobín will route security questions to the right people at Lambda.\n"
   },
   "knownEntities": [
     {
@@ -277,11 +277,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -289,21 +289,21 @@
       ]
     },
     {
-      "id": "g-person-priya-raman",
+      "id": "g-person-pia-sample",
       "type": "Person",
-      "label": "Priya Raman",
+      "label": "Pia Sample",
       "aliases": [
-        "Priya"
+        "Pia"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-sarah-chen",
+      "id": "g-person-sasha-example",
       "type": "Person",
-      "label": "Sarah Chen",
+      "label": "Sasha Example",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -337,38 +337,38 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "sarah",
+        "key": "sasha",
         "type": "Person",
-        "label": "Sarah Chen",
+        "label": "Sasha Example",
         "aliases": [],
-        "existingId": "g-person-sarah-chen",
+        "existingId": "g-person-sasha-example",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m01-s002",
-            "quote": "I'm Sarah Chen, VP of Operations at Org Lambda Robotics"
+            "quote": "I'm Sasha Example, VP of Operations at Org Lambda Robotics"
           }
         ]
       },
       {
-        "key": "tomas",
+        "key": "tobin",
         "type": "Person",
-        "label": "Tomás Aguilar",
+        "label": "Tobín Dummyson",
         "aliases": [],
         "existingId": null,
         "props": {},
@@ -376,22 +376,22 @@
           {
             "source": "segment",
             "segmentId": "m01-s003",
-            "quote": "I'm Tomás Aguilar, I'm an engineer on the warehouse systems team"
+            "quote": "I'm Tobín Dummyson, I'm an engineer on the warehouse systems team"
           }
         ]
       },
       {
-        "key": "priya",
+        "key": "pia",
         "type": "Person",
-        "label": "Priya Raman",
+        "label": "Pia Sample",
         "aliases": [],
-        "existingId": "g-person-priya-raman",
+        "existingId": "g-person-pia-sample",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m01-s004",
-            "quote": "Priya Raman, engineering manager at Larkspur"
+            "quote": "Pia Sample, engineering manager at Larkspur"
           }
         ]
       },
@@ -420,7 +420,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Priya Raman (Larkspur Labs)"
+            "quote": "Pia Sample (Larkspur Labs)"
           }
         ]
       },
@@ -445,7 +445,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -454,13 +454,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sarah",
+        "from": "sasha",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -469,13 +469,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "tomas",
+        "from": "tobin",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -484,13 +484,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "priya",
+        "from": "pia",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -499,13 +499,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Pia Sample (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "sarah",
+        "from": "sasha",
         "to": "nwr",
         "validFrom": null,
         "validTo": null,
@@ -515,13 +515,13 @@
           {
             "source": "segment",
             "segmentId": "m01-s002",
-            "quote": "I'm Sarah Chen, VP of Operations at Org Lambda Robotics"
+            "quote": "I'm Sasha Example, VP of Operations at Org Lambda Robotics"
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "sarah",
+        "from": "sasha",
         "to": "nwr",
         "validFrom": null,
         "validTo": null,
@@ -533,13 +533,13 @@
           {
             "source": "segment",
             "segmentId": "m01-s002",
-            "quote": "I'm Sarah Chen, VP of Operations at Org Lambda Robotics"
+            "quote": "I'm Sasha Example, VP of Operations at Org Lambda Robotics"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "tomas",
+        "from": "tobin",
         "to": "nwr",
         "validFrom": null,
         "validTo": null,
@@ -548,13 +548,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "tomas",
+        "from": "tobin",
         "to": "nwr",
         "validFrom": null,
         "validTo": null,
@@ -572,7 +572,7 @@
       },
       {
         "type": "WORKS_FOR",
-        "from": "priya",
+        "from": "pia",
         "to": "larkspur",
         "validFrom": null,
         "validTo": null,
@@ -582,13 +582,13 @@
           {
             "source": "segment",
             "segmentId": "m01-s004",
-            "quote": "Priya Raman, engineering manager at Larkspur."
+            "quote": "Pia Sample, engineering manager at Larkspur."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "priya",
+        "from": "pia",
         "to": "larkspur",
         "validFrom": null,
         "validTo": null,
@@ -600,7 +600,7 @@
           {
             "source": "segment",
             "segmentId": "m01-s004",
-            "quote": "Priya Raman, engineering manager at Larkspur."
+            "quote": "Pia Sample, engineering manager at Larkspur."
           }
         ]
       },
@@ -704,10 +704,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "sarah",
+        "owner": "sasha",
         "counterparty": "larkspur",
         "title": "Send floor plans and location export",
-        "statement": "Sarah will send the Building 3 floor plans and shelf location export by next Tuesday.",
+        "statement": "Sasha will send the Building 3 floor plans and shelf location export by next Tuesday.",
         "status": "open",
         "occurredAt": "2026-01-08",
         "dueAt": "2026-01-13",
@@ -724,10 +724,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "priya",
+        "owner": "pia",
         "counterparty": null,
         "title": "Staff two engineers on the pilot",
-        "statement": "Priya will staff two engineers on the pilot from the start of February.",
+        "statement": "Pia will staff two engineers on the pilot from the start of February.",
         "status": "open",
         "occurredAt": "2026-01-08",
         "dueAt": "2026-02-01",
@@ -744,10 +744,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "alex",
-        "counterparty": "sarah",
+        "owner": "alma",
+        "counterparty": "sasha",
         "title": "Send Friday written updates",
-        "statement": "Alex will send a short written update every Friday, copying Tomás.",
+        "statement": "Alma will send a short written update every Friday, copying Tobín.",
         "status": "open",
         "occurredAt": "2026-01-08",
         "dueAt": null,
@@ -763,11 +763,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "sarah",
+        "subject": "sasha",
         "owner": null,
         "counterparty": null,
         "title": "Prefers written updates to calls",
-        "statement": "Sarah prefers a short written update every Friday over another recurring call.",
+        "statement": "Sasha prefers a short written update every Friday over another recurring call.",
         "status": null,
         "occurredAt": "2026-01-08",
         "dueAt": null,

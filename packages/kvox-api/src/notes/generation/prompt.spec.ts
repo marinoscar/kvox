@@ -30,8 +30,8 @@ const base = {
   templateStructure: ['Overview', 'Decisions', 'Action items'],
   templateTone: 'Neutral and factual',
   templateLength: 'About 400 words',
-  contextText: 'Attendees: Ana, Bo. Project codename: Kestrel.',
-  sourceText: '**Ana** · 00:00\n\nWe should ship on Friday.',
+  contextText: 'Attendees: Anders, Bo. Project codename: Kestrel.',
+  sourceText: '**Anders** · 00:00\n\nWe should ship on Friday.',
 };
 
 describe('assemblePrompt — purity', () => {

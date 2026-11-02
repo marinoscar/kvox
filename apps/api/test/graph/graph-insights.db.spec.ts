@@ -128,34 +128,34 @@ describeWithDb('GET /api/graph/insights (real Postgres)', () => {
 
   it('fading ties: people and organizations with >= 3 evidence before the window and none in it', async () => {
     const { user, g } = await owner('fading');
-    const joe = await g.entity('Person', 'Joe');
+    const jonty = await g.entity('Person', 'Jonty');
     const ann = await g.entity('Person', 'Ann');
     const bob = await g.entity('Person', 'Bob');
     const cara = await g.entity('Person', 'Cara');
     const kappa = await g.entity('Organization', 'Kappa');
     const atlas = await g.entity('Project', 'Atlas');
 
-    const cold = await g.relation('KNOWS', joe, ann);
+    const cold = await g.relation('KNOWS', jonty, ann);
     await relationEvidenceAt(g, user.id, cold, [100, 120, 150]);
-    const warm = await g.relation('KNOWS', joe, bob);
+    const warm = await g.relation('KNOWS', jonty, bob);
     await relationEvidenceAt(g, user.id, warm, [100, 120, 150, 5]); // one in the window
-    const thin = await g.relation('KNOWS', joe, cara);
+    const thin = await g.relation('KNOWS', jonty, cara);
     await relationEvidenceAt(g, user.id, thin, [100, 120]); // too little before
     const org = await g.relation('WORKS_AT', ann, kappa);
     await relationEvidenceAt(g, user.id, org, [60, 61, 62]); // newer silence
-    const project = await g.relation('WORKS_ON', joe, atlas);
+    const project = await g.relation('WORKS_ON', jonty, atlas);
     await relationEvidenceAt(g, user.id, project, [100, 120, 150]); // not People/Organizations
-    // A second relation type between Joe and Ann merges into the same pair.
-    const colleague = await g.relation('COLLEAGUE_OF', ann, joe);
+    // A second relation type between Jonty and Ann merges into the same pair.
+    const colleague = await g.relation('COLLEAGUE_OF', ann, jonty);
     await relationEvidenceAt(g, user.id, colleague, [90]);
 
     const res = await get(user.id);
-    expect(res.fadingTies.map((f) => [f.from.label, f.to.label].sort().join('+'))).toEqual(['Ann+Kappa', 'Ann+Joe']);
-    const annJoe = res.fadingTies[1];
-    expect(annJoe.relationTypes).toEqual(['COLLEAGUE_OF', 'KNOWS']);
-    expect(annJoe.evidenceBefore).toBe(4);
-    expect(annJoe.lastEvidenceAt).toBe(daysAgo(90).toISOString());
-    expect(annJoe.reason).toMatch(/^You haven't discussed (Ann|Joe) with (Ann|Joe) since Apr 1, 2026\.$/);
+    expect(res.fadingTies.map((f) => [f.from.label, f.to.label].sort().join('+'))).toEqual(['Ann+Kappa', 'Ann+Jonty']);
+    const annJonty = res.fadingTies[1];
+    expect(annJonty.relationTypes).toEqual(['COLLEAGUE_OF', 'KNOWS']);
+    expect(annJonty.evidenceBefore).toBe(4);
+    expect(annJonty.lastEvidenceAt).toBe(daysAgo(90).toISOString());
+    expect(annJonty.reason).toMatch(/^You haven't discussed (Ann|Jonty) with (Ann|Jonty) since Apr 1, 2026\.$/);
   });
 
   it('open risks: open and readable only, high severity first, merged subject dropped, sensitive facts never shown', async () => {
@@ -186,7 +186,7 @@ describeWithDb('GET /api/graph/insights (real Postgres)', () => {
     };
     const left = await group('Left');
     const right = await group('Right');
-    const bridge = await g.entity('Person', 'Joe Bridge');
+    const bridge = await g.entity('Person', 'Jonty Example');
     await g.relation('KNOWS', bridge, left[0]);
     await g.relation('KNOWS', bridge, right[0]);
 
@@ -199,9 +199,9 @@ describeWithDb('GET /api/graph/insights (real Postgres)', () => {
     expect(res).toMatchObject({ status: 'ready', stale: false, tooLarge: false, connectorsReady: true });
     expect(res.themes.length).toBeGreaterThanOrEqual(2);
     expect(res.themes[0].memberSample.length).toBeGreaterThan(0);
-    expect(res.connectors[0].entity).toMatchObject({ id: bridge, label: 'Joe Bridge' });
+    expect(res.connectors[0].entity).toMatchObject({ id: bridge, label: 'Jonty Example' });
     expect(res.connectors[0].clusters.length).toBeGreaterThanOrEqual(2);
-    expect(res.connectors[0].reason).toMatch(/^Joe Bridge connects the .+ group and the .+ group\.$/);
+    expect(res.connectors[0].reason).toMatch(/^Jonty Example connects the .+ group and the .+ group\.$/);
     expect(JSON.stringify(res)).not.toMatch(/"score":\s*"/);
 
     // Forgotten after the snapshot: the label disappears everywhere.
@@ -209,7 +209,7 @@ describeWithDb('GET /api/graph/insights (real Postgres)', () => {
     const after = await get(user.id);
     expect(after.stale).toBe(true);
     expect(after.connectors.map((c) => c.entity.id)).not.toContain(bridge);
-    expect(JSON.stringify(after)).not.toContain('Joe Bridge');
+    expect(JSON.stringify(after)).not.toContain('Jonty Example');
   });
 
   it('a snapshot computed before connectors existed reports connectorsReady: false', async () => {

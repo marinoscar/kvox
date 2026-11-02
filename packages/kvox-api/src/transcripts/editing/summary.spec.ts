@@ -20,9 +20,9 @@ describe('summarizeOps', () => {
   it('names the speaker a rename produced', () => {
     expect(
       summarizeOps([
-        { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Dana' },
+        { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Darcy' },
       ]),
-    ).toBe('Renamed a speaker to Dana');
+    ).toBe('Renamed a speaker to Darcy');
   });
 
   it('describes a find & replace by what was asked for, not by its expansion', () => {
@@ -50,9 +50,9 @@ describe('summarizeOps', () => {
   it('names the surviving speaker of a merge', () => {
     expect(
       summarizeOps([{ op: OP_TYPES.MERGE_SPEAKERS, sourceIds: ['B', 'C'], targetId: 'A' }], {
-        speakerNames: new Map([['A', 'Dana']]),
+        speakerNames: new Map([['A', 'Darcy']]),
       }),
-    ).toBe('Merged 2 speakers into Dana');
+    ).toBe('Merged 2 speakers into Darcy');
   });
 
   it('is just the restore, ignoring everything else', () => {

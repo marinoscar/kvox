@@ -383,9 +383,9 @@ describe('HomePage — data', () => {
 
 describe('HomePage — the hero', () => {
   it('greets the user by first name', async () => {
-    renderHome({ ...homeUser, displayName: 'Ana Ruiz' });
+    renderHome({ ...homeUser, displayName: 'Anders Stubbs' });
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Hi, Ana' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Hi, Anders' })).toBeInTheDocument();
   });
 
   it('greets a user with no display name', async () => {
@@ -1623,7 +1623,7 @@ describe('HomePage — the search entry point', () => {
 });
 
 // =============================================================================
-// Knowledge section isolation (#373, PR #415's visual regression)
+// Knowledge section isolation (#373, PR #415's regression)
 // =============================================================================
 
 describe('HomePage — the Knowledge section can never break the rest of Home', () => {
@@ -1641,7 +1641,7 @@ describe('HomePage — the Knowledge section can never break the rest of Home', 
   }
 
   it('renders Home unchanged when the graph answers a 200 that is not an entity list', async () => {
-    // Exactly the visual harness's catch-all `{}`: before the fix this threw
+    // A catch-all stub answering `{}`: before the fix this threw
     // during render and replaced the whole page with the root ErrorBoundary.
     server.use(http.get(`${API_BASE}/graph/entities`, () => HttpResponse.json({ data: {} })));
     renderHome(graphHomeUser);

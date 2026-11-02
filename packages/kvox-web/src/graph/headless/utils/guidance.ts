@@ -134,7 +134,7 @@ export function entityLabel(id: string, items: readonly ProposalItem[] = []): st
 }
 
 /**
- * "Focused on Sarah Chen, Q2 pilot · 3 types · instructions" — or null for no guidance.
+ * "Focused on Sasha Example, Q2 pilot · 3 types · instructions" — or null for no guidance.
  *
  * @stability experimental
  */

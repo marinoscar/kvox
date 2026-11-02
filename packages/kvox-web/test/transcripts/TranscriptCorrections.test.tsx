@@ -78,7 +78,7 @@ const mockApply = vi.mocked(applyOperations);
 const mockSearch = vi.mocked(searchTranscript);
 
 const SPEAKERS: TranscriptSpeaker[] = [
-  { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
+  { id: 'sp1', label: 'A', displayName: 'Anders', colorIndex: 0, rev: 1 },
   { id: 'sp2', label: 'B', displayName: 'Speaker 3', colorIndex: 1, rev: 1 },
 ];
 
@@ -256,7 +256,7 @@ describe('TranscriptPage — a viewer sees no editing controls', () => {
     expect(screen.queryByRole('button', { name: /Merge speakers/ })).toBeNull();
     expect(screen.queryByRole('checkbox', { name: /to merge/ })).toBeNull();
     // The read-only filter is untouched — this is still the reader #30 shipped.
-    expect(screen.getByRole('button', { name: 'Play only Ana' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play only Anders' })).toBeInTheDocument();
   });
 
   it('shows no save indicator, because a viewer has nothing to save', async () => {
@@ -351,7 +351,7 @@ describe('TranscriptPage — editing a segment', () => {
     await user.click(screen.getByRole('button', { name: 'Actions for the line at 0:00' }));
     await screen.findByRole('menu', { name: 'Segment actions' });
 
-    expect(menuItemFor('Rename Ana')).toBeInTheDocument();
+    expect(menuItemFor('Rename Anders')).toBeInTheDocument();
     expect(menuItemFor('Move this line to another speaker')).toBeInTheDocument();
     for (const label of ['Split here', 'Join with next', 'Play from here', 'Delete segment']) {
       expect(screen.getByRole('menuitem', { name: label })).toBeInTheDocument();
@@ -364,13 +364,13 @@ describe('TranscriptPage — editing a segment', () => {
     // (`speaker.create`) and repointed only THAT line (`segment.set_speaker`),
     // silently leaving every other `Speaker A` line behind. The only
     // acceptable op here is the all-lines `speaker.rename`, keyed on the
-    // SPEAKER's id — s0's speaker is Ana (`sp1`), not the segment's own id.
+    // SPEAKER's id — s0's speaker is Anders (`sp1`), not the segment's own id.
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('region', { name: 'Transcript' });
 
     await user.click(screen.getByRole('button', { name: 'Actions for the line at 0:00' }));
-    await user.click(menuItemFor('Rename Ana'));
+    await user.click(menuItemFor('Rename Anders'));
     const field = await screen.findByRole('combobox', { name: 'Speaker name' });
     await user.clear(field);
     await user.type(field, 'Justin');
@@ -465,7 +465,7 @@ describe('TranscriptPage — merging speakers', () => {
     const user = userEvent.setup();
     mockApply.mockResolvedValue(
       opsResult({
-        summary: 'Merged Speaker 3 into Ana',
+        summary: 'Merged Speaker 3 into Anders',
         merges: [
           {
             targetId: 'sp1',
@@ -494,14 +494,14 @@ describe('TranscriptPage — merging speakers', () => {
     // snackbar below is the confirmation, and it is shown after the user can
     // see what happened.
     await user.click(
-      await screen.findByRole('menuitem', { name: 'Merge Speaker 3 into Ana' }),
+      await screen.findByRole('menuitem', { name: 'Merge Speaker 3 into Anders' }),
     );
 
     await waitFor(() => expect(mockApply).toHaveBeenCalled());
     expect(mockApply.mock.calls[0][2].ops).toEqual([
       { op: 'speaker.merge', sourceIds: ['sp2'], targetId: 'sp1', keepName: true },
     ]);
-    expect(await screen.findByText('Merged Speaker 3 into Ana')).toBeInTheDocument();
+    expect(await screen.findByText('Merged Speaker 3 into Anders')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
   });
 
@@ -513,7 +513,7 @@ describe('TranscriptPage — merging speakers', () => {
     const merge = screen.getByRole('button', { name: 'Merge speakers' });
     expect(merge).toBeDisabled();
 
-    await user.click(screen.getByRole('checkbox', { name: 'Select Ana to merge' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Anders to merge' }));
     await user.click(screen.getByRole('checkbox', { name: 'Select Speaker 3 to merge' }));
     await user.click(screen.getByRole('button', { name: 'Merge 2 speakers' }));
 
@@ -530,12 +530,12 @@ describe('TranscriptPage — merging speakers', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
     const field = await screen.findByRole('combobox', { name: 'Speaker name' });
     await user.clear(field);
-    await user.type(field, 'Ben Olsen');
+    await user.type(field, 'Bram Fixture');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(mockApply).toHaveBeenCalled());
     expect(mockApply.mock.calls[0][2].ops).toEqual([
-      { op: 'speaker.rename', speakerId: 'sp2', rev: 1, displayName: 'Ben Olsen' },
+      { op: 'speaker.rename', speakerId: 'sp2', rev: 1, displayName: 'Bram Fixture' },
     ]);
   });
 });

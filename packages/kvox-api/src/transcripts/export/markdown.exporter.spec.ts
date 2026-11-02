@@ -153,7 +153,7 @@ describe('MarkdownTranscriptExporter', () => {
     const output = await renderToString(exporter(), fixtureDocument());
 
     expect(output).toContain('**José Núñez** · 00:00:00');
-    expect(output).toContain('**Priya \\*Patel\\*** · 00:00:08');
+    expect(output).toContain('**Pia \\*Placeholder\\*** · 00:00:08');
   });
 
   it('escapes the title in the heading and the segment text in the body', async () => {

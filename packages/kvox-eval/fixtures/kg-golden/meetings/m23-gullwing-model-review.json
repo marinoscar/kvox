@@ -12,27 +12,27 @@
     {
       "id": "m23-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m23-spk-b",
       "label": "B",
-      "displayName": "Wen Zhao"
+      "displayName": "Waverly Testcase"
     },
     {
       "id": "m23-spk-c",
       "label": "C",
-      "displayName": "Felix Amundsen"
+      "displayName": "Florian Mockwell"
     },
     {
       "id": "m23-spk-d",
       "label": "D",
-      "displayName": "Kwame Mensah"
+      "displayName": "Kieran Testcase"
     },
     {
       "id": "m23-spk-e",
       "label": "E",
-      "displayName": "Yusuf Demir"
+      "displayName": "Yarrow Placeholder"
     }
   ],
   "segments": [
@@ -114,7 +114,7 @@
       "startMs": 57050,
       "endMs": 66010,
       "rev": 1,
-      "text": "I'm Yusuf Demir, I lead the disputes platform engineering at Gullwing. For that we'll need a queue the analysts can work from."
+      "text": "I'm Yarrow Placeholder, I lead the disputes platform engineering at Gullwing. For that we'll need a queue the analysts can work from."
     },
     {
       "id": "m23-s011",
@@ -178,7 +178,7 @@
       "startMs": 98050,
       "endMs": 101310,
       "rev": 1,
-      "text": "Great news. Hana will send it over."
+      "text": "Great news. Hazel will send it over."
     },
     {
       "id": "m23-s019",
@@ -223,7 +223,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Gullwing pilot model review\n\n**Date:** June 4\n**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)\n\n## Summary\n\nGate review of the first chargeback automation model on the labelled dispute sample. Felix approved the build phase.\n\n## Results\n\n- On the held-out set, the model's precision is 0.91 on the three target reason codes; recall is around 0.78.\n- In plain terms: when the model calls a dispute a clear case it is right nine times out of ten, and the clear cases it misses go to a human as they do today.\n- The model was trained on last year's data, so seasonal fraud patterns may shift.\n\n## Decisions\n\n- **The model flags disputes for review and never auto-rejects.** Analysts make every final call.\n- **Felix approved the build phase.**\n- Numbers will be reviewed monthly because of the seasonality risk.\n\n## Action items\n\n- **Yusuf Demir** — expose the flagged disputes queue API by June 18. Yusuf leads disputes platform engineering at Gullwing.\n- **Kwame Mensah** — give Yusuf the model output schema today.\n- **Wen Zhao** — write reviewer guidelines for analysts by next Tuesday.\n- **Hana Sato** — send the build-phase paperwork to Felix.\n\n## Notes\n\n- Wen is learning Portuguese for a trip.\n"
+    "body": "# Gullwing pilot model review\n\n**Date:** June 4\n**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)\n\n## Summary\n\nGate review of the first chargeback automation model on the labelled dispute sample. Florian approved the build phase.\n\n## Results\n\n- On the held-out set, the model's precision is 0.91 on the three target reason codes; recall is around 0.78.\n- In plain terms: when the model calls a dispute a clear case it is right nine times out of ten, and the clear cases it misses go to a human as they do today.\n- The model was trained on last year's data, so seasonal fraud patterns may shift.\n\n## Decisions\n\n- **The model flags disputes for review and never auto-rejects.** Analysts make every final call.\n- **Florian approved the build phase.**\n- Numbers will be reviewed monthly because of the seasonality risk.\n\n## Action items\n\n- **Yarrow Placeholder** — expose the flagged disputes queue API by June 18. Yarrow leads disputes platform engineering at Gullwing.\n- **Kieran Testcase** — give Yarrow the model output schema today.\n- **Waverly Testcase** — write reviewer guidelines for analysts by next Tuesday.\n- **Hazel Placeholder** — send the build-phase paperwork to Florian.\n\n## Notes\n\n- Waverly is learning Portuguese for a trip.\n"
   },
   "knownEntities": [
     {
@@ -237,11 +237,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -270,11 +270,11 @@
       ]
     },
     {
-      "id": "g-person-felix-amundsen",
+      "id": "g-person-florian-mockwell",
       "type": "Person",
-      "label": "Felix Amundsen",
+      "label": "Florian Mockwell",
       "aliases": [
-        "Felix"
+        "Florian"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -282,11 +282,11 @@
       ]
     },
     {
-      "id": "g-person-hana-sato",
+      "id": "g-person-hazel-placeholder",
       "type": "Person",
-      "label": "Hana Sato",
+      "label": "Hazel Placeholder",
       "aliases": [
-        "Hana"
+        "Hazel"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -296,11 +296,11 @@
       ]
     },
     {
-      "id": "g-person-kwame-mensah",
+      "id": "g-person-kieran-testcase",
       "type": "Person",
-      "label": "Kwame Mensah",
+      "label": "Kieran Testcase",
       "aliases": [
-        "Kwame"
+        "Kieran"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -310,11 +310,11 @@
       ]
     },
     {
-      "id": "g-person-wen-zhao",
+      "id": "g-person-waverly-testcase",
       "type": "Person",
-      "label": "Wen Zhao",
+      "label": "Waverly Testcase",
       "aliases": [
-        "Wen"
+        "Waverly"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -347,65 +347,65 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "kwame",
+        "key": "kieran",
         "type": "Person",
-        "label": "Kwame Mensah",
+        "label": "Kieran Testcase",
         "aliases": [],
-        "existingId": "g-person-kwame-mensah",
+        "existingId": "g-person-kieran-testcase",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Kwame Mensah (Larkspur Labs)"
+            "quote": "Kieran Testcase (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "felix",
+        "key": "florian",
         "type": "Person",
-        "label": "Felix Amundsen",
+        "label": "Florian Mockwell",
         "aliases": [],
-        "existingId": "g-person-felix-amundsen",
+        "existingId": "g-person-florian-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Felix Amundsen (Gullwing Payments)"
+            "quote": "Florian Mockwell (Gullwing Payments)"
           }
         ]
       },
       {
-        "key": "wen",
+        "key": "waverly",
         "type": "Person",
-        "label": "Wen Zhao",
+        "label": "Waverly Testcase",
         "aliases": [],
-        "existingId": "g-person-wen-zhao",
+        "existingId": "g-person-waverly-testcase",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Wen Zhao (Gullwing Payments)"
+            "quote": "Waverly Testcase (Gullwing Payments)"
           }
         ]
       },
       {
-        "key": "yusuf",
+        "key": "yarrow",
         "type": "Person",
-        "label": "Yusuf Demir",
+        "label": "Yarrow Placeholder",
         "aliases": [],
         "existingId": null,
         "props": {},
@@ -413,7 +413,7 @@
           {
             "source": "segment",
             "segmentId": "m23-s010",
-            "quote": "I'm Yusuf Demir, I lead the disputes platform engineering at Gullwing."
+            "quote": "I'm Yarrow Placeholder, I lead the disputes platform engineering at Gullwing."
           }
         ]
       },
@@ -450,7 +450,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -459,13 +459,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "kwame",
+        "from": "kieran",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -474,13 +474,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "felix",
+        "from": "florian",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -489,13 +489,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "wen",
+        "from": "waverly",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -504,13 +504,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "yusuf",
+        "from": "yarrow",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -519,13 +519,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Kieran Testcase (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "yusuf",
+        "from": "yarrow",
         "to": "gullwing",
         "validFrom": null,
         "validTo": null,
@@ -535,7 +535,7 @@
           {
             "source": "segment",
             "segmentId": "m23-s010",
-            "quote": "I'm Yusuf Demir, I lead the disputes platform engineering at Gullwing."
+            "quote": "I'm Yarrow Placeholder, I lead the disputes platform engineering at Gullwing."
           }
         ]
       },
@@ -602,7 +602,7 @@
         "owner": null,
         "counterparty": null,
         "title": "Build phase approved",
-        "statement": "Felix approved the build phase.",
+        "statement": "Florian approved the build phase.",
         "status": null,
         "occurredAt": "2026-06-04",
         "dueAt": null,
@@ -619,10 +619,10 @@
       {
         "kind": "commitment",
         "subject": "chargeback",
-        "owner": "yusuf",
+        "owner": "yarrow",
         "counterparty": null,
         "title": "Expose disputes queue API",
-        "statement": "Yusuf will expose the disputes queue API by June 18.",
+        "statement": "Yarrow will expose the disputes queue API by June 18.",
         "status": "open",
         "occurredAt": "2026-06-04",
         "dueAt": "2026-06-18",
@@ -639,10 +639,10 @@
       {
         "kind": "commitment",
         "subject": "chargeback",
-        "owner": "wen",
+        "owner": "waverly",
         "counterparty": null,
         "title": "Write reviewer guidelines",
-        "statement": "Wen will write the reviewer guidelines by next Tuesday.",
+        "statement": "Waverly will write the reviewer guidelines by next Tuesday.",
         "status": "open",
         "occurredAt": "2026-06-04",
         "dueAt": "2026-06-09",
@@ -659,10 +659,10 @@
       {
         "kind": "commitment",
         "subject": "chargeback",
-        "owner": "kwame",
-        "counterparty": "yusuf",
+        "owner": "kieran",
+        "counterparty": "yarrow",
         "title": "Share model output schema",
-        "statement": "Kwame will give Yusuf the model output schema today.",
+        "statement": "Kieran will give Yarrow the model output schema today.",
         "status": "open",
         "occurredAt": "2026-06-04",
         "dueAt": "2026-06-04",
@@ -678,11 +678,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "wen",
+        "subject": "waverly",
         "owner": null,
         "counterparty": null,
         "title": "Learning Portuguese",
-        "statement": "Wen is learning Portuguese for a trip.",
+        "statement": "Waverly is learning Portuguese for a trip.",
         "status": null,
         "occurredAt": "2026-06-04",
         "dueAt": null,

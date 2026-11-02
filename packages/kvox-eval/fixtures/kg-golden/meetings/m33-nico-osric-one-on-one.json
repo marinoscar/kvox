@@ -1,6 +1,6 @@
 {
   "id": "m33",
-  "title": "One-on-one: Nina and Oliver",
+  "title": "One-on-one: Nico and Osric",
   "tags": [
     "personal",
     "note-only",
@@ -8,13 +8,13 @@
     "negative-project-milestone"
   ],
   "recordedAt": "2026-05-18T14:00:00Z",
-  "contextText": "Fortnightly one-on-one with Oliver.",
+  "contextText": "Fortnightly one-on-one with Osric.",
   "hasTranscript": false,
   "speakers": [],
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# One-on-one: Nina and Oliver\n\n**Date:** May 18\n**Attendees:** Nina Castellanos, Oliver Brandt\n\n## Summary\n\nFortnightly one-on-one. We covered the Harbourline retest plan, Oliver's promotion packet, and how he wants to handle the next few weeks at home before his leave.\n\n## Work\n\n- The Harbourline beta milestone slipped a week because the account-linking screen is being reworked after the first round of testing. Oliver is comfortable with the new date and has told the client.\n- Oliver's promotion packet to senior designer is nearly ready. He wants one more case study in it, ideally the Harbourline onboarding work once the retest is done.\n- I agreed to review the draft packet before the next calibration round.\n\n## Action items\n\n- **Nina Castellanos** — review Oliver's promotion packet by May 29 and send written feedback.\n- **Oliver Brandt** — add the Harbourline onboarding case study to the packet after the retest.\n\n## Home and family\n\n- Oliver asked to keep Fridays short for the next month. Their son Leo has swimming lessons straight after school, and Oliver and Maya take turns collecting him.\n- Oliver and Maya's daughter Ivy is starting nursery in September; Maya is handling the settling-in sessions.\n- Ivy turns five on June 2 and they are having a small party at home that weekend. Oliver will be offline that Friday afternoon.\n- Oliver is the parent of both Leo and Ivy, and Maya is their mother; worth remembering for scheduling around school holidays.\n\n## Wellbeing\n\nOliver said the workload feels manageable now that the Harbourline scope is settled. He is looking forward to the Lisbon trip and has already started the handover notes for Sam.\n\n## Next one-on-one\n\nIn two weeks, after the Harbourline retest, so we can look at the results and the updated packet together.\n"
+    "body": "# One-on-one: Nico and Osric\n\n**Date:** May 18\n**Attendees:** Nico Sample, Osric Testcase\n\n## Summary\n\nFortnightly one-on-one. We covered the Harbourline retest plan, Osric's promotion packet, and how he wants to handle the next few weeks at home before his leave.\n\n## Work\n\n- The Harbourline beta milestone slipped a week because the account-linking screen is being reworked after the first round of testing. Osric is comfortable with the new date and has told the client.\n- Osric's promotion packet to senior designer is nearly ready. He wants one more case study in it, ideally the Harbourline onboarding work once the retest is done.\n- I agreed to review the draft packet before the next calibration round.\n\n## Action items\n\n- **Nico Sample** — review Osric's promotion packet by May 29 and send written feedback.\n- **Osric Testcase** — add the Harbourline onboarding case study to the packet after the retest.\n\n## Home and family\n\n- Osric asked to keep Fridays short for the next month. Their son Lowell has swimming lessons straight after school, and Osric and Mercer take turns collecting him.\n- Osric and Mercer's daughter Ivo is starting nursery in September; Mercer is handling the settling-in sessions.\n- Ivo turns five on June 2 and they are having a small party at home that weekend. Osric will be offline that Friday afternoon.\n- Osric is the parent of both Lowell and Ivo, and Mercer is their mother; worth remembering for scheduling around school holidays.\n\n## Wellbeing\n\nOsric said the workload feels manageable now that the Harbourline scope is settled. He is looking forward to the Lisbon trip and has already started the handover notes for Sabin.\n\n## Next one-on-one\n\nIn two weeks, after the Harbourline retest, so we can look at the results and the updated packet together.\n"
   },
   "knownEntities": [
     {
@@ -28,11 +28,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-nina-castellanos",
+      "id": "g-person-nico-sample",
       "type": "Person",
-      "label": "Nina Castellanos",
+      "label": "Nico Sample",
       "aliases": [
-        "Nina"
+        "Nico"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -40,11 +40,11 @@
       ]
     },
     {
-      "id": "g-person-oliver-brandt",
+      "id": "g-person-osric-testcase",
       "type": "Person",
-      "label": "Oliver Brandt",
+      "label": "Osric Testcase",
       "aliases": [
-        "Oliver"
+        "Osric"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -52,11 +52,11 @@
       ]
     },
     {
-      "id": "g-person-maya-brandt",
+      "id": "g-person-mercer-sample",
       "type": "Person",
-      "label": "Maya Brandt",
+      "label": "Mercer Sample",
       "aliases": [
-        "Maya"
+        "Mercer"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -72,10 +72,10 @@
   ],
   "knownRelations": [
     {
-      "id": "g-rel-oliver-spouse-maya",
+      "id": "g-rel-osric-spouse-mercer",
       "type": "SPOUSE_OF",
-      "from": "g-person-oliver-brandt",
-      "to": "g-person-maya-brandt",
+      "from": "g-person-osric-testcase",
+      "to": "g-person-mercer-sample",
       "props": {},
       "validFrom": null,
       "validTo": null,
@@ -87,88 +87,88 @@
       {
         "key": "meeting",
         "type": "Meeting",
-        "label": "One-on-one: Nina and Oliver",
+        "label": "One-on-one: Nico and Osric",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "One-on-one: Nina and Oliver"
+            "quote": "One-on-one: Nico and Osric"
           }
         ]
       },
       {
-        "key": "nina",
+        "key": "nico",
         "type": "Person",
-        "label": "Nina Castellanos",
+        "label": "Nico Sample",
         "aliases": [],
-        "existingId": "g-person-nina-castellanos",
+        "existingId": "g-person-nico-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase"
           }
         ]
       },
       {
-        "key": "oliver",
+        "key": "osric",
         "type": "Person",
-        "label": "Oliver Brandt",
+        "label": "Osric Testcase",
         "aliases": [],
-        "existingId": "g-person-oliver-brandt",
+        "existingId": "g-person-osric-testcase",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase"
           }
         ]
       },
       {
-        "key": "maya",
+        "key": "mercer",
         "type": "Person",
-        "label": "Maya Brandt",
+        "label": "Mercer Sample",
         "aliases": [],
-        "existingId": "g-person-maya-brandt",
+        "existingId": "g-person-mercer-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Oliver and Maya take turns collecting him"
+            "quote": "Osric and Mercer take turns collecting him"
           }
         ]
       },
       {
-        "key": "leo",
+        "key": "lowell",
         "type": "Person",
-        "label": "Leo Brandt",
+        "label": "Lowell Example",
         "aliases": [
-          "Leo"
+          "Lowell"
         ],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Their son Leo has swimming lessons straight after school"
+            "quote": "Their son Lowell has swimming lessons straight after school"
           }
         ]
       },
       {
-        "key": "ivy",
+        "key": "ivo",
         "type": "Person",
-        "label": "Ivy Brandt",
+        "label": "Ivo Placeholder",
         "aliases": [
-          "Ivy"
+          "Ivo"
         ],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Oliver and Maya's daughter Ivy is starting nursery in September"
+            "quote": "Osric and Mercer's daughter Ivo is starting nursery in September"
           }
         ]
       },
@@ -187,9 +187,9 @@
         ]
       },
       {
-        "key": "ivy-birthday",
+        "key": "ivo-birthday",
         "type": "Milestone",
-        "label": "Ivy's 5th birthday",
+        "label": "Ivo's 5th birthday",
         "aliases": [],
         "existingId": null,
         "props": {
@@ -199,7 +199,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Ivy turns five on June 2"
+            "quote": "Ivo turns five on June 2"
           }
         ]
       }
@@ -207,7 +207,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "nina",
+        "from": "nico",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -216,13 +216,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "oliver",
+        "from": "osric",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -231,14 +231,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt"
+            "quote": "**Attendees:** Nico Sample, Osric Testcase"
           }
         ]
       },
       {
         "type": "PARENT_OF",
-        "from": "oliver",
-        "to": "leo",
+        "from": "osric",
+        "to": "lowell",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -246,14 +246,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Oliver is the parent of both Leo and Ivy"
+            "quote": "Osric is the parent of both Lowell and Ivo"
           }
         ]
       },
       {
         "type": "PARENT_OF",
-        "from": "oliver",
-        "to": "ivy",
+        "from": "osric",
+        "to": "ivo",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -261,14 +261,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Oliver is the parent of both Leo and Ivy"
+            "quote": "Osric is the parent of both Lowell and Ivo"
           }
         ]
       },
       {
         "type": "PARENT_OF",
-        "from": "maya",
-        "to": "leo",
+        "from": "mercer",
+        "to": "lowell",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -276,14 +276,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Maya is their mother"
+            "quote": "Mercer is their mother"
           }
         ]
       },
       {
         "type": "PARENT_OF",
-        "from": "maya",
-        "to": "ivy",
+        "from": "mercer",
+        "to": "ivo",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -291,14 +291,14 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Maya is their mother"
+            "quote": "Mercer is their mother"
           }
         ]
       },
       {
         "type": "HAS_MILESTONE",
-        "from": "ivy",
-        "to": "ivy-birthday",
+        "from": "ivo",
+        "to": "ivo-birthday",
         "validFrom": null,
         "validTo": null,
         "precision": "unknown",
@@ -306,7 +306,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Ivy turns five on June 2"
+            "quote": "Ivo turns five on June 2"
           }
         ]
       }
@@ -314,11 +314,11 @@
     "items": [
       {
         "kind": "commitment",
-        "subject": "oliver",
-        "owner": "nina",
+        "subject": "osric",
+        "owner": "nico",
         "counterparty": null,
-        "title": "Review Oliver's promotion packet",
-        "statement": "Nina will review Oliver's promotion packet by May 29 and send written feedback.",
+        "title": "Review Osric's promotion packet",
+        "statement": "Nico will review Osric's promotion packet by May 29 and send written feedback.",
         "status": "open",
         "occurredAt": "2026-05-18",
         "dueAt": "2026-05-29",
@@ -327,7 +327,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "review Oliver's promotion packet by May 29 and send written feedback"
+            "quote": "review Osric's promotion packet by May 29 and send written feedback"
           }
         ]
       }

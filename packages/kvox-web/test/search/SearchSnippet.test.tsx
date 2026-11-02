@@ -57,8 +57,8 @@ describe('parseSnippetHtml', () => {
   });
 
   it('unescapes the five entities the server writes', () => {
-    expect(unescapeSnippetText('Tom &amp; Jerry &lt;3 &gt;_&lt; &quot;hi&quot; &#39;x&#39;')).toBe(
-      'Tom & Jerry <3 >_< "hi" \'x\'',
+    expect(unescapeSnippetText('Tobias &amp; Jerry &lt;3 &gt;_&lt; &quot;hi&quot; &#39;x&#39;')).toBe(
+      'Tobias & Jerry <3 >_< "hi" \'x\'',
     );
   });
 

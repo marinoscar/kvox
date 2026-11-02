@@ -39,7 +39,7 @@ designated branch).
 ## Step 1 — rename it
 
 Use the **`rename-app`** skill. Do not reimplement it here; it handles the
-identity codemod, the do-not-rename list, and the visual-baseline consequence.
+identity codemod, and the do-not-rename list.
 
 Come back when the rename is committed and its tests pass.
 
@@ -131,8 +131,7 @@ npm run test:run --workspace=web
 ```
 
 Report honestly: what is running, what is still stubbed, and the outstanding
-manual items (OAuth redirect URIs, the GitHub repository rename, visual
-baselines if the rename has not had them regenerated yet).
+manual items (OAuth redirect URIs, the GitHub repository rename).
 
 ---
 

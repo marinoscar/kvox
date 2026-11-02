@@ -15,10 +15,10 @@ function build(options: { embedderOk?: boolean; entities?: any[]; items?: any[] 
   const prisma = {
     kgEntity: {
       findMany: jest.fn(async ({ where }: any) =>
-        where.reviewStatus ? (options.entities ?? []) : [{ id: 'org', label: 'Lambda' }, { id: E1, label: 'Sarah Chen' }],
+        where.reviewStatus ? (options.entities ?? []) : [{ id: 'org', label: 'Lambda' }, { id: E1, label: 'Sasha Example' }],
       ),
     },
-    kgEntityAlias: { findMany: jest.fn(async () => [{ entityId: E1, alias: 'S. Chen' }]) },
+    kgEntityAlias: { findMany: jest.fn(async () => [{ entityId: E1, alias: 'S. Example' }]) },
     kgRelation: { findMany: jest.fn(async () => [{ fromId: E1, toId: 'org', type: 'HAS_ROLE', props: { title: 'CTO' } }]) },
     kgItem: { findMany: jest.fn(async () => options.items ?? []) },
     $queryRaw: jest.fn(async () => []),
@@ -58,30 +58,30 @@ describe('kg.embed', () => {
   });
 
   it('returns normally, embedding nothing, when the owner cannot embed', async () => {
-    const t = build({ embedderOk: false, entities: [{ id: E1, type: 'Person', label: 'Sarah Chen', embeddingHash: null }] });
+    const t = build({ embedderOk: false, entities: [{ id: E1, type: 'Person', label: 'Sasha Example', embeddingHash: null }] });
     await expect(t.handler.process(job({ userId: USER, subjectKind: 'entity', ids: [E1] }))).resolves.toBeUndefined();
     expect(t.embed).not.toHaveBeenCalled();
     expect(t.prisma.kgEntity.findMany).not.toHaveBeenCalled();
   });
 
   it('embeds only rows whose content hash changed', async () => {
-    const text = 'Person: Sarah Chen\nAlso known as: S. Chen\nOrganization: Lambda\nRole: CTO';
+    const text = 'Person: Sasha Example\nAlso known as: S. Example\nOrganization: Lambda\nRole: CTO';
     const unchanged = profileHash('text-embedding-3-small', text);
     const t = build({
       entities: [
-        { id: E1, type: 'Person', label: 'Sarah Chen', embeddingHash: unchanged },
-        { id: E2, type: 'Person', label: 'Joe', embeddingHash: 'stale' },
+        { id: E1, type: 'Person', label: 'Sasha Example', embeddingHash: unchanged },
+        { id: E2, type: 'Person', label: 'Jonty', embeddingHash: 'stale' },
       ],
     });
     await t.handler.process(job({ userId: USER, subjectKind: 'entity', ids: [E1, E2] }));
     expect(t.embed).toHaveBeenCalledTimes(1);
-    expect(t.embed.mock.calls[0][0]).toEqual(['Person: Joe']);
+    expect(t.embed.mock.calls[0][0]).toEqual(['Person: Jonty']);
     expect(t.prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(t.executed).toHaveLength(1);
   });
 
   it('defers on a rate limit under the owner\'s own throttle key (never a shared one)', async () => {
-    const t = build({ entities: [{ id: E2, type: 'Person', label: 'Joe', embeddingHash: 'stale' }] });
+    const t = build({ entities: [{ id: E2, type: 'Person', label: 'Jonty', embeddingHash: 'stale' }] });
     t.embed.mockRejectedValueOnce(new KvoxAiError('rate_limit', '429', 1000));
     const failure = await t.handler
       .process(job({ userId: USER, subjectKind: 'entity', ids: [E2] }))
@@ -91,8 +91,8 @@ describe('kg.embed', () => {
   });
 
   it('is idempotent: a retry after success finds every hash equal and calls nothing', async () => {
-    const hash = profileHash('text-embedding-3-small', 'Person: Joe');
-    const t = build({ entities: [{ id: E2, type: 'Person', label: 'Joe', embeddingHash: hash }] });
+    const hash = profileHash('text-embedding-3-small', 'Person: Jonty');
+    const t = build({ entities: [{ id: E2, type: 'Person', label: 'Jonty', embeddingHash: hash }] });
     await t.handler.process(job({ userId: USER, subjectKind: 'entity', ids: [E2] }));
     expect(t.embed).not.toHaveBeenCalled();
     expect(t.prisma.$transaction).not.toHaveBeenCalled();

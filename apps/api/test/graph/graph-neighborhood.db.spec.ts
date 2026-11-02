@@ -87,8 +87,8 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
 
   it('walks one hop, then two', async () => {
     const { user, g } = await owner();
-    const a = await g.entity('Person', 'Ana');
-    const b = await g.entity('Person', 'Ben');
+    const a = await g.entity('Person', 'Anders');
+    const b = await g.entity('Person', 'Bram');
     const kappa = await g.entity('Organization', 'Kappa');
     await g.relation('WORKS_FOR', a, kappa, { valid: '[2019-01-01,)', precision: 'year' });
     await g.relation('WORKS_FOR', b, kappa, { valid: '[2020-01-01,)', precision: 'year' });
@@ -188,29 +188,29 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
 
   it('never walks through an item, and derives item edges once from the registry', async () => {
     const { user, g } = await owner();
-    const sarah = await g.entity('Person', 'Sarah');
-    const joe = await g.entity('Person', 'Joe');
+    const sasha = await g.entity('Person', 'Sasha');
+    const jonty = await g.entity('Person', 'Jonty');
     const meeting = await g.entity('Meeting', 'Kickoff', { occurredAt: new Date('2026-03-02T00:00:00Z') });
     const commitment = await g.item('commitment', {
-      ownerPersonId: sarah,
-      counterpartyId: joe,
+      ownerPersonId: sasha,
+      counterpartyId: jonty,
       meetingId: meeting,
-      statement: 'Sarah will send the deck to Joe',
+      statement: 'Sasha will send the deck to Jonty',
       occurredAt: new Date('2026-03-02T00:00:00Z'),
     });
 
-    const slice = await nbhd(user.id, sarah, { hops: 2 });
-    // Sarah → the commitment (depth 1). Joe and the meeting are only reachable
+    const slice = await nbhd(user.id, sasha, { hops: 2 });
+    // Sasha → the commitment (depth 1). Jonty and the meeting are only reachable
     // THROUGH the commitment, which hop 2 never does.
-    expect(ids(slice)).toEqual([sarah, commitment].sort());
+    expect(ids(slice)).toEqual([sasha, commitment].sort());
     const item = slice.nodes.find((n) => n.id === commitment)!;
-    expect(item).toMatchObject({ nodeKind: 'item', type: 'commitment', status: 'open', label: 'Sarah will send the deck to Joe' });
+    expect(item).toMatchObject({ nodeKind: 'item', type: 'commitment', status: 'open', label: 'Sasha will send the deck to Jonty' });
     expect(slice.edges).toEqual([
       expect.objectContaining({
         id: `virt:${commitment}:ASSIGNED_TO`,
         type: 'ASSIGNED_TO',
         source: commitment,
-        target: sarah,
+        target: sasha,
         virtual: true,
         valid: null,
         props: {},
@@ -220,7 +220,7 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     // Expanding FROM the item reaches all three of its column targets — and a
     // commitment's meeting is CREATED_IN, never DECIDED_IN.
     const expanded = await svc.expand({ id: user.id }, { nodeIds: [commitment], cap: 100 } as never);
-    expect(ids(expanded)).toEqual([commitment, sarah, joe, meeting].sort());
+    expect(ids(expanded)).toEqual([commitment, sasha, jonty, meeting].sort());
     expect(expanded.edges.map((e) => e.id).sort()).toEqual(
       [`virt:${commitment}:ASSIGNED_TO`, `virt:${commitment}:CREATED_IN`, `virt:${commitment}:OWED_TO`].sort(),
     );
@@ -229,13 +229,13 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
 
   it('never puts a sensitive person fact in a slice', async () => {
     const { user, g } = await owner();
-    const joe = await g.entity('Person', 'Joe');
-    const personal = await g.item('person_fact', { subjectId: joe, sensitivity: 'personal', statement: 'Plays chess' });
-    const sensitive = await g.item('person_fact', { subjectId: joe, sensitivity: 'sensitive', statement: 'Private matter' });
+    const jonty = await g.entity('Person', 'Jonty');
+    const personal = await g.item('person_fact', { subjectId: jonty, sensitivity: 'personal', statement: 'Plays chess' });
+    const sensitive = await g.item('person_fact', { subjectId: jonty, sensitivity: 'sensitive', statement: 'Private matter' });
 
-    const slice = await nbhd(user.id, joe);
-    expect(ids(slice)).toEqual([joe, personal].sort());
-    expect(slice.nodes.find((n) => n.id === joe)?.degree).toBe(1);
+    const slice = await nbhd(user.id, jonty);
+    expect(ids(slice)).toEqual([jonty, personal].sort());
+    expect(slice.nodes.find((n) => n.id === jonty)?.degree).toBe(1);
 
     await expect(svc.expand({ id: user.id }, { nodeIds: [sensitive], cap: 10 } as never)).rejects.toThrow(NotFoundException);
   });
@@ -262,7 +262,7 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
 
   it('enriches nodes and edges with exact mention / evidence counts and times', async () => {
     const { user, g } = await owner('enrich');
-    const a = await g.entity('Person', 'Ana');
+    const a = await g.entity('Person', 'Anders');
     const b = await g.entity('Organization', 'Kappa');
     // g.relation() already writes one evidence row (created now), so 1 + 2 = 3 below.
     const rel = await g.relation('DISCUSSED', a, b);
@@ -295,16 +295,16 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
 
   it('gives a virtual item edge the item evidence, and never counts a sensitive fact', async () => {
     const { user, g } = await owner('enrich2');
-    const joe = await g.entity('Person', 'Joe');
-    const fact = await g.item('person_fact', { subjectId: joe, sensitivity: 'personal', statement: 'Plays chess' });
-    const secret = await g.item('person_fact', { subjectId: joe, sensitivity: 'sensitive', statement: 'Private matter' });
+    const jonty = await g.entity('Person', 'Jonty');
+    const fact = await g.item('person_fact', { subjectId: jonty, sensitivity: 'personal', statement: 'Plays chess' });
+    const secret = await g.item('person_fact', { subjectId: jonty, sensitivity: 'sensitive', statement: 'Private matter' });
     // g.item() already writes one evidence row per accepted item (created now), so 1 + 2 = 3 readable rows.
     await g.evidence('item', fact, { createdAt: new Date('2026-05-01T00:00:00Z') });
     await g.evidence('item', fact, { createdAt: new Date('2026-06-01T00:00:00Z') });
     await g.evidence('item', secret);
 
-    const slice = await nbhd(user.id, joe);
-    expect(ids(slice)).toEqual([joe, fact].sort());
+    const slice = await nbhd(user.id, jonty);
+    expect(ids(slice)).toEqual([jonty, fact].sort());
     const virt = slice.edges.filter((e) => e.virtual);
     expect(virt).toHaveLength(1);
     expect(virt[0].evidenceCount).toBe(3);
@@ -344,48 +344,48 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
 
   it('as_of reads the manager valid then, not the one valid now', async () => {
     const { user, g } = await owner();
-    const joe = await g.entity('Person', 'Joe');
+    const jonty = await g.entity('Person', 'Jonty');
     const jane = await g.entity('Person', 'Jane');
     const will = await g.entity('Person', 'Will');
     // The closing rule marks the replaced edge `superseded` and closes its range.
-    const toJane = await g.relation('REPORTS_TO', joe, jane, {
+    const toJane = await g.relation('REPORTS_TO', jonty, jane, {
       valid: '[2020-01-01,2026-03-01)',
       precision: 'day',
       reviewStatus: 'superseded',
     });
-    const toWill = await g.relation('REPORTS_TO', joe, will, { valid: '[2026-03-01,)', precision: 'day' });
+    const toWill = await g.relation('REPORTS_TO', jonty, will, { valid: '[2026-03-01,)', precision: 'day' });
 
-    const then = await nbhd(user.id, joe, { as_of: '2024-01-15' });
-    expect(ids(then)).toEqual([joe, jane].sort());
+    const then = await nbhd(user.id, jonty, { as_of: '2024-01-15' });
+    expect(ids(then)).toEqual([jonty, jane].sort());
     expect(then.edges.map((e) => e.id)).toEqual([toJane]);
     expect(then.asOf).toBe('2024-01-15T00:00:00.000Z');
 
-    const now = await nbhd(user.id, joe, { as_of: '2026-09-01T12:00:00Z' });
-    expect(ids(now)).toEqual([joe, will].sort());
+    const now = await nbhd(user.id, jonty, { as_of: '2026-09-01T12:00:00Z' });
+    expect(ids(now)).toEqual([jonty, will].sort());
     expect(now.edges.map((e) => e.id)).toEqual([toWill]);
 
     // The exclusive upper bound: on the day of the change, Will — not Jane.
-    const onTheDay = await nbhd(user.id, joe, { as_of: '2026-03-01' });
+    const onTheDay = await nbhd(user.id, jonty, { as_of: '2026-03-01' });
     expect(onTheDay.edges.map((e) => e.id)).toEqual([toWill]);
 
-    await expect(nbhd(user.id, joe, { as_of: '2024-02-30' })).rejects.toThrow(BadRequestException);
+    await expect(nbhd(user.id, jonty, { as_of: '2024-02-30' })).rejects.toThrow(BadRequestException);
   });
 
   it('as_of reads the role held then (promotion)', async () => {
     const { user, g } = await owner();
-    const joe = await g.entity('Person', 'Joe');
+    const jonty = await g.entity('Person', 'Jonty');
     const kappa = await g.entity('Organization', 'Kappa');
-    const engineer = await g.relation('HAS_ROLE', joe, kappa, {
+    const engineer = await g.relation('HAS_ROLE', jonty, kappa, {
       valid: '[2019-01-01,2026-03-01)',
       precision: 'year',
       reviewStatus: 'superseded',
     });
-    const staff = await g.relation('HAS_ROLE', joe, kappa, { valid: '[2026-03-01,)', precision: 'month' });
-    const unknown = await g.relation('WORKS_FOR', joe, kappa, { valid: null, precision: 'unknown' });
+    const staff = await g.relation('HAS_ROLE', jonty, kappa, { valid: '[2026-03-01,)', precision: 'month' });
+    const unknown = await g.relation('WORKS_FOR', jonty, kappa, { valid: null, precision: 'unknown' });
 
-    const then = await nbhd(user.id, joe, { as_of: '2022-06-01' });
+    const then = await nbhd(user.id, jonty, { as_of: '2022-06-01' });
     expect(then.edges.map((e) => e.id).sort()).toEqual([engineer, unknown].sort());
-    const later = await nbhd(user.id, joe, { as_of: '2026-04-01' });
+    const later = await nbhd(user.id, jonty, { as_of: '2026-04-01' });
     expect(later.edges.map((e) => e.id).sort()).toEqual([staff, unknown].sort());
     // An `unknown` edge is valid at every instant and says so.
     expect(later.edges.find((e) => e.id === unknown)?.valid).toEqual({ from: null, to: null, precision: 'unknown' });

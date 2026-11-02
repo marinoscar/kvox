@@ -8,28 +8,28 @@
     "negative-on-call"
   ],
   "recordedAt": "2026-03-05T15:00:00Z",
-  "contextText": "Sarah wants to walk us through changes in the Lambda engineering org.",
+  "contextText": "Sasha wants to walk us through changes in the Lambda engineering org.",
   "hasTranscript": true,
   "speakers": [
     {
       "id": "m09-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m09-spk-b",
       "label": "B",
-      "displayName": "Sarah Chen"
+      "displayName": "Sasha Example"
     },
     {
       "id": "m09-spk-c",
       "label": "C",
-      "displayName": "Tomás Aguilar"
+      "displayName": "Tobín Dummyson"
     },
     {
       "id": "m09-spk-d",
       "label": "D",
-      "displayName": "Owen Barker"
+      "displayName": "Otis Dummyson"
     }
   ],
   "segments": [
@@ -39,7 +39,7 @@
       "startMs": 0,
       "endMs": 7060,
       "rev": 1,
-      "text": "Thanks for setting this up, Sarah. You said there were some org changes we should know about."
+      "text": "Thanks for setting this up, Sasha. You said there were some org changes we should know about."
     },
     {
       "id": "m09-s002",
@@ -47,7 +47,7 @@
       "startMs": 7310,
       "endMs": 15130,
       "rev": 1,
-      "text": "Yes, a few. First, I want to introduce Owen Barker. Owen joined us in February as Head of Platform."
+      "text": "Yes, a few. First, I want to introduce Otis Dummyson. Otis joined us in February as Head of Platform."
     },
     {
       "id": "m09-s003",
@@ -63,7 +63,7 @@
       "startMs": 20790,
       "endMs": 25950,
       "rev": 1,
-      "text": "Second, some good news. Tomás was promoted to Staff Engineer this month."
+      "text": "Second, some good news. Tobín was promoted to Staff Engineer this month."
     },
     {
       "id": "m09-s005",
@@ -71,7 +71,7 @@
       "startMs": 26200,
       "endMs": 28320,
       "rev": 1,
-      "text": "Congratulations, Tomás, well deserved."
+      "text": "Congratulations, Tobín, well deserved."
     },
     {
       "id": "m09-s006",
@@ -87,7 +87,7 @@
       "startMs": 35500,
       "endMs": 42560,
       "rev": 1,
-      "text": "Third, and this affects you more directly: Lena Park is moving to lead our robotics research group."
+      "text": "Third, and this affects you more directly: Lorne Testcase is moving to lead our robotics research group."
     },
     {
       "id": "m09-s008",
@@ -95,7 +95,7 @@
       "startMs": 42810,
       "endMs": 46070,
       "rev": 1,
-      "text": "So who does Tomás report to now?"
+      "text": "So who does Tobín report to now?"
     },
     {
       "id": "m09-s009",
@@ -103,7 +103,7 @@
       "startMs": 46320,
       "endMs": 53000,
       "rev": 1,
-      "text": "Tomás reported to Lena until the end of March. From April he reports to Owen instead."
+      "text": "Tobín reported to Lorne until the end of March. From April he reports to Otis instead."
     },
     {
       "id": "m09-s010",
@@ -159,7 +159,7 @@
       "startMs": 89890,
       "endMs": 94290,
       "rev": 1,
-      "text": "Good. Owen, how do you like to work with vendors?"
+      "text": "Good. Otis, how do you like to work with vendors?"
     },
     {
       "id": "m09-s017",
@@ -183,7 +183,7 @@
       "startMs": 104980,
       "endMs": 111660,
       "rev": 1,
-      "text": "Lena will still be around, by the way. The research group is on the same floor."
+      "text": "Lorne will still be around, by the way. The research group is on the same floor."
     },
     {
       "id": "m09-s020",
@@ -207,7 +207,7 @@
       "startMs": 122350,
       "endMs": 129030,
       "rev": 1,
-      "text": "Good. So to confirm: Owen is your escalation point from April, and Tomás stays technical lead."
+      "text": "Good. So to confirm: Otis is your escalation point from April, and Tobín stays technical lead."
     },
     {
       "id": "m09-s023",
@@ -223,12 +223,12 @@
       "startMs": 132790,
       "endMs": 135670,
       "rev": 1,
-      "text": "Thanks Sarah, that's a clear picture."
+      "text": "Thanks Sasha, that's a clear picture."
     }
   ],
   "note": {
     "version": 1,
-    "body": "# Lambda platform org update\n\n**Date:** March 5\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)\n\n## Summary\n\nSarah Chen walked us through three changes in the Org Lambda Robotics engineering organisation and what they mean for the pick-path pilot.\n\n## Changes\n\n1. **Owen Barker** joined Lambda in February as **Head of Platform**.\n2. **Tomás Aguilar** was promoted to **Staff Engineer** this month. Day-to-day work is unchanged, but he will have more say in architecture.\n3. **Lena Park** is moving to lead the robotics research group. Tomás reported to Lena until the end of March; from April he reports to Owen.\n\n## Decisions\n\n- The pilot's platform work moves under Owen's team from April. Owen becomes Larkspur's escalation point; Tomás stays technical lead.\n\n## Action items\n\n- **Owen Barker** — set up a joint on-call rotation between Larkspur and the platform team by April 1.\n- **Alex Rivera** — add Lena Park to the Friday update distribution; send Owen written pre-reads before meetings.\n\n## Notes\n\n- Until the rotation exists, whoever's on call on the platform team handles anything urgent.\n- Owen prefers a written proposal a day before any meeting rather than being walked through slides.\n- Lena's research group is on the same floor, and she will want to hear how the pilot goes since it started under her.\n"
+    "body": "# Lambda platform org update\n\n**Date:** March 5\n**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics)\n\n## Summary\n\nSasha Example walked us through three changes in the Org Lambda Robotics engineering organisation and what they mean for the pick-path pilot.\n\n## Changes\n\n1. **Otis Dummyson** joined Lambda in February as **Head of Platform**.\n2. **Tobín Dummyson** was promoted to **Staff Engineer** this month. Day-to-day work is unchanged, but he will have more say in architecture.\n3. **Lorne Testcase** is moving to lead the robotics research group. Tobín reported to Lorne until the end of March; from April he reports to Otis.\n\n## Decisions\n\n- The pilot's platform work moves under Otis's team from April. Otis becomes Larkspur's escalation point; Tobín stays technical lead.\n\n## Action items\n\n- **Otis Dummyson** — set up a joint on-call rotation between Larkspur and the platform team by April 1.\n- **Alma Mockwell** — add Lorne Testcase to the Friday update distribution; send Otis written pre-reads before meetings.\n\n## Notes\n\n- Until the rotation exists, whoever's on call on the platform team handles anything urgent.\n- Otis prefers a written proposal a day before any meeting rather than being walked through slides.\n- Lorne's research group is on the same floor, and she will want to hear how the pilot goes since it started under her.\n"
   },
   "knownEntities": [
     {
@@ -253,11 +253,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -273,21 +273,21 @@
       ]
     },
     {
-      "id": "g-person-lena-park",
+      "id": "g-person-lorne-testcase",
       "type": "Person",
-      "label": "Lena Park",
+      "label": "Lorne Testcase",
       "aliases": [
-        "Lena"
+        "Lorne"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-sarah-chen",
+      "id": "g-person-sasha-example",
       "type": "Person",
-      "label": "Sarah Chen",
+      "label": "Sasha Example",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -296,12 +296,12 @@
       ]
     },
     {
-      "id": "g-person-tomas-aguilar",
+      "id": "g-person-tobin-dummyson",
       "type": "Person",
-      "label": "Tomás Aguilar",
+      "label": "Tobín Dummyson",
       "aliases": [
-        "Tomas Aguilar",
-        "Tomás"
+        "Tobin Dummyson",
+        "Tobín"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -337,52 +337,52 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "sarah",
+        "key": "sasha",
         "type": "Person",
-        "label": "Sarah Chen",
+        "label": "Sasha Example",
         "aliases": [],
-        "existingId": "g-person-sarah-chen",
+        "existingId": "g-person-sasha-example",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Sarah Chen walked us through three changes"
+            "quote": "Sasha Example walked us through three changes"
           }
         ]
       },
       {
-        "key": "tomas",
+        "key": "tobin",
         "type": "Person",
-        "label": "Tomás Aguilar",
+        "label": "Tobín Dummyson",
         "aliases": [],
-        "existingId": "g-person-tomas-aguilar",
+        "existingId": "g-person-tobin-dummyson",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m09-s004",
-            "quote": "Tomás was promoted to Staff Engineer this month."
+            "quote": "Tobín was promoted to Staff Engineer this month."
           }
         ]
       },
       {
-        "key": "owen",
+        "key": "otis",
         "type": "Person",
-        "label": "Owen Barker",
+        "label": "Otis Dummyson",
         "aliases": [],
         "existingId": null,
         "props": {},
@@ -390,22 +390,22 @@
           {
             "source": "segment",
             "segmentId": "m09-s002",
-            "quote": "I want to introduce Owen Barker."
+            "quote": "I want to introduce Otis Dummyson."
           }
         ]
       },
       {
-        "key": "lena",
+        "key": "lorne",
         "type": "Person",
-        "label": "Lena Park",
+        "label": "Lorne Testcase",
         "aliases": [],
-        "existingId": "g-person-lena-park",
+        "existingId": "g-person-lorne-testcase",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m09-s007",
-            "quote": "Lena Park is moving to lead our robotics research group."
+            "quote": "Lorne Testcase is moving to lead our robotics research group."
           }
         ]
       },
@@ -441,7 +441,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -450,13 +450,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sarah",
+        "from": "sasha",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -465,13 +465,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "tomas",
+        "from": "tobin",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -480,13 +480,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "owen",
+        "from": "otis",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -495,13 +495,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "owen",
+        "from": "otis",
         "to": "nwr",
         "validFrom": "2026-02-01",
         "validTo": null,
@@ -511,13 +511,13 @@
           {
             "source": "segment",
             "segmentId": "m09-s002",
-            "quote": "Owen joined us in February as Head of Platform."
+            "quote": "Otis joined us in February as Head of Platform."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "owen",
+        "from": "otis",
         "to": "nwr",
         "validFrom": "2026-02-01",
         "validTo": null,
@@ -529,13 +529,13 @@
           {
             "source": "segment",
             "segmentId": "m09-s002",
-            "quote": "Owen joined us in February as Head of Platform."
+            "quote": "Otis joined us in February as Head of Platform."
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "tomas",
+        "from": "tobin",
         "to": "nwr",
         "validFrom": "2026-03-01",
         "validTo": null,
@@ -547,14 +547,14 @@
           {
             "source": "segment",
             "segmentId": "m09-s004",
-            "quote": "Tomás was promoted to Staff Engineer this month."
+            "quote": "Tobín was promoted to Staff Engineer this month."
           }
         ]
       },
       {
         "type": "REPORTS_TO",
-        "from": "tomas",
-        "to": "lena",
+        "from": "tobin",
+        "to": "lorne",
         "validFrom": null,
         "validTo": "2026-04-01",
         "precision": "month",
@@ -563,14 +563,14 @@
           {
             "source": "segment",
             "segmentId": "m09-s009",
-            "quote": "Tomás reported to Lena until the end of March."
+            "quote": "Tobín reported to Lorne until the end of March."
           }
         ]
       },
       {
         "type": "REPORTS_TO",
-        "from": "tomas",
-        "to": "owen",
+        "from": "tobin",
+        "to": "otis",
         "validFrom": "2026-04-01",
         "validTo": null,
         "precision": "month",
@@ -579,7 +579,7 @@
           {
             "source": "segment",
             "segmentId": "m09-s009",
-            "quote": "From April he reports to Owen instead."
+            "quote": "From April he reports to Otis instead."
           }
         ]
       },
@@ -602,11 +602,11 @@
     "items": [
       {
         "kind": "claim",
-        "subject": "lena",
+        "subject": "lorne",
         "owner": null,
         "counterparty": null,
-        "title": "Lena moving to robotics research",
-        "statement": "Lena Park is moving to lead the robotics research group.",
+        "title": "Lorne moving to robotics research",
+        "statement": "Lorne Testcase is moving to lead the robotics research group.",
         "status": null,
         "occurredAt": "2026-03-05",
         "dueAt": null,
@@ -616,7 +616,7 @@
           {
             "source": "segment",
             "segmentId": "m09-s007",
-            "quote": "Lena Park is moving to lead our robotics research group."
+            "quote": "Lorne Testcase is moving to lead our robotics research group."
           }
         ]
       },
@@ -625,8 +625,8 @@
         "subject": "pilot",
         "owner": null,
         "counterparty": null,
-        "title": "Platform work moves under Owen's team",
-        "statement": "The pilot's platform work moves under Owen's team from April, making Owen the escalation point.",
+        "title": "Platform work moves under Otis's team",
+        "statement": "The pilot's platform work moves under Otis's team from April, making Otis the escalation point.",
         "status": null,
         "occurredAt": "2026-03-05",
         "dueAt": null,
@@ -643,10 +643,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "owen",
+        "owner": "otis",
         "counterparty": "g-org-larkspur-labs",
         "title": "Set up joint on-call rotation",
-        "statement": "Owen will set up the joint on-call rotation with Larkspur by April 1.",
+        "statement": "Otis will set up the joint on-call rotation with Larkspur by April 1.",
         "status": "open",
         "occurredAt": "2026-03-05",
         "dueAt": "2026-04-01",
@@ -663,10 +663,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "alex",
-        "counterparty": "lena",
-        "title": "Add Lena to Friday updates",
-        "statement": "Alex will make sure Lena gets the Friday updates too.",
+        "owner": "alma",
+        "counterparty": "lorne",
+        "title": "Add Lorne to Friday updates",
+        "statement": "Alma will make sure Lorne gets the Friday updates too.",
         "status": "open",
         "occurredAt": "2026-03-05",
         "dueAt": null,
@@ -682,11 +682,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "owen",
+        "subject": "otis",
         "owner": null,
         "counterparty": null,
         "title": "Prefers written pre-reads",
-        "statement": "Owen prefers a written proposal a day before any meeting rather than slides.",
+        "statement": "Otis prefers a written proposal a day before any meeting rather than slides.",
         "status": null,
         "occurredAt": "2026-03-05",
         "dueAt": null,

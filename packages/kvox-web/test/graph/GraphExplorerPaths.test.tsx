@@ -9,7 +9,7 @@ import 'vitest-axe/extend-expect';
 import type { GraphCanvasProps } from '../../src/graph/ui/components/explorer/GraphCanvas.js';
 import { GraphExplorerPage } from '../../src/graph/ui/pages/GraphExplorerPage.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
-import { KAPPA_ID, JOE_ID, entityDetail, expandFixture, graphEntitySummaries, type ExpandFixtureRequest } from './graphData.js';
+import { KAPPA_ID, JONTY_ID, entityDetail, expandFixture, graphEntitySummaries, type ExpandFixtureRequest } from './graphData.js';
 import { PRODUCT_X_ID, PRODUCT_X_SUMMARY, EDGE_INVOLVED, EDGE_USES, pathEvidence, pathsResponse } from './pathsData.js';
 import { graphReader } from './graphTestUsers.js';
 import { render } from './helpers.js';
@@ -133,7 +133,7 @@ function renderExplorer(route: string) {
   );
 }
 
-const PAIR = `seed=${JOE_ID}&pathFrom=${JOE_ID}&pathTo=${PRODUCT_X_ID}`;
+const PAIR = `seed=${JONTY_ID}&pathFrom=${JONTY_ID}&pathTo=${PRODUCT_X_ID}`;
 
 async function pathReady() {
   const list = await screen.findByRole('list', { name: /^Path 1, strong evidence/ });
@@ -141,17 +141,17 @@ async function pathReady() {
 }
 
 describe('path mode — results', () => {
-  it('Joe to the Product X rollout: two ranked paths, each hop with a quote and a working deep link', async () => {
+  it('Jonty to the Product X rollout: two ranked paths, each hop with a quote and a working deep link', async () => {
     renderExplorer(`/graph/explore?${PAIR}`);
     const list = await pathReady();
 
     expect(list).toHaveAccessibleName(
-      'Path 1, strong evidence, 1 hop: Joe Rivera, involved in as stakeholder, skeptical, Product X rollout',
+      'Path 1, strong evidence, 1 hop: Jonty Placeholder, involved in as stakeholder, skeptical, Product X rollout',
     );
     expect(screen.getByRole('button', { name: /^Path 1, strong evidence$/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /^Path 2, moderate evidence$/ })).toBeInTheDocument();
 
-    const quote = await within(list).findByText(/Joe is a stakeholder on the Product X rollout/);
+    const quote = await within(list).findByText(/Jonty is a stakeholder on the Product X rollout/);
     expect(quote).toBeInTheDocument();
     const link = within(list).getByRole('link', { name: /Open at source: Product X sync/ });
     expect(link).toHaveAttribute('href', expect.stringContaining('/notes/'));
@@ -159,7 +159,7 @@ describe('path mode — results', () => {
     expect(within(list).getByRole('button', { name: '4 more sources for this connection' })).toBeInTheDocument();
 
     // The request: the pair, three paths, four hops, and the canvas's date.
-    expect(pathRequests[0].searchParams.get('from')).toBe(JOE_ID);
+    expect(pathRequests[0].searchParams.get('from')).toBe(JONTY_ID);
     expect(pathRequests[0].searchParams.get('to')).toBe(PRODUCT_X_ID);
     expect(pathRequests[0].searchParams.get('k')).toBe('3');
     expect(pathRequests[0].searchParams.get('maxHops')).toBe('4');
@@ -186,7 +186,7 @@ describe('path mode — results', () => {
   it('is accessible', async () => {
     const { container } = renderExplorer(`/graph/explore?${PAIR}`);
     const list = await pathReady();
-    await within(list).findByText(/Joe is a stakeholder/);
+    await within(list).findByText(/Jonty is a stakeholder/);
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
@@ -206,9 +206,9 @@ describe('path mode — on the canvas', () => {
     await within(canvas).findByRole('button', { name: 'Product X rollout' });
     // Merge, not replace: Kappa was already there.
     expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toBeInTheDocument();
-    await waitFor(() => expect(canvas).toHaveAttribute('data-path-nodes', [JOE_ID, PRODUCT_X_ID].sort().join(',')));
+    await waitFor(() => expect(canvas).toHaveAttribute('data-path-nodes', [JONTY_ID, PRODUCT_X_ID].sort().join(',')));
     expect(canvas).toHaveAttribute('data-path-edges', EDGE_INVOLVED);
-    await waitFor(() => expect(mocks.fitTo).toHaveBeenCalledWith([JOE_ID, PRODUCT_X_ID]));
+    await waitFor(() => expect(mocks.fitTo).toHaveBeenCalledWith([JONTY_ID, PRODUCT_X_ID]));
   });
 
   it('switching to another path while it is shown re-highlights and re-fits', async () => {
@@ -219,7 +219,7 @@ describe('path mode — on the canvas', () => {
     await waitFor(() => expect(mocks.fitTo).toHaveBeenCalledTimes(1));
 
     await user.click(screen.getByRole('button', { name: /^Path 2, moderate evidence$/ }));
-    await waitFor(() => expect(mocks.fitTo).toHaveBeenCalledWith([JOE_ID, KAPPA_ID, PRODUCT_X_ID]));
+    await waitFor(() => expect(mocks.fitTo).toHaveBeenCalledWith([JONTY_ID, KAPPA_ID, PRODUCT_X_ID]));
     expect(screen.getByTestId('fake-canvas')).toHaveAttribute('data-path-edges', expect.stringContaining(EDGE_USES));
   });
 
@@ -228,7 +228,7 @@ describe('path mode — on the canvas', () => {
     renderExplorer(`/graph/explore?${PAIR}`);
     const list = await pathReady();
     const hop = within(list).getByRole('button', {
-      name: 'Joe Rivera, involved in as stakeholder, skeptical, Product X rollout. Open this connection in the inspector.',
+      name: 'Jonty Placeholder, involved in as stakeholder, skeptical, Product X rollout. Open this connection in the inspector.',
     });
     hop.focus();
     await user.keyboard('{Enter}');
@@ -241,10 +241,10 @@ describe('path mode — on the canvas', () => {
 describe('path mode — URL and entry points', () => {
   it('a link with only pathFrom opens the picker with A filled in; Find paths writes the URL', async () => {
     const user = userEvent.setup();
-    renderExplorer(`/graph/explore?seed=${JOE_ID}&pathFrom=${JOE_ID}`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}&pathFrom=${JONTY_ID}`);
 
     const a = await screen.findByRole('combobox', { name: 'From (A)' });
-    await waitFor(() => expect(a).toHaveValue('Joe Rivera'));
+    await waitFor(() => expect(a).toHaveValue('Jonty Placeholder'));
     const find = screen.getByRole('button', { name: 'Find paths' });
     expect(find).toBeDisabled();
 
@@ -255,7 +255,7 @@ describe('path mode — URL and entry points', () => {
     await user.click(find);
 
     await waitFor(() => expect(currentUrl().searchParams.get('pathTo')).toBe(PRODUCT_X_ID));
-    expect(currentUrl().searchParams.get('pathFrom')).toBe(JOE_ID);
+    expect(currentUrl().searchParams.get('pathFrom')).toBe(JONTY_ID);
     expect(currentUrl().searchParams.get('pathHops')).toBe('2');
     await pathReady();
     expect(pathRequests.at(-1)!.searchParams.get('maxHops')).toBe('2');
@@ -263,7 +263,7 @@ describe('path mode — URL and entry points', () => {
 
   it('the command palette offers "Connect A \u2194 B\u2026", which opens the picker', async () => {
     const user = userEvent.setup();
-    renderExplorer(`/graph/explore?seed=${JOE_ID}`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}`);
     await screen.findByTestId('fake-canvas');
     await user.keyboard('/');
     await user.click(await screen.findByRole('option', { name: /Connect A/ }));
@@ -284,36 +284,36 @@ describe('path mode — URL and entry points', () => {
     await pathReady();
     await user.click(await screen.findByRole('button', { name: 'Change the connection' }));
     const a = await screen.findByRole('combobox', { name: 'From (A)' });
-    await waitFor(() => expect(a).toHaveValue('Joe Rivera'));
+    await waitFor(() => expect(a).toHaveValue('Jonty Placeholder'));
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'To (B)' })).toHaveValue('Product X rollout'));
     await user.click(screen.getByRole('button', { name: 'Swap A and B' }));
     expect(screen.getByRole('combobox', { name: 'From (A)' })).toHaveValue('Product X rollout');
-    expect(screen.getByRole('combobox', { name: 'To (B)' })).toHaveValue('Joe Rivera');
+    expect(screen.getByRole('combobox', { name: 'To (B)' })).toHaveValue('Jonty Placeholder');
   });
 
   it('the inspector offers "Path to…" with A pre-filled', async () => {
     const user = userEvent.setup();
-    renderExplorer(`/graph/explore?seed=${JOE_ID}`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}`);
     const canvas = await screen.findByTestId('fake-canvas');
-    await user.click(await within(canvas).findByRole('button', { name: 'Joe Rivera' }));
+    await user.click(await within(canvas).findByRole('button', { name: 'Jonty Placeholder' }));
 
     await user.click(await screen.findByRole('button', { name: 'Path to…' }));
 
-    expect(currentUrl().searchParams.get('pathFrom')).toBe(JOE_ID);
+    expect(currentUrl().searchParams.get('pathFrom')).toBe(JONTY_ID);
     expect(currentUrl().searchParams.get('pathTo')).toBeNull();
     const a = await screen.findByRole('combobox', { name: 'From (A)' });
-    await waitFor(() => expect(a).toHaveValue('Joe Rivera'));
+    await waitFor(() => expect(a).toHaveValue('Jonty Placeholder'));
   });
 
   it('the node context menu offers "Path to…"', async () => {
     const user = userEvent.setup();
-    renderExplorer(`/graph/explore?seed=${JOE_ID}`);
+    renderExplorer(`/graph/explore?seed=${JONTY_ID}`);
     const canvas = await screen.findByTestId('fake-canvas');
-    fireEvent.contextMenu(await within(canvas).findByRole('button', { name: 'Joe Rivera' }));
+    fireEvent.contextMenu(await within(canvas).findByRole('button', { name: 'Jonty Placeholder' }));
 
     await user.click(await screen.findByRole('menuitem', { name: 'Path to…' }));
 
-    expect(currentUrl().searchParams.get('pathFrom')).toBe(JOE_ID);
+    expect(currentUrl().searchParams.get('pathFrom')).toBe(JONTY_ID);
     expect(await screen.findByRole('combobox', { name: 'From (A)' })).toBeInTheDocument();
   });
 
@@ -324,7 +324,7 @@ describe('path mode — URL and entry points', () => {
     await user.click(screen.getByRole('button', { name: 'Close the connection' }));
     await waitFor(() => expect(currentUrl().searchParams.get('pathFrom')).toBeNull());
     expect(currentUrl().searchParams.get('pathTo')).toBeNull();
-    expect(currentUrl().searchParams.get('seed')).toBe(JOE_ID);
+    expect(currentUrl().searchParams.get('seed')).toBe(JONTY_ID);
   });
 });
 

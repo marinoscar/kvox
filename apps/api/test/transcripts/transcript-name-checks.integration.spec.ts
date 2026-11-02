@@ -59,7 +59,7 @@ const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const speakerRows = [{ id: SPEAKER_A, label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 }];
+const speakerRows = [{ id: SPEAKER_A, label: 'A', displayName: 'Orlo', colorIndex: 0, rev: 1 }];
 
 const segmentRows = [
   {
@@ -67,7 +67,7 @@ const segmentRows = [
     rev: 1,
     speakerId: SPEAKER_A,
     startMs: 0,
-    text: 'They called him Skar yesterday.',
+    text: 'They called him Rolo yesterday.',
     words: null,
   },
 ];
@@ -140,7 +140,7 @@ describe('AI name correction Integration', () => {
         mode: 'standard',
         status: 'pending',
         basedOnVersion: 3,
-        terms: ['Oscar'],
+        terms: ['Orlo'],
         providerId: 'openai',
         model: 'gpt-4o',
         candidateCount: 0,

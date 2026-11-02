@@ -43,8 +43,8 @@ const mockGetTranscript = vi.mocked(getTranscript);
 const mockGetSegments = vi.mocked(getTranscriptSegments);
 
 const SPEAKERS: TranscriptSpeaker[] = [
-  { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 3 },
-  { id: 'sp2', label: 'B', displayName: 'Ben', colorIndex: 1, rev: 1 },
+  { id: 'sp1', label: 'A', displayName: 'Anders', colorIndex: 0, rev: 3 },
+  { id: 'sp2', label: 'B', displayName: 'Bram', colorIndex: 1, rev: 1 },
 ];
 
 function segment(index: number, overrides: Partial<TranscriptSegment> = {}): TranscriptSegment {
@@ -219,11 +219,11 @@ describe('useTranscriptOperations — the ops it sends', () => {
     const { result: hook } = setup();
 
     await act(async () => {
-      await hook.current.renameSpeaker('sp1', '  Ana Ruiz  ');
+      await hook.current.renameSpeaker('sp1', '  Anders Stubbs  ');
     });
 
     expect(mockApply.mock.calls[0][2].ops).toEqual([
-      { op: 'speaker.rename', speakerId: 'sp1', rev: 3, displayName: 'Ana Ruiz' },
+      { op: 'speaker.rename', speakerId: 'sp1', rev: 3, displayName: 'Anders Stubbs' },
     ]);
   });
 
@@ -313,7 +313,7 @@ describe('useTranscriptOperations — idempotency and retry', () => {
       await hook.current.setSpeaker('s0', 'sp2');
     });
     await act(async () => {
-      await hook.current.renameSpeaker('sp2', 'Ben Olsen');
+      await hook.current.renameSpeaker('sp2', 'Bram Fixture');
     });
 
     const first = mockApply.mock.calls[0][2].clientBatchId;
@@ -485,7 +485,7 @@ describe('useTranscriptOperations — offline and the unload guard', () => {
 describe('useTranscriptOperations — undo a merge', () => {
   const merged = result({
     version: 8,
-    summary: 'Merged Ben into Ana',
+    summary: 'Merged Bram into Anders',
     merges: [
       {
         targetId: 'sp1',
@@ -493,7 +493,7 @@ describe('useTranscriptOperations — undo a merge', () => {
           {
             speakerId: 'sp2',
             label: 'B',
-            displayName: 'Ben',
+            displayName: 'Bram',
             colorIndex: 1,
             segmentIds: ['s1'],
           },
@@ -533,7 +533,7 @@ describe('useTranscriptOperations — undo a merge', () => {
     const recreated: TranscriptSpeaker = {
       id: 'sp9',
       label: null,
-      displayName: 'Ben',
+      displayName: 'Bram',
       colorIndex: 1,
       rev: 1,
     };
@@ -544,7 +544,7 @@ describe('useTranscriptOperations — undo a merge', () => {
       )
       .mockResolvedValueOnce(result({ version: 13 }));
     await act(async () => {
-      await hook.current.renameSpeaker('sp1', 'Ana Ruiz');
+      await hook.current.renameSpeaker('sp1', 'Anders Stubbs');
     });
 
     mockApply.mockClear();
@@ -558,7 +558,7 @@ describe('useTranscriptOperations — undo a merge', () => {
 
     expect(mockRestore).not.toHaveBeenCalled();
     expect(mockApply.mock.calls[0][2].ops).toEqual([
-      { op: 'speaker.create', displayName: 'Ben' },
+      { op: 'speaker.create', displayName: 'Bram' },
     ]);
     expect(mockApply.mock.calls[1][2].ops).toEqual([
       { op: 'segment.set_speaker', segmentId: 's1', rev: 2, speakerId: 'sp9' },

@@ -6,12 +6,12 @@
 // the 3 s statement timeout are only real against Postgres. Excluded from
 // `npm test`; run by `npm run test:db`.
 //
-// The reference scenario (the epic's question, "how is Joe connected to the
+// The reference scenario (the epic's question, "how is Jonty connected to the
 // Product X rollout?"), with the relation types that exist in the ontology:
 //
-//   Joe -ATTENDED-> Product X rollout                                     1 hop
-//   Joe -WORKS_FOR-> Company A <-PART_OF- Product X program <-PART_OF- Product X rollout   3 hops
-//   Joe -ATTENDED-> Kickoff -PART_OF-> Product X program <-PART_OF- Product X rollout      3 hops
+//   Jonty -ATTENDED-> Product X rollout                                     1 hop
+//   Jonty -WORKS_FOR-> Company A <-PART_OF- Product X program <-PART_OF- Product X rollout   3 hops
+//   Jonty -ATTENDED-> Kickoff -PART_OF-> Product X program <-PART_OF- Product X rollout      3 hops
 //
 // What it proves: the shortest path is found, ranking follows evidence, at
 // most k DISTINCT paths come back, "no connection" is an empty list and not an
@@ -98,18 +98,18 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
 
   /** The reference scenario; every relation carries one evidence row (the fixture's). */
   async function scenario(g: GraphFixture, worksForValid = '[2020-01-01,)') {
-    const joe = await g.entity('Person', 'Joe');
+    const jonty = await g.entity('Person', 'Jonty');
     const rollout = await g.entity('Meeting', 'Product X rollout');
     const kickoff = await g.entity('Meeting', 'Kickoff');
     const program = await g.entity('Project', 'Product X program');
     const companyA = await g.entity('Organization', 'Company A');
-    const direct = await g.relation('ATTENDED', joe, rollout);
-    const worksFor = await g.relation('WORKS_FOR', joe, companyA, { valid: worksForValid, precision: 'year' });
+    const direct = await g.relation('ATTENDED', jonty, rollout);
+    const worksFor = await g.relation('WORKS_FOR', jonty, companyA, { valid: worksForValid, precision: 'year' });
     const programOf = await g.relation('PART_OF', program, companyA);
     const rolloutOf = await g.relation('PART_OF', rollout, program);
-    const attendedKickoff = await g.relation('ATTENDED', joe, kickoff);
+    const attendedKickoff = await g.relation('ATTENDED', jonty, kickoff);
     const kickoffOf = await g.relation('PART_OF', kickoff, program);
-    return { joe, rollout, kickoff, program, companyA, direct, worksFor, programOf, rolloutOf, attendedKickoff, kickoffOf };
+    return { jonty, rollout, kickoff, program, companyA, direct, worksFor, programOf, rolloutOf, attendedKickoff, kickoffOf };
   }
 
   // ---------------------------------------------------------------------------
@@ -120,25 +120,25 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
     const { user, g } = await owner();
     const s = await scenario(g);
 
-    const res = await find(user.id, s.joe, s.rollout, { k: 5 });
-    expect(res.from).toBe(s.joe);
+    const res = await find(user.id, s.jonty, s.rollout, { k: 5 });
+    expect(res.from).toBe(s.jonty);
     expect(res.to).toBe(s.rollout);
     expect(res.asOf).toBeNull();
     expect(res.truncated).toBe(false);
 
     // Equal evidence everywhere: ties break on fewer hops.
     expect(res.paths.map((p) => p.hops)).toEqual([1, 3, 3]);
-    expect(res.paths[0]).toMatchObject({ nodeIds: [s.joe, s.rollout], edgeIds: [s.direct] });
+    expect(res.paths[0]).toMatchObject({ nodeIds: [s.jonty, s.rollout], edgeIds: [s.direct] });
     const three = res.paths.slice(1).map((p) => p.nodeIds.join('>'));
-    expect(three).toContain([s.joe, s.companyA, s.program, s.rollout].join('>'));
-    expect(three).toContain([s.joe, s.kickoff, s.program, s.rollout].join('>'));
+    expect(three).toContain([s.jonty, s.companyA, s.program, s.rollout].join('>'));
+    expect(three).toContain([s.jonty, s.kickoff, s.program, s.rollout].join('>'));
     const viaCompany = res.paths.find((p) => p.nodeIds.includes(s.companyA))!;
     expect(viaCompany.edgeIds).toEqual([s.worksFor, s.programOf, s.rolloutOf]);
 
     // Distinct node sets, every path starts at from and ends at to.
     expect(new Set(res.paths.map((p) => [...p.nodeIds].sort().join('|'))).size).toBe(res.paths.length);
     for (const p of res.paths) {
-      expect(p.nodeIds[0]).toBe(s.joe);
+      expect(p.nodeIds[0]).toBe(s.jonty);
       expect(p.nodeIds[p.nodeIds.length - 1]).toBe(s.rollout);
       expect(p.edgeIds).toHaveLength(p.hops);
       expect(p.nodeIds).toHaveLength(p.hops + 1);
@@ -149,11 +149,11 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
     const { user, g } = await owner();
     const s = await scenario(g);
 
-    const res = await find(user.id, s.joe, s.rollout, { k: 5 });
+    const res = await find(user.id, s.jonty, s.rollout, { k: 5 });
     const nodeIds = res.slice.nodes.map((n) => n.id).sort();
-    expect(nodeIds).toEqual([s.joe, s.rollout, s.kickoff, s.program, s.companyA].sort());
-    expect(res.slice.seedIds).toEqual([s.joe, s.rollout]);
-    expect(res.slice.nodes.find((n) => n.id === s.joe)).toMatchObject({ depth: 0, label: 'Joe', nodeKind: 'entity' });
+    expect(nodeIds).toEqual([s.jonty, s.rollout, s.kickoff, s.program, s.companyA].sort());
+    expect(res.slice.seedIds).toEqual([s.jonty, s.rollout]);
+    expect(res.slice.nodes.find((n) => n.id === s.jonty)).toMatchObject({ depth: 0, label: 'Jonty', nodeKind: 'entity' });
     expect(res.slice.nodes.find((n) => n.id === s.program)?.depth).toBe(1);
 
     const edgeIds = res.slice.edges.map((e) => e.id).sort();
@@ -178,8 +178,8 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
       for (let i = 0; i < 5; i++) await g.evidence('relation', id);
     }
 
-    const res = await find(user.id, s.joe, s.rollout, { k: 5 });
-    expect(res.paths[0].nodeIds).toEqual([s.joe, s.companyA, s.program, s.rollout]);
+    const res = await find(user.id, s.jonty, s.rollout, { k: 5 });
+    expect(res.paths[0].nodeIds).toEqual([s.jonty, s.companyA, s.program, s.rollout]);
     expect(res.paths[0].score).toBeCloseTo(Math.log(7), 3);
     expect(res.paths[0].score).toBeGreaterThan(res.paths[1].score);
     const scores = res.paths.map((p) => p.score);
@@ -190,20 +190,20 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
   it('returns at most k paths, and a single path for k=1', async () => {
     const { user, g } = await owner();
     const s = await scenario(g);
-    expect((await find(user.id, s.joe, s.rollout, { k: 1 })).paths).toHaveLength(1);
-    expect((await find(user.id, s.joe, s.rollout, { k: 2 })).paths).toHaveLength(2);
-    expect((await find(user.id, s.joe, s.rollout, { k: 5 })).paths.length).toBeLessThanOrEqual(5);
+    expect((await find(user.id, s.jonty, s.rollout, { k: 1 })).paths).toHaveLength(1);
+    expect((await find(user.id, s.jonty, s.rollout, { k: 2 })).paths).toHaveLength(2);
+    expect((await find(user.id, s.jonty, s.rollout, { k: 5 })).paths.length).toBeLessThanOrEqual(5);
   });
 
   it('counts parallel edges between the same two nodes as one path', async () => {
     const { user, g } = await owner();
-    const joe = await g.entity('Person', 'Joe');
+    const jonty = await g.entity('Person', 'Jonty');
     const meeting = await g.entity('Meeting', 'Sync');
-    const a = await g.relation('ATTENDED', joe, meeting);
-    const b = await g.relation('ATTENDED', joe, meeting);
+    const a = await g.relation('ATTENDED', jonty, meeting);
+    const b = await g.relation('ATTENDED', jonty, meeting);
     await g.evidence('relation', b);
 
-    const res = await find(user.id, joe, meeting, { k: 5 });
+    const res = await find(user.id, jonty, meeting, { k: 5 });
     expect(res.paths).toHaveLength(1);
     // The better-evidenced of the two is the one the path uses.
     expect(res.paths[0].edgeIds).toEqual([b]);
@@ -212,19 +212,19 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
 
   it('answers a symmetric relation from either end, in its stored direction', async () => {
     const { user, g } = await owner();
-    const ana = await g.entity('Person', 'Ana');
-    const ben = await g.entity('Person', 'Ben');
-    const friends = await g.relation('FRIEND_OF', ana, ben);
+    const anders = await g.entity('Person', 'Anders');
+    const bram = await g.entity('Person', 'Bram');
+    const friends = await g.relation('FRIEND_OF', anders, bram);
 
     for (const [from, to] of [
-      [ana, ben],
-      [ben, ana],
+      [anders, bram],
+      [bram, anders],
     ]) {
       const res = await find(user.id, from, to);
       expect(res.paths).toHaveLength(1);
       expect(res.paths[0].hops).toBe(1);
       expect(res.slice.edges).toHaveLength(1);
-      expect(res.slice.edges[0]).toMatchObject({ id: friends, source: ana, target: ben });
+      expect(res.slice.edges[0]).toMatchObject({ id: friends, source: anders, target: bram });
     }
   });
 
@@ -237,20 +237,20 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
     const s = await scenario(g);
     const stranger = await g.entity('Person', 'Stranger');
 
-    const res = await find(user.id, s.joe, stranger);
+    const res = await find(user.id, s.jonty, stranger);
     expect(res.paths).toEqual([]);
     expect(res.truncated).toBe(false);
     // The endpoints are still in the slice, so the UI can name them.
-    expect(res.slice.nodes.map((n) => n.id).sort()).toEqual([s.joe, stranger].sort());
+    expect(res.slice.nodes.map((n) => n.id).sort()).toEqual([s.jonty, stranger].sort());
     expect(res.slice.edges).toEqual([]);
   });
 
   it('honours maxHops: the 3-hop routes need maxHops >= 3', async () => {
     const { user, g } = await owner();
     const s = await scenario(g);
-    expect((await find(user.id, s.joe, s.rollout, { k: 5, maxHops: 1 })).paths.map((p) => p.hops)).toEqual([1]);
-    expect((await find(user.id, s.joe, s.rollout, { k: 5, maxHops: 2 })).paths.map((p) => p.hops)).toEqual([1]);
-    expect((await find(user.id, s.joe, s.rollout, { k: 5, maxHops: 3 })).paths.map((p) => p.hops)).toEqual([1, 3, 3]);
+    expect((await find(user.id, s.jonty, s.rollout, { k: 5, maxHops: 1 })).paths.map((p) => p.hops)).toEqual([1]);
+    expect((await find(user.id, s.jonty, s.rollout, { k: 5, maxHops: 2 })).paths.map((p) => p.hops)).toEqual([1]);
+    expect((await find(user.id, s.jonty, s.rollout, { k: 5, maxHops: 3 })).paths.map((p) => p.hops)).toEqual([1, 3, 3]);
     // A path of 5 edges is found with maxHops=5 and not with 4.
     const chain: string[] = [];
     for (let i = 0; i < 6; i++) chain.push(await g.entity('Person', `Chain ${i}`));
@@ -286,57 +286,57 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
     const { user, g } = await owner();
     const s = await scenario(g, '[2020-01-01,2022-01-01)');
 
-    const now = await find(user.id, s.joe, s.rollout, { k: 5 });
+    const now = await find(user.id, s.jonty, s.rollout, { k: 5 });
     expect(now.paths.some((p) => p.nodeIds.includes(s.companyA))).toBe(false);
 
-    const during = await find(user.id, s.joe, s.rollout, { k: 5, as_of: '2021-06-01' });
+    const during = await find(user.id, s.jonty, s.rollout, { k: 5, as_of: '2021-06-01' });
     expect(during.paths.some((p) => p.nodeIds.includes(s.companyA))).toBe(true);
     expect(during.asOf).toBe('2021-06-01T00:00:00.000Z');
     expect(during.slice.asOf).toBe('2021-06-01T00:00:00.000Z');
 
-    const after = await find(user.id, s.joe, s.rollout, { k: 5, as_of: '2023-06-01' });
+    const after = await find(user.id, s.jonty, s.rollout, { k: 5, as_of: '2023-06-01' });
     expect(after.paths.some((p) => p.nodeIds.includes(s.companyA))).toBe(false);
     expect(after.paths).toHaveLength(2);
 
     // The range is half-open: the instant it ends is already outside it.
-    const boundary = await find(user.id, s.joe, s.rollout, { k: 5, as_of: '2022-01-01' });
+    const boundary = await find(user.id, s.jonty, s.rollout, { k: 5, as_of: '2022-01-01' });
     expect(boundary.paths.some((p) => p.nodeIds.includes(s.companyA))).toBe(false);
   });
 
   it('does not find a superseded or unreviewed relation now', async () => {
     const { user, g } = await owner();
-    const joe = await g.entity('Person', 'Joe');
+    const jonty = await g.entity('Person', 'Jonty');
     const meeting = await g.entity('Meeting', 'Sync');
-    await g.relation('ATTENDED', joe, meeting, { reviewStatus: 'unreviewed' });
-    await g.relation('ATTENDED', joe, meeting, { reviewStatus: 'rejected' });
-    expect((await find(user.id, joe, meeting)).paths).toEqual([]);
+    await g.relation('ATTENDED', jonty, meeting, { reviewStatus: 'unreviewed' });
+    await g.relation('ATTENDED', jonty, meeting, { reviewStatus: 'rejected' });
+    expect((await find(user.id, jonty, meeting)).paths).toEqual([]);
   });
 
   it('honours types: excluding Organization removes the route through Company A', async () => {
     const { user, g } = await owner();
     const s = await scenario(g);
-    const res = await find(user.id, s.joe, s.rollout, { k: 5, types: 'Person,Meeting,Project' });
+    const res = await find(user.id, s.jonty, s.rollout, { k: 5, types: 'Person,Meeting,Project' });
     expect(res.paths.map((p) => p.nodeIds.join('>')).sort()).toEqual(
-      [[s.joe, s.rollout].join('>'), [s.joe, s.kickoff, s.program, s.rollout].join('>')].sort(),
+      [[s.jonty, s.rollout].join('>'), [s.jonty, s.kickoff, s.program, s.rollout].join('>')].sort(),
     );
     // The endpoints are kept even when their own type is not listed.
-    const only = await find(user.id, s.joe, s.rollout, { k: 5, types: 'Organization' });
+    const only = await find(user.id, s.jonty, s.rollout, { k: 5, types: 'Organization' });
     expect(only.paths.map((p) => p.hops)).toEqual([1]);
   });
 
   it('honours relationTypes', async () => {
     const { user, g } = await owner();
     const s = await scenario(g);
-    const attended = await find(user.id, s.joe, s.rollout, { k: 5, relationTypes: 'ATTENDED' });
+    const attended = await find(user.id, s.jonty, s.rollout, { k: 5, relationTypes: 'ATTENDED' });
     expect(attended.paths).toHaveLength(1);
     expect(attended.paths[0].edgeIds).toEqual([s.direct]);
 
-    const viaCompany = await find(user.id, s.joe, s.rollout, { k: 5, relationTypes: 'WORKS_FOR,PART_OF' });
+    const viaCompany = await find(user.id, s.jonty, s.rollout, { k: 5, relationTypes: 'WORKS_FOR,PART_OF' });
     expect(viaCompany.paths).toHaveLength(1);
-    expect(viaCompany.paths[0].nodeIds).toEqual([s.joe, s.companyA, s.program, s.rollout]);
+    expect(viaCompany.paths[0].nodeIds).toEqual([s.jonty, s.companyA, s.program, s.rollout]);
 
-    await expect(find(user.id, s.joe, s.rollout, { relationTypes: 'NOT_A_RELATION' })).rejects.toBeInstanceOf(BadRequestException);
-    await expect(find(user.id, s.joe, s.rollout, { types: 'Spaceship' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(find(user.id, s.jonty, s.rollout, { relationTypes: 'NOT_A_RELATION' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(find(user.id, s.jonty, s.rollout, { types: 'Spaceship' })).rejects.toBeInstanceOf(BadRequestException);
   });
 
   // ---------------------------------------------------------------------------
@@ -384,49 +384,49 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
 
   it('treats an item as an endpoint only: never a stop on the way', async () => {
     const { user, g } = await owner();
-    const sarah = await g.entity('Person', 'Sarah');
-    const joe = await g.entity('Person', 'Joe');
-    const commitment = await g.item('commitment', { ownerPersonId: sarah, counterpartyId: joe, statement: 'Sarah will send the deck to Joe' });
+    const sasha = await g.entity('Person', 'Sasha');
+    const jonty = await g.entity('Person', 'Jonty');
+    const commitment = await g.item('commitment', { ownerPersonId: sasha, counterpartyId: jonty, statement: 'Sasha will send the deck to Jonty' });
 
-    // Joe - commitment - Sarah is NOT a path from Joe to Sarah.
-    expect((await find(user.id, joe, sarah)).paths).toEqual([]);
+    // Jonty - commitment - Sasha is NOT a path from Jonty to Sasha.
+    expect((await find(user.id, jonty, sasha)).paths).toEqual([]);
 
     // As an endpoint it is: the item to the person it names, with the derived edge in its true direction.
-    const res = await find(user.id, commitment, sarah);
+    const res = await find(user.id, commitment, sasha);
     expect(res.paths).toHaveLength(1);
-    expect(res.paths[0]).toMatchObject({ nodeIds: [commitment, sarah], hops: 1 });
-    expect(res.slice.edges[0]).toMatchObject({ virtual: true, type: 'ASSIGNED_TO', source: commitment, target: sarah });
+    expect(res.paths[0]).toMatchObject({ nodeIds: [commitment, sasha], hops: 1 });
+    expect(res.slice.edges[0]).toMatchObject({ virtual: true, type: 'ASSIGNED_TO', source: commitment, target: sasha });
     expect(res.slice.nodes.find((n) => n.id === commitment)).toMatchObject({ nodeKind: 'item', depth: 0 });
 
     // And an entity reaches an item endpoint from the other side.
-    const back = await find(user.id, joe, commitment);
+    const back = await find(user.id, jonty, commitment);
     expect(back.paths).toHaveLength(1);
-    expect(back.paths[0].nodeIds).toEqual([joe, commitment]);
+    expect(back.paths[0].nodeIds).toEqual([jonty, commitment]);
 
     // Two hops: the item, through the person it names, to someone that person knows.
-    const ben = await g.entity('Person', 'Ben');
-    await g.relation('FRIEND_OF', sarah, ben);
-    const two = await find(user.id, commitment, ben);
-    expect(two.paths[0].nodeIds).toEqual([commitment, sarah, ben]);
+    const bram = await g.entity('Person', 'Bram');
+    await g.relation('FRIEND_OF', sasha, bram);
+    const two = await find(user.id, commitment, bram);
+    expect(two.paths[0].nodeIds).toEqual([commitment, sasha, bram]);
   });
 
   it('never reaches or returns a sensitive PersonFact', async () => {
     const { user, g } = await owner();
-    const joe = await g.entity('Person', 'Joe');
-    const ana = await g.entity('Person', 'Ana');
-    await g.relation('FRIEND_OF', joe, ana);
-    const secret = await g.item('person_fact', { subjectId: joe, sensitivity: 'sensitive', statement: 'Joe has a health condition' });
-    const ordinary = await g.item('person_fact', { subjectId: joe, sensitivity: 'personal', statement: 'Joe likes tea' });
+    const jonty = await g.entity('Person', 'Jonty');
+    const anders = await g.entity('Person', 'Anders');
+    await g.relation('FRIEND_OF', jonty, anders);
+    const secret = await g.item('person_fact', { subjectId: jonty, sensitivity: 'sensitive', statement: 'Jonty has a health condition' });
+    const ordinary = await g.item('person_fact', { subjectId: jonty, sensitivity: 'personal', statement: 'Jonty likes tea' });
 
     // As an endpoint: the same 404 as a node that does not exist.
-    await expect(find(user.id, joe, secret)).rejects.toBeInstanceOf(NotFoundException);
-    await expect(find(user.id, secret, ana)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(find(user.id, jonty, secret)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(find(user.id, secret, anders)).rejects.toBeInstanceOf(NotFoundException);
     // A non-sensitive fact is an ordinary item endpoint.
-    expect((await find(user.id, ordinary, joe)).paths).toHaveLength(1);
+    expect((await find(user.id, ordinary, jonty)).paths).toHaveLength(1);
 
     // And it is on no slice.
-    for (const to of [ana, ordinary]) {
-      const res = await find(user.id, joe, to, { k: 5, maxHops: 5 });
+    for (const to of [anders, ordinary]) {
+      const res = await find(user.id, jonty, to, { k: 5, maxHops: 5 });
       expect(JSON.stringify(res)).not.toContain(secret);
     }
   });
@@ -440,31 +440,31 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
     const hub = await g.entity('Organization', 'Mega Corp');
     await bulkStar(prisma, user.id, hub, 5000);
     await analyze();
-    const ana = await g.entity('Person', 'Ana');
-    const ben = await g.entity('Person', 'Ben');
+    const anders = await g.entity('Person', 'Anders');
+    const bram = await g.entity('Person', 'Bram');
     const quiet = await g.entity('Meeting', 'Quiet meeting');
-    await g.relation('DISCUSSED', ana, hub);
-    await g.relation('DISCUSSED', ben, hub);
-    const a1 = await g.relation('ATTENDED', ana, quiet);
-    const a2 = await g.relation('ATTENDED', ben, quiet);
+    await g.relation('DISCUSSED', anders, hub);
+    await g.relation('DISCUSSED', bram, hub);
+    const a1 = await g.relation('ATTENDED', anders, quiet);
+    const a2 = await g.relation('ATTENDED', bram, quiet);
 
     // Two hops need no hub expansion at all: both routes are found, and nothing was capped.
-    const two = await find(user.id, ana, ben, { k: 5, maxHops: 2 });
+    const two = await find(user.id, anders, bram, { k: 5, maxHops: 2 });
     expect(two.truncated).toBe(false);
     expect(two.paths).toHaveLength(2);
     // Equal evidence and length: the route through the quiet meeting outranks the one through the 5,000-edge hub.
-    expect(two.paths[0].nodeIds).toEqual([ana, quiet, ben]);
+    expect(two.paths[0].nodeIds).toEqual([anders, quiet, bram]);
     expect(two.paths[0].edgeIds).toEqual([a1, a2]);
-    expect(two.paths[1].nodeIds).toEqual([ana, hub, ben]);
+    expect(two.paths[1].nodeIds).toEqual([anders, hub, bram]);
     expect(two.paths[0].score).toBeGreaterThan(two.paths[1].score);
 
     // Four hops expand the hub: the per-hop cap bites, the answer says so, and it is still correct and fast.
     const t0 = performance.now();
-    const four = await find(user.id, ana, ben, { k: 5, maxHops: 4 });
+    const four = await find(user.id, anders, bram, { k: 5, maxHops: 4 });
     const ms = performance.now() - t0;
     expect(ms).toBeLessThan(3000);
     expect(four.truncated).toBe(true);
-    expect(four.paths[0].nodeIds).toEqual([ana, quiet, ben]);
+    expect(four.paths[0].nodeIds).toEqual([anders, quiet, bram]);
     expect(four.paths.length).toBeGreaterThanOrEqual(2);
     // eslint-disable-next-line no-console
     console.log(`[graph-paths hub] 5,000-degree hub, maxHops=4: ${ms.toFixed(0)}ms truncated=${four.truncated}`);
@@ -475,12 +475,12 @@ describeWithDb('GraphPathsService (real Postgres)', () => {
     const hub = await g.entity('Organization', 'Mega Corp');
     await bulkStar(prisma, user.id, hub, 5000);
     await analyze();
-    const ana = await g.entity('Person', 'Ana');
-    const ben = await g.entity('Person', 'Ben');
-    await g.relation('DISCUSSED', ana, hub);
-    await g.relation('DISCUSSED', ben, hub);
+    const anders = await g.entity('Person', 'Anders');
+    const bram = await g.entity('Person', 'Bram');
+    await g.relation('DISCUSSED', anders, hub);
+    await g.relation('DISCUSSED', bram, hub);
 
-    const err = await find(user.id, ana, ben, { maxHops: 4 }, { timeoutMs: 1 }).catch((e: unknown) => e);
+    const err = await find(user.id, anders, bram, { maxHops: 4 }, { timeoutMs: 1 }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ServiceUnavailableException);
     expect((err as ServiceUnavailableException).getResponse()).toMatchObject({ details: { reason: 'graph_query_timeout' } });
   }, 60_000);

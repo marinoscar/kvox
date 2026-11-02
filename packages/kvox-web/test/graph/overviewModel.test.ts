@@ -19,7 +19,7 @@ import {
   topTypes,
 } from '../../src/graph/ui/components/overview/overviewModel.js';
 import type { GraphOverview } from '../../src/graph/headless/clients/graph.js';
-import { KAPPA_ID, BEACON_ID, OMEGA_ID, JOE_ID, gid, overviewFixture } from './graphData.js';
+import { KAPPA_ID, BEACON_ID, OMEGA_ID, JONTY_ID, gid, overviewFixture } from './graphData.js';
 
 /**
  * The overview's pure model (#375). Everything the page draws is decided here,
@@ -104,12 +104,12 @@ describe('buildNodeGraph', () => {
     const graph = buildNodeGraph(o, dark);
     expect(graph.order).toBe(o.nodes.length);
     expect(graph.size).toBe(0);
-    const joe = graph.getNodeAttributes(JOE_ID);
-    expect(joe).toMatchObject({ x: -330, y: 60, label: 'Joe Rivera', clusterId: 0, entityType: 'Person' });
-    expect(joe.color).toBe(clusterColor(0, dark));
-    expect(joe.size).toBeCloseTo(2 + Math.log2(6), 2);
+    const jonty = graph.getNodeAttributes(JONTY_ID);
+    expect(jonty).toMatchObject({ x: -330, y: 60, label: 'Jonty Placeholder', clusterId: 0, entityType: 'Person' });
+    expect(jonty.color).toBe(clusterColor(0, dark));
+    expect(jonty.size).toBeCloseTo(2 + Math.log2(6), 2);
     expect(graph.getNodeAttribute(gid(20), 'size')).toBe(2);
-    expect(joe).not.toHaveProperty('type');
+    expect(jonty).not.toHaveProperty('type');
   });
 });
 
@@ -117,28 +117,28 @@ describe('applyClusterFocus', () => {
   it('dims every node outside the cluster and restores them on null', () => {
     const graph = buildNodeGraph(overviewFixture(), light);
     applyClusterFocus(graph, 1, '#999999');
-    expect(graph.getNodeAttribute(JOE_ID, 'color')).toBe('#999999');
-    expect(graph.getNodeAttribute(JOE_ID, 'label')).toBe('');
+    expect(graph.getNodeAttribute(JONTY_ID, 'color')).toBe('#999999');
+    expect(graph.getNodeAttribute(JONTY_ID, 'label')).toBe('');
     expect(graph.getNodeAttribute(gid(2), 'color')).toBe(clusterColor(1, light));
     expect(graph.getNodeAttribute(gid(2), 'zIndex')).toBe(1);
 
     applyClusterFocus(graph, null, '#999999');
-    expect(graph.getNodeAttribute(JOE_ID, 'color')).toBe(clusterColor(0, light));
-    expect(graph.getNodeAttribute(JOE_ID, 'label')).toBe('Joe Rivera');
+    expect(graph.getNodeAttribute(JONTY_ID, 'color')).toBe(clusterColor(0, light));
+    expect(graph.getNodeAttribute(JONTY_ID, 'label')).toBe('Jonty Placeholder');
     expect(graph.getNodeAttribute(gid(2), 'zIndex')).toBe(0);
   });
 });
 
 describe('clusterSeedIds + clusterHandoff', () => {
   it('orders members by degree, then label', () => {
-    // Joe and Kappa both have degree 5: label breaks the tie.
+    // Jonty and Kappa both have degree 5: label breaks the tie.
     expect(clusterSeedIds(overviewFixture(), 0)).toEqual([
-      JOE_ID,
+      JONTY_ID,
       KAPPA_ID,
       gid(6), // Project Atlas (3)
-      gid(3), // Ben Okafor (2)
+      gid(3), // Bram Example (2)
       gid(7), // Q3 planning (2)
-      gid(12), // Dana Li (1)
+      gid(12), // Darcy Placeholder (1)
     ]);
   });
 
@@ -206,8 +206,8 @@ describe('toClusterList + keyboard order', () => {
   it('carries top types, sample labels and member links', () => {
     const [kappa] = toClusterList(overviewFixture());
     expect(kappa.topTypes).toEqual(['Person', 'Meeting', 'Organization']);
-    expect(kappa.sample[0]).toBe('Joe Rivera');
-    expect(kappa.members[0]).toEqual({ id: JOE_ID, label: 'Joe Rivera', type: 'Person' });
+    expect(kappa.sample[0]).toBe('Jonty Placeholder');
+    expect(kappa.members[0]).toEqual({ id: JONTY_ID, label: 'Jonty Placeholder', type: 'Person' });
     expect(kappa.labelEntityId).toBe(KAPPA_ID);
   });
 

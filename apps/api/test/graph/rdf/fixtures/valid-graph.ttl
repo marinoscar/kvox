@@ -29,8 +29,8 @@
 
 ent:a0000000-0000-4000-8000-000000000001
     a kv:Person, schema:Person ;
-    rdfs:label "Sarah Chen" ;
-    skos:altLabel "Sarah" ;
+    rdfs:label "Sasha Example" ;
+    skos:altLabel "Sasha" ;
     schema:jobTitle "Staff Engineer" ;
     kv:WORKS_FOR ent:a0000000-0000-4000-8000-000000000002 ;
     schema:worksFor ent:a0000000-0000-4000-8000-000000000002 ;
@@ -44,7 +44,7 @@ ent:a0000000-0000-4000-8000-000000000001
 
 ent:a0000000-0000-4000-8000-000000000005
     a kv:Person ;
-    rdfs:label "Marcus Webb" ;
+    rdfs:label "Maddox Sample" ;
     prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
 
 ent:a0000000-0000-4000-8000-000000000002
@@ -77,7 +77,7 @@ ent:a0000000-0000-4000-8000-000000000004
 itm:c0000000-0000-4000-8000-000000000001
     a kv:Commitment ;
     rdfs:label "Send the updated proposal by Friday" ;
-    kv:Commitment.statement "Sarah will send the updated proposal by Friday." ;
+    kv:Commitment.statement "Sasha will send the updated proposal by Friday." ;
     kv:status "open" ;
     kv:dueAt "2026-04-10T17:00:00Z"^^xsd:dateTime ;
     kv:ASSIGNED_TO ent:a0000000-0000-4000-8000-000000000001 ;
@@ -118,7 +118,7 @@ itm:c0000000-0000-4000-8000-000000000003
 itm:c0000000-0000-4000-8000-000000000004
     a kv:PersonFact ;
     rdfs:label "Prefers written updates" ;
-    kv:PersonFact.statement "Sarah prefers written updates." ;
+    kv:PersonFact.statement "Sasha prefers written updates." ;
     kv:status "active" ;
     kv:ABOUT ent:a0000000-0000-4000-8000-000000000001 ;
     prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .

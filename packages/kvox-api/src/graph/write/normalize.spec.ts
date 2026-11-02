@@ -7,16 +7,16 @@ describe('normalizeAlias', () => {
   });
 
   it('lowercases locale-independently', () => {
-    expect(normalizeAlias('SARAH CHEN')).toBe('sarah chen');
+    expect(normalizeAlias('SASHA EXAMPLE')).toBe('sasha example');
     expect(normalizeAlias('İstanbul')).toBe('i̇stanbul');
   });
 
   it('trims and collapses every run of whitespace to one space', () => {
-    expect(normalizeAlias('  Sarah \t\n  Chen  ')).toBe('sarah chen');
+    expect(normalizeAlias('  Sasha \t\n  Example  ')).toBe('sasha example');
   });
 
   it('strips leading and trailing punctuation and symbols, but keeps internal ones', () => {
-    expect(normalizeAlias('"Dr. Sarah Chen!"')).toBe('dr. sarah chen');
+    expect(normalizeAlias('"Dr. Sasha Example!"')).toBe('dr. sasha example');
     expect(normalizeAlias('-- AT&T --')).toBe('at&t');
     expect(normalizeAlias('★ Kappa ★')).toBe('kappa');
   });

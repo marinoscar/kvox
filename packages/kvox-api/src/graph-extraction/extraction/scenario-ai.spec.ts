@@ -7,7 +7,7 @@ import { addDeterministicRows, validateExtraction } from './validate.js';
 // The testing kit's scenario model (`@marinoscar/kvox-api/testing`) against the
 // REAL extraction prompt and validator: a host's end-to-end test relies on it
 // reading `assembleExtractionPrompt`'s shapes, so they are pinned together here.
-// The fixture's speaker A is identified ("Sarah Chen", known as k1), so its
+// The fixture's speaker A is identified ("Sasha Example", known as k1), so its
 // transcript lines carry a real name rather than "Speaker A".
 // =============================================================================
 
@@ -17,14 +17,14 @@ const { userContent } = assembleExtractionPrompt(ctx);
 function meeting(attended: boolean): KvoxScenarioMeeting {
   return {
     title: ctx.meetingTitle,
-    people: [{ label: 'Sarah Chen', quote: "I'm Sarah Chen", attended }],
+    people: [{ label: 'Sasha Example', quote: "I'm Sasha Example", attended }],
     relations: [],
     commitments: [
       {
-        owner: 'Sarah Chen',
+        owner: 'Sasha Example',
         counterparty: null,
         title: 'Send the updated proposal',
-        statement: 'Sarah Chen will send the updated proposal by Friday.',
+        statement: 'Sasha Example will send the updated proposal by Friday.',
         status: 'open',
         quote: "I'll send the updated proposal by Friday.",
       },
@@ -34,13 +34,13 @@ function meeting(attended: boolean): KvoxScenarioMeeting {
 
 describe('scenarioStructuredAnswer against the real kg_extraction prompt', () => {
   it('reads named speaker lines and known entities, and the validator accepts the answer', () => {
-    expect(userContent).toContain("s3 [00:12:03] Sarah Chen: I'll send the updated proposal by Friday.");
+    expect(userContent).toContain("s3 [00:12:03] Sasha Example: I'll send the updated proposal by Friday.");
     const answer = scenarioStructuredAnswer('kg_extraction', userContent, [meeting(true)]) as Record<string, any>;
 
-    // Sarah is a known entity: answered with her k#, never proposed again.
+    // Sasha is a known entity: answered with her k#, never proposed again.
     expect(answer.entities).toEqual([]);
     expect(answer.items[0]).toMatchObject({ owner: 'k1', evidence: [{ source: 's3' }] });
-    expect(answer.relations).toEqual([expect.objectContaining({ type: 'ATTENDED', from: 'k1', to: 'meeting', evidence: [{ source: 's1', quote: "I'm Sarah Chen" }] })]);
+    expect(answer.relations).toEqual([expect.objectContaining({ type: 'ATTENDED', from: 'k1', to: 'meeting', evidence: [{ source: 's1', quote: "I'm Sasha Example" }] })]);
 
     const result = validateExtraction(answer, ctx);
     expect(result.ok).toBe(true);

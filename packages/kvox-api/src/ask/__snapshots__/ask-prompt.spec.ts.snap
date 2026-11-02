@@ -8,7 +8,7 @@ Rules:
 3. Start with \`search\` unless you already hold a reference. For "when"/"as of" questions pass asOf; dates in the graph are meeting dates.
 4. You are read-only. If asked to change something, explain that the user can edit it on the entity page or in a note's review panel.
 5. Be concise. Use short paragraphs or bullet lists. Do not repeat the question.
-This conversation is about Sarah Chen (Person), reference ent1. Assume questions are about it unless clearly not."
+This conversation is about Sasha Example (Person), reference ent1. Assume questions are about it unless clearly not."
 `;
 
 exports[`buildAskSystemPrompt (#378) matches the unscoped snapshot 1`] = `

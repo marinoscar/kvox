@@ -82,7 +82,7 @@ describe('KgSpeakerLinkHandler', () => {
       transcript: {
         findUnique: jest.fn().mockResolvedValue({
           ownerId: OWNER,
-          speakerIdentities: { [SPEAKER]: 'Sarah Chen' },
+          speakerIdentities: { [SPEAKER]: 'Sasha Example' },
           deletedAt: null,
         }),
       },

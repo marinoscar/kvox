@@ -43,7 +43,7 @@ const job = (payload: unknown): KvoxJob => ({ id: 'job-1', payload, subjectType:
 
 function entityPage(): RawEntityPageRow[] {
   return [
-    { id: PERSON, type: 'Person', label: 'Sarah Chen', props: {}, reviewStatus: 'accepted', occurredAt: null, ontologyVersion: '1.0.0' },
+    { id: PERSON, type: 'Person', label: 'Sasha Example', props: {}, reviewStatus: 'accepted', occurredAt: null, ontologyVersion: '1.0.0' },
   ];
 }
 
@@ -67,7 +67,7 @@ function itemPage(): RawItemPageRow[] {
     counterpartyId: null,
   };
   return [
-    { ...base, id: FACT, statement: 'Sarah prefers written updates.', sensitivity: 'personal' },
+    { ...base, id: FACT, statement: 'Sasha prefers written updates.', sensitivity: 'personal' },
     { ...base, id: SECRET_FACT, statement: 'SECRET-HEALTH-DETAIL', sensitivity: 'sensitive' },
   ];
 }
@@ -93,10 +93,10 @@ function setup(options: { failOn?: 'entityPage' | 'upload'; zone?: string; creat
       kg_relations: { count: 0, lastChangedAt: null },
     }),
     entityPage: jest.fn().mockImplementation(async (_o: string, after: string | null) => {
-      if (options.failOn === 'entityPage') throw new Error('database went away while reading Sarah Chen');
+      if (options.failOn === 'entityPage') throw new Error('database went away while reading Sasha Example');
       return after === null ? entityPage() : [];
     }),
-    aliasesFor: jest.fn().mockResolvedValue(new Map([[PERSON, ['Sarah Chen', 'Sarah']]])),
+    aliasesFor: jest.fn().mockResolvedValue(new Map([[PERSON, ['Sasha Example', 'Sasha']]])),
     evidenceIdsFor: jest.fn().mockImplementation(async (_o: string, kind: string) => {
       if (kind === 'entity') return new Map([[PERSON, [EV(1)]]]);
       if (kind === 'item') return new Map([[FACT, [EV(2)]], [SECRET_FACT, [EV(3)]]]);
@@ -218,8 +218,8 @@ describe('KgExportHandler', () => {
         meta: expect.objectContaining({ exportId: EXPORT, format: 'turtle' }),
       }),
     });
-    expect(uploads[0]).toContain('Sarah Chen');
-    expect(uploads[0]).toContain('Sarah prefers written updates.');
+    expect(uploads[0]).toContain('Sasha Example');
+    expect(uploads[0]).toContain('Sasha prefers written updates.');
   });
 
   it('⚠ never writes a sensitive fact or its evidence quote into the file', async () => {
@@ -246,7 +246,7 @@ describe('KgExportHandler', () => {
     prisma.kgExport.findUnique.mockResolvedValue(exportRow({ format }));
     await handler.process(job({ mode: 'render', exportId: EXPORT }));
     expect(objects.putStream).toHaveBeenCalledWith(expect.objectContaining({ mimeType, storageKey: expect.stringMatching(new RegExp(`\\${extension}$`)) }));
-    expect(uploads[0]).toContain('Sarah Chen');
+    expect(uploads[0]).toContain('Sasha Example');
     if (format === 'jsonld') expect(() => JSON.parse(uploads[0])).not.toThrow();
   });
 
@@ -255,7 +255,7 @@ describe('KgExportHandler', () => {
     await expect(handler.process(job({ mode: 'render', exportId: EXPORT }))).rejects.toThrow('database went away');
     const failed = prisma.kgExport.update.mock.calls.at(-1)![0];
     expect(failed.data.status).toBe('failed');
-    expect(failed.data.errorMessage).not.toContain('Sarah');
+    expect(failed.data.errorMessage).not.toContain('Sasha');
     expect(prisma.auditEvent.create).not.toHaveBeenCalled();
   });
 

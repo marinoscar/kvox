@@ -106,7 +106,7 @@ describe('NoteGenerationStreamService', () => {
   // ==========================================================================
 
   it('emits ordered deltas whose concatenation is the final buffer, then done', async () => {
-    const full = '# Weekly sync\n\nWe ship on Friday.\n\n- Ana confirms the date.';
+    const full = '# Weekly sync\n\nWe ship on Friday.\n\n- Anders confirms the date.';
 
     const { prisma } = scripted([
       row({ content: full.slice(0, 14) }),

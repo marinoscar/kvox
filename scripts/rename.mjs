@@ -35,8 +35,6 @@
 //     validated by `apps/cli/src/deploy/env-spec.test.ts`, which counts even
 //     COMMENTED `# KEY=value` lines as declarations. Changing a value is safe;
 //     adding a key breaks the CLI's test suite.
-//   - It does not regenerate the visual baselines, and cannot: they are only
-//     ever produced inside a pinned Playwright container. It prints the command.
 //   - It does not touch anything on the do-not-rename list. See DO_NOT_RENAME
 //     below — one entry there is genuinely destructive to get wrong.
 //
@@ -558,14 +556,6 @@ function printChecklist(old, next, opts) {
       '`npm ci` (which CI and all three Dockerfiles run first) fails if they disagree.',
     ]);
   }
-  lines.push([
-    'Regenerate the visual baselines',
-    'The app name is rendered into pixel baselines that run at maxDiffPixels: 4, so',
-    'CI WILL BE RED until this is done. That is expected, not a regression.',
-    '',
-    '  docker run --rm -it -v "$PWD":/w -w /w mcr.microsoft.com/playwright:v1.62.1-noble \\',
-    '    npx playwright test --config=tests/visual/playwright.config.ts --update-snapshots',
-  ]);
   if (next.repoSlug !== old.repoSlug) {
     lines.push([
       'Re-point the repository',

@@ -11,9 +11,8 @@
  * =============================================================================
  *
  * "Good morning" is the obvious thing to write here and it is wrong twice
- * over. It is non-deterministic — the pixel baselines under
- * `tests/visual/specs/` run at `maxDiffPixels: 4`, so a greeting that changes
- * at 12:00 re-baselines itself twice a day — and it is computed from the
+ * over. It is non-deterministic — a greeting that changes at 12:00 makes any
+ * test or screenshot of the page differ twice a day — and it is computed from the
  * BROWSER's clock, which is routinely wrong (the same clock-skew reality
  * `utils/relativeTime.ts` guards against by hand). A greeting that says "Good
  * evening" at breakfast reads as a bug in the app rather than as a wrong clock

@@ -8,8 +8,8 @@ const NOTE = '0b000000-0000-4000-8000-000000000001';
 const TRANSCRIPT = '0c000000-0000-4000-8000-000000000001';
 const OTHER_TRANSCRIPT = '0c000000-0000-4000-8000-000000000002';
 const SEG = '0d000000-0000-4000-8000-000000000001';
-const BODY = '# Kickoff\n\nSarah   Chen\njoined Lambda.';
-const SEG_TEXT = "Hi, I'm Sarah Chen.";
+const BODY = '# Kickoff\n\nSasha   Example\njoined Lambda.';
+const SEG_TEXT = "Hi, I'm Sasha Example.";
 
 function setup(opts: { originId?: string | null; segmentTranscript?: string; segmentRev?: number } = {}) {
   const origin = { resolve: jest.fn(async () => (opts.originId === null ? null : { id: opts.originId ?? TRANSCRIPT })) };
@@ -41,20 +41,20 @@ const reasonOf = (e: unknown) => ((e as BadRequestException).getResponse() as { 
 describe('SpanValidator', () => {
   it('normalizes NFC and whitespace, keeps case', () => {
     expect(normalizeSpanText('  Café\n\n  ok ')).toBe('Café ok');
-    expect(spanMatches('Sarah   Chen', 0, 12, 'Sarah Chen')).toBe(true);
-    expect(spanMatches('Sarah Chen', 0, 10, 'sarah chen')).toBe(false);
-    expect(spanMatches('Sarah', 3, 3, '')).toBe(false);
-    expect(spanMatches('Sarah', 0, 6, 'Sarah')).toBe(false);
+    expect(spanMatches('Sasha   Example', 0, 15, 'Sasha Example')).toBe(true);
+    expect(spanMatches('Sasha Example', 0, 13, 'sasha example')).toBe(false);
+    expect(spanMatches('Sasha', 3, 3, '')).toBe(false);
+    expect(spanMatches('Sasha', 0, 6, 'Sasha')).toBe(false);
   });
 
   it('a note span at the current version becomes note evidence', async () => {
     const { validator, tx } = setup();
-    const start = BODY.indexOf('Sarah');
-    const end = BODY.indexOf('Chen') + 4;
+    const start = BODY.indexOf('Sasha');
+    const end = BODY.indexOf('Example') + 7;
     const [e] = await validator.validate(tx, { ownerId: OWNER, noteId: NOTE }, [
-      { source: 'note', noteVersion: 2, charStart: start, charEnd: end, quote: 'Sarah Chen' },
+      { source: 'note', noteVersion: 2, charStart: start, charEnd: end, quote: 'Sasha Example' },
     ]);
-    expect(e).toEqual(expect.objectContaining({ noteId: NOTE, noteVersion: 2, charStart: start, charEnd: end, quote: 'Sarah Chen', segmentId: null }));
+    expect(e).toEqual(expect.objectContaining({ noteId: NOTE, noteVersion: 2, charStart: start, charEnd: end, quote: 'Sasha Example', segmentId: null }));
   });
 
   it('a note span at an older version is 409 stale_note_version', async () => {
@@ -81,7 +81,7 @@ describe('SpanValidator', () => {
   it('a segment span of the origin transcript carries its timing', async () => {
     const { validator, tx } = setup();
     const [e] = await validator.validate(tx, { ownerId: OWNER, noteId: NOTE }, [
-      { source: 'segment', segmentId: SEG, segmentRev: 3, charStart: 8, charEnd: 18, quote: 'Sarah Chen' },
+      { source: 'segment', segmentId: SEG, segmentRev: 3, charStart: 8, charEnd: 21, quote: 'Sasha Example' },
     ]);
     expect(e).toEqual(expect.objectContaining({ transcriptId: TRANSCRIPT, segmentId: SEG, segmentRev: 3, startMs: 100, endMs: 900, noteId: null }));
   });
@@ -127,7 +127,7 @@ describe('SpanValidator', () => {
 // `validate` inside it (tx only). Counted here, with a root client and an origin service
 // that record every call.
 describe('SpanValidator — two phases (#615)', () => {
-  const SEGMENT_SPAN: EvidenceSpanInput = { source: 'segment', segmentId: SEG, segmentRev: 3, charStart: 8, charEnd: 18, quote: 'Sarah Chen' };
+  const SEGMENT_SPAN: EvidenceSpanInput = { source: 'segment', segmentId: SEG, segmentRev: 3, charStart: 8, charEnd: 21, quote: 'Sasha Example' };
   const NOTE_SPAN: EvidenceSpanInput = { source: 'note', noteVersion: 2, charStart: 0, charEnd: 9, quote: '# Kickoff' };
   const source: SpanSource = { ownerId: OWNER, noteId: NOTE };
 

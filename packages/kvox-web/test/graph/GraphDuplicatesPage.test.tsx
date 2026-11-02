@@ -22,8 +22,8 @@ import { duplicatesBadgeText } from '../../src/graph/ui/components/DuplicatesLin
 
 const OAC = { id: gid(601), type: 'Organization', label: 'OAC', aliases: [], mentionCount: 2 };
 const ORG_ALPHA = { id: gid(602), type: 'Organization', label: 'Org Alpha Consulting', aliases: ['O&C'], mentionCount: 9 };
-const JON = { id: gid(603), type: 'Person', label: 'Jon Smith', aliases: [], mentionCount: 4 };
-const JOHN = { id: gid(604), type: 'Person', label: 'John Smith', aliases: ['Johnny'], mentionCount: 1 };
+const JOSS = { id: gid(603), type: 'Person', label: 'Joss Dummyson', aliases: [], mentionCount: 4 };
+const JORY = { id: gid(604), type: 'Person', label: 'Jory Dummyson', aliases: ['Jorry'], mentionCount: 1 };
 const MERGE_ID = gid(690);
 
 const ORG_PAIR: DuplicatePair = {
@@ -35,8 +35,8 @@ const ORG_PAIR: DuplicatePair = {
   proposalItemId: gid(680),
 };
 const PERSON_PAIR: DuplicatePair = {
-  a: JON,
-  b: JOHN,
+  a: JOSS,
+  b: JORY,
   score: 0.7,
   reasons: ['similar_name', 'alias_match', 'name_contained'],
   source: 'name_pass',
@@ -95,7 +95,7 @@ function renderPage(user: MockUser = graphWriter) {
 
 const card = (name: string) => screen.findByRole('article', { name });
 const ORG_CARD = 'OAC and Org Alpha Consulting';
-const PERSON_CARD = 'Jon Smith and John Smith';
+const PERSON_CARD = 'Joss Dummyson and Jory Dummyson';
 
 describe('GraphDuplicatesPage — list', () => {
   it('renders each pair with names linking to entity pages, types, aliases, mentions and human reasons', async () => {
@@ -179,8 +179,8 @@ describe('GraphDuplicatesPage — actions', () => {
     const person = await card(PERSON_CARD);
     await user.click(within(person).getByRole('button', { name: 'Not the same' }));
     await waitFor(() => expect(screen.queryByRole('article', { name: PERSON_CARD })).not.toBeInTheDocument());
-    expect(posts).toEqual([{ path: '/graph/distinct-pairs', body: { aId: JON.id, bId: JOHN.id } }]);
-    expect(await screen.findByText('Marked “Jon Smith” and “John Smith” as not the same')).toBeInTheDocument();
+    expect(posts).toEqual([{ path: '/graph/distinct-pairs', body: { aId: JOSS.id, bId: JORY.id } }]);
+    expect(await screen.findByText('Marked “Joss Dummyson” and “Jory Dummyson” as not the same')).toBeInTheDocument();
   });
 
   it('Skip hides the pair for the session without a request', async () => {
@@ -243,7 +243,7 @@ describe('GraphDuplicatesPage — actions', () => {
 describe('duplicates helpers', () => {
   it('keeps the side with more mentions; a tie keeps a', () => {
     expect(defaultDuplicateSurvivor(ORG_PAIR).id).toBe(ORG_ALPHA.id);
-    expect(defaultDuplicateSurvivor(PERSON_PAIR).id).toBe(JON.id);
+    expect(defaultDuplicateSurvivor(PERSON_PAIR).id).toBe(JOSS.id);
     expect(defaultDuplicateSurvivor({ a: OAC, b: { ...ORG_ALPHA, mentionCount: 2 } }).id).toBe(OAC.id);
   });
 
@@ -279,8 +279,8 @@ describe('Possible duplicates entry point on the Knowledge index', () => {
   it('reads "50+" when the answer is full', async () => {
     pairs = Array.from({ length: 50 }, (_, n) => ({
       ...PERSON_PAIR,
-      a: { ...JON, id: gid(1000 + n) },
-      b: { ...JOHN, id: gid(2000 + n) },
+      a: { ...JOSS, id: gid(1000 + n) },
+      b: { ...JORY, id: gid(2000 + n) },
     }));
     renderIndex();
     expect(await screen.findByRole('link', { name: 'Possible duplicates (50+)' })).toBeInTheDocument();

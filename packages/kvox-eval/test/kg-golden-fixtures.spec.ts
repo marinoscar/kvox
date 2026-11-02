@@ -474,26 +474,26 @@ describe('kg golden set (issue #362)', () => {
     });
 
     it('sets the resolution traps', () => {
-      // Two different people named Sarah at different organizations, both in one fixture's prior graph.
-      const sarahs = new Set(
-        entities.filter(({ e }) => e.type === 'Person' && /^Sarah\b/.test(e.label)).map(({ f, e }) => identity(f, e.key)),
+      // Two different people named Sasha at different organizations, both in one fixture's prior graph.
+      const sashas = new Set(
+        entities.filter(({ e }) => e.type === 'Person' && /^Sasha\b/.test(e.label)).map(({ f, e }) => identity(f, e.key)),
       );
-      expect(sarahs.size).toBeGreaterThanOrEqual(2);
+      expect(sashas.size).toBeGreaterThanOrEqual(2);
       expect(
         fixtures.some(
-          (f) => f.knownEntities.filter((k) => k.type === 'Person' && /^Sarah\b/.test(k.label)).length >= 2,
+          (f) => f.knownEntities.filter((k) => k.type === 'Person' && /^Sasha\b/.test(k.label)).length >= 2,
         ),
       ).toBe(true);
 
       const citesLinked = (existingId: string, re: RegExp) =>
         entities.some(({ e }) => e.existingId === existingId && e.evidence.some((ev) => re.test(ev.quote)));
-      // A misspelling ("Sara Chen") that must still link to Sarah Chen.
-      expect(citesLinked('g-person-sarah-chen', /\bSara Chen\b/)).toBe(true);
-      // A nickname ("JJ") that matches a known alias.
+      // A misspelling ("Sasa Example") that must still link to Sasha Example.
+      expect(citesLinked('g-person-sasha-example', /\bSasa Example\b/)).toBe(true);
+      // A nickname ("JD") that matches a known alias.
       expect(
-        fixtures.some((f) => f.knownEntities.some((k) => k.id === 'g-person-jonah-jimenez' && k.aliases.includes('JJ'))),
+        fixtures.some((f) => f.knownEntities.some((k) => k.id === 'g-person-jovan-demo' && k.aliases.includes('JD'))),
       ).toBe(true);
-      expect(citesLinked('g-person-jonah-jimenez', /\bJJ\b/)).toBe(true);
+      expect(citesLinked('g-person-jovan-demo', /\bJD\b/)).toBe(true);
       // An organization abbreviation ("NWR" / "Org Lambda Robotics").
       expect(citesLinked('g-org-lambda-robotics', /\bNWR\b/)).toBe(true);
     });

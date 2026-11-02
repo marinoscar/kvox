@@ -27,7 +27,7 @@ const entityRow = {
   id: ENTITY,
   ownerId: OWNER,
   type: 'Person',
-  label: 'Sarah',
+  label: 'Sasha',
   props: {},
   reviewStatus: 'edited',
   mergedIntoId: null,
@@ -79,13 +79,13 @@ const user = { id: OWNER, permissions: ['graph:write'] } as never;
 describe('GraphEntitiesService', () => {
   it('authorises with edit level and the caller permissions before writing', async () => {
     const { service, access } = setup();
-    await service.patch(ENTITY, { label: 'Sarah' }, user);
+    await service.patch(ENTITY, { label: 'Sasha' }, user);
     expect(access.require).toHaveBeenCalledWith(OWNER, 'entity', ENTITY, 'edit', ['graph:write']);
   });
 
   it('audits graph.entity_edited with keys and counts only', async () => {
     const { service, prisma } = setup();
-    await service.patch(ENTITY, { label: 'Sarah' }, user);
+    await service.patch(ENTITY, { label: 'Sasha' }, user);
     expect(prisma.auditEvent.create).toHaveBeenCalledWith({
       data: {
         actorUserId: OWNER,
@@ -99,14 +99,14 @@ describe('GraphEntitiesService', () => {
 
   it('enqueues nothing while neither handler is registered', async () => {
     const { service, jobs, aiRuns } = setup({ registered: [], graphEnabled: true });
-    await service.patch(ENTITY, { label: 'Sarah' }, user);
+    await service.patch(ENTITY, { label: 'Sasha' }, user);
     expect(jobs.enqueue).not.toHaveBeenCalled();
     expect(aiRuns.graphEnabled).not.toHaveBeenCalled();
   });
 
   it('enqueues exactly one kg.embed once its handler is registered, in the #364 shape', async () => {
     const { service, jobs } = setup({ registered: [KG_EMBED_JOB_TYPE] });
-    await service.patch(ENTITY, { label: 'Sarah' }, user);
+    await service.patch(ENTITY, { label: 'Sasha' }, user);
     expect(jobs.enqueue).toHaveBeenCalledTimes(1);
     expect(jobs.enqueue).toHaveBeenCalledWith({
       type: 'kg.embed',
@@ -120,11 +120,11 @@ describe('GraphEntitiesService', () => {
 
   it('enqueues kg.entity_digest only when registered AND ai.graphEnabled, in the #372 shape', async () => {
     const off = setup({ registered: [KG_ENTITY_DIGEST_JOB_TYPE] });
-    await off.service.patch(ENTITY, { label: 'Sarah' }, user);
+    await off.service.patch(ENTITY, { label: 'Sasha' }, user);
     expect(off.jobs.enqueue).not.toHaveBeenCalled();
 
     const on = setup({ registered: [KG_ENTITY_DIGEST_JOB_TYPE], graphEnabled: true });
-    await on.service.patch(ENTITY, { label: 'Sarah' }, user);
+    await on.service.patch(ENTITY, { label: 'Sasha' }, user);
     expect(on.jobs.enqueue).toHaveBeenCalledTimes(1);
     expect(on.jobs.enqueue).toHaveBeenCalledWith({
       type: 'kg.entity_digest',
@@ -137,14 +137,14 @@ describe('GraphEntitiesService', () => {
 
   it('neither audits nor enqueues when nothing changed', async () => {
     const { service, jobs, prisma } = setup({ registered: [KG_EMBED_JOB_TYPE], changed: false });
-    await service.patch(ENTITY, { label: 'Sarah' }, user);
+    await service.patch(ENTITY, { label: 'Sasha' }, user);
     expect(jobs.enqueue).not.toHaveBeenCalled();
     expect(prisma.auditEvent.create).not.toHaveBeenCalled();
   });
 
   it('emits graph.changed (manual_edit) after a committed change, and not for a no-op', async () => {
     const changed = setup();
-    await changed.service.patch(ENTITY, { label: 'Sarah' }, user);
+    await changed.service.patch(ENTITY, { label: 'Sasha' }, user);
     expect(changed.events.emit).toHaveBeenCalledWith('graph.changed', { ownerId: OWNER, reason: 'manual_edit' });
     // After the transaction, never inside it.
     expect(changed.events.emit.mock.invocationCallOrder[0]).toBeGreaterThan(
@@ -152,20 +152,20 @@ describe('GraphEntitiesService', () => {
     );
 
     const unchanged = setup({ changed: false });
-    await unchanged.service.patch(ENTITY, { label: 'Sarah' }, user);
+    await unchanged.service.patch(ENTITY, { label: 'Sasha' }, user);
     expect(unchanged.events.emit).not.toHaveBeenCalled();
   });
 
   it('does not fail the edit when a follow-up enqueue throws', async () => {
     const { service, jobs } = setup({ registered: [KG_EMBED_JOB_TYPE] });
     jobs.enqueue.mockRejectedValueOnce(new Error('queue down'));
-    await expect(service.patch(ENTITY, { label: 'Sarah' }, user)).resolves.toMatchObject({ id: ENTITY });
+    await expect(service.patch(ENTITY, { label: 'Sasha' }, user)).resolves.toMatchObject({ id: ENTITY });
   });
 
   it('maps a domain validation error to a 400', async () => {
     const { service, write } = setup();
     write.updateEntityDetailed.mockRejectedValueOnce(new GraphValidationError('bad', { issues: [] }));
-    await expect(service.patch(ENTITY, { label: 'Sarah' }, user)).rejects.toMatchObject({ status: 400 });
+    await expect(service.patch(ENTITY, { label: 'Sasha' }, user)).rejects.toMatchObject({ status: 400 });
   });
 });
 

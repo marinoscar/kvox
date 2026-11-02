@@ -108,14 +108,14 @@ function segment(
 
 /**
  * A → B → A → B, one second each with one second of the other between.
- * Ana's intervals are therefore [0,1000) and [2000,3000) — two windows with a
+ * Anders's intervals are therefore [0,1000) and [2000,3000) — two windows with a
  * 1000ms gap, comfortably above the 300ms merge threshold.
  */
 const SEGMENTS: TranscriptSegment[] = [
-  segment('s1', 'ana', 0, 1000),
-  segment('s2', 'ben', 1000, 2000),
-  segment('s3', 'ana', 2000, 3000),
-  segment('s4', 'ben', 3000, 4000),
+  segment('s1', 'anders', 0, 1000),
+  segment('s2', 'bram', 1000, 2000),
+  segment('s3', 'anders', 2000, 3000),
+  segment('s4', 'bram', 3000, 4000),
 ];
 
 const AUDIO: TranscriptAudio = {
@@ -226,7 +226,7 @@ describe('usePlaybackEngine — loading the source', () => {
 
 describe('usePlaybackEngine — speaker-only playback (spec §7.2)', () => {
   it('plays only the selected speaker’s windows and pauses after the last', async () => {
-    const { result, audio } = renderEngine({ selectedSpeakerIds: ['ana'] });
+    const { result, audio } = renderEngine({ selectedSpeakerIds: ['anders'] });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
     expect(result.current.intervals).toEqual([
@@ -237,13 +237,13 @@ describe('usePlaybackEngine — speaker-only playback (spec §7.2)', () => {
     act(() => result.current.play());
     expect(audio.paused).toBe(false);
 
-    // Reaching the end of Ana's first window jumps to the start of her second,
-    // skipping Ben entirely rather than playing him quietly.
+    // Reaching the end of Anders's first window jumps to the start of her second,
+    // skipping Bram entirely rather than playing him quietly.
     act(() => audio.advanceTo(1.0));
     expect(audio.currentTime).toBe(2.0);
     expect(audio.paused).toBe(false);
 
-    // Past her LAST window it stops, rather than running on into Ben.
+    // Past her LAST window it stops, rather than running on into Bram.
     act(() => audio.advanceTo(3.0));
     expect(audio.paused).toBe(true);
     // Parked on the last window's end, so the scrubber and the current segment
@@ -252,12 +252,12 @@ describe('usePlaybackEngine — speaker-only playback (spec §7.2)', () => {
   });
 
   it('does not interrupt playback inside a merged sub-300ms gap', async () => {
-    // Two of Ana's segments a 200ms breath apart are ONE window: without
+    // Two of Anders's segments a 200ms breath apart are ONE window: without
     // merging the engine would seek-pause-seek across it audibly.
-    const tight = [segment('a1', 'ana', 0, 1000), segment('a2', 'ana', 1200, 2000)];
+    const tight = [segment('a1', 'anders', 0, 1000), segment('a2', 'anders', 1200, 2000)];
     const { result, audio } = renderEngine({
       segments: tight,
-      selectedSpeakerIds: ['ana'],
+      selectedSpeakerIds: ['anders'],
     });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
@@ -270,15 +270,15 @@ describe('usePlaybackEngine — speaker-only playback (spec §7.2)', () => {
   });
 
   it('snaps a seek that lands outside a window forward to the next one', async () => {
-    const { result, audio } = renderEngine({ selectedSpeakerIds: ['ana'] });
+    const { result, audio } = renderEngine({ selectedSpeakerIds: ['anders'] });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
-    act(() => result.current.seekToMs(1500)); // in Ben's segment
+    act(() => result.current.seekToMs(1500)); // in Bram's segment
     expect(audio.currentTime).toBe(2.0);
   });
 
   it('snaps BEFORE starting playback, so no frame of the wrong speaker is heard', async () => {
-    const { result, audio } = renderEngine({ selectedSpeakerIds: ['ana'] });
+    const { result, audio } = renderEngine({ selectedSpeakerIds: ['anders'] });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
     audio.currentTime = 1.5;
@@ -293,7 +293,7 @@ describe('usePlaybackEngine — speaker-only playback (spec §7.2)', () => {
   it('wraps to the first window when play is pressed past the last one', async () => {
     // Rather than refusing, which would leave a dead Play button with nothing
     // on screen to explain it.
-    const { result, audio } = renderEngine({ selectedSpeakerIds: ['ana'] });
+    const { result, audio } = renderEngine({ selectedSpeakerIds: ['anders'] });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
     act(() => result.current.seekToMs(59_000));
@@ -316,7 +316,7 @@ describe('usePlaybackEngine — speaker-only playback (spec §7.2)', () => {
 
 describe('usePlaybackEngine — the two clocks', () => {
   it('enforces boundaries from the rAF loop while the page is visible', async () => {
-    const { result, audio } = renderEngine({ selectedSpeakerIds: ['ana'] });
+    const { result, audio } = renderEngine({ selectedSpeakerIds: ['anders'] });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
     act(() => result.current.play());
@@ -333,7 +333,7 @@ describe('usePlaybackEngine — the two clocks', () => {
     // the fallback that keeps per-speaker filtering working there (with the
     // documented ~250ms overshoot, which is the event's own firing interval and
     // not something this engine can narrow).
-    const { result, audio } = renderEngine({ selectedSpeakerIds: ['ana'] });
+    const { result, audio } = renderEngine({ selectedSpeakerIds: ['anders'] });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
     frameCallbacks = []; // no frames from here on
@@ -346,7 +346,7 @@ describe('usePlaybackEngine — the two clocks', () => {
 
 describe('usePlaybackEngine — the current segment', () => {
   it('tracks the segment under the playhead and answers -1 between segments', async () => {
-    const gapped = [segment('g1', 'ana', 0, 1000), segment('g2', 'ben', 5000, 6000)];
+    const gapped = [segment('g1', 'anders', 0, 1000), segment('g2', 'bram', 5000, 6000)];
     const { result, audio } = renderEngine({ segments: gapped });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
@@ -445,15 +445,15 @@ describe('usePlaybackEngine — transport', () => {
   });
 
   it('steps over speakers the filter excludes', async () => {
-    // With "only Ana", "next" must mean HER next line: stepping to Ben's would
+    // With "only Anders", "next" must mean HER next line: stepping to Bram's would
     // seek into a gap the tick immediately skips out of, which reads as the
     // button doing nothing.
-    const { result, audio } = renderEngine({ selectedSpeakerIds: ['ana'] });
+    const { result, audio } = renderEngine({ selectedSpeakerIds: ['anders'] });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
     act(() => audio.advanceTo(0.5));
     act(() => result.current.nextSegment());
-    expect(audio.currentTime).toBe(2.0); // s3, skipping Ben's s2
+    expect(audio.currentTime).toBe(2.0); // s3, skipping Bram's s2
   });
 });
 
@@ -484,12 +484,12 @@ describe('usePlaybackEngine — segment play (#108)', () => {
   });
 
   it('plays a line whose speaker the filter EXCLUDES, without snapping away', async () => {
-    // The regression guard for `handleTick`'s ordering. With "only Ana", s2 is
-    // Ben's and sits in a gap the interval branch seeks straight out of — so if
-    // segment mode did not take precedence, pressing play on Ben's line would
-    // silently jump to Ana's next one, which is the one thing the button must
+    // The regression guard for `handleTick`'s ordering. With "only Anders", s2 is
+    // Bram's and sits in a gap the interval branch seeks straight out of — so if
+    // segment mode did not take precedence, pressing play on Bram's line would
+    // silently jump to Anders's next one, which is the one thing the button must
     // never do.
-    const { result, audio } = renderEngine({ selectedSpeakerIds: ['ana'] });
+    const { result, audio } = renderEngine({ selectedSpeakerIds: ['anders'] });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
     act(() => result.current.playSegment(SEGMENTS[1]));
@@ -518,12 +518,12 @@ describe('usePlaybackEngine — segment play (#108)', () => {
   });
 
   it('lets the speaker filter reclaim the playhead once the line has ended', async () => {
-    // The documented edge in the file header. s4 is Ben's LAST line
-    // (3000–4000ms) and Ana's last window ends at 3000, so the boundary this
+    // The documented edge in the file header. s4 is Bram's LAST line
+    // (3000–4000ms) and Anders's last window ends at 3000, so the boundary this
     // parks on is outside every window the filter allows. Segment mode has just
     // been cleared, so the interval branch resumes and pulls the playhead back
     // — the filter reasserting itself, not the boundary parking failing.
-    const { result, audio } = renderEngine({ selectedSpeakerIds: ['ana'] });
+    const { result, audio } = renderEngine({ selectedSpeakerIds: ['anders'] });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
     act(() => result.current.playSegment(SEGMENTS[3]));
@@ -535,7 +535,7 @@ describe('usePlaybackEngine — segment play (#108)', () => {
     expect(audio.paused).toBe(true);
 
     act(() => flushFrame());
-    expect(audio.currentTime).toBe(3.0); // Ana's last window's end
+    expect(audio.currentTime).toBe(3.0); // Anders's last window's end
     expect(audio.paused).toBe(true);
   });
 

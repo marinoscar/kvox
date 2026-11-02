@@ -19,14 +19,14 @@ describe('locateQuoteInMarkdown', () => {
   });
 
   it('trims the selection before matching', () => {
-    const md = 'Ana owns the rollback plan.';
+    const md = 'Anders owns the rollback plan.';
     expect(slice(md, locateQuoteInMarkdown(md, '  the rollback plan \n', 0.5))).toBe('the rollback plan');
   });
 
   it('tolerates emphasis markup inside the rendered text', () => {
-    const md = 'Met with **Sarah** Chen about the pilot.';
-    const span = locateQuoteInMarkdown(md, 'Sarah Chen', 0.3);
-    expect(slice(md, span)).toBe('Sarah** Chen');
+    const md = 'Met with **Sasha** Example about the pilot.';
+    const span = locateQuoteInMarkdown(md, 'Sasha Example', 0.3);
+    expect(slice(md, span)).toBe('Sasha** Example');
   });
 
   it('tolerates underscores, code and strike markers', () => {
@@ -37,9 +37,9 @@ describe('locateQuoteInMarkdown', () => {
   });
 
   it('tolerates link syntax around link text', () => {
-    const md = 'Ask [Sarah Chen](https://example.com/sarah) about it.';
-    const span = locateQuoteInMarkdown(md, 'Ask Sarah Chen about', 0);
-    expect(slice(md, span)).toBe('Ask [Sarah Chen](https://example.com/sarah) about');
+    const md = 'Ask [Sasha Example](https://example.com/sasha) about it.';
+    const span = locateQuoteInMarkdown(md, 'Ask Sasha Example about', 0);
+    expect(slice(md, span)).toBe('Ask [Sasha Example](https://example.com/sasha) about');
   });
 
   it('collapses whitespace (a soft line break renders as a space)', () => {
@@ -48,17 +48,17 @@ describe('locateQuoteInMarkdown', () => {
   });
 
   it('picks the occurrence nearest the selection among several', () => {
-    const md = 'Ana said yes. Later, Ben said no. Finally Ana said yes.';
-    const first = md.indexOf('Ana said yes');
-    const last = md.lastIndexOf('Ana said yes');
-    expect(locateQuoteInMarkdown(md, 'Ana said yes', 0.05)?.charStart).toBe(first);
-    expect(locateQuoteInMarkdown(md, 'Ana said yes', 0.9)?.charStart).toBe(last);
+    const md = 'Anders said yes. Later, Bram said no. Finally Anders said yes.';
+    const first = md.indexOf('Anders said yes');
+    const last = md.lastIndexOf('Anders said yes');
+    expect(locateQuoteInMarkdown(md, 'Anders said yes', 0.05)?.charStart).toBe(first);
+    expect(locateQuoteInMarkdown(md, 'Anders said yes', 0.9)?.charStart).toBe(last);
   });
 
   it('picks the nearest among several tolerant matches too', () => {
-    const md = '**Ana** said yes. Then **Ana** said yes again.';
-    const span = locateQuoteInMarkdown(md, 'Ana said yes', 0.9);
-    expect(span?.charStart).toBe(md.lastIndexOf('Ana'));
+    const md = '**Anders** said yes. Then **Anders** said yes again.';
+    const span = locateQuoteInMarkdown(md, 'Anders said yes', 0.9);
+    expect(span?.charStart).toBe(md.lastIndexOf('Anders'));
   });
 
   it('returns null when the text is not in the markdown', () => {
@@ -74,9 +74,9 @@ describe('locateQuoteInMarkdown', () => {
 
 describe('locateQuoteInText', () => {
   it('finds a quote and one differing only in whitespace', () => {
-    const text = 'Tom will check with legal.';
-    expect(locateQuoteInText(text, 'check with', 0.5)).toEqual({ charStart: 9, charEnd: 19 });
-    expect(locateQuoteInText(text, 'check  with', 0.5)).toEqual({ charStart: 9, charEnd: 19 });
+    const text = 'Tobias will check with legal.';
+    expect(locateQuoteInText(text, 'check with', 0.5)).toEqual({ charStart: 12, charEnd: 22 });
+    expect(locateQuoteInText(text, 'check  with', 0.5)).toEqual({ charStart: 12, charEnd: 22 });
     expect(locateQuoteInText(text, 'nope', 0.5)).toBeNull();
   });
 });
@@ -84,7 +84,7 @@ describe('locateQuoteInText', () => {
 describe('DOM helpers', () => {
   it('measures a text offset through nested markup', () => {
     const root = document.createElement('p');
-    root.innerHTML = 'Met with <strong>Sarah</strong> Chen';
+    root.innerHTML = 'Met with <strong>Sasha</strong> Example';
     const strongText = root.querySelector('strong')!.firstChild!;
     expect(textOffsetWithin(root, strongText, 2)).toBe('Met with Sa'.length);
   });

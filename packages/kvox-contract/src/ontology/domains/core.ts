@@ -85,7 +85,7 @@ export const Person = defineEntityType({
     'A human being: one specific, individual person named or unambiguously identified in the source.',
   disambiguation: [
     'Never a role ("the CIO"), never a team, never an organization acting collectively.',
-    'Positive: "Sarah Chen"; "the Kappa CIO whose name was given as Marcus Webb."',
+    'Positive: "Sasha Example"; "the Kappa CIO whose name was given as Maddox Sample."',
     'Negative: "the data team at OAC" is an Organization, or a Person if and only if one specific human is meant.',
     'Negative: "whoever\'s on call" names no specific human, so there is nothing to create.',
   ],

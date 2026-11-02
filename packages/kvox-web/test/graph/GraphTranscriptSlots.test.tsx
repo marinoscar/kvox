@@ -59,8 +59,8 @@ const mockGetAudio = vi.mocked(getTranscriptAudio);
 const mockGetWords = vi.mocked(getTranscriptWords);
 
 const SPEAKERS: TranscriptSpeaker[] = [
-  { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
-  { id: 'sp2', label: 'B', displayName: 'Ben', colorIndex: 1, rev: 1 },
+  { id: 'sp1', label: 'A', displayName: 'Anders', colorIndex: 0, rev: 1 },
+  { id: 'sp2', label: 'B', displayName: 'Bram', colorIndex: 1, rev: 1 },
 ];
 
 const DETAIL: TranscriptDetail = {
@@ -178,9 +178,9 @@ describe('TranscriptPage — speaker person links (#373)', () => {
           data: {
             items: [
               {
-                id: 'person-ana',
+                id: 'person-anders',
                 type: 'Person',
-                label: 'Ana',
+                label: 'Anders',
                 aliases: [],
                 mentionCount: 1,
                 lastSeenAt: null,
@@ -194,10 +194,10 @@ describe('TranscriptPage — speaker person links (#373)', () => {
     );
     renderPage(graphUser);
 
-    const links = await screen.findAllByRole('button', { name: "Open Ana's page" });
-    expect(screen.queryByRole('button', { name: "Open Ben's page" })).not.toBeInTheDocument();
+    const links = await screen.findAllByRole('button', { name: "Open Anders's page" });
+    expect(screen.queryByRole('button', { name: "Open Bram's page" })).not.toBeInTheDocument();
     fireEvent.click(links[0]!);
-    expect(mockNavigate).toHaveBeenCalledWith('/graph/entities/person-ana');
+    expect(mockNavigate).toHaveBeenCalledWith('/graph/entities/person-anders');
   });
 
   it('asks the graph nothing without graph:read', async () => {

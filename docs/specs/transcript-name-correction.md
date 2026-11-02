@@ -21,7 +21,7 @@ A transcript's speech-recognition text is a best guess at what was said, and
 names are where that guess fails hardest: a name has no grammar to lean on,
 often has no common spelling, and the provider has never heard it before this
 recording. A user who has already told this application a name — by renaming
-speaker "A" to "Oscar", or by typing "Kubernetes" into an upload form — has
+speaker "A" to "Orlo", or by typing "Kubernetes" into an upload form — has
 given it information the provider's acoustic model does not have. This
 feature is the two ways that information is put to use:
 
@@ -107,7 +107,7 @@ output.
 Free, instant, and runs in every mode. For each transcript segment:
 
 1. **Tokenize** into word tokens with UTF-16 offsets (`[\p{L}\p{N}\p{M}]+`
-   plus internal apostrophes/hyphens, so `"O'Brien"` and `"Oscar's"` are one
+   plus internal apostrophes/hyphens, so `"O'Brien"` and `"Orlo's"` are one
    token each).
 2. **Slide windows** of 1–3 consecutive tokens, never crossing a segment
    boundary.
@@ -127,16 +127,16 @@ Free, instant, and runs in every mode. For each transcript segment:
      a length-3 floor before an edit-distance check is attempted at all).
      One-edit differences are further classified **`near`** (a substitution
      between phonetically confusable consonant classes — labials, dentals,
-     sibilants, nasals — or dropping the key's leading vowel marker: "Oscar"
-     `ASKR` / "Skar" `SKR`) or **`weak`** (any other single edit), and each
+     sibilants, nasals — or dropping the key's leading vowel marker: "Orlo"
+     `ARL` / "Rolo" `RL`) or **`weak`** (any other single edit), and each
      strength carries its own minimum letter-similarity floor below.
    - **Jaro-Winkler** (`phonetic.ts`) letter-level similarity of the
      normalized forms, at least 0.85 on its own, or a looser floor when
      paired with a phonetic match (because Double Metaphone drops every
      vowel — "again" and "Joaquín" share a key — so a phonetic match alone
      is not evidence; it needs a minimum of surviving letter agreement too).
-   - A window whose token count differs from the name's own ("Oh scar" for
-     "Oscar") is held to a stricter bar: only an *exact* phonetic key match
+   - A window whose token count differs from the name's own ("Or low" for
+     "Orlo") is held to a stricter bar: only an *exact* phonetic key match
      with strong letter agreement counts, or every short word pair would
      resemble some name.
    - The window's letter count must be within ±50% of the target's.
@@ -157,7 +157,7 @@ see §5.
 ### 3.2 Stage 1b — thorough discovery (`prompts.ts`, mode `thorough` only, #330)
 
 Phonetic retrieval leans toward recall but is still fundamentally a spelling
-comparison: it cannot find "Oscar" heard and transcribed as "the scar," where
+comparison: it cannot find "Orlo" heard and transcribed as "the scar," where
 the mis-hearing does not even preserve the name's token boundaries or sound
 shape closely enough to clear Stage 1's gates. Thorough mode adds a second,
 LLM-driven pass that reads transcript **text**, not spelling similarity.

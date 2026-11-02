@@ -66,12 +66,12 @@ function entityRow(overrides: Partial<ExportEntityRow> = {}): ExportEntityRow {
   return {
     id: PERSON,
     type: 'Person',
-    label: 'Sarah Chen',
+    label: 'Sasha Example',
     props: {},
     reviewStatus: 'accepted',
     occurredAt: null,
     ontologyVersion: '1.0.0',
-    aliases: ['Sarah Chen', 'Sarah'],
+    aliases: ['Sasha Example', 'Sasha'],
     evidenceIds: [id(50)],
     refTypes: new Map(),
     outgoing: [],
@@ -104,7 +104,7 @@ function itemRow(overrides: Partial<ExportItemRow> = {}): ExportItemRow {
     id: id(30),
     kind: 'commitment',
     title: 'Send the proposal',
-    statement: 'Sarah will send the proposal.',
+    statement: 'Sasha will send the proposal.',
     status: 'open',
     props: {},
     occurredAt: null,
@@ -139,9 +139,9 @@ describe('GraphRdfDatasetBuilder — entities', () => {
     const subject = `${NS}entity/${PERSON}`;
     expect(block.subject).toBe(subject);
     expect(objects(block, `${RDF}type`)).toEqual([`${NS}Person`, 'https://schema.org/Person']);
-    expect(objects(block, `${RDFS}label`)).toEqual(['Sarah Chen']);
+    expect(objects(block, `${RDFS}label`)).toEqual(['Sasha Example']);
     // The alias equal to the label is not repeated.
-    expect(objects(block, `${SKOS}altLabel`)).toEqual(['Sarah']);
+    expect(objects(block, `${SKOS}altLabel`)).toEqual(['Sasha']);
     expect(objects(block, `${NS}occurredAt`)).toEqual(['2026-04-02T15:00:00.000Z']);
     expect(objects(block, `${NS}reviewStatus`)).toEqual(['accepted']);
     expect(objects(block, `${NS}ontologyVersion`)).toEqual(['1.0.0']);
@@ -245,7 +245,7 @@ describe('GraphRdfDatasetBuilder — items', () => {
     expect(block.subject).toBe(`${NS}item/${id(30)}`);
     expect(objects(block, `${RDF}type`)).toEqual([`${NS}Commitment`]);
     expect(objects(block, `${RDFS}label`)).toEqual(['Send the proposal']);
-    expect(objects(block, `${NS}Commitment.statement`)).toEqual(['Sarah will send the proposal.']);
+    expect(objects(block, `${NS}Commitment.statement`)).toEqual(['Sasha will send the proposal.']);
     expect(objects(block, `${NS}status`)).toEqual(['open']);
     expect(objects(block, `${NS}dueAt`)).toEqual(['2026-04-10T17:00:00.000Z']);
     expect(objects(block, `${NS}ASSIGNED_TO`)).toEqual([`${NS}entity/${PERSON}`]);
@@ -278,7 +278,7 @@ describe('GraphRdfDatasetBuilder — items', () => {
       itemRow({
         kind: 'person_fact',
         status: 'active',
-        statement: 'Sarah has a heart condition.',
+        statement: 'Sasha has a heart condition.',
         sensitivity: 'sensitive',
         subject: { id: PERSON, type: 'Person' },
       }),
@@ -369,7 +369,7 @@ describe('GraphRdfDatasetBuilder — the personal domain (#383)', () => {
     const spouse = relationRow({ id: id(24), type: 'SPOUSE_OF', toId: id(6), toType: 'Person' });
     const from = b.entity(entityRow({ outgoing: [spouse] }))!;
     // The other endpoint's block carries no SPOUSE_OF back: its outgoing list is its own rows only.
-    const to = b.entity(entityRow({ id: id(6), label: 'Alex', aliases: [], outgoing: [spouse] }))!;
+    const to = b.entity(entityRow({ id: id(6), label: 'Alma', aliases: [], outgoing: [spouse] }))!;
     const all = [...from.triples, ...to.triples].filter((t) => t.predicate.value === `${NS}SPOUSE_OF`);
     expect(all).toHaveLength(1);
     expect(all[0].subject.value).toBe(`${NS}entity/${PERSON}`);
@@ -385,7 +385,7 @@ describe('GraphRdfDatasetBuilder — evidence', () => {
       id: id(50),
       subjectKind: 'entity',
       subjectSensitivity: null,
-      quote: 'Sarah joined Kappa in 2019',
+      quote: 'Sasha joined Kappa in 2019',
       segmentId: id(60),
       startMs: 102_000,
       endMs: 118_500,
@@ -402,7 +402,7 @@ describe('GraphRdfDatasetBuilder — evidence', () => {
     const s = `${NS}evidence/${id(50)}`;
     expect(objects(block, `${RDF}type`, s)).toEqual([`${OA}Annotation`]);
     const [body] = objects(block, `${OA}hasBody`, s);
-    expect(objects(block, `${RDF}value`, body)).toEqual(['Sarah joined Kappa in 2019']);
+    expect(objects(block, `${RDF}value`, body)).toEqual(['Sasha joined Kappa in 2019']);
     const [target] = objects(block, `${OA}hasTarget`, s);
     expect(objects(block, `${OA}hasSource`, target)).toEqual([`${NS}segment/${id(60)}`]);
     const selectors = objects(block, `${OA}hasSelector`, target);
@@ -427,7 +427,7 @@ describe('GraphRdfDatasetBuilder — evidence', () => {
   it('keeps a citation whose source is gone as a quote with no target', () => {
     const block = builder().evidence(evidenceRow({ segmentId: null, noteId: null, startMs: null, endMs: null }))!;
     expect(objects(block, `${OA}hasTarget`)).toEqual([]);
-    expect(objects(block, `${RDF}value`)).toEqual(['Sarah joined Kappa in 2019']);
+    expect(objects(block, `${RDF}value`)).toEqual(['Sasha joined Kappa in 2019']);
   });
 
   it('⚠ never exports the evidence of a sensitive fact — its quote is the fact', () => {

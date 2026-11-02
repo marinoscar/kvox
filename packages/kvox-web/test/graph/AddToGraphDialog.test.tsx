@@ -9,7 +9,7 @@ import { AddToGraphDialog, STALE_SELECTION_MESSAGE } from '../../src/graph/ui/co
 import { TargetProposalDialog } from '../../src/graph/ui/components/selection/TargetProposalDialog.js';
 import type { GraphSelection } from '../../src/graph/headless/utils/selection.js';
 import {
-  EXISTING_TOM_ID,
+  EXISTING_TOBIAS_ID,
   PROPOSAL_ID,
   draftItems,
   mockGraphOntology,
@@ -30,14 +30,14 @@ const graphUser: MockUser = {
 };
 
 const NOTE_SELECTION: GraphSelection = {
-  quote: 'Sarah** Chen',
-  source: { kind: 'note', noteId: 'n1', noteVersion: 3, charStart: 9, charEnd: 21 },
+  quote: 'Sasha** Example',
+  source: { kind: 'note', noteId: 'n1', noteVersion: 3, charStart: 9, charEnd: 24 },
   rect: new DOMRect(0, 0, 0, 0),
 };
 
 const SEGMENT_SELECTION: GraphSelection = {
-  quote: 'Tom will check with legal',
-  source: { kind: 'segment', transcriptId: 't1', segmentId: 'seg-9', segmentRev: 4, charStart: 0, charEnd: 25 },
+  quote: 'Tobias will check with legal',
+  source: { kind: 'segment', transcriptId: 't1', segmentId: 'seg-9', segmentRev: 4, charStart: 0, charEnd: 28 },
   rect: new DOMRect(0, 0, 0, 0),
 };
 
@@ -80,21 +80,21 @@ describe('AddToGraphDialog — entity', () => {
   it('prefills the name from the quote and sends the selection as evidence', async () => {
     const user = userEvent.setup();
     const { container, onAdded } = renderDialog();
-    expect(screen.getByRole('figure', { name: 'Evidence' })).toHaveTextContent('Sarah** Chen');
+    expect(screen.getByRole('figure', { name: 'Evidence' })).toHaveTextContent('Sasha** Example');
     expect(screen.getByText('From your note, version 3')).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Sarah** Chen');
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Sasha** Example');
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
 
     await user.clear(screen.getByRole('textbox', { name: 'Name' }));
-    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Sarah Chen');
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Sasha Example');
     // Person's `title` is retired (1.2.0, #440): a new Person offers no field for it.
     expect(screen.queryByRole('textbox', { name: 'Job title' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Add to draft' }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
     expect(lastAddBody()).toEqual({
       kind: 'entity',
-      payload: { type: 'Person', label: 'Sarah Chen', aliases: [], props: {}, occurredAt: null },
-      evidence: [{ source: 'note', noteVersion: 3, charStart: 9, charEnd: 21, quote: 'Sarah** Chen' }],
+      payload: { type: 'Person', label: 'Sasha Example', aliases: [], props: {}, occurredAt: null },
+      evidence: [{ source: 'note', noteVersion: 3, charStart: 9, charEnd: 24, quote: 'Sasha** Example' }],
     });
     expect(onAdded.mock.calls[0][0].item.origin).toBe('user');
     expect(onAdded.mock.calls[0][1]).toBe(PROPOSAL_ID);
@@ -106,15 +106,15 @@ describe('AddToGraphDialog — entity', () => {
     expect(screen.getByText('From a line of the transcript')).toBeInTheDocument();
     await user.click(screen.getByRole('checkbox', { name: /already in my graph/ }));
     expect(screen.getByRole('button', { name: 'Add to draft' })).toBeDisabled();
-    await user.type(screen.getByRole('combobox', { name: 'Which one?' }), 'Tom');
-    await user.click(await screen.findByRole('option', { name: /Tom Baker/ }));
+    await user.type(screen.getByRole('combobox', { name: 'Which one?' }), 'Tobias');
+    await user.click(await screen.findByRole('option', { name: /Tobias Dummyson/ }));
     await user.click(screen.getByRole('button', { name: 'Add to draft' }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
     expect(lastAddBody()).toMatchObject({
       kind: 'entity',
-      existingEntityId: EXISTING_TOM_ID,
+      existingEntityId: EXISTING_TOBIAS_ID,
       evidence: [
-        { source: 'segment', segmentId: 'seg-9', segmentRev: 4, charStart: 0, charEnd: 25, quote: 'Tom will check with legal' },
+        { source: 'segment', segmentId: 'seg-9', segmentRev: 4, charStart: 0, charEnd: 28, quote: 'Tobias will check with legal' },
       ],
     });
   });
@@ -125,7 +125,7 @@ describe('AddToGraphDialog — fact', () => {
     const user = userEvent.setup();
     const { onAdded } = renderDialog({ selection: SEGMENT_SELECTION });
     await user.click(screen.getByRole('button', { name: 'A fact' }));
-    expect(screen.getByRole('textbox', { name: 'Statement' })).toHaveValue('Tom will check with legal');
+    expect(screen.getByRole('textbox', { name: 'Statement' })).toHaveValue('Tobias will check with legal');
     await user.type(screen.getByRole('textbox', { name: 'Title' }), 'Legal review');
 
     await user.click(screen.getByRole('combobox', { name: 'About' }));
@@ -140,7 +140,7 @@ describe('AddToGraphDialog — fact', () => {
       payload: {
         kind: 'decision',
         title: 'Legal review',
-        statement: 'Tom will check with legal',
+        statement: 'Tobias will check with legal',
         subject: { ref: 'e4' },
         owner: null,
         counterparty: null,
@@ -166,7 +166,7 @@ describe('AddToGraphDialog — fact', () => {
     await user.click(await screen.findByRole('option', { name: 'Person fact' }));
     await user.type(screen.getByRole('textbox', { name: 'Title' }), 'Runs marathons');
     expect(screen.getByRole('button', { name: 'Add to draft' })).toBeDisabled();
-    await pick(user, 'About', 'Sarah Chen');
+    await pick(user, 'About', 'Sasha Example');
     expect(screen.getByRole('combobox', { name: 'Sensitivity' })).toHaveTextContent('Business');
     await user.click(screen.getByRole('button', { name: 'Add to draft' }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
@@ -183,7 +183,7 @@ describe('AddToGraphDialog — fact', () => {
     await user.click(screen.getByRole('combobox', { name: 'Kind' }));
     await user.click(await screen.findByRole('option', { name: 'Commitment' }));
     await user.type(screen.getByRole('textbox', { name: 'Title' }), 'Write the plan');
-    await pick(user, 'Owner', 'Sarah Chen');
+    await pick(user, 'Owner', 'Sasha Example');
     await user.type(screen.getByLabelText('Due'), '2026-10-01');
     await user.click(screen.getByRole('button', { name: 'Add to draft' }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
@@ -202,7 +202,7 @@ describe('AddToGraphDialog — relationship', () => {
     await user.click(screen.getByRole('combobox', { name: 'From' }));
     const fromList = await screen.findByRole('listbox');
     expect(within(fromList).queryByRole('option', { name: 'Org Lambda Robotics' })).not.toBeInTheDocument();
-    await user.click(within(fromList).getByRole('option', { name: 'Sarah Chen' }));
+    await user.click(within(fromList).getByRole('option', { name: 'Sasha Example' }));
     await pick(user, 'To', 'Org Lambda Robotics');
     await user.click(screen.getByRole('button', { name: 'Add to draft' }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());

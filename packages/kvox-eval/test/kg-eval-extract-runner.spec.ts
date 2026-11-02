@@ -29,18 +29,18 @@ describe('kg:eval extract runner (#363)', () => {
   it('maps a fixture to an extraction input: speakers linked to known persons by name', () => {
     const ctx = buildExtractionContext(fixtureToInput(m01));
     expect(ctx.segments.map((s) => s.segmentId).slice(0, 2)).toEqual(['m01-s001', 'm01-s002']);
-    expect(ctx.speakers.find((s) => s.name === 'Sarah Chen')?.personEntityId).toBe('g-person-sarah-chen');
-    expect(ctx.speakers.find((s) => s.name === 'Tomás Aguilar')?.personEntityId).toBeNull();
+    expect(ctx.speakers.find((s) => s.name === 'Sasha Example')?.personEntityId).toBe('g-person-sasha-example');
+    expect(ctx.speakers.find((s) => s.name === 'Tobín Dummyson')?.personEntityId).toBeNull();
     expect(ctx.meetingDate).toBe('2026-01-08');
   });
 
   it('runs one structured call and emits the Meeting, ATTENDED rows and cited evidence as a valid prediction', async () => {
-    const tomasLine = m01.segments.find((s) => s.text.includes('Tomás Aguilar'))!;
-    const alias = `s${m01.segments.indexOf(tomasLine) + 1}`;
+    const tobinLine = m01.segments.find((s) => s.text.includes('Tobín Dummyson'))!;
+    const alias = `s${m01.segments.indexOf(tobinLine) + 1}`;
     const answer = {
       meeting: { topics: [] },
       entities: [
-        { ref: 'e1', type: 'Person', label: 'Tomás Aguilar', aliases: [], props: {}, evidence: [{ source: alias, quote: "I'm Tomás Aguilar" }] },
+        { ref: 'e1', type: 'Person', label: 'Tobín Dummyson', aliases: [], props: {}, evidence: [{ source: alias, quote: "I'm Tobín Dummyson" }] },
       ],
       relations: [],
       items: [],
@@ -70,9 +70,9 @@ describe('kg:eval extract runner (#363)', () => {
     const meeting = prediction.entities.find((e) => e.ref === 'meeting')!;
     expect(meeting).toEqual(expect.objectContaining({ type: 'Meeting', label: m01.title }));
     const attended = prediction.relations.filter((r) => r.type === 'ATTENDED');
-    expect(attended.map((r) => r.from).sort()).toEqual(['e1', 'g-person-alex-rivera', 'g-person-priya-raman', 'g-person-sarah-chen']);
+    expect(attended.map((r) => r.from).sort()).toEqual(['e1', 'g-person-alma-mockwell', 'g-person-pia-sample', 'g-person-sasha-example']);
     expect(prediction.entities.find((e) => e.ref === 'e1')!.evidence).toEqual([
-      { source: 'segment', segmentId: tomasLine.id, quote: "I'm Tomás Aguilar" },
+      { source: 'segment', segmentId: tobinLine.id, quote: "I'm Tobín Dummyson" },
     ]);
 
     // The scorer sees the Meeting and every ATTENDED as true positives.

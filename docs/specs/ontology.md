@@ -111,7 +111,7 @@ one product statement — the north star this whole document optimises for:
 A transcript remembers what was *said*. A note remembers what was *written*
 about what was said. Neither remembers, across dozens of meetings over
 months, that Kappa's CIO is leaving in March, that the Q2 pilot was already
-pushed once, or that Sarah owns the vendor migration and it is three weeks
+pushed once, or that Sasha owns the vendor migration and it is three weeks
 overdue. That is the specific gap this document's graph closes — nothing more
 ambitious, and (per the research below) nothing less either.
 
@@ -153,7 +153,7 @@ architecture — a "LazyGraphRAG" strategy that defers entity resolution to
 query time scoring within 0.1% of full GraphRAG on quality while resolving
 nothing at write time. That is a real engineering option for a system with no
 review step; §"Rejected alternatives" explains why it is wrong for kvox
-specifically, where resolving "is this the same Sarah" *is* the review step
+specifically, where resolving "is this the same Sasha" *is* the review step
 a human already has to do once per meeting, and deferring it to every future
 query would just repeat that decision, unreviewed, forever.
 
@@ -178,7 +178,7 @@ The synthesis these four sources converge on, and the one sentence this whole
 document is an elaboration of: **a knowledge graph over meeting content is
 worth building because it wins on multi-hop and temporal questions
 specifically — "what's changed since I last checked on Kappa," "who inherited
-this when Sarah left" — and it is worth building *carefully* because its
+this when Sasha left" — and it is worth building *carefully* because its
 single biggest failure mode, in every source that measured it, is
 under-extraction, not bad ranking.** Hybrid retrieval that never depends on
 the graph alone (§9.4) is not a hedge against this design being wrong; it is
@@ -337,7 +337,7 @@ other reasons:
 
 1. **Upload a recording** (`docs/specs/transcription.md`) — unchanged.
 2. **Name speakers** — unchanged, but this is **resolution moment #1**: the
-   instant a user types "Sarah Chen" against "Speaker A," they have just
+   instant a user types "Sasha Example" against "Speaker A," they have just
    performed the single highest-confidence entity-resolution act this whole
    design will ever see, for free, as a side effect of a feature that already
    exists (`Transcript.speakerIdentities`, verified above). §5.1 and §7 both
@@ -381,8 +381,8 @@ prevent (§3.5) is precisely two people creating two entities for the same
 real-world thing because nothing told them which label to reach for.
 
 **Person** — a human being. Never a role ("the CIO"), never a team, never an
-organization acting collectively. *Positive:* "Sarah Chen," "the Kappa CIO
-whose name was given as Marcus Webb." *Negative:* "the data team at OAC" (an
+organization acting collectively. *Positive:* "Sasha Example," "the Kappa CIO
+whose name was given as Maddox Sample." *Negative:* "the data team at OAC" (an
 `Organization`, or a `Person` if and only if one specific human is meant);
 "whoever's on call" (no specific human named — nothing to create). *Domain:*
 `core` (§17.2).
@@ -451,8 +451,8 @@ Person) are likewise system-written. A document-origin note gets exactly one
 
 **Commitment** — a task with an *owner* and, optionally, a *counterparty* and
 a *due date*, stated or clearly implied by the source text. `status`:
-`open | done | dropped | superseded`. *Positive:* "Sarah will send the
-updated proposal by Friday" (owner: Sarah, due: Friday). *Negative:* "we
+`open | done | dropped | superseded`. *Positive:* "Sasha will send the
+updated proposal by Friday" (owner: Sasha, due: Friday). *Negative:* "we
 should probably look into that at some point" — no owner named or clearly
 implied is **not** a `Commitment`; it is either a `Claim` (a statement that
 this was discussed) or nothing at all, never force-fit into a task type
@@ -730,7 +730,7 @@ accepting a new fact with a `valid` start date closes that person's
 still-open edge of the same type at the new fact's start: the open edge's
 `valid` upper bound is set, and the new edge records `SUPERSEDES` against it
 (§3.4). The closing is never applied silently — it surfaces in the review
-panel as its own proposal row ("Closes: Joe works for Kappa, 2019 → Feb
+panel as its own proposal row ("Closes: Jonty works for Kappa, 2019 → Feb
 2026") and is accepted, edited, or rejected exactly like any other proposed
 item (§8); a reviewer who rejects the close leaves both edges open, which
 the overlap tolerance below then treats as a legitimate (if unusual)
@@ -738,7 +738,7 @@ concurrent pair rather than an error state.
 
 **Out-of-order rule.** Facts are inserted by **valid** time, never by
 arrival order. A note about a 2020 meeting, reviewed and committed in 2026,
-saying "Joe works for Kappa" that lands inside an already-accepted
+saying "Jonty works for Kappa" that lands inside an already-accepted
 `[2019, 2026)` edge is additional evidence for that edge — it is attached to
 it (the same "known, skipped" collapsing §8 already gives a restated fact)
 and never reopens or splits it. A fact whose valid period lands **outside**
@@ -767,31 +767,31 @@ accurate graph with a flagged overlap in it.
 
 **Worked examples.**
 
-- *A promotion.* Joe holds `HAS_ROLE { title: "Engineer" }` at Kappa,
+- *A promotion.* Jonty holds `HAS_ROLE { title: "Engineer" }` at Kappa,
   `valid = [2019-01-01, )`. A meeting in March 2026 says he was promoted to
   "Staff Engineer" that month. The closing rule ends the Engineer edge at
   `2026-03-01` and proposes a new `HAS_ROLE { title: "Staff Engineer" }`
   edge starting the same day, `SUPERSEDES` linking the two — one person, one
   role at a time, two edges, full history kept.
-- *A manager change.* Joe `REPORTS_TO` Jane, `valid = [2020-01-01,
+- *A manager change.* Jonty `REPORTS_TO` Jane, `valid = [2020-01-01,
   2026-03-01)`; from March 2026 he `REPORTS_TO` Will. Both edges are real
   and both stay in the graph; the entity page reads the second as current
   and the first as history, and an "as of January 2024" query (below) reads
   the first.
-- *A company change, with its two side effects.* Joe leaves Kappa for a new
+- *A company change, with its two side effects.* Jonty leaves Kappa for a new
   employer: the `WORKS_FOR` edge closes, a new one opens. Two things the
   closing rule alone does not handle, both worth stating because they are
-  easy to miss: any **open `Commitment`** where Joe is owner or
+  easy to miss: any **open `Commitment`** where Jonty is owner or
   counterparty is flagged in the review panel for a second look — a
   commitment made to an employee who has since left is not automatically
   void, but it is exactly the kind of fact a reviewer should be asked about
   rather than have silently carry over unremarked; and every **`PersonFact`**
-  about Joe carries over unchanged, because a `PersonFact` is about Joe as a
+  about Jonty carries over unchanged, because a `PersonFact` is about Jonty as a
   person, not about his employer, and has no relationship to the
   `WORKS_FOR` edge closing at all.
-- *An as-of question.* "What was Joe's role when the Q2 pilot was decided?"
+- *An as-of question.* "What was Jonty's role when the Q2 pilot was decided?"
   is answered by intersecting the `Decision`'s own `occurred_at` with every
-  `HAS_ROLE` edge's `valid` range for Joe and returning the one range that
+  `HAS_ROLE` edge's `valid` range for Jonty and returning the one range that
   contains it — the same range-containment operator the "in 2026" example
   above uses for a point query, applied here to a derived point (the
   decision's date) rather than "now."
@@ -932,11 +932,11 @@ about that specific pattern does not apply to this job type at all).
   rollout", "licensing cost", "Product X"), and never to fold two
   of them into one row; it names only the offered types among the three and
   is absent when fewer than two are offered. A *worked example* shows the
-  reference scenario (*"Joe from Company A said he's skeptical about the
+  reference scenario (*"Jonty from Company A said he's skeptical about the
   Product X rollout; Company A is piloting Product X; the licence
-  budget isn't approved"* → Person Joe, Organization Company A and
-  Org Beta, Product Product X, Project Product X rollout; Joe
-  `WORKS_FOR` Company A; Joe `INVOLVED_IN` Product X rollout `{role:
+  budget isn't approved"* → Person Jonty, Organization Company A and
+  Org Beta, Product Product X, Project Product X rollout; Jonty
+  `WORKS_FOR` Company A; Jonty `INVOLVED_IN` Product X rollout `{role:
   stakeholder, stance: skeptical}`; Company A `USES` Product X
   `{stage: piloting}`; Product X `OFFERED_BY` Org Beta; Product X
   rollout `CONCERNS` Product X; a `risk` fact `{riskKind:
@@ -1276,8 +1276,8 @@ precise at this stage:
 **Scoring** combines name similarity with context signals, weighted
 qualitatively (strong/medium/weak) rather than as a single opaque number,
 because the signals genuinely differ in kind: **same-meeting
-attendee/speaker match** (strong — the two "Sarah"s were in the same room),
-**organization co-mention** (strong — both "Sarah"s work at Kappa; for a
+attendee/speaker match** (strong — the two "Sasha"s were in the same room),
+**organization co-mention** (strong — both "Sasha"s work at Kappa; for a
 `Product` the organization is its vendor, so `OFFERED_BY` counts like
 `WORKS_FOR` and `HAS_ROLE`, and a mention's stated `vendorName` counts as
 the vendor named in the proposal even with no Organization row — "PX",
@@ -1343,7 +1343,7 @@ only when they are the **same fact**: same type, same endpoints, same
 `valid`, **and** the same identity props under the one rule the temporal
 planner and dedup use (`sameIdentityProps`, `graph/temporal/identity.ts`) —
 required props equal after trimming and case-folding, an `identity: true`
-prop equal or null/absent on either side. `Joe HAS_ROLE Org Beta {VP}` and
+prop equal or null/absent on either side. `Jonty HAS_ROLE Org Beta {VP}` and
 `{SVP}` over the same period are two roles and both stay, simply re-pointed;
 `{VP}` and `{VP, businessUnit: "Consulting"}` are one role. On a fold, every
 declared, non-deprecated prop the kept row lacks and the folded row states is
@@ -1369,7 +1369,7 @@ two unrelated rows that silently disagree.
 **Closing a temporal edge is a proposal row, not a side effect.** When
 §5.4's closing rule fires — a new fact with a `valid` start closing an
 existing exclusive edge — the close is itself a `kg_proposal_items` row
-("Closes: Joe works for Kappa, 2019 → Feb 2026") that goes through the same
+("Closes: Jonty works for Kappa, 2019 → Feb 2026") that goes through the same
 `pending | accept | edit | reject | merge_into` decision as everything else
 in §8; nothing closes an edge outside a proposal a reviewer acts on. An
 overlap between two edges of the same normally-exclusive type is a warning
@@ -1452,11 +1452,11 @@ storage rule.
 verbatim — the same endpoints, the same statement hash — is shown collapsed
 rather than proposed as a duplicate row to accept, and its evidence is
 appended to the existing row's evidence set even though nothing new is
-created: a second meeting restating "Sarah owns the vendor migration" is
+created: a second meeting restating "Sasha owns the vendor migration" is
 additional support for a fact the graph already has, not a second fact.
 
 **A `known` relation fills what it adds (#444).** A restatement can carry
-*more* than the stored row: the graph holds `Sarah —HAS_ROLE {title: VP}→
+*more* than the stored row: the graph holds `Sasha —HAS_ROLE {title: VP}→
 Kappa` and a later note says she is VP of Consulting there. #440's identity
 rule calls that `known` (an absent `businessUnit` matches anything), so
 before #444 the commit appended the citation and silently dropped the unit.
@@ -1523,7 +1523,7 @@ and a reserved `source_iri` no wire caller may send), so the no-orphans
 invariant (§3.3) holds and Ask can cite the fact. Setting one applies §5.4's
 closing rule exactly as committing a proposal does — the person's still-open
 edge of the type, started earlier, closes at the new start and is linked to
-the new edge — because the owner stating "Jenny now reports to Mark" is the
+the new edge — because the owner stating "Jarek now reports to Marta" is the
 review that a `closing` row otherwise waits for. Removing one is a
 correction, not an end of validity: the row becomes `rejected` (kept, never
 read, §5.5) and an edge it had closed reopens.
@@ -1783,7 +1783,7 @@ summary, kept in sync with that schema by issue #351's own "definition of done")
   gone, which is the entire reason `quote` is stored rather than resolved
   live on every read.
 - **`kg_mentions`** — `(note_id | transcript_id, entity_id, span)` — the
-  coarse `MENTIONS` shortcut (§5.2), what an entity page's "notes about Joe"
+  coarse `MENTIONS` shortcut (§5.2), what an entity page's "notes about Jonty"
   section reads. `entity_id`/`note_id`/`transcript_id` **Cascade** — a
   mention has no meaning once either side is gone, unlike evidence's
   pointer relationship above.
@@ -2225,7 +2225,7 @@ itself — it is a transient review surface over the note that is already
 open, which is exactly what a side sheet is for and a tab strip is not.
 
 **Entity page**, at `/graph/entities/:id` (built, #373) — "everything about
-Joe": the entity's properties, a plain grouped **Connections** list over its
+Jonty": the entity's properties, a plain grouped **Connections** list over its
 1-hop neighbourhood (below), its open commitments, its recent claims and
 decisions, and the entity brief (§9.1).
 
@@ -2624,13 +2624,13 @@ without the runtime self-registration mechanism those use:
 **Why `Person` and `Organization` are `core` rather than `work`, specifically
 — this is the reason to design domains at all rather than ship one flat
 list.** A person exists whether or not `work` is ever enabled; putting
-`Person` in `work` would mean the identical human Joe becomes two different,
+`Person` in `work` would mean the identical human Jonty becomes two different,
 unrelated rows depending on which domain proposed him — one from a
 `work`-domain `WORKS_FOR` edge, a second from a `personal`-domain
-`SPOUSE_OF` edge — with nothing to say they are the same Joe. Keeping
+`SPOUSE_OF` edge — with nothing to say they are the same Jonty. Keeping
 `Person`/`Organization` in `core` and letting `work` and `personal` each add
 *relations* onto them (and, via a mixin, *attributes* onto them) is what
-guarantees one Joe across every domain a user ever turns on.
+guarantees one Jonty across every domain a user ever turns on.
 
 **Rules:**
 
@@ -2721,7 +2721,7 @@ Notion's model makes it safe here.
 worked example: a user adds a "Nickname" attribute to `Person` with
 `extraction_hint: "how this person is addressed informally, e.g. by
 teammates"`; the next `kg.extract` run over a transcript where everyone
-calls someone "JJ" fills it in as an ordinary proposal row, reviewed exactly
+calls someone "JD" fills it in as an ordinary proposal row, reviewed exactly
 like any built-in attribute — a user-defined attribute is not a second-class
 citizen of the extraction pipeline, it is a field the effective schema (§17.4)
 handed the model like any other.
@@ -2871,7 +2871,7 @@ vocabulary counterpart, and §18.2's generators read that field directly.
 | Entity type | `rdfs:Class`, aligned via `alignment` | `schema:Person`, `schema:Organization` |
 | Built-in attribute | `owl:DatatypeProperty`, with `rdfs:domain`/`rdfs:range` | Aligned where a standard property exists — `schema:jobTitle`, `schema:email` — and left as a `kv:`-namespaced property (§18.2) where none does |
 | Relation type | `owl:ObjectProperty`, also `owl:SymmetricProperty` when the type declares `symmetric` (#383 — `SPOUSE_OF`, `FRIEND_OF`) | `schema:worksFor` for `WORKS_FOR`, `schema:spouse` for `SPOUSE_OF`, `foaf:knows` for `FRIEND_OF`, and so on |
-| A temporal edge (§5.4) | A per-edge reified node carrying `prov:startedAtTime`/`prov:endedAtTime`, or RDF-star (`<< :joe :worksFor :kappa >> :validFrom "2019"`) where the consumer supports it | The choice is the consumer's, not the exporter's — both forms are emitted from the identical `valid`/`valid_precision` pair (§5.4, §10), never two separately maintained representations |
+| A temporal edge (§5.4) | A per-edge reified node carrying `prov:startedAtTime`/`prov:endedAtTime`, or RDF-star (`<< :jonty :worksFor :kappa >> :validFrom "2019"`) where the consumer supports it | The choice is the consumer's, not the exporter's — both forms are emitted from the identical `valid`/`valid_precision` pair (§5.4, §10), never two separately maintained representations |
 | Evidence (§5.3) | `prov:wasDerivedFrom` a segment or note-span IRI, plus an `oa:Annotation` carrying an `oa:TextPositionSelector` (the `char_start`/`char_end` range) and an `oa:FragmentSelector` (`t=102,118`, the `start_ms`/`end_ms` range) | The no-orphans invariant (§3.3) restated as two standard selector shapes rather than kvox-specific columns |
 | Review status, confidence, `ontology_version` | `kv:` annotation properties | No standard vocabulary states an opinion about review workflow or a source ontology's version, so these stay in kvox's own namespace rather than being force-fit onto a property that means something narrower |
 | User-defined attribute (§17.3) | `kv:attr/<def-id>`, `rdfs:label` set to the definition's own `label` | The definition id, not the label, is the stable part — identical to how `props` itself is keyed (§17.3) |
@@ -3097,8 +3097,8 @@ that fails validation fails all of it, not row by row.
 
 **Everything imported is a proposal.** A validated import becomes a
 `kg_proposals` row of kind `import` (§8), running through the identical §7
-resolution pipeline as an extraction proposal — an imported "Joe Smith"
-resolves against the graph's existing Joe exactly as a newly extracted
+resolution pipeline as an extraction proposal — an imported "Jonty Sample"
+resolves against the graph's existing Jonty exactly as a newly extracted
 mention would — and committing only through the same "Send to graph" action
 (§8). §8's rule that nothing else writes to the graph holds for imports too,
 without a carve-out: an import is powerful precisely because it is *not* a
@@ -3201,8 +3201,8 @@ server-only, `{ 30 min, 1 attempt }`):
   *anchor* (`import_object_id` + `source_iri`), exactly as a segment or a note
   span is, and the no-orphans trigger sees an ordinary cited row.
 - **Resolves** by running every registered proposal stage with `noteId:
-  null` — #364's resolution first (an imported "Joe Smith" is scored against
-  the owner's Joe exactly like a mention; adjudication, when the owner's
+  null` — #364's resolution first (an imported "Jonty Sample" is scored against
+  the owner's Jonty exactly like a mention; adjudication, when the owner's
   preferences ask for it, spends their key under `aiProviderThrottleKey`, and
   without a key the match stays a flagged, un-ticked candidate), then #365's
   dedup/closing stages (rejection memory skips its per-note half). Then the
@@ -3296,7 +3296,7 @@ already describes, each recorded as the item's `decision`/`edited_payload`/
   declared `from`/`to` (§17.1) and is refused, inline, if they no longer fit.
 - **Re-link** — replace §7's proposed entity match with a different one
   (search the caller's own graph), for the case where automatic resolution
-  picked a plausible but wrong "Sarah."
+  picked a plausible but wrong "Sasha."
 - **Evidence add/remove** — a reviewer who read further in the transcript
   than the model's own cited range can attach another segment or note span
   as additional support, or remove a citation that does not actually say
@@ -3814,7 +3814,7 @@ An **`/ask`** page (conversation list, a streaming answer view, citation
 chips that open the exact ▶ segment, note span, or entity page a claim came
 from, and a model picker honouring §20.3's override) and, on the entity page
 (§13), an **Ask panel** pre-scoped to that entity (`scope_entity_id`, §21.2)
-for "what does the graph know about Joe, and can I ask it something" without
+for "what does the graph know about Jonty, and can I ask it something" without
 leaving the page. Both routes — `/ask` and `/ask/:conversationId` — are
 owned by the `knowledge` destination, exactly as §13 now states for the rest
 of this epic's routes (issue #438); at the time issues #380/#381 shipped
@@ -4037,9 +4037,9 @@ groups rather than an LLM judge, deliberately: crude, but deterministic and
 reviewable without a second model's variance. `citeFrom` reuses the
 fixtures' own segment ids (`"m01-s009"`) or `"mNN#note"` verbatim; with
 `citeFromMin: N` (default 1) valid citations must reach at least N
-distinct listed sources. q43 (#665), *"How is Joe connected to the Product X
-rollout?"*, is grounded in the Joe / Company A / Product X rollout notes
-(m56, m57; the extraction golden set holds their labels: Joe `WORKS_FOR`
+distinct listed sources. q43 (#665), *"How is Jonty connected to the Product X
+rollout?"*, is grounded in the Jonty / Company A / Product X rollout notes
+(m56, m57; the extraction golden set holds their labels: Jonty `WORKS_FOR`
 Company A and `INVOLVED_IN` the rollout `{stakeholder, skeptical}`, Company A
 `USES` Product X `{piloting}` `OFFERED_BY` Org Beta, the rollout
 `CONCERNS` the product and *licensing cost*, a blocker Risk) and passes only
@@ -4413,7 +4413,7 @@ is the part that keeps this inside the job's profile. Measured at 20,000 nodes a
 nodes: 7.3 s and 0.4 s; `packages/kvox-api/test/graph/compute-layout.perf.ts`, `PERF_NODES`),
 against `maxRuntimeMs` of 15 minutes. The endpoint's `themes` are the snapshot's clusters
 (not `Unconnected`, at most 8) and `connectors` its top betweenness entities (at most 8)
-with the live label of each cluster they join and a sentence ("Joe connects the Kappa
+with the live label of each cluster they join and a sentence ("Jonty connects the Kappa
 group and the Org Sigma group."); a raw score is in the response for ordering only and the
 UI never shows it. Both carry `status`, `pending`, `stale`, `tooLarge` and `computedAt`
 exactly like the overview; the request never queues a layout.
@@ -4471,7 +4471,7 @@ printed in a brief).
   every transcript and note to a long-context model on every question.
   Rejected on cost and scale (this grows linearly with corpus size, forever,
   on every query) and because it performs no write-time entity resolution at
-  all — every question re-derives "is this the same Sarah" from scratch,
+  all — every question re-derives "is this the same Sasha" from scratch,
   which is strictly worse than doing it once at review time (§7) and
   reusing the answer.
 - **Org Beta GraphRAG's community-summary architecture.** Rejected because
@@ -4488,7 +4488,7 @@ printed in a brief).
   resolution here is not pure overhead to be deferred — it **is** the review
   step a human already performs once, deliberately, over their own curated
   facts (§7, §8). Deferring it to query time would mean re-asking "is this
-  the same Sarah" on every future question instead of once at commit time,
+  the same Sasha" on every future question instead of once at commit time,
   discarding the one thing a human-in-the-loop design (§3.6) is supposed to
   buy: an answer, decided once, that stays decided.
 - **The 44-type `graph_nodes` catalogue** the v0.2 draft used for every

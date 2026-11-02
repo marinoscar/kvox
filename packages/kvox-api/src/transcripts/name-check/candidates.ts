@@ -2,8 +2,8 @@
 // Name-correction candidate retrieval — stage 1 (issue #328, epic #326)
 // =============================================================================
 //
-// After a user renames speaker "A" to "Oscar", the ASR text still says what the
-// provider heard: "Skar", "Oh scar", "Oscars". This module finds the spans that
+// After a user renames speaker "A" to "Orlo", the ASR text still says what the
+// provider heard: "Rolo", "Or low", "Orlos". This module finds the spans that
 // PLAUSIBLY are a mis-hearing of a name the user has told us about. It does not
 // decide; stage 2 hands every candidate to an LLM for verification, so this
 // stage leans towards recall while keeping the noise bounded enough that the
@@ -21,7 +21,7 @@
 //   2. Slide windows of 1..3 consecutive tokens (never across segments).
 //   3. Drop a window that already IS a name — spelled exactly (case- and
 //      diacritic-insensitively) like ANY target, or that name's plural or
-//      possessive ("Oscar's", "Oscars"). A correctly spelled other name is
+//      possessive ("Orlo's", "Orlos"). A correctly spelled other name is
 //      never a candidate for this one. A multi-token window containing such a
 //      token is dropped too: the misspelled neighbour is still reachable as a
 //      window of its own, and a candidate must never ask to rewrite a name
@@ -33,7 +33,7 @@
 //      the normalized forms is at least 0.85. Because Double Metaphone drops
 //      every vowel, a phonetic match additionally needs a modest amount of
 //      letter agreement (see `similarity`), and a window split differently
-//      from the name ("Oh scar" for "Oscar") needs an exact key. Runs of
+//      from the name ("Or low" for "Orlo") needs an exact key. Runs of
 //      function words ("that is") are never windows.
 //   5. Score, then keep the best-scoring non-overlapping windows (greedy).
 //
@@ -163,14 +163,14 @@ const PHONETIC_WEIGHT = 0.55;
 const PHONETIC_SCORE: Record<PhoneticRelation, number> = { exact: 1, near: 0.85, weak: 0.75 };
 /** Minimum letter-level Jaro-Winkler for each strength of phonetic match. */
 const PHONETIC_JW_FLOOR: Record<PhoneticRelation, number> = { exact: 0.7, near: 0.65, weak: 0.72 };
-/** A window split differently from the name ("Oh scar" / "Oscar") needs an exact key and this much letter agreement. */
+/** A window split differently from the name ("Or low" / "Orlo") needs an exact key and this much letter agreement. */
 const SPLIT_JW_FLOOR = 0.8;
 /** The loosest letter floor of any path — below it nothing can pass, so the phonetic keys are never built. */
 const MIN_JW_ANY_PATH = Math.min(JW_GATE, SPLIT_JW_FLOOR, ...Object.values(PHONETIC_JW_FLOOR));
 /** Confidence below which the provider's own doubt counts as evidence. */
 const LOW_CONFIDENCE = 0.6;
 const STOPWORD_PENALTY = 0.35;
-/** A multi-token window starting or ending on a function word ("the scar"). */
+/** A multi-token window starting or ending on a function word ("the low"). */
 const EDGE_STOPWORD_PENALTY = 0.05;
 /** A multi-token window matched against a multi-token name covers the whole name. */
 const FULL_NAME_BONUS = 0.02;
@@ -195,7 +195,7 @@ const STOPWORDS = new Set([
 
 /**
  * A word token: a maximal run of letters, digits and combining marks, with
- * internal apostrophes and hyphens ("O'Brien", "Jean-Luc", "Oscar's"). Leading
+ * internal apostrophes and hyphens ("O'Brien", "Jean-Luc", "Orlo's"). Leading
  * and trailing punctuation is outside the token, so offsets never include it.
  */
 const TOKEN = /[\p{L}\p{N}\p{M}]+(?:['’\-‐][\p{L}\p{N}\p{M}]+)*/gu;
@@ -257,7 +257,7 @@ function makeTarget(text: string, tokens: string[]): NameTarget {
  * Build comparison targets from speaker display names and user-supplied terms.
  *
  * Each full name is a target, and so is every token of at least three
- * characters of a multi-word name ("Avery Example" → "Avery Example", "Oscar",
+ * characters of a multi-word name ("Avery Example" → "Avery Example", "Orlo",
  * "Example"). Generic labels ("Speaker A", "Unknown") are dropped, duplicates are
  * removed case- and diacritic-insensitively (first spelling wins), and the list
  * is capped at {@link MAX_TARGETS}.
@@ -308,7 +308,7 @@ function confusable(a: string, b: string): boolean {
 /**
  * Classify a one-edit difference between two phonetic keys. A substitution
  * between confusable sounds (Siobhan XPN / Shivon XFN) or losing the key's
- * leading vowel marker (Oscar ASKR / Skar SKR) is `near`; any other single
+ * leading vowel marker (Orlo ARL / Rolo RL) is `near`; any other single
  * edit (Bartholomew PRTLM / problem PRPLM) is only `weak`.
  */
 function oneEditKind(x: string, y: string): 'near' | 'weak' {
@@ -358,8 +358,8 @@ interface Similarity {
  * its whole purpose is to let "Nwin" reach "Nguyen", and on the phonetic key
  * alone it would also let every "nine", "none" and "noon" through.
  *
- * `split` marks a window whose token count differs from the name's ("Oh scar"
- * for "Oscar"): only an exact phonetic match with strong letter agreement
+ * `split` marks a window whose token count differs from the name's ("Or low"
+ * for "Orlo"): only an exact phonetic match with strong letter agreement
  * counts, or every pair of short words would resemble some name.
  */
 function similarity(norm: string, keys: () => string[], spellings: Spelling[], split: boolean): Similarity | null {

@@ -81,7 +81,7 @@ describe('EvidenceChip', () => {
                 id,
                 subjectKind: 'relation',
                 subjectId: gid(498),
-                quote: 'Set by hand: Joe Rivera reports to Dana Li',
+                quote: 'Set by hand: Jonty Placeholder reports to Darcy Placeholder',
                 createdAt: '2026-10-17T00:00:00.000Z',
                 source: { kind: 'manual', available: true, href: null },
               },
@@ -94,7 +94,7 @@ describe('EvidenceChip', () => {
     renderChips([id]);
     await user.click(await screen.findByRole('button', { name: 'Source 1: Set by hand' }));
     const dialog = await screen.findByRole('dialog', { name: 'Set by hand' });
-    expect(within(dialog).getByText('Set by hand: Joe Rivera reports to Dana Li').tagName).toBe('BLOCKQUOTE');
+    expect(within(dialog).getByText('Set by hand: Jonty Placeholder reports to Darcy Placeholder').tagName).toBe('BLOCKQUOTE');
     expect(within(dialog).queryByRole('button', { name: /Play|Open/ })).not.toBeInTheDocument();
   });
 

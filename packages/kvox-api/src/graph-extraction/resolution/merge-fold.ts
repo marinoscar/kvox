@@ -8,7 +8,7 @@
 // FACT: same type, same endpoints, same `valid` (the SQL candidate query
 // decides those) AND the same identity props under the one shared rule
 // (`sameIdentityProps`, the planner's and dedup's own comparison). So
-// `Joe HAS_ROLE Org Beta {VP}` and `{SVP}` over the same period are two roles
+// `Jonty HAS_ROLE Org Beta {VP}` and `{SVP}` over the same period are two roles
 // and both stay; `{VP}` and `{VP, Consulting}` are one role, and the survivor
 // gains `businessUnit: Consulting` if it had none.
 //

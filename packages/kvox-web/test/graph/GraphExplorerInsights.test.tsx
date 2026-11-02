@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GraphCanvasProps } from '../../src/graph/ui/components/explorer/GraphCanvas.js';
 import { GraphExplorerPage } from '../../src/graph/ui/pages/GraphExplorerPage.js';
-import { KAPPA_ID, ANA_ID, SIGMA_ID, OMEGA_ID, JOE_ID, expandFixture, type ExpandFixtureRequest } from './graphData.js';
+import { KAPPA_ID, ANDERS_ID, SIGMA_ID, OMEGA_ID, JONTY_ID, expandFixture, type ExpandFixtureRequest } from './graphData.js';
 import { server } from './msw-compat.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
 import { graphReader } from './graphTestUsers.js';
@@ -84,7 +84,7 @@ function LocationProbe() {
   return <output data-testid="location">{location.pathname + location.search}</output>;
 }
 
-function renderExplorer(route = `/graph/explore?seed=${JOE_ID}`) {
+function renderExplorer(route = `/graph/explore?seed=${JONTY_ID}`) {
   return render(
     <>
       <Routes>
@@ -104,13 +104,13 @@ describe('GraphExplorerPage — Insights', () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
-    await within(canvas).findByRole('button', { name: 'Ana Diaz' });
+    await within(canvas).findByRole('button', { name: 'Anders Placeholder' });
 
     const rising = await screen.findByRole('region', { name: /^Rising/ });
-    await user.click(within(rising).getByRole('button', { name: /Ana Diaz/ }));
+    await user.click(within(rising).getByRole('button', { name: /Anders Placeholder/ }));
 
-    expect(mocks.controls.focusNode).toHaveBeenCalledWith(ANA_ID);
-    expect(seedsInUrl()).toEqual([JOE_ID]);
+    expect(mocks.controls.focusNode).toHaveBeenCalledWith(ANDERS_ID);
+    expect(seedsInUrl()).toEqual([JONTY_ID]);
   });
 
   it('a connector seeds the node and the groups it joins, rings those, and focuses the node once drawn', async () => {
@@ -119,29 +119,29 @@ describe('GraphExplorerPage — Insights', () => {
     renderExplorer(`/graph/explore?seed=${OMEGA_ID}`);
     const canvas = await screen.findByTestId('fake-canvas');
     await within(canvas).findByRole('button', { name: 'Org Omega' });
-    expect(within(canvas).queryByRole('button', { name: 'Joe Rivera' })).not.toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'Jonty Placeholder' })).not.toBeInTheDocument();
 
     const connectors = await screen.findByRole('region', { name: /^Connectors/ });
-    await user.click(within(connectors).getByRole('button', { name: /Joe Rivera/ }));
+    await user.click(within(connectors).getByRole('button', { name: /Jonty Placeholder/ }));
 
-    await waitFor(() => expect(seedsInUrl()[0]).toBe(JOE_ID));
+    await waitFor(() => expect(seedsInUrl()[0]).toBe(JONTY_ID));
     expect(seedsInUrl()).toEqual(expect.arrayContaining([KAPPA_ID, SIGMA_ID]));
-    await waitFor(() => expect(mocks.controls.focusNode).toHaveBeenCalledWith(JOE_ID));
+    await waitFor(() => expect(mocks.controls.focusNode).toHaveBeenCalledWith(JONTY_ID));
     await waitFor(() => expect(within(canvas).getByRole('button', { name: 'Org Kappa' })).toHaveAttribute('data-marked', 'true'));
-    expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toHaveAttribute('data-marked', 'false');
+    expect(within(canvas).getByRole('button', { name: 'Jonty Placeholder' })).toHaveAttribute('data-marked', 'false');
   });
 
   it('a theme replaces the seeds with the theme members', async () => {
     act(() => setViewportWidth(1280));
     const user = userEvent.setup();
     renderExplorer();
-    await within(await screen.findByTestId('fake-canvas')).findByRole('button', { name: 'Joe Rivera' });
+    await within(await screen.findByTestId('fake-canvas')).findByRole('button', { name: 'Jonty Placeholder' });
 
     const themes = await screen.findByRole('region', { name: /^Themes/ });
     await user.click(within(themes).getByRole('button', { name: /^Org Sigma/ }));
 
     await waitFor(() => expect(seedsInUrl()).toContain(SIGMA_ID));
-    expect(seedsInUrl()).not.toContain(JOE_ID);
+    expect(seedsInUrl()).not.toContain(JONTY_ID);
   });
 
   it('a fading tie seeds both ends', async () => {
@@ -151,16 +151,16 @@ describe('GraphExplorerPage — Insights', () => {
     await within(await screen.findByTestId('fake-canvas')).findByRole('button', { name: 'Org Omega' });
 
     const ties = await screen.findByRole('region', { name: /^Fading ties/ });
-    await user.click(within(ties).getByRole('button', { name: /Joe Rivera and Ana Diaz/ }));
+    await user.click(within(ties).getByRole('button', { name: /Jonty Placeholder and Anders Placeholder/ }));
 
-    await waitFor(() => expect(seedsInUrl()).toEqual([JOE_ID, ANA_ID]));
+    await waitFor(() => expect(seedsInUrl()).toEqual([JONTY_ID, ANDERS_ID]));
   });
 
   it('on a medium window the panel is in the filter rail popover', async () => {
     act(() => setViewportWidth(900));
     const user = userEvent.setup();
     renderExplorer();
-    await within(await screen.findByTestId('fake-canvas')).findByRole('button', { name: 'Joe Rivera' });
+    await within(await screen.findByTestId('fake-canvas')).findByRole('button', { name: 'Jonty Placeholder' });
 
     expect(screen.queryByRole('region', { name: 'Insights' })).not.toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: 'Filters' }));
@@ -171,7 +171,7 @@ describe('GraphExplorerPage — Insights', () => {
     act(() => setViewportWidth(390));
     const user = userEvent.setup();
     renderExplorer();
-    await within(await screen.findByTestId('fake-canvas')).findByRole('button', { name: 'Joe Rivera' });
+    await within(await screen.findByTestId('fake-canvas')).findByRole('button', { name: 'Jonty Placeholder' });
 
     await user.click(await screen.findByRole('button', { name: /Filters/ }));
     expect(await screen.findByRole('region', { name: 'Insights' })).toBeInTheDocument();

@@ -57,9 +57,7 @@
       (`scripts/sync-brand-assets.mjs`, checked by `npm run brand:check` and by a
       test). A <link> in <head> is discovered by the browser's preload scanner in
       the first parse of the document, so the font request starts before the React
-      bundle is even fetched, and the visual regression harness
-      (`visual/index.html`, issue #107) loads the very same file, so its baselines
-      describe the font-loading path users get. See the package file's header for
+      bundle is even fetched. See the package file's header for
       self-hosting, `font-display: swap` and the variable-weight range.
 
       Served from `public/`, so Vite copies it into `dist/` untouched and

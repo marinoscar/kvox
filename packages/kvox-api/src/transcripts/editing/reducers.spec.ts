@@ -99,11 +99,11 @@ describe('applyOps — one op at a time', () => {
 
   it('speaker.rename changes the name and bumps the speaker rev', () => {
     const { state: after } = applyOps(threeLines(), [
-      { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'B', rev: 1, displayName: 'Dana' },
+      { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'B', rev: 1, displayName: 'Darcy' },
     ]);
 
     expect(after.speakers.find((row) => row.id === 'B')).toMatchObject({
-      displayName: 'Dana',
+      displayName: 'Darcy',
       rev: 2,
     });
   });

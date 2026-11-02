@@ -96,18 +96,18 @@ describeWithDb('Ask conversations (real Postgres)', () => {
   it('lists newest-updated first, pages with a cursor, filters by scope, and reports running + preview', async () => {
     const user = await owner('list');
     const g = new GraphFixture(prisma, user.id);
-    const sarah = await g.entity('Person', 'Sarah Chen');
+    const sasha = await g.entity('Person', 'Sasha Example');
 
     const c1 = await service.create(user.id, { title: 'First' });
-    const c2 = await service.create(user.id, { title: 'Second', scopeEntityId: sarah });
+    const c2 = await service.create(user.id, { title: 'Second', scopeEntityId: sasha });
     const c3 = await service.create(user.id, { title: 'Third' });
     // Same millisecond, different microseconds: the cursor must not skip c1.
     await prisma.$executeRaw`UPDATE ask_conversations SET updated_at = '2026-09-01T10:00:00.000300Z' WHERE id = ${c3.id}::uuid`;
     await prisma.$executeRaw`UPDATE ask_conversations SET updated_at = '2026-09-01T10:00:00.000200Z' WHERE id = ${c2.id}::uuid`;
     await prisma.$executeRaw`UPDATE ask_conversations SET updated_at = '2026-09-01T10:00:00.000100Z' WHERE id = ${c1.id}::uuid`;
 
-    await message(c2.id, 'user', 'Who is Sarah?', { createdAt: new Date('2026-09-01T09:00:00Z') });
-    await message(c2.id, 'assistant', 'Sarah[^ent1] leads Atlas.[^ev2]', { createdAt: new Date('2026-09-01T09:00:01Z') });
+    await message(c2.id, 'user', 'Who is Sasha?', { createdAt: new Date('2026-09-01T09:00:00Z') });
+    await message(c2.id, 'assistant', 'Sasha[^ent1] leads Atlas.[^ev2]', { createdAt: new Date('2026-09-01T09:00:01Z') });
     await message(c3.id, 'user', 'What changed?', { createdAt: new Date('2026-09-01T09:00:00Z') });
     await message(c3.id, 'assistant', '', { status: 'streaming', createdAt: new Date('2026-09-01T09:00:01Z') });
 
@@ -116,8 +116,8 @@ describeWithDb('Ask conversations (real Postgres)', () => {
     expect(p1.items[0]).toMatchObject({ running: true, lastMessagePreview: 'What changed?' });
     expect(p1.items[1]).toMatchObject({
       running: false,
-      lastMessagePreview: 'Sarah leads Atlas.',
-      scopeEntity: { id: sarah, label: 'Sarah Chen', type: 'Person' },
+      lastMessagePreview: 'Sasha leads Atlas.',
+      scopeEntity: { id: sasha, label: 'Sasha Example', type: 'Person' },
     });
     expect(p1.nextCursor).not.toBeNull();
 
@@ -126,9 +126,9 @@ describeWithDb('Ask conversations (real Postgres)', () => {
     expect(p2.items[0]).toMatchObject({ running: false, lastMessagePreview: null });
     expect(p2.nextCursor).toBeNull();
 
-    const scoped = await service.list(user.id, { limit: 20, scopeEntityId: sarah });
+    const scoped = await service.list(user.id, { limit: 20, scopeEntityId: sasha });
     expect(scoped.items.map((i) => i.id)).toEqual([c2.id]);
-    await expect(service.list(user.id, { limit: 20, scopeEntityId: sarah, cursor: p1.nextCursor! })).rejects.toThrow(
+    await expect(service.list(user.id, { limit: 20, scopeEntityId: sasha, cursor: p1.nextCursor! })).rejects.toThrow(
       'different list',
     );
   });
@@ -221,9 +221,9 @@ describeWithDb('Ask conversations (real Postgres)', () => {
   it('delete cascades the messages — a running turn included — and audits counts only', async () => {
     const user = await owner('delete');
     const g = new GraphFixture(prisma, user.id);
-    const sarah = await g.entity('Person', 'Sarah Chen');
-    const conv = await service.create(user.id, { scopeEntityId: sarah });
-    await message(conv.id, 'user', 'A private question about Sarah');
+    const sasha = await g.entity('Person', 'Sasha Example');
+    const conv = await service.create(user.id, { scopeEntityId: sasha });
+    await message(conv.id, 'user', 'A private question about Sasha');
     await message(conv.id, 'assistant', 'A private answer', { status: 'streaming' });
 
     await service.remove(user.id, conv.id);
@@ -234,7 +234,7 @@ describeWithDb('Ask conversations (real Postgres)', () => {
       where: { actorUserId: user.id, action: 'ask.conversation_deleted' },
     });
     expect(audit).toMatchObject({ targetType: 'ask_conversation', targetId: conv.id });
-    expect(audit.meta).toEqual({ messageCount: 2, scopeEntityId: sarah });
+    expect(audit.meta).toEqual({ messageCount: 2, scopeEntityId: sasha });
     expect(JSON.stringify(audit.meta)).not.toContain('private');
   });
 

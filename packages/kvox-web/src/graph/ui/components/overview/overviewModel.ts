@@ -12,7 +12,7 @@
  * stored snapshot (`kg.graph_layout`, #371); a client-side layout of a whole
  * graph is exactly what spec §22.3 rules out. Both builders are pure
  * functions of the snapshot and the theme, so the same response always draws
- * the same picture — which the visual baselines rely on.
+ * the same picture.
  *
  * ⚠ ATTRIBUTE NAMES. Sigma reads a node's or edge's `type` attribute as the
  * WebGL program to draw it with, so an entity's type lives in `entityType`

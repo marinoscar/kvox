@@ -19,7 +19,7 @@ function row(over: Record<string, unknown>) {
     id: ENTITY,
     ownerId: USER,
     type: 'Person',
-    label: 'Sarah',
+    label: 'Sasha',
     props: { title: 'CTO' },
     occurredAt: null,
     reviewStatus: 'accepted',

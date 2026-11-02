@@ -15,27 +15,27 @@
     {
       "id": "m26-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m26-spk-b",
       "label": "B",
-      "displayName": "Priya Raman"
+      "displayName": "Pia Sample"
     },
     {
       "id": "m26-spk-c",
       "label": "C",
-      "displayName": "Jonah Jiménez"
+      "displayName": "Jovan Démo"
     },
     {
       "id": "m26-spk-d",
       "label": "D",
-      "displayName": "Kwame Mensah"
+      "displayName": "Kieran Testcase"
     },
     {
       "id": "m26-spk-e",
       "label": "E",
-      "displayName": "Nadia Brooks"
+      "displayName": "Nell Fixture"
     }
   ],
   "segments": [
@@ -53,7 +53,7 @@
       "startMs": 5790,
       "endMs": 12470,
       "rev": 1,
-      "text": "First item should be the good news. JJ's promotion to Staff Engineer takes effect July 1."
+      "text": "First item should be the good news. JD's promotion to Staff Engineer takes effect July 1."
     },
     {
       "id": "m26-s003",
@@ -61,7 +61,7 @@
       "startMs": 12720,
       "endMs": 14080,
       "rev": 1,
-      "text": "Congratulations, JJ."
+      "text": "Congratulations, JD."
     },
     {
       "id": "m26-s004",
@@ -213,7 +213,7 @@
       "startMs": 91190,
       "endMs": 93690,
       "rev": 1,
-      "text": "Fine, afternoon pairing for Kwame."
+      "text": "Fine, afternoon pairing for Kieran."
     },
     {
       "id": "m26-s023",
@@ -221,7 +221,7 @@
       "startMs": 93940,
       "endMs": 98340,
       "rev": 1,
-      "text": "Priya, while you're out in July, I'll cover team questions."
+      "text": "Pia, while you're out in July, I'll cover team questions."
     },
     {
       "id": "m26-s024",
@@ -229,7 +229,7 @@
       "startMs": 98590,
       "endMs": 103370,
       "rev": 1,
-      "text": "Thank you, JJ. I'll send the handover note before I go."
+      "text": "Thank you, JD. I'll send the handover note before I go."
     },
     {
       "id": "m26-s025",
@@ -258,7 +258,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Larkspur engineering all-hands prep\n\n**Date:** June 25\n**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks\n\n## Summary\n\nPriya locked the agenda for next week's Larkspur Labs engineering all-hands.\n\n## Agenda\n\n1. **Promotion:** JJ's promotion to Staff Engineer takes effect July 1.\n2. **Branching:** adopt trunk-based development across client repos.\n3. **On-call:** the guide is out of date; a new one is coming, including the Lambda rotation.\n4. **Hiring:** three open engineering reqs now that the freeze is over.\n5. **Design demo:** five minutes on the Corvid intake.\n\n## Decisions\n\n- **Adopt trunk-based development across client repos**, with short-lived branches and feature flags. The Gullwing repo is already trunk-based and is the calmest.\n- AI code review stays off the agenda: it keeps coming up, but it is a topic, not a project.\n\n## Action items\n\n- **Priya Raman** — publish the new on-call guide by July 3, including the Lambda rotation; present the branching decision; send a handover note before her leave.\n- **JJ** — cover team questions while Priya is out in July.\n\n## Notes\n\n- Kwame is better at pairing in the afternoons; mornings he is on the Gullwing stand-ups.\n- The agenda is final; Priya will circulate it to the whole engineering group before Monday so people can add questions.\n"
+    "body": "# Larkspur engineering all-hands prep\n\n**Date:** June 25\n**Attendees:** Alma Mockwell, Pia Sample, JD, Kieran Testcase, Nell Fixture\n\n## Summary\n\nPia locked the agenda for next week's Larkspur Labs engineering all-hands.\n\n## Agenda\n\n1. **Promotion:** JD's promotion to Staff Engineer takes effect July 1.\n2. **Branching:** adopt trunk-based development across client repos.\n3. **On-call:** the guide is out of date; a new one is coming, including the Lambda rotation.\n4. **Hiring:** three open engineering reqs now that the freeze is over.\n5. **Design demo:** five minutes on the Corvid intake.\n\n## Decisions\n\n- **Adopt trunk-based development across client repos**, with short-lived branches and feature flags. The Gullwing repo is already trunk-based and is the calmest.\n- AI code review stays off the agenda: it keeps coming up, but it is a topic, not a project.\n\n## Action items\n\n- **Pia Sample** — publish the new on-call guide by July 3, including the Lambda rotation; present the branching decision; send a handover note before her leave.\n- **JD** — cover team questions while Pia is out in July.\n\n## Notes\n\n- Kieran is better at pairing in the afternoons; mornings he is on the Gullwing stand-ups.\n- The agenda is final; Pia will circulate it to the whole engineering group before Monday so people can add questions.\n"
   },
   "knownEntities": [
     {
@@ -272,11 +272,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -308,12 +308,12 @@
       ]
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -327,11 +327,11 @@
       ]
     },
     {
-      "id": "g-person-kwame-mensah",
+      "id": "g-person-kieran-testcase",
       "type": "Person",
-      "label": "Kwame Mensah",
+      "label": "Kieran Testcase",
       "aliases": [
-        "Kwame"
+        "Kieran"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -342,11 +342,11 @@
       ]
     },
     {
-      "id": "g-person-nadia-brooks",
+      "id": "g-person-nell-fixture",
       "type": "Person",
-      "label": "Nadia Brooks",
+      "label": "Nell Fixture",
       "aliases": [
-        "Nadia"
+        "Nell"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -358,11 +358,11 @@
       ]
     },
     {
-      "id": "g-person-priya-raman",
+      "id": "g-person-pia-sample",
       "type": "Person",
-      "label": "Priya Raman",
+      "label": "Pia Sample",
       "aliases": [
-        "Priya"
+        "Pia"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -392,75 +392,75 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera"
+            "quote": "**Attendees:** Alma Mockwell"
           }
         ]
       },
       {
-        "key": "priya",
+        "key": "pia",
         "type": "Person",
-        "label": "Priya Raman",
+        "label": "Pia Sample",
         "aliases": [],
-        "existingId": "g-person-priya-raman",
+        "existingId": "g-person-pia-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Priya locked the agenda"
+            "quote": "Pia locked the agenda"
           }
         ]
       },
       {
         "key": "jj",
         "type": "Person",
-        "label": "Jonah Jiménez",
+        "label": "Jovan Démo",
         "aliases": [
-          "JJ"
+          "JD"
         ],
-        "existingId": "g-person-jonah-jimenez",
+        "existingId": "g-person-jovan-demo",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m26-s002",
-            "quote": "JJ's promotion to Staff Engineer takes effect July 1."
+            "quote": "JD's promotion to Staff Engineer takes effect July 1."
           }
         ]
       },
       {
-        "key": "kwame",
+        "key": "kieran",
         "type": "Person",
-        "label": "Kwame Mensah",
+        "label": "Kieran Testcase",
         "aliases": [],
-        "existingId": "g-person-kwame-mensah",
+        "existingId": "g-person-kieran-testcase",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Kwame Mensah"
+            "quote": "Kieran Testcase"
           }
         ]
       },
       {
-        "key": "nadia",
+        "key": "nell",
         "type": "Person",
-        "label": "Nadia Brooks",
+        "label": "Nell Fixture",
         "aliases": [],
-        "existingId": "g-person-nadia-brooks",
+        "existingId": "g-person-nell-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Nadia Brooks"
+            "quote": "Nell Fixture"
           }
         ]
       },
@@ -482,7 +482,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -491,13 +491,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks"
+            "quote": "**Attendees:** Alma Mockwell, Pia Sample, JD, Kieran Testcase, Nell Fixture"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "priya",
+        "from": "pia",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -506,7 +506,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks"
+            "quote": "**Attendees:** Alma Mockwell, Pia Sample, JD, Kieran Testcase, Nell Fixture"
           }
         ]
       },
@@ -521,13 +521,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks"
+            "quote": "**Attendees:** Alma Mockwell, Pia Sample, JD, Kieran Testcase, Nell Fixture"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "kwame",
+        "from": "kieran",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -536,13 +536,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks"
+            "quote": "**Attendees:** Alma Mockwell, Pia Sample, JD, Kieran Testcase, Nell Fixture"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "nadia",
+        "from": "nell",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -551,7 +551,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks"
+            "quote": "**Attendees:** Alma Mockwell, Pia Sample, JD, Kieran Testcase, Nell Fixture"
           }
         ]
       },
@@ -569,7 +569,7 @@
           {
             "source": "segment",
             "segmentId": "m26-s002",
-            "quote": "JJ's promotion to Staff Engineer takes effect July 1."
+            "quote": "JD's promotion to Staff Engineer takes effect July 1."
           }
         ]
       }
@@ -623,10 +623,10 @@
       {
         "kind": "commitment",
         "subject": "larkspur",
-        "owner": "priya",
+        "owner": "pia",
         "counterparty": null,
         "title": "Publish the new on-call guide",
-        "statement": "Priya will publish the new on-call guide by July 3.",
+        "statement": "Pia will publish the new on-call guide by July 3.",
         "status": "open",
         "occurredAt": "2026-06-25",
         "dueAt": "2026-07-03",
@@ -644,9 +644,9 @@
         "kind": "commitment",
         "subject": "larkspur",
         "owner": "jj",
-        "counterparty": "priya",
+        "counterparty": "pia",
         "title": "Cover team questions in July",
-        "statement": "JJ will cover team questions while Priya is out in July.",
+        "statement": "JD will cover team questions while Pia is out in July.",
         "status": "open",
         "occurredAt": "2026-06-25",
         "dueAt": null,
@@ -662,11 +662,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "kwame",
+        "subject": "kieran",
         "owner": null,
         "counterparty": null,
         "title": "Prefers afternoon pairing",
-        "statement": "Kwame is better at pairing in the afternoons because mornings are Gullwing stand-ups.",
+        "statement": "Kieran is better at pairing in the afternoons because mornings are Gullwing stand-ups.",
         "status": null,
         "occurredAt": "2026-06-25",
         "dueAt": null,

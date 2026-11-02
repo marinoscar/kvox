@@ -99,12 +99,6 @@ const identity = require('./identity.json');
  * README.md in this folder for the current consumer list. Two of them append a
  * suffix (`${APP_NAME} API`, `${APP_NAME} CLI`) instead of holding a second
  * literal, so the suffix survives a rename and the name does not have to.
- *
- * ONE THING TO KNOW BEFORE YOU CHANGE IT: the app name is rendered into the
- * visual-regression baselines under `tests/visual/specs/**\/*-snapshots/`, and
- * that suite runs at `maxDiffPixels: 4`. Changing this string is a real pixel
- * change, so the baselines must be regenerated in the pinned container — see
- * this folder's README for the exact command.
  */
 exports.APP_NAME = identity.productName;
 

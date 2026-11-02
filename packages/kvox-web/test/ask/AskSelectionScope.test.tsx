@@ -5,7 +5,7 @@ import { Route, Routes } from 'react-router-dom';
 
 import { server, http, HttpResponse, render, makeHost } from './helpers.js';
 import { mockGraphAiConfig } from '../graph/graphData.js';
-import { CONV_ATLAS_ID, JOE_ID, askMock, resetAskMock } from './askData.js';
+import { CONV_ATLAS_ID, JONTY_ID, askMock, resetAskMock } from './askData.js';
 import { graphReader } from '../graph/graphTestUsers.js';
 import { clearEvidenceCache } from '../../src/graph/headless/index.js';
 import type { AskStreamHandlers } from '../../src/ask/headless/index.js';
@@ -45,8 +45,8 @@ describe('postAskMessage', () => {
     resetAskMock();
     const id = CONV_ATLAS_ID;
 
-    await postAskMessage(host, id, { content: 'How is Joe involved?', scope: { entityIds: [JOE_ID], evidenceIds: [EVIDENCE_ID] } });
-    expect(lastMessageBody()).toEqual({ content: 'How is Joe involved?', scope: { entityIds: [JOE_ID], evidenceIds: [EVIDENCE_ID] } });
+    await postAskMessage(host, id, { content: 'How is Jonty involved?', scope: { entityIds: [JONTY_ID], evidenceIds: [EVIDENCE_ID] } });
+    expect(lastMessageBody()).toEqual({ content: 'How is Jonty involved?', scope: { entityIds: [JONTY_ID], evidenceIds: [EVIDENCE_ID] } });
 
     await postAskMessage(host, id, { content: 'And now?', scope: { entityIds: [], evidenceIds: [] } });
     expect(lastMessageBody()).toEqual({ content: 'And now?' });
@@ -63,14 +63,14 @@ function Panel(props: Partial<GraphEntityAskPanelProps>) {
         path="*"
         element={
           <AskEntityPanelSlot
-            entityId={JOE_ID}
-            entityLabel="Joe and 1 more"
+            entityId={JONTY_ID}
+            entityLabel="Jonty and 1 more"
             entityType="Person"
             open
             onClose={() => undefined}
             conversationId={null}
             onConversationChange={() => undefined}
-            scope={{ entityIds: [JOE_ID, OTHER_ID], evidenceIds: [EVIDENCE_ID] }}
+            scope={{ entityIds: [JONTY_ID, OTHER_ID], evidenceIds: [EVIDENCE_ID] }}
             {...props}
           />
         }
@@ -82,7 +82,7 @@ function Panel(props: Partial<GraphEntityAskPanelProps>) {
 describe('the Ask panel the explorer opens for a selection', () => {
   it('sends the selection with the first question, into a conversation scoped to the first entity', async () => {
     render(<Panel />, { wrapperOptions: { route: '/', user: graphReader }, hostOptions: { features: { graphEnabled: true } } });
-    const dialog = await screen.findByRole('dialog', { name: 'Ask about Joe and 1 more' });
+    const dialog = await screen.findByRole('dialog', { name: 'Ask about Jonty and 1 more' });
     const suggestions = await within(dialog).findByRole('list', { name: 'Suggested questions' });
     const first = within(suggestions).getAllByRole('button')[0];
     await waitFor(() => expect(first).toBeEnabled());
@@ -90,17 +90,17 @@ describe('the Ask panel the explorer opens for a selection', () => {
 
     await waitFor(() => expect(askMock.requests.some((r) => r.method === 'POST' && r.path.endsWith('/messages'))).toBe(true));
     const create = askMock.requests.find((r) => r.method === 'POST' && r.path === '/ask/conversations');
-    expect(create?.body).toEqual({ scopeEntityId: JOE_ID });
+    expect(create?.body).toEqual({ scopeEntityId: JONTY_ID });
     const post = askMock.requests.find((r) => r.method === 'POST' && r.path.endsWith('/messages'));
-    expect(post?.body).toMatchObject({ scope: { entityIds: [JOE_ID, OTHER_ID], evidenceIds: [EVIDENCE_ID] } });
+    expect(post?.body).toMatchObject({ scope: { entityIds: [JONTY_ID, OTHER_ID], evidenceIds: [EVIDENCE_ID] } });
   });
 
   it('sends no scope when the panel is opened for a plain entity', async () => {
-    render(<Panel scope={undefined} entityLabel="Joe Rivera" />, {
+    render(<Panel scope={undefined} entityLabel="Jonty Placeholder" />, {
       wrapperOptions: { route: '/', user: graphReader },
       hostOptions: { features: { graphEnabled: true } },
     });
-    const dialog = await screen.findByRole('dialog', { name: 'Ask about Joe Rivera' });
+    const dialog = await screen.findByRole('dialog', { name: 'Ask about Jonty Placeholder' });
     const suggestions = await within(dialog).findByRole('list', { name: 'Suggested questions' });
     const first = within(suggestions).getAllByRole('button')[0];
     await waitFor(() => expect(first).toBeEnabled());

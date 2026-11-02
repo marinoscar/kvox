@@ -21,7 +21,7 @@ export function quoteFoundIn(quote: string, haystack: string): boolean {
 
 /**
  * NFKC → lower-case → strip punctuation except an inner `'`/`-` (one joining
- * two letters/digits) → collapse whitespace. "Sarah  Chen," → "sarah chen";
+ * two letters/digits) → collapse whitespace. "Sasha  Example," → "sasha example";
  * "O'Neil-Smith" keeps both joiners.
   *
   * @stability experimental

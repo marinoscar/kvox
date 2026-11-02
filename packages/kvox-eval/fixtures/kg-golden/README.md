@@ -46,7 +46,7 @@ fixture `id` (`m01`…). The contract is `goldenFixtureSchema` in
 | `hasTranscript` | `false` for a note-only meeting: no `speakers`, no `segments`, and every citation is `source: "note"`. |
 | `speakers`, `segments` | Diarized speakers and their lines. Segment ids are `<id>-sNNN`, unique across the set, sorted and non-overlapping. 20–120 segments per transcript. |
 | `note.body` | The generated note, written the way `note.generate` writes one: `# Title`, a `**Date:**` and an `**Attendees:**` line, then sections. 200–700 words (a `long-record` fixture is a document of 6,000+ words). |
-| `knownEntities` | The graph as it stood **before** this meeting (ids like `g-person-sarah-chen`), with aliases and the earlier fixtures each attended. What resolution may link to. |
+| `knownEntities` | The graph as it stood **before** this meeting (ids like `g-person-sasha-example`), with aliases and the earlier fixtures each attended. What resolution may link to. |
 | `labels.entities` | Gold `Person` / `Organization` / `Project` / `Meeting` rows. `key` is local to the file; `existingId` says which known entity the mention must link to. Every fixture labels its own `Meeting` (key `meeting`). |
 | `labels.relations` | Gold edges, using only the ontology's extractable relation types. `from`/`to` are keys or known ids. Temporal types carry `validFrom`/`validTo`/`precision` per §5.4 (half-open; month/year bounds on the first of the unit; `unknown` means both bounds `null`). Non-temporal ones are `unknown` with `null` bounds. |
 | `labels.items` | Gold `commitment` / `decision` / `risk` / `claim` / `person_fact`. `owner` and `counterparty` are the `ASSIGNED_TO`/`OWED_TO` columns; `status` only on commitments (`open | done | dropped`) and risks (`open | mitigated | closed`); `sensitivity` only on person facts; `props` carries the item type's own attributes (a risk's `severity`, `riskKind`, `mitigation`). `supersedesLabel` names an earlier item as `<fixtureId>#<kind>-<n>` (`n` = 1-based position among that fixture's items of that kind), e.g. `m01#claim-1`. |
@@ -94,15 +94,15 @@ never enables `personal` is offered none of it.
   Project (`negative-topic`), "we should probably look into that"
   (`negative-vague-task`).
 - `PersonFact` at all three sensitivity levels, ≥ 3 `sensitive`.
-- Resolution traps: two different Sarahs at different organisations
-  (`two-sarahs`), a misspelling ("Sara Chen", `misspelling`), a nickname
-  matching a known alias ("JJ", `nickname`), an abbreviation ("NWR" /
+- Resolution traps: two different Sashas at different organisations
+  (`two-sashas`), a misspelling ("Sasa Example", `misspelling`), a nickname
+  matching a known alias ("JD", `nickname`), an abbreviation ("NWR" /
   "Org Lambda Robotics", `abbreviation`).
 - Supersedes chains: a decision reversed in a later fixture, and "the pilot
   moved to Q2" after "the pilot is scheduled for Q1".
 - ≥ 2 note-only meetings (`note-only`).
 - Risks (#664, m50-m55, tag `risks`): ≥ 15 gold `risk` items over every severity (low, medium, high) and every `riskKind` (risk, issue, blocker), subjects of every allowed kind (Project, Product, Organization, Topic), one with a `mitigation`, and a status chain (`m53` supersedes `m50#risk-1`).
-- The Joe / Company A / Product X rollout scenario (#665, m56-m57, tag `product-x-rollout`): two note-only meetings that carry the stakeholder and market shapes end to end (a Person `INVOLVED_IN` a Project with `role` and `stance`, an Organization `USES` a Product at a `stage`, `OFFERED_BY`, `CONCERNS` a Product and a Topic, a Risk, a `Product` with the alias "Product X"), and a negative: a person who only took notes gets no `INVOLVED_IN` and no stance. `m57` links back to `m56`'s entities by `existingId`, so the Ask question q43 ("How is Joe connected to the Product X rollout?") must cite both notes (`citeFromMin: 2`).
+- The Jonty / Company A / Product X rollout scenario (#665, m56-m57, tag `product-x-rollout`): two note-only meetings that carry the stakeholder and market shapes end to end (a Person `INVOLVED_IN` a Project with `role` and `stance`, an Organization `USES` a Product at a `stage`, `OFFERED_BY`, `CONCERNS` a Product and a Topic, a Risk, a `Product` with the alias "Product X"), and a negative: a person who only took notes gets no `INVOLVED_IN` and no stance. `m57` links back to `m56`'s entities by `existingId`, so the Ask question q43 ("How is Jonty connected to the Product X rollout?") must cite both notes (`citeFromMin: 2`).
 - The long record (#780, `m60`, tags `long-record`, `multi-meeting`): one invented 6,000+ word document recording six meetings on distinct dates between two firms with sub-units (Org Alpha, Org Beta), 25 people, an Opportunity with decision makers, influencers and evaluators (`INVOLVED_IN` with a `role`), metrics (claims), actions (commitments), decisions and risks. The owner (`selfEntityId`) organizes some meetings and attends all. It labels the 1.4 types and relations the rest of the set does not: `Document`, `Opportunity`, `ORGANIZED`, `WITH_CLIENT`, `PURSUED_BY`, `COMPETING_FOR`, and `ATTENDED` with `attendance` (invited, copied). `packages/kvox-eval/test/kg-long-record.spec.ts` extracts it through the product's own pipeline with a scripted answer and asserts the pass criteria (six or more Meetings, every attendee linked, the owner with five or more edges, sub-units under their parent, the opportunity's roles, every row cited). The Document and its `RECORDED_IN` / `PREPARED_FOR` edges are system rows, so only the Document is labelled.
 - Personal domain (#383), in fixtures tagged `personal` (≥ 5): every
   `personal` type and relation labelled at least once — a spouse, parents and

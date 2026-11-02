@@ -195,7 +195,7 @@ export function describeGraphConformance(
       const fact = (over: Partial<DigestItemFact>): DigestItemFact => ({
         kind: 'person_fact',
         title: null,
-        statement: 'Sarah prefers written updates',
+        statement: 'Sasha prefers written updates',
         status: null,
         occurredAt: null,
         dueAt: null,
@@ -223,7 +223,7 @@ export function describeGraphConformance(
           relations: [],
           includePersonalFacts: true,
         });
-        const prompt = buildDigestPrompt({ entity: { label: 'Sarah Chen', type: 'Person' }, facts: list.facts, previousHandles: list.previousHandles });
+        const prompt = buildDigestPrompt({ entity: { label: 'Sasha Example', type: 'Person' }, facts: list.facts, previousHandles: list.previousHandles });
         const ai = createFakeKvoxAi({ script: { structured: { statements: [] } } });
         const target = await ai.resolveTask({ userId: USER, orgId: null, feature: 'graph.entity_digest' }, 'graph.digest');
 

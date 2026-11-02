@@ -776,7 +776,7 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
   /**
    * Step to a neighbouring segment.
    *
-   * Steps over segments the current filter excludes: with "only Ana" active,
+   * Steps over segments the current filter excludes: with "only Anders" active,
    * "next" must mean her next line, not the next line in the transcript — the
    * engine would otherwise seek into a gap and the tick would immediately skip
    * out of it, which reads as the button doing nothing.

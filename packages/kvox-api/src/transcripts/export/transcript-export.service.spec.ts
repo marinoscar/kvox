@@ -342,7 +342,7 @@ describe('requestExport', () => {
     const { service, prisma, access } = build();
 
     access.require.mockResolvedValue({
-      transcript: { ...TRANSCRIPT, speakerIdentities: { A: 'Oscar' } },
+      transcript: { ...TRANSCRIPT, speakerIdentities: { A: 'Orlo' } },
       role: 'owner',
     });
     primeCreate(prisma);
@@ -356,7 +356,7 @@ describe('requestExport', () => {
         format: 'markdown',
         version: 4,
         options: { includeTimestamps: true, mergeConsecutive: false },
-        contentFingerprint: identitiesFingerprint({ A: 'Oscar' }),
+        contentFingerprint: identitiesFingerprint({ A: 'Orlo' }),
       }),
     );
     // Different from a request against the SAME transcript before anyone was

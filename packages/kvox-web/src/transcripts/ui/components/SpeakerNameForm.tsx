@@ -15,7 +15,7 @@
  * other quietly does something else.
  *
  * SUGGESTIONS ARE THE POINT, not a convenience. The realistic correction is
- * "Speaker 3 is also Ana" — the name is almost always one already on screen,
+ * "Speaker 3 is also Anders" — the name is almost always one already on screen,
  * and typing it again by hand is how two spellings of one person end up in the
  * same transcript. `freeSolo` because a name this transcript has never seen is
  * the other half of the job, and `openOnFocus` so the list is offered rather

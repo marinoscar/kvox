@@ -62,7 +62,7 @@ const generationRow = (overrides: Record<string, unknown> = {}) => ({
   content: '# Kestrel weekly\n\nWe ship on Friday.',
   lastEventId: 3,
   systemPrompt: 'You write meeting notes.',
-  userContent: 'Source material:\nAna: we ship on Friday.',
+  userContent: 'Source material:\nAnders: we ship on Friday.',
   sourceVersion: 7,
   contextCapturedAt: new Date('2026-09-14T00:30:00.000Z'),
   promptTokens: 120,
@@ -136,7 +136,7 @@ describe('Note generation context (#307)', () => {
         sourceVersion: 7,
         sourceRedacted: false,
         systemPrompt: 'You write meeting notes.',
-        userContent: 'Source material:\nAna: we ship on Friday.',
+        userContent: 'Source material:\nAnders: we ship on Friday.',
         promptTokens: 120,
         completionTokens: 40,
       });

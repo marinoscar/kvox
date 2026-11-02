@@ -15,22 +15,22 @@
     {
       "id": "m12-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m12-spk-b",
       "label": "B",
-      "displayName": "Sarah Chen"
+      "displayName": "Sasha Example"
     },
     {
       "id": "m12-spk-c",
       "label": "C",
-      "displayName": "Tomás Aguilar"
+      "displayName": "Tobín Dummyson"
     },
     {
       "id": "m12-spk-d",
       "label": "D",
-      "displayName": "Owen Barker"
+      "displayName": "Otis Dummyson"
     }
   ],
   "segments": [
@@ -128,7 +128,7 @@
       "startMs": 59130,
       "endMs": 63150,
       "rev": 1,
-      "text": "Tomás, the install plan is the next dependency, right?"
+      "text": "Tobín, the install plan is the next dependency, right?"
     },
     {
       "id": "m12-s013",
@@ -176,7 +176,7 @@
       "startMs": 85890,
       "endMs": 90670,
       "rev": 1,
-      "text": "Good idea. JJ can build a replay of last November's orders."
+      "text": "Good idea. JD can build a replay of last November's orders."
     },
     {
       "id": "m12-s019",
@@ -192,7 +192,7 @@
       "startMs": 94430,
       "endMs": 99590,
       "rev": 1,
-      "text": "Sarah, how are you doing? You mentioned a big race coming up."
+      "text": "Sasha, how are you doing? You mentioned a big race coming up."
     },
     {
       "id": "m12-s021",
@@ -216,7 +216,7 @@
       "startMs": 112180,
       "endMs": 116960,
       "rev": 1,
-      "text": "Please do. And copy Owen now that platform sits with him."
+      "text": "Please do. And copy Otis now that platform sits with him."
     },
     {
       "id": "m12-s024",
@@ -245,7 +245,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Lambda pilot re-plan\n\n**Date:** March 26\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)\n\n## Summary\n\nThe aisle sensor supplier slipped delivery by five weeks, and the pick-path pilot cannot run without sensor location data. The group re-planned the timeline.\n\n## Timeline\n\n- The pilot moved to Q2. Sarah has already told NWR's board, who care that it works rather than that it lands in Q1.\n- Sensors are expected mid April; installation takes about a week, followed by a week of calibration.\n\n## Decisions\n\n- **Go live in Building 3 on May 4.**\n- Use the extra time for load testing at peak-season order volumes, using a replay of last November's orders — Lambda's worst month.\n\n## Action items\n\n- **Tomás Aguilar** — finalize the aisle sensor install plan by next Tuesday and share it with Owen, since it affects the network work.\n- **Tomás Aguilar** — forward the supplier's weekly status updates.\n- **JJ** — build a replay of last November's orders for load testing.\n- **Alex Rivera** — continue the Friday updates and copy Owen.\n\n## Notes\n\n- Sarah is running the Berlin marathon in September for the first time; her mornings are mostly training.\n"
+    "body": "# Lambda pilot re-plan\n\n**Date:** March 26\n**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics)\n\n## Summary\n\nThe aisle sensor supplier slipped delivery by five weeks, and the pick-path pilot cannot run without sensor location data. The group re-planned the timeline.\n\n## Timeline\n\n- The pilot moved to Q2. Sasha has already told NWR's board, who care that it works rather than that it lands in Q1.\n- Sensors are expected mid April; installation takes about a week, followed by a week of calibration.\n\n## Decisions\n\n- **Go live in Building 3 on May 4.**\n- Use the extra time for load testing at peak-season order volumes, using a replay of last November's orders — Lambda's worst month.\n\n## Action items\n\n- **Tobín Dummyson** — finalize the aisle sensor install plan by next Tuesday and share it with Otis, since it affects the network work.\n- **Tobín Dummyson** — forward the supplier's weekly status updates.\n- **JD** — build a replay of last November's orders for load testing.\n- **Alma Mockwell** — continue the Friday updates and copy Otis.\n\n## Notes\n\n- Sasha is running the Berlin marathon in September for the first time; her mornings are mostly training.\n"
   },
   "knownEntities": [
     {
@@ -260,11 +260,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -283,12 +283,12 @@
       ]
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -299,21 +299,21 @@
       ]
     },
     {
-      "id": "g-person-owen-barker",
+      "id": "g-person-otis-dummyson",
       "type": "Person",
-      "label": "Owen Barker",
+      "label": "Otis Dummyson",
       "aliases": [
-        "Owen"
+        "Otis"
       ],
       "props": {},
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-sarah-chen",
+      "id": "g-person-sasha-example",
       "type": "Person",
-      "label": "Sarah Chen",
+      "label": "Sasha Example",
       "aliases": [
-        "Sarah"
+        "Sasha"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -323,12 +323,12 @@
       ]
     },
     {
-      "id": "g-person-tomas-aguilar",
+      "id": "g-person-tobin-dummyson",
       "type": "Person",
-      "label": "Tomás Aguilar",
+      "label": "Tobín Dummyson",
       "aliases": [
-        "Tomas Aguilar",
-        "Tomás"
+        "Tobin Dummyson",
+        "Tobín"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -365,58 +365,58 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "sarah",
+        "key": "sasha",
         "type": "Person",
-        "label": "Sarah Chen",
+        "label": "Sasha Example",
         "aliases": [],
-        "existingId": "g-person-sarah-chen",
+        "existingId": "g-person-sasha-example",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Sarah Chen (Org Lambda Robotics)"
+            "quote": "Sasha Example (Org Lambda Robotics)"
           }
         ]
       },
       {
-        "key": "tomas",
+        "key": "tobin",
         "type": "Person",
-        "label": "Tomás Aguilar",
+        "label": "Tobín Dummyson",
         "aliases": [],
-        "existingId": "g-person-tomas-aguilar",
+        "existingId": "g-person-tobin-dummyson",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Tomás Aguilar (Org Lambda Robotics)"
+            "quote": "Tobín Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
-        "key": "owen",
+        "key": "otis",
         "type": "Person",
-        "label": "Owen Barker",
+        "label": "Otis Dummyson",
         "aliases": [],
-        "existingId": "g-person-owen-barker",
+        "existingId": "g-person-otis-dummyson",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Owen Barker (Org Lambda Robotics)"
+            "quote": "Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
@@ -455,7 +455,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -464,13 +464,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "sarah",
+        "from": "sasha",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -479,13 +479,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "tomas",
+        "from": "tobin",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -494,13 +494,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "owen",
+        "from": "otis",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -509,7 +509,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Org Lambda Robotics), Tomás Aguilar (Org Lambda Robotics), Owen Barker (Org Lambda Robotics)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Sasha Example (Org Lambda Robotics), Tobín Dummyson (Org Lambda Robotics), Otis Dummyson (Org Lambda Robotics)"
           }
         ]
       },
@@ -606,7 +606,7 @@
           {
             "source": "segment",
             "segmentId": "m12-s018",
-            "quote": "JJ can build a replay of last November's orders."
+            "quote": "JD can build a replay of last November's orders."
           },
           {
             "source": "segment",
@@ -618,10 +618,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "tomas",
-        "counterparty": "owen",
+        "owner": "tobin",
+        "counterparty": "otis",
         "title": "Finalize the sensor install plan",
-        "statement": "Tomás will finalize the aisle sensor install plan by next Tuesday.",
+        "statement": "Tobín will finalize the aisle sensor install plan by next Tuesday.",
         "status": "open",
         "occurredAt": "2026-03-26",
         "dueAt": "2026-03-31",
@@ -638,10 +638,10 @@
       {
         "kind": "commitment",
         "subject": "pilot",
-        "owner": "g-person-jonah-jimenez",
+        "owner": "g-person-jovan-demo",
         "counterparty": null,
         "title": "Build November order replay",
-        "statement": "JJ will build a replay of last November's orders for load testing.",
+        "statement": "JD will build a replay of last November's orders for load testing.",
         "status": "open",
         "occurredAt": "2026-03-26",
         "dueAt": null,
@@ -651,17 +651,17 @@
           {
             "source": "segment",
             "segmentId": "m12-s018",
-            "quote": "JJ can build a replay of last November's orders."
+            "quote": "JD can build a replay of last November's orders."
           }
         ]
       },
       {
         "kind": "person_fact",
-        "subject": "sarah",
+        "subject": "sasha",
         "owner": null,
         "counterparty": null,
         "title": "Running the Berlin marathon",
-        "statement": "Sarah is running the Berlin marathon in September for the first time.",
+        "statement": "Sasha is running the Berlin marathon in September for the first time.",
         "status": null,
         "occurredAt": "2026-03-26",
         "dueAt": null,

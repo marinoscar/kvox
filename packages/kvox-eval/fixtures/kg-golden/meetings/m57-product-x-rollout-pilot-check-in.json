@@ -15,15 +15,15 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Product X rollout pilot check-in\n\n**Date:** October 20\n**Attendees:** Maya Ibsen, Joe Hartigan, Ilse Brandvold\n\n## Summary\n\nA check-in on the Product X rollout at Company A, two weeks after the first call. Ilse Brandvold joined this time as the executive sponsor of the rollout, and Joe Hartigan came again from the Company A claims side. The session reviewed the pilot of Product X and what the group still needs before a decision on the second wave.\n\n## The sponsor's view\n\nIlse Brandvold is the executive sponsor of the Product X rollout. She said she will not sign off the second wave until the licence budget is settled, and she was direct that she is not willing to move earlier. Joe agreed that the budget has to come first and repeated that he wants the hours saved set against the licensing cost.\n\n## Pilot findings\n\nPilot users report slow responses when a long case file is open, and the claims team has started to avoid the assistant for the largest files. The smaller drafting tasks are working well, and the team lead said the letters are now written in half the time.\n\n## Actions\n\nJoe will bring the finance contact from Company A to the next review. The group will look at the pilot usage summary together then.\n\n## Open points\n\nThe licensing cost is still the main open subject. Nobody has yet asked Org Beta for an extension of the trial licences, and that is the first thing to settle with the vendor.\n"
+    "body": "# Product X rollout pilot check-in\n\n**Date:** October 20\n**Attendees:** Mercer Stubbs, Jonty Fixture, Ilka Stubbs\n\n## Summary\n\nA check-in on the Product X rollout at Company A, two weeks after the first call. Ilka Stubbs joined this time as the executive sponsor of the rollout, and Jonty Fixture came again from the Company A claims side. The session reviewed the pilot of Product X and what the group still needs before a decision on the second wave.\n\n## The sponsor's view\n\nIlka Stubbs is the executive sponsor of the Product X rollout. She said she will not sign off the second wave until the licence budget is settled, and she was direct that she is not willing to move earlier. Jonty agreed that the budget has to come first and repeated that he wants the hours saved set against the licensing cost.\n\n## Pilot findings\n\nPilot users report slow responses when a long case file is open, and the claims team has started to avoid the assistant for the largest files. The smaller drafting tasks are working well, and the team lead said the letters are now written in half the time.\n\n## Actions\n\nJonty will bring the finance contact from Company A to the next review. The group will look at the pilot usage summary together then.\n\n## Open points\n\nThe licensing cost is still the main open subject. Nobody has yet asked Org Beta for an extension of the trial licences, and that is the first thing to settle with the vendor.\n"
   },
   "knownEntities": [
     {
-      "id": "g-person-joe-hartigan",
+      "id": "g-person-jonty-fixture",
       "type": "Person",
-      "label": "Joe Hartigan",
+      "label": "Jonty Fixture",
       "aliases": [
-        "Joe"
+        "Jonty"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -31,9 +31,9 @@
       ]
     },
     {
-      "id": "g-person-maya-ibsen",
+      "id": "g-person-mercer-stubbs",
       "type": "Person",
-      "label": "Maya Ibsen",
+      "label": "Mercer Stubbs",
       "aliases": [],
       "props": {},
       "attendedFixtureIds": [
@@ -99,46 +99,46 @@
         ]
       },
       {
-        "key": "maya",
+        "key": "mercer",
         "type": "Person",
-        "label": "Maya Ibsen",
+        "label": "Mercer Stubbs",
         "aliases": [],
-        "existingId": "g-person-maya-ibsen",
+        "existingId": "g-person-mercer-stubbs",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Maya Ibsen, Joe Hartigan, Ilse Brandvold"
+            "quote": "Mercer Stubbs, Jonty Fixture, Ilka Stubbs"
           }
         ]
       },
       {
-        "key": "joe",
+        "key": "jonty",
         "type": "Person",
-        "label": "Joe Hartigan",
+        "label": "Jonty Fixture",
         "aliases": [
-          "Joe"
+          "Jonty"
         ],
-        "existingId": "g-person-joe-hartigan",
+        "existingId": "g-person-jonty-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Joe Hartigan came again from the Company A claims side"
+            "quote": "Jonty Fixture came again from the Company A claims side"
           }
         ]
       },
       {
-        "key": "ilse",
+        "key": "ilka",
         "type": "Person",
-        "label": "Ilse Brandvold",
+        "label": "Ilka Stubbs",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Ilse Brandvold is the executive sponsor of the Product X rollout"
+            "quote": "Ilka Stubbs is the executive sponsor of the Product X rollout"
           }
         ]
       },
@@ -218,7 +218,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "joe",
+        "from": "jonty",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -227,13 +227,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Joe Hartigan came again from the Company A claims side"
+            "quote": "Jonty Fixture came again from the Company A claims side"
           }
         ]
       },
       {
         "type": "INVOLVED_IN",
-        "from": "ilse",
+        "from": "ilka",
         "to": "rollout",
         "validFrom": null,
         "validTo": null,
@@ -245,7 +245,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Ilse Brandvold is the executive sponsor of the Product X rollout"
+            "quote": "Ilka Stubbs is the executive sponsor of the Product X rollout"
           },
           {
             "source": "note",
@@ -311,10 +311,10 @@
       {
         "kind": "commitment",
         "subject": "rollout",
-        "owner": "joe",
+        "owner": "jonty",
         "counterparty": null,
         "title": "Bring the finance contact to the review",
-        "statement": "Joe will bring the finance contact from Company A to the next review.",
+        "statement": "Jonty will bring the finance contact from Company A to the next review.",
         "status": "open",
         "occurredAt": "2026-10-20",
         "dueAt": null,
@@ -324,7 +324,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Joe will bring the finance contact from Company A to the next review"
+            "quote": "Jonty will bring the finance contact from Company A to the next review"
           }
         ]
       }

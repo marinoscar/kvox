@@ -184,7 +184,7 @@ export class TranscriptExportService {
     // ⚠ THE SPEAKER IDENTITIES ARE PART OF THE CONTENT ADDRESS (#323). Naming a
     // speaker does not create a version, but `materialize()` overlays the name
     // onto every version — so "v7 as JSON" rendered before "Speaker A" became
-    // "Oscar" and "v7 as JSON" rendered after it are different files. Without
+    // "Orlo" and "v7 as JSON" rendered after it are different files. Without
     // the fingerprint the second request would be served the first file.
     // `identitiesFingerprint` is `null` for an empty map, which is what keeps
     // every pre-#323 export's hash — and so its reuse — exactly as it was.

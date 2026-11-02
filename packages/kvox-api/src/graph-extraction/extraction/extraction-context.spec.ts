@@ -28,20 +28,20 @@ describe('buildExtractionContext (#363)', () => {
 
     it('names each line with the speaker name, falling back to the placeholder', () => {
       const ctx = makeContext();
-      expect(ctx.segments[0].speakerName).toBe('Sarah Chen');
+      expect(ctx.segments[0].speakerName).toBe('Sasha Example');
       expect(ctx.segments[1].speakerName).toBe('Speaker B');
     });
 
     it('assigns k1…kM to known entities and maps them back to ids', () => {
       const ctx = makeContext();
       expect(ctx.knownEntities.map((k) => k.alias)).toEqual(['k1', 'k2', 'k3']);
-      expect(ctx.knownAlias.get('k1')).toBe(IDS.sarah);
+      expect(ctx.knownAlias.get('k1')).toBe(IDS.sasha);
       expect(ctx.knownById.get(IDS.lambda)?.alias).toBe('k2');
     });
 
     it('links an identified speaker to its known alias', () => {
       const ctx = makeContext();
-      expect(ctx.speakers[0]).toEqual(expect.objectContaining({ name: 'Sarah Chen', knownAlias: 'k1', firstSegmentAlias: 's1' }));
+      expect(ctx.speakers[0]).toEqual(expect.objectContaining({ name: 'Sasha Example', knownAlias: 'k1', firstSegmentAlias: 's1' }));
       expect(ctx.speakers[1]).toEqual(expect.objectContaining({ name: null, knownAlias: null, firstSegmentAlias: 's2' }));
     });
   });
@@ -52,13 +52,13 @@ describe('buildExtractionContext (#363)', () => {
         guidance: { pinnedEntityIds: ['p-pin'], instructions: '' },
         knownEntityCandidates: {
           pinned: [known('p-pin', 'Project', 'Pinned project')],
-          speakerPersons: [known(IDS.sarah, 'Person', 'Sarah Chen')],
-          organizations: [known(IDS.lambda, 'Organization', 'Org Lambda Robotics'), known(IDS.sarah, 'Person', 'Sarah Chen')],
+          speakerPersons: [known(IDS.sasha, 'Person', 'Sasha Example')],
+          organizations: [known(IDS.lambda, 'Organization', 'Org Lambda Robotics'), known(IDS.sasha, 'Person', 'Sasha Example')],
           contextPool: [known(IDS.pilot, 'Project', 'Pick-path pilot', { aliases: ['pilot'] }), known('x', 'Person', 'Nobody Here')],
           recentlyMentioned: [known('r1', 'Organization', 'Recent Org'), known('p-pin', 'Project', 'Pinned project')],
         },
       });
-      expect(selectKnownEntities(input).map((r) => r.id)).toEqual(['p-pin', IDS.sarah, IDS.lambda, IDS.pilot, 'r1']);
+      expect(selectKnownEntities(input).map((r) => r.id)).toEqual(['p-pin', IDS.sasha, IDS.lambda, IDS.pilot, 'r1']);
     });
 
     it(`caps the list at ${MAX_KNOWN_ENTITIES}`, () => {
@@ -74,7 +74,7 @@ describe('buildExtractionContext (#363)', () => {
         effectiveSchema: schemaFor(['core']),
         knownEntityCandidates: {
           pinned: [],
-          speakerPersons: [known('m', 'Person', 'Merged', { mergedIntoId: IDS.sarah }), known('u', 'Person', 'Unreviewed', { reviewStatus: 'unreviewed' })],
+          speakerPersons: [known('m', 'Person', 'Merged', { mergedIntoId: IDS.sasha }), known('u', 'Person', 'Unreviewed', { reviewStatus: 'unreviewed' })],
           organizations: [known('e', 'Organization', 'Edited', { reviewStatus: 'edited' })],
           contextPool: [],
           recentlyMentioned: [known('p', 'Project', 'Work-only type')],

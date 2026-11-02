@@ -9,8 +9,8 @@ import { server, http, HttpResponse, render } from './helpers.js';
 import { mockGraphAiConfig } from '../graph/graphData.js';
 import {
   CONV_ATLAS_ID,
-  CONV_JOE_ID,
-  JOE_ID,
+  CONV_JONTY_ID,
+  JONTY_ID,
   askMock,
   defaultAskConversations,
   resetAskMock,
@@ -87,7 +87,7 @@ function renderEntity(search = '', graphEnabled = true) {
     </>,
     {
       wrapperOptions: {
-        route: `/graph/entities/${JOE_ID}${search}`,
+        route: `/graph/entities/${JONTY_ID}${search}`,
         user: graphReader,
       },
       hostOptions: { features: { graphEnabled } },
@@ -96,8 +96,8 @@ function renderEntity(search = '', graphEnabled = true) {
 }
 
 const search = () => new URLSearchParams((screen.getByTestId('location').textContent ?? '').split('?')[1] ?? '');
-const panel = () => screen.findByRole('dialog', { name: 'Ask about Joe Rivera' });
-const askButton = () => screen.findByRole('button', { name: 'Ask about Joe Rivera' });
+const panel = () => screen.findByRole('dialog', { name: 'Ask about Jonty Placeholder' });
+const askButton = () => screen.findByRole('button', { name: 'Ask about Jonty Placeholder' });
 const listRequests = () => askMock.requests.filter((r) => r.method === 'GET' && r.path === '/ask/conversations');
 
 async function openPanel() {
@@ -107,8 +107,8 @@ async function openPanel() {
 }
 
 /** Only unscoped conversations: the entity has none of its own. */
-function withoutJoeConversations() {
-  resetAskMock(defaultAskConversations().filter((conv) => conv.summary.id !== CONV_JOE_ID));
+function withoutJontyConversations() {
+  resetAskMock(defaultAskConversations().filter((conv) => conv.summary.id !== CONV_JONTY_ID));
 }
 
 beforeEach(() => {
@@ -124,11 +124,11 @@ describe('EntityAskPanel — the header action', () => {
   it('is offered only when connected knowledge is on', async () => {
     aiConfig = mockGraphAiConfig({ graphEnabled: false });
     renderEntity('?ask=1', false);
-    await screen.findByRole('heading', { level: 1, name: 'Joe Rivera' });
+    await screen.findByRole('heading', { level: 1, name: 'Jonty Placeholder' });
     // Let the AI config answer before asserting the absence.
     await waitFor(() => expect(askMock.requests).toEqual([]));
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(screen.queryByRole('button', { name: 'Ask about Joe Rivera' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ask about Jonty Placeholder' })).not.toBeInTheDocument();
     // Even a URL asking for the panel does not open it.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
@@ -137,7 +137,7 @@ describe('EntityAskPanel — the header action', () => {
     renderEntity();
     const { dialog } = await openPanel();
     expect(dialog.closest('.MuiDrawer-root')).toHaveClass('MuiDrawer-anchorRight');
-    expect(within(dialog).getByRole('heading', { level: 2, name: 'Ask about Joe Rivera' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { level: 2, name: 'Ask about Jonty Placeholder' })).toBeInTheDocument();
     expect(search().get('ask')).not.toBeNull();
   });
 
@@ -160,19 +160,19 @@ describe('EntityAskPanel — scoped conversations', () => {
 
     await waitFor(() => expect(listRequests().length).toBeGreaterThan(0));
     const query = new URLSearchParams(listRequests()[0].search);
-    expect(query.get('scopeEntityId')).toBe(JOE_ID);
+    expect(query.get('scopeEntityId')).toBe(JONTY_ID);
     expect(query.get('limit')).toBe('10');
 
     // The newest scoped conversation opens by default, and the URL says so.
-    expect(await within(dialog).findByText(/Joe committed to the Atlas launch/)).toBeInTheDocument();
-    await waitFor(() => expect(search().get('ask')).toBe(CONV_JOE_ID));
-    expect(within(dialog).getByRole('link', { name: 'Open in Ask' })).toHaveAttribute('href', `/ask/${CONV_JOE_ID}`);
+    expect(await within(dialog).findByText(/Jonty committed to the Atlas launch/)).toBeInTheDocument();
+    await waitFor(() => expect(search().get('ask')).toBe(CONV_JONTY_ID));
+    expect(within(dialog).getByRole('link', { name: 'Open in Ask' })).toHaveAttribute('href', `/ask/${CONV_JONTY_ID}`);
 
     await user.click(within(dialog).getByRole('combobox', { name: 'Conversation' }));
     const options = await screen.findAllByRole('option');
     expect(options.map((o) => o.textContent)).toEqual([
       'New conversation',
-      expect.stringContaining('What did Joe promise us?'),
+      expect.stringContaining('What did Jonty promise us?'),
     ]);
     expect(screen.queryByRole('option', { name: /Atlas beta ship/ })).not.toBeInTheDocument();
 
@@ -184,10 +184,10 @@ describe('EntityAskPanel — scoped conversations', () => {
   });
 
   it('reopens the conversation named in the URL (a reload)', async () => {
-    renderEntity(`?ask=${CONV_JOE_ID}`);
+    renderEntity(`?ask=${CONV_JONTY_ID}`);
     const dialog = await panel();
-    expect(await within(dialog).findByText(/Joe committed to the Atlas launch/)).toBeInTheDocument();
-    expect(within(dialog).getByRole('combobox', { name: 'Conversation' })).toHaveTextContent('What did Joe promise us?');
+    expect(await within(dialog).findByText(/Jonty committed to the Atlas launch/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('combobox', { name: 'Conversation' })).toHaveTextContent('What did Jonty promise us?');
   });
 
   it('never shows a conversation scoped to a different entity', async () => {
@@ -206,41 +206,41 @@ describe('EntityAskPanel — scoped conversations', () => {
 
 describe('EntityAskPanel — asking', () => {
   it('offers Person suggestions and sends one into a new, scoped conversation', async () => {
-    withoutJoeConversations();
+    withoutJontyConversations();
     renderEntity();
     const { user, dialog } = await openPanel();
 
     const suggestions = await within(dialog).findByRole('list', { name: 'Suggested questions' });
     const buttons = within(suggestions).getAllByRole('button');
     expect(buttons.map((b) => b.textContent)).toEqual([
-      'What has Joe Rivera committed to?',
-      "How has Joe Rivera's role changed?",
-      'What did we last discuss with Joe Rivera?',
+      'What has Jonty Placeholder committed to?',
+      "How has Jonty Placeholder's role changed?",
+      'What did we last discuss with Jonty Placeholder?',
     ]);
     await waitFor(() => expect(buttons[0]).toBeEnabled());
     await user.click(buttons[0]);
 
     // Created WITH the scope, then asked.
-    await waitFor(() => expect(within(dialog).getByText('What has Joe Rivera committed to?')).toBeInTheDocument());
+    await waitFor(() => expect(within(dialog).getByText('What has Jonty Placeholder committed to?')).toBeInTheDocument());
     const create = askMock.requests.find((r) => r.method === 'POST' && r.path === '/ask/conversations');
-    expect(create?.body).toEqual({ scopeEntityId: JOE_ID });
+    expect(create?.body).toEqual({ scopeEntityId: JONTY_ID });
     const post = askMock.requests.find((r) => r.method === 'POST' && r.path.endsWith('/messages'));
-    expect(post?.body).toEqual({ content: 'What has Joe Rivera committed to?' });
+    expect(post?.body).toEqual({ content: 'What has Jonty Placeholder committed to?' });
 
     const createdId = askMock.conversations[0].summary.id;
     await waitFor(() => expect(search().get('ask')).toBe(createdId));
     await waitFor(() => expect(streams).toHaveLength(1));
 
     // Streaming behaves as on /ask: the shared thread renders the frames.
-    act(() => streams[0].handlers.onContent('Joe owns the Atlas launch.'));
-    expect(await within(dialog).findByText('Joe owns the Atlas launch.')).toBeInTheDocument();
+    act(() => streams[0].handlers.onContent('Jonty owns the Atlas launch.'));
+    expect(await within(dialog).findByText('Jonty owns the Atlas launch.')).toBeInTheDocument();
     act(() => streams[0].handlers.onDone({ citations: [], finishReason: 'stop' }));
     expect(await within(dialog).findByText('No sources were cited — treat this answer with care.')).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Open in Ask' })).toHaveAttribute('href', `/ask/${createdId}`);
   });
 
   it('says the entity is gone when creating the conversation 404s', async () => {
-    withoutJoeConversations();
+    withoutJontyConversations();
     server.use(
       http.post(`${API}/ask/conversations`, () =>
         HttpResponse.json({ statusCode: 404, code: 'NOT_FOUND', message: 'Entity not found' }, { status: 404 }),
@@ -257,7 +257,7 @@ describe('EntityAskPanel — asking', () => {
   });
 
   it('keeps the typed question and shows the 409 copy when a send is refused', async () => {
-    renderEntity(`?ask=${CONV_JOE_ID}`);
+    renderEntity(`?ask=${CONV_JONTY_ID}`);
     askMock.postError = {
       status: 409,
       body: { statusCode: 409, code: 'CONFLICT', message: 'x', details: { reason: 'ai_key_missing' } },
@@ -279,30 +279,30 @@ describe('EntityAskPanel — closing', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(search().get('ask')).toBeNull();
-    expect(screen.getByRole('heading', { level: 1, name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Jonty Placeholder' })).toBeInTheDocument();
   });
 
   it('closes on the back gesture', async () => {
     renderEntity();
     const { user } = await openPanel();
-    await waitFor(() => expect(search().get('ask')).toBe(CONV_JOE_ID));
+    await waitFor(() => expect(search().get('ask')).toBe(CONV_JONTY_ID));
     await user.click(screen.getByRole('button', { name: 'Browser back', hidden: true }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(search().get('ask')).toBeNull();
   });
 
   it('drops the parameter when the panel was opened from the URL', async () => {
-    renderEntity(`?ask=${CONV_JOE_ID}`);
+    renderEntity(`?ask=${CONV_JONTY_ID}`);
     const dialog = await panel();
     const user = userEvent.setup({ delay: null });
     await user.click(within(dialog).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(search().get('ask')).toBeNull();
-    expect(screen.getByRole('heading', { level: 1, name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Jonty Placeholder' })).toBeInTheDocument();
   });
 
   it('disconnects a running answer on close and shows it completed on reopening', async () => {
-    withoutJoeConversations();
+    withoutJontyConversations();
     renderEntity();
     const { user, dialog } = await openPanel();
     const suggestions = await within(dialog).findByRole('list', { name: 'Suggested questions' });
@@ -318,13 +318,13 @@ describe('EntityAskPanel — closing', () => {
     // Server-side the job finished while nobody watched.
     const conv = askMock.conversations[0];
     conv.messages = conv.messages.map((m) =>
-      m.role === 'assistant' ? { ...m, status: 'complete', content: 'Joe owns the launch.', finishReason: 'stop' } : m,
+      m.role === 'assistant' ? { ...m, status: 'complete', content: 'Jonty owns the launch.', finishReason: 'stop' } : m,
     );
     conv.summary = { ...conv.summary, running: false };
 
     await user.click(await askButton());
     const reopened = await panel();
-    expect(await within(reopened).findByText('Joe owns the launch.')).toBeInTheDocument();
+    expect(await within(reopened).findByText('Jonty owns the launch.')).toBeInTheDocument();
     // A settled turn never reattaches.
     expect(streams).toHaveLength(1);
   });
@@ -334,7 +334,7 @@ describe('EntityAskPanel — accessibility', () => {
   it('has no axe violations with the drawer open', async () => {
     renderEntity();
     const { dialog } = await openPanel();
-    await within(dialog).findByText(/Joe committed to the Atlas launch/);
+    await within(dialog).findByText(/Jonty committed to the Atlas launch/);
     await waitFor(() => expect(within(dialog).queryAllByLabelText(/Loading/)).toHaveLength(0));
     expect(await axe(document.body, AXE_OPTIONS)).toHaveNoViolations();
   });

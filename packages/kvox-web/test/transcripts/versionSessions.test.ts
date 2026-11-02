@@ -15,7 +15,7 @@ function version(
     version: number,
     kind: 'edit',
     summary: 'Edited 1 segment',
-    author: { id: 'u1', name: 'Ana Ruiz', email: 'ana@example.com' },
+    author: { id: 'u1', name: 'Anders Stubbs', email: 'anders@example.com' },
     restoredFromVersion: null,
     hasSnapshot: false,
     opCount: 1,
@@ -39,7 +39,7 @@ describe('groupVersionsIntoSessions', () => {
   it('splits on a different author', () => {
     const sessions = groupVersionsIntoSessions([
       version(5),
-      version(4, { author: { id: 'u2', name: 'Ben Olsen', email: null } }),
+      version(4, { author: { id: 'u2', name: 'Bram Fixture', email: null } }),
       version(3),
     ]);
 
@@ -104,12 +104,12 @@ describe('authorLabel', () => {
 describe('sessionSummary', () => {
   it('prefers the server’s own summaries and dedupes them', () => {
     const [session] = groupVersionsIntoSessions([
-      version(4, { summary: 'Merged Ben into Ana' }),
+      version(4, { summary: 'Merged Bram into Anders' }),
       version(3, { summary: 'Edited 1 segment' }),
       version(2, { summary: 'Edited 1 segment' }),
     ]);
 
-    expect(sessionSummary(session)).toBe('Merged Ben into Ana · Edited 1 segment');
+    expect(sessionSummary(session)).toBe('Merged Bram into Anders · Edited 1 segment');
   });
 
   it('counts instead when no version carries a summary', () => {

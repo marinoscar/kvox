@@ -64,14 +64,14 @@ describe('transcriptETag', () => {
   });
 
   it('carries the fingerprint once at least one speaker has been named', () => {
-    const etag = transcriptETag(3, { A: 'Oscar' });
+    const etag = transcriptETag(3, { A: 'Orlo' });
 
-    expect(etag).toBe(`W/"v3-${identitiesFingerprint({ A: 'Oscar' })}"`);
+    expect(etag).toBe(`W/"v3-${identitiesFingerprint({ A: 'Orlo' })}"`);
     expect(etag).not.toBe(versionETag(3));
   });
 
   it('changes when the identities change, at the same version', () => {
-    expect(transcriptETag(3, { A: 'Oscar' })).not.toBe(transcriptETag(3, { A: 'Joe' }));
+    expect(transcriptETag(3, { A: 'Orlo' })).not.toBe(transcriptETag(3, { A: 'Jonty' }));
   });
 });
 
@@ -118,27 +118,27 @@ describe('TranscriptsController — GET :id / :id/segments', () => {
     transcripts.detailConditional.mockResolvedValue({
       payload: { id: 't1' },
       version: 3,
-      identities: { A: 'Oscar' },
+      identities: { A: 'Orlo' },
     });
 
     const reply = fakeReply();
     await controller.detail('t1', USER, fakeRequest(), reply);
 
-    expect(reply.header).toHaveBeenCalledWith('ETag', transcriptETag(3, { A: 'Oscar' }));
+    expect(reply.header).toHaveBeenCalledWith('ETag', transcriptETag(3, { A: 'Orlo' }));
   });
 
   it('a poller holding the PRE-NAMING W/"v3" gets the full body, never a 304, once a speaker is named', async () => {
     transcripts.detailConditional.mockResolvedValue({
-      payload: { id: 't1', speakers: [{ id: 'A', displayName: 'Oscar' }] },
+      payload: { id: 't1', speakers: [{ id: 'A', displayName: 'Orlo' }] },
       version: 3,
-      identities: { A: 'Oscar' },
+      identities: { A: 'Orlo' },
     });
 
     const reply = fakeReply();
     // The client is still holding the validator it got before the naming.
     const result = await controller.detail('t1', USER, fakeRequest('W/"v3"'), reply);
 
-    expect(result).toEqual({ id: 't1', speakers: [{ id: 'A', displayName: 'Oscar' }] });
+    expect(result).toEqual({ id: 't1', speakers: [{ id: 'A', displayName: 'Orlo' }] });
     expect(reply.status).not.toHaveBeenCalledWith(HttpStatus.NOT_MODIFIED);
   });
 
@@ -146,10 +146,10 @@ describe('TranscriptsController — GET :id / :id/segments', () => {
     transcripts.detailConditional.mockResolvedValue({
       payload: { id: 't1' },
       version: 3,
-      identities: { A: 'Oscar' },
+      identities: { A: 'Orlo' },
     });
 
-    const current = transcriptETag(3, { A: 'Oscar' });
+    const current = transcriptETag(3, { A: 'Orlo' });
     const reply = fakeReply();
     const result = await controller.detail('t1', USER, fakeRequest(current), reply);
 
@@ -161,13 +161,13 @@ describe('TranscriptsController — GET :id / :id/segments', () => {
     transcripts.segmentsConditional.mockResolvedValue({
       payload: { currentVersion: 3, segments: [] },
       version: 3,
-      identities: { A: 'Oscar' },
+      identities: { A: 'Orlo' },
     });
 
     const reply = fakeReply();
     await controller.segments('t1', USER, fakeRequest(), reply);
 
-    expect(reply.header).toHaveBeenCalledWith('ETag', transcriptETag(3, { A: 'Oscar' }));
+    expect(reply.header).toHaveBeenCalledWith('ETag', transcriptETag(3, { A: 'Orlo' }));
   });
 });
 
@@ -177,7 +177,7 @@ describe('matchesETag', () => {
   });
 
   it('does not match a different fingerprint at the same version', () => {
-    expect(matchesETag(transcriptETag(3, { A: 'Oscar' }), transcriptETag(3, { A: 'Joe' }))).toBe(
+    expect(matchesETag(transcriptETag(3, { A: 'Orlo' }), transcriptETag(3, { A: 'Jonty' }))).toBe(
       false,
     );
   });

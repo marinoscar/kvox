@@ -131,7 +131,7 @@ function messageFor(err: unknown, fallback: string): string {
  * dependency.
  *
  * Returns `null` when the host has no notification stream (`useLatestEventId`
- * is optional on the host port), so this works in a test, in the visual harness, and on any
+ * is optional on the host port), so this works in a test and on any
  * surface that has no bell.
  */
 function useLatestNoteEventId(): string | null {

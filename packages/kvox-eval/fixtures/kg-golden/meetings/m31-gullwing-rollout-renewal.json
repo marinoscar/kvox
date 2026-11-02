@@ -13,27 +13,27 @@
     {
       "id": "m31-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m31-spk-b",
       "label": "B",
-      "displayName": "Felix Amundsen"
+      "displayName": "Florian Mockwell"
     },
     {
       "id": "m31-spk-c",
       "label": "C",
-      "displayName": "Wen Zhao"
+      "displayName": "Waverly Testcase"
     },
     {
       "id": "m31-spk-d",
       "label": "D",
-      "displayName": "Yusuf Demir"
+      "displayName": "Yarrow Placeholder"
     },
     {
       "id": "m31-spk-e",
       "label": "E",
-      "displayName": "Hana Sato"
+      "displayName": "Hazel Placeholder"
     }
   ],
   "segments": [
@@ -83,7 +83,7 @@
       "startMs": 24770,
       "endMs": 29170,
       "rev": 1,
-      "text": "Yes. Wen became our Head of Risk on September 1."
+      "text": "Yes. Waverly became our Head of Risk on September 1."
     },
     {
       "id": "m31-s007",
@@ -99,7 +99,7 @@
       "startMs": 34450,
       "endMs": 37710,
       "rev": 1,
-      "text": "Congratulations, Wen. So, the roadmap. What's next?"
+      "text": "Congratulations, Waverly. So, the roadmap. What's next?"
     },
     {
       "id": "m31-s009",
@@ -139,7 +139,7 @@
       "startMs": 55800,
       "endMs": 58300,
       "rev": 1,
-      "text": "Decided. Hana, the commercial side."
+      "text": "Decided. Hazel, the commercial side."
     },
     {
       "id": "m31-s014",
@@ -171,7 +171,7 @@
       "startMs": 71360,
       "endMs": 80700,
       "rev": 1,
-      "text": "One personal note. I'm moving to part-time in the new year, to care for my father. Wen will take more of the day-to-day."
+      "text": "One personal note. I'm moving to part-time in the new year, to care for my father. Waverly will take more of the day-to-day."
     },
     {
       "id": "m31-s018",
@@ -179,7 +179,7 @@
       "startMs": 80950,
       "endMs": 85730,
       "rev": 1,
-      "text": "Thank you for telling us, Felix. We'll route more through Wen."
+      "text": "Thank you for telling us, Florian. We'll route more through Waverly."
     },
     {
       "id": "m31-s019",
@@ -224,7 +224,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Gullwing rollout and renewal\n\n**Date:** September 3\n**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)\n\n## Summary\n\nReview after three months of chargeback automation in production at Gullwing Payments, followed by the renewal discussion.\n\n## Results\n\n- Dispute handling time is down 35 percent on the three automated reason codes.\n- The disputes queue API has had no incidents since launch.\n\n## People\n\n- Wen Zhao became Gullwing's Head of Risk on September 1, and now officially owns the automation roadmap.\n- Felix is moving to part-time in the new year; Wen will take more of the day-to-day.\n\n## Decisions\n\n- **Roll out automation to all dispute reason codes in Q4**, including the long tail. The flag-only design means the long tail is simply flagged less often.\n- Quarterly model retraining will be included in the renewal proposal.\n\n## Action items\n\n- **Hana Sato** — send the renewal proposal by Friday, with Q4 scope and quarterly retraining included.\n- **Felix Amundsen** — sign the renewal by September 18, assuming the numbers hold.\n\n## Notes\n\n- Route more day-to-day questions through Wen going forward.\n- Yusuf's engineering team asked for quarterly retraining because fraud patterns shift with the seasons.\n"
+    "body": "# Gullwing rollout and renewal\n\n**Date:** September 3\n**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)\n\n## Summary\n\nReview after three months of chargeback automation in production at Gullwing Payments, followed by the renewal discussion.\n\n## Results\n\n- Dispute handling time is down 35 percent on the three automated reason codes.\n- The disputes queue API has had no incidents since launch.\n\n## People\n\n- Waverly Testcase became Gullwing's Head of Risk on September 1, and now officially owns the automation roadmap.\n- Florian is moving to part-time in the new year; Waverly will take more of the day-to-day.\n\n## Decisions\n\n- **Roll out automation to all dispute reason codes in Q4**, including the long tail. The flag-only design means the long tail is simply flagged less often.\n- Quarterly model retraining will be included in the renewal proposal.\n\n## Action items\n\n- **Hazel Placeholder** — send the renewal proposal by Friday, with Q4 scope and quarterly retraining included.\n- **Florian Mockwell** — sign the renewal by September 18, assuming the numbers hold.\n\n## Notes\n\n- Route more day-to-day questions through Waverly going forward.\n- Yarrow's engineering team asked for quarterly retraining because fraud patterns shift with the seasons.\n"
   },
   "knownEntities": [
     {
@@ -248,11 +248,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -289,11 +289,11 @@
       ]
     },
     {
-      "id": "g-person-felix-amundsen",
+      "id": "g-person-florian-mockwell",
       "type": "Person",
-      "label": "Felix Amundsen",
+      "label": "Florian Mockwell",
       "aliases": [
-        "Felix"
+        "Florian"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -302,11 +302,11 @@
       ]
     },
     {
-      "id": "g-person-hana-sato",
+      "id": "g-person-hazel-placeholder",
       "type": "Person",
-      "label": "Hana Sato",
+      "label": "Hazel Placeholder",
       "aliases": [
-        "Hana"
+        "Hazel"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -317,11 +317,11 @@
       ]
     },
     {
-      "id": "g-person-wen-zhao",
+      "id": "g-person-waverly-testcase",
       "type": "Person",
-      "label": "Wen Zhao",
+      "label": "Waverly Testcase",
       "aliases": [
-        "Wen"
+        "Waverly"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -330,11 +330,11 @@
       ]
     },
     {
-      "id": "g-person-yusuf-demir",
+      "id": "g-person-yarrow-placeholder",
       "type": "Person",
-      "label": "Yusuf Demir",
+      "label": "Yarrow Placeholder",
       "aliases": [
-        "Yusuf"
+        "Yarrow"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -365,73 +365,73 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "hana",
+        "key": "hazel",
         "type": "Person",
-        "label": "Hana Sato",
+        "label": "Hazel Placeholder",
         "aliases": [],
-        "existingId": "g-person-hana-sato",
+        "existingId": "g-person-hazel-placeholder",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Hana Sato (Larkspur Labs)"
+            "quote": "Hazel Placeholder (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "felix",
+        "key": "florian",
         "type": "Person",
-        "label": "Felix Amundsen",
+        "label": "Florian Mockwell",
         "aliases": [],
-        "existingId": "g-person-felix-amundsen",
+        "existingId": "g-person-florian-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Felix Amundsen (Gullwing Payments)"
+            "quote": "Florian Mockwell (Gullwing Payments)"
           }
         ]
       },
       {
-        "key": "wen",
+        "key": "waverly",
         "type": "Person",
-        "label": "Wen Zhao",
+        "label": "Waverly Testcase",
         "aliases": [],
-        "existingId": "g-person-wen-zhao",
+        "existingId": "g-person-waverly-testcase",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m31-s006",
-            "quote": "Wen became our Head of Risk on September 1."
+            "quote": "Waverly became our Head of Risk on September 1."
           }
         ]
       },
       {
-        "key": "yusuf",
+        "key": "yarrow",
         "type": "Person",
-        "label": "Yusuf Demir",
+        "label": "Yarrow Placeholder",
         "aliases": [],
-        "existingId": "g-person-yusuf-demir",
+        "existingId": "g-person-yarrow-placeholder",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Yusuf Demir (Gullwing Payments)"
+            "quote": "Yarrow Placeholder (Gullwing Payments)"
           }
         ]
       },
@@ -467,7 +467,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -476,13 +476,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "hana",
+        "from": "hazel",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -491,13 +491,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "felix",
+        "from": "florian",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -506,13 +506,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "wen",
+        "from": "waverly",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -521,13 +521,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "yusuf",
+        "from": "yarrow",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -536,13 +536,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Hazel Placeholder (Larkspur Labs), Florian Mockwell (Gullwing Payments), Waverly Testcase (Gullwing Payments), Yarrow Placeholder (Gullwing Payments)"
           }
         ]
       },
       {
         "type": "HAS_ROLE",
-        "from": "wen",
+        "from": "waverly",
         "to": "gullwing",
         "validFrom": "2026-09-01",
         "validTo": null,
@@ -554,7 +554,7 @@
           {
             "source": "segment",
             "segmentId": "m31-s006",
-            "quote": "Wen became our Head of Risk on September 1."
+            "quote": "Waverly became our Head of Risk on September 1."
           }
         ]
       },
@@ -618,10 +618,10 @@
       {
         "kind": "commitment",
         "subject": "chargeback",
-        "owner": "hana",
-        "counterparty": "felix",
+        "owner": "hazel",
+        "counterparty": "florian",
         "title": "Send renewal proposal",
-        "statement": "Hana will send the renewal proposal by Friday, with Q4 scope included.",
+        "statement": "Hazel will send the renewal proposal by Friday, with Q4 scope included.",
         "status": "open",
         "occurredAt": "2026-09-03",
         "dueAt": "2026-09-04",
@@ -638,10 +638,10 @@
       {
         "kind": "commitment",
         "subject": "chargeback",
-        "owner": "felix",
+        "owner": "florian",
         "counterparty": "g-org-larkspur-labs",
         "title": "Sign the renewal",
-        "statement": "Felix will sign the renewal by September 18.",
+        "statement": "Florian will sign the renewal by September 18.",
         "status": "open",
         "occurredAt": "2026-09-03",
         "dueAt": "2026-09-18",
@@ -657,11 +657,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "felix",
+        "subject": "florian",
         "owner": null,
         "counterparty": null,
         "title": "Moving to part-time to care for his father",
-        "statement": "Felix is moving to part-time in the new year to care for his father.",
+        "statement": "Florian is moving to part-time in the new year to care for his father.",
         "status": null,
         "occurredAt": "2026-09-03",
         "dueAt": null,

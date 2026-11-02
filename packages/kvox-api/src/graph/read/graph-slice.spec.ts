@@ -144,7 +144,7 @@ describe('edgeValid', () => {
 
 describe('itemLabel', () => {
   it('prefers the title, else the first 80 characters of the statement', () => {
-    expect(itemLabel('Send deck', 'Sarah will send the deck')).toBe('Send deck');
+    expect(itemLabel('Send deck', 'Sasha will send the deck')).toBe('Send deck');
     expect(itemLabel(null, 'short')).toBe('short');
     const long = 'x'.repeat(200);
     expect(itemLabel('  ', long)).toHaveLength(80);

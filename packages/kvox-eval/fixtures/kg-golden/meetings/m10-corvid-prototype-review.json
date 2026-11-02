@@ -12,22 +12,22 @@
     {
       "id": "m10-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m10-spk-b",
       "label": "B",
-      "displayName": "Elif Kaya"
+      "displayName": "Elowen Sample"
     },
     {
       "id": "m10-spk-c",
       "label": "C",
-      "displayName": "Nadia Brooks"
+      "displayName": "Nell Fixture"
     },
     {
       "id": "m10-spk-d",
       "label": "D",
-      "displayName": "Samir Haddad"
+      "displayName": "Salim Stubbs"
     }
   ],
   "segments": [
@@ -37,7 +37,7 @@
       "startMs": 0,
       "endMs": 7060,
       "rev": 1,
-      "text": "Thanks everyone. Nadia's going to walk us through the first clickable prototype of the new intake flow."
+      "text": "Thanks everyone. Nell's going to walk us through the first clickable prototype of the new intake flow."
     },
     {
       "id": "m10-s002",
@@ -157,7 +157,7 @@
       "startMs": 83050,
       "endMs": 86690,
       "rev": 1,
-      "text": "Samir, how are you feeling, by the way?"
+      "text": "Salim, how are you feeling, by the way?"
     },
     {
       "id": "m10-s017",
@@ -173,7 +173,7 @@
       "startMs": 90830,
       "endMs": 95990,
       "rev": 1,
-      "text": "Glad to hear it. Elif, when's the best time for the tests?"
+      "text": "Glad to hear it. Elowen, when's the best time for the tests?"
     },
     {
       "id": "m10-s019",
@@ -226,7 +226,7 @@
   ],
   "note": {
     "version": 1,
-    "body": "# Corvid intake prototype review\n\n**Date:** March 12\n**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)\n\n## Summary\n\nNadia walked the group through the first clickable prototype of the new patient intake flow for the Corvid Health walk-in clinics.\n\n## Prototype\n\n- Allergies and current medication are now required and come first rather than last. Samir expects this alone to save nurses a lot of chasing.\n- Completion takes about four minutes in internal tests, against an average of seven on the paper form.\n- Corvid's walk-in clinics see about 300 patients a day across the network, so the time saving compounds quickly.\n\n## Feedback\n\n- Buttons are too small for many elderly patients, some of whom have tremors.\n- A high contrast mode is needed because some clinics have very bright windows.\n\n## Decisions\n\n- **Drop the paper fallback form** for the walk-in clinics. Elif's reasoning: if paper stays available, staff will default to it. Samir agreed the habit is the main risk.\n\n## Action items\n\n- **Nadia Brooks** — revise the prototype with larger touch targets by next Tuesday; add a high contrast theme to the backlog.\n- **Elif Kaya** — recruit five front-desk staff for usability tests in three weeks.\n\n## Notes\n\n- Elif prefers morning meetings, before clinic hours.\n- Samir is back to nearly full hours.\n"
+    "body": "# Corvid intake prototype review\n\n**Date:** March 12\n**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)\n\n## Summary\n\nNell walked the group through the first clickable prototype of the new patient intake flow for the Corvid Health walk-in clinics.\n\n## Prototype\n\n- Allergies and current medication are now required and come first rather than last. Salim expects this alone to save nurses a lot of chasing.\n- Completion takes about four minutes in internal tests, against an average of seven on the paper form.\n- Corvid's walk-in clinics see about 300 patients a day across the network, so the time saving compounds quickly.\n\n## Feedback\n\n- Buttons are too small for many elderly patients, some of whom have tremors.\n- A high contrast mode is needed because some clinics have very bright windows.\n\n## Decisions\n\n- **Drop the paper fallback form** for the walk-in clinics. Elowen's reasoning: if paper stays available, staff will default to it. Salim agreed the habit is the main risk.\n\n## Action items\n\n- **Nell Fixture** — revise the prototype with larger touch targets by next Tuesday; add a high contrast theme to the backlog.\n- **Elowen Sample** — recruit five front-desk staff for usability tests in three weeks.\n\n## Notes\n\n- Elowen prefers morning meetings, before clinic hours.\n- Salim is back to nearly full hours.\n"
   },
   "knownEntities": [
     {
@@ -250,11 +250,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -271,11 +271,11 @@
       ]
     },
     {
-      "id": "g-person-elif-kaya",
+      "id": "g-person-elowen-sample",
       "type": "Person",
-      "label": "Elif Kaya",
+      "label": "Elowen Sample",
       "aliases": [
-        "Elif"
+        "Elowen"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -283,11 +283,11 @@
       ]
     },
     {
-      "id": "g-person-nadia-brooks",
+      "id": "g-person-nell-fixture",
       "type": "Person",
-      "label": "Nadia Brooks",
+      "label": "Nell Fixture",
       "aliases": [
-        "Nadia"
+        "Nell"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -296,12 +296,12 @@
       ]
     },
     {
-      "id": "g-person-samir-haddad",
+      "id": "g-person-salim-stubbs",
       "type": "Person",
-      "label": "Samir Haddad",
+      "label": "Salim Stubbs",
       "aliases": [
-        "Dr. Haddad",
-        "Samir"
+        "Dr. Stubbs",
+        "Salim"
       ],
       "props": {},
       "attendedFixtureIds": []
@@ -334,58 +334,58 @@
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "nadia",
+        "key": "nell",
         "type": "Person",
-        "label": "Nadia Brooks",
+        "label": "Nell Fixture",
         "aliases": [],
-        "existingId": "g-person-nadia-brooks",
+        "existingId": "g-person-nell-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Nadia Brooks (Larkspur Labs)"
+            "quote": "Nell Fixture (Larkspur Labs)"
           }
         ]
       },
       {
-        "key": "elif",
+        "key": "elowen",
         "type": "Person",
-        "label": "Elif Kaya",
+        "label": "Elowen Sample",
         "aliases": [],
-        "existingId": "g-person-elif-kaya",
+        "existingId": "g-person-elowen-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Elif Kaya (Corvid Health)"
+            "quote": "Elowen Sample (Corvid Health)"
           }
         ]
       },
       {
-        "key": "samir",
+        "key": "salim",
         "type": "Person",
-        "label": "Samir Haddad",
+        "label": "Salim Stubbs",
         "aliases": [],
-        "existingId": "g-person-samir-haddad",
+        "existingId": "g-person-salim-stubbs",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Samir Haddad (Corvid Health)"
+            "quote": "Salim Stubbs (Corvid Health)"
           }
         ]
       },
@@ -421,7 +421,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -430,13 +430,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "nadia",
+        "from": "nell",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -445,13 +445,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "elif",
+        "from": "elowen",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -460,13 +460,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "samir",
+        "from": "salim",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -475,7 +475,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), Nell Fixture (Larkspur Labs), Elowen Sample (Corvid Health), Salim Stubbs (Corvid Health)"
           }
         ]
       },
@@ -560,10 +560,10 @@
       {
         "kind": "commitment",
         "subject": "intake",
-        "owner": "nadia",
+        "owner": "nell",
         "counterparty": null,
         "title": "Larger touch targets",
-        "statement": "Nadia will revise the prototype with larger touch targets by next Tuesday.",
+        "statement": "Nell will revise the prototype with larger touch targets by next Tuesday.",
         "status": "open",
         "occurredAt": "2026-03-12",
         "dueAt": "2026-03-17",
@@ -580,10 +580,10 @@
       {
         "kind": "commitment",
         "subject": "intake",
-        "owner": "elif",
+        "owner": "elowen",
         "counterparty": "g-org-larkspur-labs",
         "title": "Recruit five testers",
-        "statement": "Elif will recruit five front-desk staff for usability tests in three weeks.",
+        "statement": "Elowen will recruit five front-desk staff for usability tests in three weeks.",
         "status": "open",
         "occurredAt": "2026-03-12",
         "dueAt": "2026-04-02",
@@ -599,11 +599,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "elif",
+        "subject": "elowen",
         "owner": null,
         "counterparty": null,
         "title": "Prefers morning meetings",
-        "statement": "Elif prefers morning meetings, before clinic hours.",
+        "statement": "Elowen prefers morning meetings, before clinic hours.",
         "status": null,
         "occurredAt": "2026-03-12",
         "dueAt": null,

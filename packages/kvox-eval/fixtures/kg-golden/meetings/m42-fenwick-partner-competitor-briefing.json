@@ -13,7 +13,7 @@
   "segments": [],
   "note": {
     "version": 1,
-    "body": "# Partner and competitor briefing: Fenwick Retail\n\n**Date:** September 2\n**Attendees:** Greta Holm, Samir Haddad, Yuki Tanabe\n\n## Summary\n\nA briefing for the Fenwick Retail account team on the software vendors and consulting partners around the account. Greta Holm owns the briefing and Samir Haddad supplied the market notes.\n\n## Vendors and partners\n\n- Fenwick Retail became a customer of Zephyrine Software in March, when it signed for the Zephyr Suite, the retailer's merchandising and planning software.\n- Zephyr Suite is offered by Zephyrine Software.\n- Fenwick Retail is rolling out Zephyr Suite store by store, starting with the northern region.\n- Alder Consulting is a partner of Zephyrine Software and runs the implementation for Fenwick Retail.\n- Marlow Systems competes with Zephyrine Software for large retail accounts, and the two meet in most tenders.\n\n## Positions on the rollout\n\n- Yuki Tanabe is the regional lead for the Zephyr Suite rollout in the northern region and reports that stores are ready.\n- Samir Haddad follows the vendor market for the account and is not part of the rollout.\n\n## Observations\n\n- Fenwick Retail has not asked for a proposal from Marlow Systems and has no contract with it.\n- Alder Consulting also works with other vendors, but none of them were named in this briefing.\n- The briefing did not discuss pricing for either Zephyrine Software or Marlow Systems.\n\n## Open points\n\nThe account team needs the go-live date for the southern region, which depends on the northern region finishing. Whether the partnership between Alder Consulting and Zephyrine Software is exclusive was not stated.\n"
+    "body": "# Partner and competitor briefing: Fenwick Retail\n\n**Date:** September 2\n**Attendees:** Gwen Placeholder, Salim Stubbs, Yael Testcase\n\n## Summary\n\nA briefing for the Fenwick Retail account team on the software vendors and consulting partners around the account. Gwen Placeholder owns the briefing and Salim Stubbs supplied the market notes.\n\n## Vendors and partners\n\n- Fenwick Retail became a customer of Zephyrine Software in March, when it signed for the Zephyr Suite, the retailer's merchandising and planning software.\n- Zephyr Suite is offered by Zephyrine Software.\n- Fenwick Retail is rolling out Zephyr Suite store by store, starting with the northern region.\n- Alder Consulting is a partner of Zephyrine Software and runs the implementation for Fenwick Retail.\n- Marlow Systems competes with Zephyrine Software for large retail accounts, and the two meet in most tenders.\n\n## Positions on the rollout\n\n- Yael Testcase is the regional lead for the Zephyr Suite rollout in the northern region and reports that stores are ready.\n- Salim Stubbs follows the vendor market for the account and is not part of the rollout.\n\n## Observations\n\n- Fenwick Retail has not asked for a proposal from Marlow Systems and has no contract with it.\n- Alder Consulting also works with other vendors, but none of them were named in this briefing.\n- The briefing did not discuss pricing for either Zephyrine Software or Marlow Systems.\n\n## Open points\n\nThe account team needs the go-live date for the southern region, which depends on the northern region finishing. Whether the partnership between Alder Consulting and Zephyrine Software is exclusive was not stated.\n"
   },
   "knownEntities": [],
   "knownRelations": [],
@@ -34,44 +34,44 @@
         ]
       },
       {
-        "key": "greta",
+        "key": "gwen",
         "type": "Person",
-        "label": "Greta Holm",
+        "label": "Gwen Placeholder",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Greta Holm, Samir Haddad, Yuki Tanabe"
+            "quote": "Gwen Placeholder, Salim Stubbs, Yael Testcase"
           }
         ]
       },
       {
-        "key": "samir",
+        "key": "salim",
         "type": "Person",
-        "label": "Samir Haddad",
+        "label": "Salim Stubbs",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Greta Holm, Samir Haddad, Yuki Tanabe"
+            "quote": "Gwen Placeholder, Salim Stubbs, Yael Testcase"
           }
         ]
       },
       {
-        "key": "yuki",
+        "key": "yael",
         "type": "Person",
-        "label": "Yuki Tanabe",
+        "label": "Yael Testcase",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Greta Holm, Samir Haddad, Yuki Tanabe"
+            "quote": "Gwen Placeholder, Salim Stubbs, Yael Testcase"
           }
         ]
       },
@@ -242,7 +242,7 @@
       },
       {
         "type": "INVOLVED_IN",
-        "from": "yuki",
+        "from": "yael",
         "to": "rollout",
         "validFrom": null,
         "validTo": null,
@@ -253,7 +253,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "Yuki Tanabe is the regional lead for the Zephyr Suite rollout"
+            "quote": "Yael Testcase is the regional lead for the Zephyr Suite rollout"
           }
         ]
       },
@@ -280,8 +280,8 @@
         "why": "A stated absence: Fenwick Retail must not get CUSTOMER_OF or USES toward Marlow Systems."
       },
       {
-        "quote": "Samir Haddad follows the vendor market for the account and is not part of the rollout",
-        "why": "Explicitly not involved: no INVOLVED_IN for Samir Haddad."
+        "quote": "Salim Stubbs follows the vendor market for the account and is not part of the rollout",
+        "why": "Explicitly not involved: no INVOLVED_IN for Salim Stubbs."
       }
     ]
   }

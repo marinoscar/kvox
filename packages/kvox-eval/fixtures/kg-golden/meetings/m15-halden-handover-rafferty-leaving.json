@@ -1,33 +1,33 @@
 {
   "id": "m15",
-  "title": "Halden handover: Ravi leaving",
+  "title": "Halden handover: Rafferty leaving",
   "tags": [
     "client",
     "company-change"
   ],
   "recordedAt": "2026-04-16T14:00:00Z",
-  "contextText": "Ravi is leaving Halden; handover of his integration work.",
+  "contextText": "Rafferty is leaving Halden; handover of his integration work.",
   "hasTranscript": true,
   "speakers": [
     {
       "id": "m15-spk-a",
       "label": "A",
-      "displayName": "Alex Rivera"
+      "displayName": "Alma Mockwell"
     },
     {
       "id": "m15-spk-b",
       "label": "B",
-      "displayName": "Ravi Menon"
+      "displayName": "Rafferty Fixture"
     },
     {
       "id": "m15-spk-c",
       "label": "C",
-      "displayName": "Marcus Webb"
+      "displayName": "Maddox Sample"
     },
     {
       "id": "m15-spk-d",
       "label": "D",
-      "displayName": "Jonah Jiménez"
+      "displayName": "Jovan Démo"
     }
   ],
   "segments": [
@@ -37,7 +37,7 @@
       "startMs": 0,
       "endMs": 5160,
       "rev": 1,
-      "text": "Thanks for joining. Ravi, do you want to share the news yourself?"
+      "text": "Thanks for joining. Rafferty, do you want to share the news yourself?"
     },
     {
       "id": "m15-s002",
@@ -125,7 +125,7 @@
       "startMs": 54570,
       "endMs": 61250,
       "rev": 1,
-      "text": "I'll take over the depot integrations after Ravi leaves. I know most of that code anyway."
+      "text": "I'll take over the depot integrations after Rafferty leaves. I know most of that code anyway."
     },
     {
       "id": "m15-s013",
@@ -133,7 +133,7 @@
       "startMs": 61500,
       "endMs": 65900,
       "rev": 1,
-      "text": "Then that's decided, JJ owns the depot integrations from May."
+      "text": "Then that's decided, JD owns the depot integrations from May."
     },
     {
       "id": "m15-s014",
@@ -141,7 +141,7 @@
       "startMs": 66150,
       "endMs": 69410,
       "rev": 1,
-      "text": "Marcus, who replaces Ravi on your side?"
+      "text": "Maddox, who replaces Rafferty on your side?"
     },
     {
       "id": "m15-s015",
@@ -189,7 +189,7 @@
       "startMs": 92530,
       "endMs": 98070,
       "rev": 1,
-      "text": "Ravi, can we do a recorded walkthrough of the mappings before you go?"
+      "text": "Rafferty, can we do a recorded walkthrough of the mappings before you go?"
     },
     {
       "id": "m15-s021",
@@ -205,7 +205,7 @@
       "startMs": 101070,
       "endMs": 104330,
       "rev": 1,
-      "text": "Ravi, anything personal we can help with?"
+      "text": "Rafferty, anything personal we can help with?"
     },
     {
       "id": "m15-s023",
@@ -221,12 +221,12 @@
       "startMs": 111510,
       "endMs": 115530,
       "rev": 1,
-      "text": "That's exciting. Thanks Ravi, for everything on this project."
+      "text": "That's exciting. Thanks Rafferty, for everything on this project."
     }
   ],
   "note": {
     "version": 1,
-    "body": "# Halden handover: Ravi leaving\n\n**Date:** April 16\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Ravi Menon (Halden Freight), Marcus Webb (Halden Freight)\n\n## Summary\n\nRavi Menon is leaving Halden Freight; his last day is the end of April. He joins Solvane Energy as integration lead from May 1. This session covered the handover of his open work on the route optimizer migration.\n\n## Open items from Ravi\n\n- The rollback runbook, which is overdue. Marcus considers it the most important item; the north cut over without it.\n- The southern depot mappings.\n\n## Decisions\n\n- **JJ takes over the depot integrations** after Ravi leaves.\n- The southern depots cutover slips to June so that Ravi's replacement does not start with a live cutover. The plan will be reworked around June.\n\n## Action items\n\n- **Ravi Menon** — finish the rollback runbook before he goes, by April 30.\n- **Ravi Menon and JJ** — record a walkthrough of the depot mappings on Tuesday afternoon.\n- **Marcus Webb** — name a replacement integration lead by April 24; he has two internal candidates.\n\n## Notes\n\n- Larkspur already works with Solvane on the grid dashboard, so we will likely work with Ravi again.\n- Ravi and his family are moving to Lisbon.\n"
+    "body": "# Halden handover: Rafferty leaving\n\n**Date:** April 16\n**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Rafferty Fixture (Halden Freight), Maddox Sample (Halden Freight)\n\n## Summary\n\nRafferty Fixture is leaving Halden Freight; his last day is the end of April. He joins Solvane Energy as integration lead from May 1. This session covered the handover of his open work on the route optimizer migration.\n\n## Open items from Rafferty\n\n- The rollback runbook, which is overdue. Maddox considers it the most important item; the north cut over without it.\n- The southern depot mappings.\n\n## Decisions\n\n- **JD takes over the depot integrations** after Rafferty leaves.\n- The southern depots cutover slips to June so that Rafferty's replacement does not start with a live cutover. The plan will be reworked around June.\n\n## Action items\n\n- **Rafferty Fixture** — finish the rollback runbook before he goes, by April 30.\n- **Rafferty Fixture and JD** — record a walkthrough of the depot mappings on Tuesday afternoon.\n- **Maddox Sample** — name a replacement integration lead by April 24; he has two internal candidates.\n\n## Notes\n\n- Larkspur already works with Solvane on the grid dashboard, so we will likely work with Rafferty again.\n- Rafferty and his family are moving to Lisbon.\n"
   },
   "knownEntities": [
     {
@@ -250,11 +250,11 @@
       "attendedFixtureIds": []
     },
     {
-      "id": "g-person-alex-rivera",
+      "id": "g-person-alma-mockwell",
       "type": "Person",
-      "label": "Alex Rivera",
+      "label": "Alma Mockwell",
       "aliases": [
-        "Alex"
+        "Alma"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -276,12 +276,12 @@
       ]
     },
     {
-      "id": "g-person-jonah-jimenez",
+      "id": "g-person-jovan-demo",
       "type": "Person",
-      "label": "Jonah Jiménez",
+      "label": "Jovan Démo",
       "aliases": [
-        "JJ",
-        "Jonah Jimenez"
+        "JD",
+        "Jovan Demo"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -293,11 +293,11 @@
       ]
     },
     {
-      "id": "g-person-marcus-webb",
+      "id": "g-person-maddox-sample",
       "type": "Person",
-      "label": "Marcus Webb",
+      "label": "Maddox Sample",
       "aliases": [
-        "Marcus"
+        "Maddox"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -307,11 +307,11 @@
       ]
     },
     {
-      "id": "g-person-ravi-menon",
+      "id": "g-person-rafferty-fixture",
       "type": "Person",
-      "label": "Ravi Menon",
+      "label": "Rafferty Fixture",
       "aliases": [
-        "Ravi"
+        "Rafferty"
       ],
       "props": {},
       "attendedFixtureIds": [
@@ -347,73 +347,73 @@
       {
         "key": "meeting",
         "type": "Meeting",
-        "label": "Halden handover: Ravi leaving",
+        "label": "Halden handover: Rafferty leaving",
         "aliases": [],
         "existingId": null,
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Halden handover: Ravi leaving"
+            "quote": "Halden handover: Rafferty leaving"
           }
         ]
       },
       {
-        "key": "alex",
+        "key": "alma",
         "type": "Person",
-        "label": "Alex Rivera",
+        "label": "Alma Mockwell",
         "aliases": [],
-        "existingId": "g-person-alex-rivera",
+        "existingId": "g-person-alma-mockwell",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Alex Rivera (Larkspur Labs)"
+            "quote": "Alma Mockwell (Larkspur Labs)"
           }
         ]
       },
       {
         "key": "jj",
         "type": "Person",
-        "label": "Jonah Jiménez",
+        "label": "Jovan Démo",
         "aliases": [
-          "JJ"
+          "JD"
         ],
-        "existingId": "g-person-jonah-jimenez",
+        "existingId": "g-person-jovan-demo",
         "props": {},
         "evidence": [
           {
             "source": "segment",
             "segmentId": "m15-s013",
-            "quote": "JJ owns the depot integrations from May."
+            "quote": "JD owns the depot integrations from May."
           }
         ]
       },
       {
-        "key": "ravi",
+        "key": "rafferty",
         "type": "Person",
-        "label": "Ravi Menon",
+        "label": "Rafferty Fixture",
         "aliases": [],
-        "existingId": "g-person-ravi-menon",
+        "existingId": "g-person-rafferty-fixture",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Ravi Menon is leaving Halden Freight"
+            "quote": "Rafferty Fixture is leaving Halden Freight"
           }
         ]
       },
       {
-        "key": "marcus",
+        "key": "maddox",
         "type": "Person",
-        "label": "Marcus Webb",
+        "label": "Maddox Sample",
         "aliases": [],
-        "existingId": "g-person-marcus-webb",
+        "existingId": "g-person-maddox-sample",
         "props": {},
         "evidence": [
           {
             "source": "note",
-            "quote": "Marcus Webb (Halden Freight)"
+            "quote": "Maddox Sample (Halden Freight)"
           }
         ]
       },
@@ -465,7 +465,7 @@
     "relations": [
       {
         "type": "ATTENDED",
-        "from": "alex",
+        "from": "alma",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -474,7 +474,7 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Ravi Menon (Halden Freight), Marcus Webb (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Rafferty Fixture (Halden Freight), Maddox Sample (Halden Freight)"
           }
         ]
       },
@@ -489,13 +489,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Ravi Menon (Halden Freight), Marcus Webb (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Rafferty Fixture (Halden Freight), Maddox Sample (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -504,13 +504,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Ravi Menon (Halden Freight), Marcus Webb (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Rafferty Fixture (Halden Freight), Maddox Sample (Halden Freight)"
           }
         ]
       },
       {
         "type": "ATTENDED",
-        "from": "marcus",
+        "from": "maddox",
         "to": "meeting",
         "validFrom": null,
         "validTo": null,
@@ -519,13 +519,13 @@
         "evidence": [
           {
             "source": "note",
-            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Ravi Menon (Halden Freight), Marcus Webb (Halden Freight)"
+            "quote": "**Attendees:** Alma Mockwell (Larkspur Labs), JD (Larkspur Labs), Rafferty Fixture (Halden Freight), Maddox Sample (Halden Freight)"
           }
         ]
       },
       {
         "type": "WORKS_FOR",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "halden",
         "validFrom": null,
         "validTo": "2026-05-01",
@@ -541,7 +541,7 @@
       },
       {
         "type": "WORKS_FOR",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "solvane",
         "validFrom": "2026-05-01",
         "validTo": null,
@@ -557,7 +557,7 @@
       },
       {
         "type": "HAS_ROLE",
-        "from": "ravi",
+        "from": "rafferty",
         "to": "solvane",
         "validFrom": "2026-05-01",
         "validTo": null,
@@ -593,10 +593,10 @@
       {
         "kind": "commitment",
         "subject": "migration",
-        "owner": "ravi",
-        "counterparty": "marcus",
+        "owner": "rafferty",
+        "counterparty": "maddox",
         "title": "Finish the rollback runbook",
-        "statement": "Ravi will still finish the rollback runbook before he goes, by April 30.",
+        "statement": "Rafferty will still finish the rollback runbook before he goes, by April 30.",
         "status": "open",
         "occurredAt": "2026-04-16",
         "dueAt": "2026-04-30",
@@ -613,10 +613,10 @@
       {
         "kind": "commitment",
         "subject": "halden",
-        "owner": "marcus",
+        "owner": "maddox",
         "counterparty": null,
         "title": "Name a replacement integration lead",
-        "statement": "Marcus will name a replacement integration lead by April 24.",
+        "statement": "Maddox will name a replacement integration lead by April 24.",
         "status": "open",
         "occurredAt": "2026-04-16",
         "dueAt": "2026-04-24",
@@ -633,10 +633,10 @@
       {
         "kind": "commitment",
         "subject": "migration",
-        "owner": "ravi",
+        "owner": "rafferty",
         "counterparty": "jj",
         "title": "Record depot mappings walkthrough",
-        "statement": "Ravi will record a walkthrough of the depot mappings with JJ on Tuesday afternoon.",
+        "statement": "Rafferty will record a walkthrough of the depot mappings with JD on Tuesday afternoon.",
         "status": "open",
         "occurredAt": "2026-04-16",
         "dueAt": "2026-04-21",
@@ -655,8 +655,8 @@
         "subject": "migration",
         "owner": null,
         "counterparty": null,
-        "title": "JJ takes over depot integrations",
-        "statement": "JJ takes over the depot integrations after Ravi leaves.",
+        "title": "JD takes over depot integrations",
+        "statement": "JD takes over the depot integrations after Rafferty leaves.",
         "status": null,
         "occurredAt": "2026-04-16",
         "dueAt": null,
@@ -666,7 +666,7 @@
           {
             "source": "segment",
             "segmentId": "m15-s013",
-            "quote": "JJ owns the depot integrations from May."
+            "quote": "JD owns the depot integrations from May."
           }
         ]
       },
@@ -692,11 +692,11 @@
       },
       {
         "kind": "person_fact",
-        "subject": "ravi",
+        "subject": "rafferty",
         "owner": null,
         "counterparty": null,
         "title": "Moving to Lisbon with family",
-        "statement": "Ravi is moving to Lisbon with his kids.",
+        "statement": "Rafferty is moving to Lisbon with his kids.",
         "status": null,
         "occurredAt": "2026-04-16",
         "dueAt": null,

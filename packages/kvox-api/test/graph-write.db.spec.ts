@@ -44,7 +44,7 @@ describe('the no-orphans invariant (real PostgreSQL)', () => {
     const attempt = db.prisma.$transaction((tx) =>
       write.createEntity(
         tx as unknown as KvoxGraphTx,
-        { ownerId, type: 'Person', label: 'Sarah Chen', reviewStatus: 'accepted', evidence: [] } as never,
+        { ownerId, type: 'Person', label: 'Sasha Example', reviewStatus: 'accepted', evidence: [] } as never,
         schema,
       ),
     );

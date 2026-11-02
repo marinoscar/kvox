@@ -32,7 +32,7 @@ function segment(id: string, text: string, overrides: Partial<CandidateSegment> 
   return { id, rev: 1, speakerId: 'A', startMs: 0, text, ...overrides };
 }
 
-const OSCAR: NameTarget = buildTargets(['Oscar'])[0]!;
+const ORLO: NameTarget = buildTargets(['Orlo'])[0]!;
 
 function candidate(overrides: Partial<SourcedCandidate> = {}): SourcedCandidate {
   const base: NameCandidate = {
@@ -40,8 +40,8 @@ function candidate(overrides: Partial<SourcedCandidate> = {}): SourcedCandidate 
     segmentRev: 1,
     start: 0,
     end: 4,
-    original: 'Skar',
-    target: 'Oscar',
+    original: 'Rolo',
+    target: 'Orlo',
     score: 0.9,
     signals: {
       jaroWinkler: 0.9,
@@ -163,17 +163,17 @@ describe('packDiscoveryChunks', () => {
 describe('buildDiscoveryPrompt', () => {
   it('lists the targets and includes the chunk text', () => {
     const chunk = { indices: [0], text: '[0] Ana: hello', tokens: 3 };
-    const prompt = buildDiscoveryPrompt(chunk, [OSCAR]);
+    const prompt = buildDiscoveryPrompt(chunk, [ORLO]);
 
-    expect(prompt.userContent).toContain('"Oscar"');
+    expect(prompt.userContent).toContain('"Orlo"');
     expect(prompt.userContent).toContain('[0] Ana: hello');
   });
 });
 
 describe('parseDiscoveryAnswer', () => {
   it('parses a well-formed envelope', () => {
-    const answer = '{"findings":[{"seg":0,"text":"Skar","target":"Oscar"}]}';
-    expect(parseDiscoveryAnswer(answer)).toEqual([{ seg: 0, text: 'Skar', target: 'Oscar' }]);
+    const answer = '{"findings":[{"seg":0,"text":"Rolo","target":"Orlo"}]}';
+    expect(parseDiscoveryAnswer(answer)).toEqual([{ seg: 0, text: 'Rolo', target: 'Orlo' }]);
   });
 
   it('returns null when the envelope itself is malformed', () => {
@@ -182,13 +182,13 @@ describe('parseDiscoveryAnswer', () => {
   });
 
   it('drops one malformed item without failing the whole answer', () => {
-    const answer = '{"findings":[{"seg":0,"text":"Skar","target":"Oscar"},{"seg":"nope"}]}';
-    expect(parseDiscoveryAnswer(answer)).toEqual([{ seg: 0, text: 'Skar', target: 'Oscar' }]);
+    const answer = '{"findings":[{"seg":0,"text":"Rolo","target":"Orlo"},{"seg":"nope"}]}';
+    expect(parseDiscoveryAnswer(answer)).toEqual([{ seg: 0, text: 'Rolo', target: 'Orlo' }]);
   });
 
   it('accepts JSON wrapped in a markdown fence', () => {
-    const answer = '```json\n{"findings":[{"seg":1,"text":"Oh scar","target":"Oscar"}]}\n```';
-    expect(parseDiscoveryAnswer(answer)).toEqual([{ seg: 1, text: 'Oh scar', target: 'Oscar' }]);
+    const answer = '```json\n{"findings":[{"seg":1,"text":"Or low","target":"Orlo"}]}\n```';
+    expect(parseDiscoveryAnswer(answer)).toEqual([{ seg: 1, text: 'Or low', target: 'Orlo' }]);
   });
 });
 
@@ -197,16 +197,16 @@ describe('parseDiscoveryAnswer', () => {
 // -----------------------------------------------------------------------------
 
 describe('locateDiscoveryFindings', () => {
-  const targets = buildTargets(['Oscar']);
+  const targets = buildTargets(['Orlo']);
 
   it('locates an exact substring and widens it to whole words', () => {
-    const segments = [segment('s1', 'They called him Skar yesterday.')];
-    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'Skar', target: 'Oscar' }];
+    const segments = [segment('s1', 'They called him Rolo yesterday.')];
+    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'Rolo', target: 'Orlo' }];
 
     const out = locateDiscoveryFindings(findings, segments, targets);
 
     expect(out).toHaveLength(1);
-    expect(out[0]!.original).toBe('Skar');
+    expect(out[0]!.original).toBe('Rolo');
     expect(out[0]!.source).toBe('discovery');
     expect(out[0]!.score).toBe(DISCOVERY_SCORE);
     expect(out[0]!.segmentId).toBe('s1');
@@ -214,46 +214,46 @@ describe('locateDiscoveryFindings', () => {
 
   it('skips a finding whose segment index does not exist', () => {
     const segments = [segment('s1', 'hello')];
-    const findings: DiscoveryFinding[] = [{ seg: 5, text: 'hello', target: 'Oscar' }];
+    const findings: DiscoveryFinding[] = [{ seg: 5, text: 'hello', target: 'Orlo' }];
     expect(locateDiscoveryFindings(findings, segments, targets)).toEqual([]);
   });
 
   it('skips a finding naming a target that is not in the list', () => {
-    const segments = [segment('s1', 'They called him Skar.')];
-    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'Skar', target: 'Not A Target' }];
+    const segments = [segment('s1', 'They called him Rolo.')];
+    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'Rolo', target: 'Not A Target' }];
     expect(locateDiscoveryFindings(findings, segments, targets)).toEqual([]);
   });
 
   it('skips a finding whose text cannot be located in the segment', () => {
     const segments = [segment('s1', 'nothing relevant here')];
-    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'Skar', target: 'Oscar' }];
+    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'Rolo', target: 'Orlo' }];
     expect(locateDiscoveryFindings(findings, segments, targets)).toEqual([]);
   });
 
-  it('skips text that is already inside a correctly-spelled word ("scar" inside "Oscars")', () => {
-    // "scar" as a standalone word does not occur; the only occurrence of the
-    // substring "scar" is inside "Oscars", and widening to the whole word
-    // yields "Oscars" — which already spells the target (plural). So this must
+  it('skips text that is already inside a correctly-spelled word ("low" inside "Orlos")', () => {
+    // "low" as a standalone word does not occur; the only occurrence of the
+    // substring "low" is inside "Orlos", and widening to the whole word
+    // yields "Orlos" — which already spells the target (plural). So this must
     // be skipped, never proposing to "correct" a name that is already right.
-    const segments = [segment('s1', 'We love the Oscars every year.')];
-    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'scar', target: 'Oscar' }];
+    const segments = [segment('s1', 'We love the Orlos every year.')];
+    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'low', target: 'Orlo' }];
     expect(locateDiscoveryFindings(findings, segments, targets)).toEqual([]);
   });
 
   it('is case-insensitive when no exact-case occurrence exists', () => {
-    const segments = [segment('s1', 'they called him skar yesterday')];
-    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'Skar', target: 'Oscar' }];
+    const segments = [segment('s1', 'they called him rolo yesterday')];
+    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'Rolo', target: 'Orlo' }];
     const out = locateDiscoveryFindings(findings, segments, targets);
     expect(out).toHaveLength(1);
-    expect(out[0]!.original).toBe('skar');
+    expect(out[0]!.original).toBe('rolo');
   });
 
   it('does not reuse a span already covered by an "already" candidate', () => {
-    const segments = [segment('s1', 'Skar met Skar again.')];
+    const segments = [segment('s1', 'Rolo met Rolo again.')];
     const already: SourcedCandidate[] = [
-      { ...candidate({ segmentId: 's1', start: 0, end: 4, original: 'Skar' }) },
+      { ...candidate({ segmentId: 's1', start: 0, end: 4, original: 'Rolo' }) },
     ];
-    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'Skar', target: 'Oscar' }];
+    const findings: DiscoveryFinding[] = [{ seg: 0, text: 'Rolo', target: 'Orlo' }];
 
     const out = locateDiscoveryFindings(findings, segments, targets, already);
 
@@ -359,21 +359,21 @@ describe('buildAdjudicationPrompt', () => {
   ]);
 
   it('marks the span with ⟦ ⟧ on the candidate segment line', () => {
-    const segments = [segment('s1', 'They called him Skar yesterday.', { speakerId: 'A' })];
+    const segments = [segment('s1', 'They called him Rolo yesterday.', { speakerId: 'A' })];
     const index = new Map([['s1', 0]]);
-    const c = candidate({ segmentId: 's1', start: 16, end: 20, original: 'Skar' });
+    const c = candidate({ segmentId: 's1', start: 16, end: 20, original: 'Rolo' });
 
     const { prompt, items } = buildAdjudicationPrompt([c], segments, index, names);
 
     expect(items.size).toBe(1);
     expect(items.get('c1')).toBe(c);
-    expect(prompt.userContent).toContain('⟦Skar⟧');
+    expect(prompt.userContent).toContain('⟦Rolo⟧');
   });
 
   it('includes neighbouring lines with their speakers', () => {
     const segments = [
       segment('s0', 'Before line.', { speakerId: 'B' }),
-      segment('s1', 'Skar was here.', { speakerId: 'A' }),
+      segment('s1', 'Rolo was here.', { speakerId: 'A' }),
       segment('s2', 'After line.', { speakerId: 'B' }),
     ];
     const index = new Map([
@@ -381,7 +381,7 @@ describe('buildAdjudicationPrompt', () => {
       ['s1', 1],
       ['s2', 2],
     ]);
-    const c = candidate({ segmentId: 's1', start: 0, end: 4, original: 'Skar' });
+    const c = candidate({ segmentId: 's1', start: 0, end: 4, original: 'Rolo' });
 
     const { prompt } = buildAdjudicationPrompt([c], segments, index, names);
 
@@ -390,7 +390,7 @@ describe('buildAdjudicationPrompt', () => {
   });
 
   it('appends the JSON retry line only when retry is true', () => {
-    const segments = [segment('s1', 'Skar', { speakerId: 'A' })];
+    const segments = [segment('s1', 'Rolo', { speakerId: 'A' })];
     const index = new Map([['s1', 0]]);
     const c = candidate({ segmentId: 's1', start: 0, end: 4 });
 
@@ -408,11 +408,11 @@ describe('buildAdjudicationPrompt', () => {
 
 describe('markSpan', () => {
   it('wraps the exact span with the open/close markers', () => {
-    expect(markSpan('They called him Skar yesterday.', 16, 20)).toContain('⟦Skar⟧');
+    expect(markSpan('They called him Rolo yesterday.', 16, 20)).toContain('⟦Rolo⟧');
   });
 
   it('adds ellipses only when the clip cuts off text', () => {
-    const long = 'x'.repeat(500) + 'Skar' + 'y'.repeat(500);
+    const long = 'x'.repeat(500) + 'Rolo' + 'y'.repeat(500);
     const marked = markSpan(long, 500, 504, 10);
     expect(marked.startsWith('…')).toBe(true);
     expect(marked.endsWith('…')).toBe(true);
@@ -425,9 +425,9 @@ describe('markSpan', () => {
 
 describe('parseAdjudicationAnswer', () => {
   it('parses a valid envelope', () => {
-    const answer = '{"results":[{"id":"c1","verdict":"replace","replacement":"Oscar","confidence":0.9,"reason":"clear"}]}';
+    const answer = '{"results":[{"id":"c1","verdict":"replace","replacement":"Orlo","confidence":0.9,"reason":"clear"}]}';
     expect(parseAdjudicationAnswer(answer)).toEqual([
-      { id: 'c1', verdict: 'replace', replacement: 'Oscar', confidence: 0.9, reason: 'clear' },
+      { id: 'c1', verdict: 'replace', replacement: 'Orlo', confidence: 0.9, reason: 'clear' },
     ]);
   });
 
@@ -461,62 +461,62 @@ describe('parseAdjudicationAnswer', () => {
 
 describe('replacementMatchesTarget', () => {
   it('accepts the exact target', () => {
-    expect(replacementMatchesTarget('Oscar', 'Oscar')).toBe(true);
+    expect(replacementMatchesTarget('Orlo', 'Orlo')).toBe(true);
   });
 
-  it("accepts a possessive (Oscar's) for target Oscar", () => {
-    expect(replacementMatchesTarget("Oscar's", 'Oscar')).toBe(true);
-    expect(replacementMatchesTarget('Oscar’s', 'Oscar')).toBe(true);
+  it("accepts a possessive (Orlo's) for target Orlo", () => {
+    expect(replacementMatchesTarget("Orlo's", 'Orlo')).toBe(true);
+    expect(replacementMatchesTarget('Orlo’s', 'Orlo')).toBe(true);
   });
 
-  it('accepts a plural (Oscars) for target Oscar', () => {
-    expect(replacementMatchesTarget('Oscars', 'Oscar')).toBe(true);
+  it('accepts a plural (Orlos) for target Orlo', () => {
+    expect(replacementMatchesTarget('Orlos', 'Orlo')).toBe(true);
   });
 
   it('is diacritic- and case-insensitive', () => {
-    expect(replacementMatchesTarget('oscar', 'Oscar')).toBe(true);
-    expect(replacementMatchesTarget('ÓSCAR', 'Oscar')).toBe(true);
+    expect(replacementMatchesTarget('orlo', 'Orlo')).toBe(true);
+    expect(replacementMatchesTarget('ÓRLO', 'Orlo')).toBe(true);
   });
 
   it('rejects an unrelated replacement', () => {
-    expect(replacementMatchesTarget('Bartholomew', 'Oscar')).toBe(false);
+    expect(replacementMatchesTarget('Bartholomew', 'Orlo')).toBe(false);
   });
 
   it('rejects an empty target', () => {
-    expect(replacementMatchesTarget('Oscar', '')).toBe(false);
+    expect(replacementMatchesTarget('Orlo', '')).toBe(false);
   });
 });
 
 describe('acceptResults', () => {
   it('accepts a replace verdict whose replacement is the target', () => {
-    const c = candidate({ target: 'Oscar', original: 'Skar' });
+    const c = candidate({ target: 'Orlo', original: 'Rolo' });
     const items = new Map([['c1', c]]);
     const results: AdjudicationResult[] = [
-      { id: 'c1', verdict: 'replace', replacement: 'Oscar', confidence: 0.9, reason: 'clear mishearing' },
+      { id: 'c1', verdict: 'replace', replacement: 'Orlo', confidence: 0.9, reason: 'clear mishearing' },
     ];
 
     const out = acceptResults(items, results);
 
     expect(out).toHaveLength(1);
-    expect(out[0]!.replacement).toBe('Oscar');
+    expect(out[0]!.replacement).toBe('Orlo');
     expect(out[0]!.confidence).toBe(0.9);
     expect(out[0]!.reason).toBe('clear mishearing');
   });
 
-  it("accepts Oscar's / Oscars as valid replacements for target Oscar", () => {
-    const c = candidate({ target: 'Oscar', original: 'Skars' });
+  it("accepts Orlo's / Orlos as valid replacements for target Orlo", () => {
+    const c = candidate({ target: 'Orlo', original: 'Rolos' });
     const items = new Map([['c1', c]]);
 
     expect(
-      acceptResults(items, [{ id: 'c1', verdict: 'replace', replacement: "Oscar's" }]),
+      acceptResults(items, [{ id: 'c1', verdict: 'replace', replacement: "Orlo's" }]),
     ).toHaveLength(1);
     expect(
-      acceptResults(items, [{ id: 'c1', verdict: 'replace', replacement: 'Oscars' }]),
+      acceptResults(items, [{ id: 'c1', verdict: 'replace', replacement: 'Orlos' }]),
     ).toHaveLength(1);
   });
 
   it('drops a replace verdict whose replacement is unrelated to the target', () => {
-    const c = candidate({ target: 'Oscar', original: 'Skar' });
+    const c = candidate({ target: 'Orlo', original: 'Rolo' });
     const items = new Map([['c1', c]]);
     const results: AdjudicationResult[] = [{ id: 'c1', verdict: 'replace', replacement: 'Bartholomew' }];
 
@@ -524,35 +524,35 @@ describe('acceptResults', () => {
   });
 
   it('drops a replace verdict whose replacement equals the original', () => {
-    const c = candidate({ target: 'Oscar', original: 'Oscar' });
+    const c = candidate({ target: 'Orlo', original: 'Orlo' });
     const items = new Map([['c1', c]]);
-    const results: AdjudicationResult[] = [{ id: 'c1', verdict: 'replace', replacement: 'Oscar' }];
+    const results: AdjudicationResult[] = [{ id: 'c1', verdict: 'replace', replacement: 'Orlo' }];
 
     expect(acceptResults(items, results)).toEqual([]);
   });
 
   it('drops a keep verdict', () => {
-    const c = candidate({ target: 'Oscar', original: 'Skar' });
+    const c = candidate({ target: 'Orlo', original: 'Rolo' });
     const items = new Map([['c1', c]]);
-    const results: AdjudicationResult[] = [{ id: 'c1', verdict: 'keep', replacement: 'Oscar' }];
+    const results: AdjudicationResult[] = [{ id: 'c1', verdict: 'keep', replacement: 'Orlo' }];
 
     expect(acceptResults(items, results)).toEqual([]);
   });
 
   it('drops a result naming an id this batch never sent', () => {
-    const c = candidate({ target: 'Oscar', original: 'Skar' });
+    const c = candidate({ target: 'Orlo', original: 'Rolo' });
     const items = new Map([['c1', c]]);
-    const results: AdjudicationResult[] = [{ id: 'c99', verdict: 'replace', replacement: 'Oscar' }];
+    const results: AdjudicationResult[] = [{ id: 'c99', verdict: 'replace', replacement: 'Orlo' }];
 
     expect(acceptResults(items, results)).toEqual([]);
   });
 
   it('keeps only the first result for a repeated id', () => {
-    const c = candidate({ target: 'Oscar', original: 'Skar' });
+    const c = candidate({ target: 'Orlo', original: 'Rolo' });
     const items = new Map([['c1', c]]);
     const results: AdjudicationResult[] = [
-      { id: 'c1', verdict: 'replace', replacement: 'Oscar', reason: 'first' },
-      { id: 'c1', verdict: 'replace', replacement: 'Oscar', reason: 'second' },
+      { id: 'c1', verdict: 'replace', replacement: 'Orlo', reason: 'first' },
+      { id: 'c1', verdict: 'replace', replacement: 'Orlo', reason: 'second' },
     ];
 
     const out = acceptResults(items, results);
@@ -561,13 +561,13 @@ describe('acceptResults', () => {
   });
 
   it('falls back to the candidate target when no replacement is given', () => {
-    const c = candidate({ target: 'Oscar', original: 'Skar' });
+    const c = candidate({ target: 'Orlo', original: 'Rolo' });
     const items = new Map([['c1', c]]);
     const results: AdjudicationResult[] = [{ id: 'c1', verdict: 'replace' }];
 
     const out = acceptResults(items, results);
     expect(out).toHaveLength(1);
-    expect(out[0]!.replacement).toBe('Oscar');
+    expect(out[0]!.replacement).toBe('Orlo');
   });
 
   it('is diacritic-insensitive when checking the replacement against the target', () => {

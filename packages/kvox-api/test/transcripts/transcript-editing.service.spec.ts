@@ -303,31 +303,31 @@ describe('TranscriptEditingService', () => {
     it('writes the name and the identities map, bumps neither the version nor the rev, and never creates a transcript_versions row', async () => {
       const result = await service.applyOperations(
         TRANSCRIPT_ID,
-        identifyBatch('Oscar') as never,
+        identifyBatch('Orlo') as never,
         USER,
       );
 
       expect(versionCreate).not.toHaveBeenCalled();
       expect(tx.transcript.updateMany).not.toHaveBeenCalled();
       expect(result.version).toBe(3);
-      expect(result.summary).toBe('Named Speaker A as Oscar');
+      expect(result.summary).toBe('Named Speaker A as Orlo');
 
       // ⚠ `rev` IS NOT PART OF THE PREDICATE'S UPDATE — only the placeholder
       // name and the rev the routing decision saw are, so a rev bump here
       // would be visible in the assertion below and it is not.
       expect(tx.transcriptSpeaker.updateMany).toHaveBeenCalledWith({
         where: { id: 'A', transcriptId: TRANSCRIPT_ID, rev: 1, displayName: 'Speaker A' },
-        data: { displayName: 'Oscar' },
+        data: { displayName: 'Orlo' },
       });
 
       expect(tx.transcript.update).toHaveBeenCalledWith({
         where: { id: TRANSCRIPT_ID },
-        data: { speakerIdentities: { A: 'Oscar' } },
+        data: { speakerIdentities: { A: 'Orlo' } },
       });
     });
 
     it('enqueues the search index and an audit event, but never a snapshot', async () => {
-      await service.applyOperations(TRANSCRIPT_ID, identifyBatch('Oscar') as never, USER);
+      await service.applyOperations(TRANSCRIPT_ID, identifyBatch('Orlo') as never, USER);
 
       expect(pipeline.enqueueSearchIndex).toHaveBeenCalledWith(TRANSCRIPT_ID);
       expect(pipeline.enqueueSnapshot).not.toHaveBeenCalled();
@@ -337,13 +337,13 @@ describe('TranscriptEditingService', () => {
           action: 'transcript.speaker_identified',
           targetType: 'transcript',
           targetId: TRANSCRIPT_ID,
-          meta: { speakers: [{ speakerId: 'A', label: 'A', previousName: 'Speaker A', displayName: 'Oscar' }] },
+          meta: { speakers: [{ speakerId: 'A', label: 'A', previousName: 'Speaker A', displayName: 'Orlo' }] },
         }),
       );
     });
 
     it('emits transcript.speakers_identified after the save, the search enqueue and the audit (#356)', async () => {
-      await service.applyOperations(TRANSCRIPT_ID, identifyBatch('Oscar') as never, USER);
+      await service.applyOperations(TRANSCRIPT_ID, identifyBatch('Orlo') as never, USER);
 
       expect(events.emit).toHaveBeenCalledTimes(1);
       expect(events.emit).toHaveBeenCalledWith(
@@ -364,16 +364,16 @@ describe('TranscriptEditingService', () => {
 
       const result = await service.applyOperations(
         TRANSCRIPT_ID,
-        identifyBatch('Oscar') as never,
+        identifyBatch('Orlo') as never,
         USER,
       );
 
-      expect(result.summary).toBe('Named Speaker A as Oscar');
+      expect(result.summary).toBe('Named Speaker A as Orlo');
     });
 
     it('is idempotent: retrying an identification the speaker already carries writes nothing and enqueues nothing', async () => {
       const alreadyIdentified = [
-        { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
+        { id: 'A', label: 'A', displayName: 'Orlo', colorIndex: 0, rev: 1 },
         speakerRows[1],
       ];
 
@@ -384,7 +384,7 @@ describe('TranscriptEditingService', () => {
 
       const result = await service.applyOperations(
         TRANSCRIPT_ID,
-        identifyBatch('Oscar', {}, 'identify-retry') as never,
+        identifyBatch('Orlo', {}, 'identify-retry') as never,
         USER,
       );
 
@@ -408,7 +408,7 @@ describe('TranscriptEditingService', () => {
       ]);
 
       const conflict = await service
-        .applyOperations(TRANSCRIPT_ID, identifyBatch('Oscar', {}, 'identify-stale') as never, USER)
+        .applyOperations(TRANSCRIPT_ID, identifyBatch('Orlo', {}, 'identify-stale') as never, USER)
         .catch((error: unknown) => error);
 
       expect(conflict).toBeInstanceOf(ConflictException);
@@ -432,7 +432,7 @@ describe('TranscriptEditingService', () => {
           baseVersion: 3,
           clientBatchId: 'mixed-batch',
           ops: [
-            { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Oscar' },
+            { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Orlo' },
             { op: OP_TYPES.UPDATE_TEXT, segmentId: 's1', rev: 1, text: 'updated text' },
           ],
         } as never,
@@ -450,9 +450,9 @@ describe('TranscriptEditingService', () => {
       expect(tx.transcriptSpeaker.updateMany).not.toHaveBeenCalled();
     });
 
-    it('records renaming an already-identified speaker (Oscar -> Joe) as a version, not an identification', async () => {
+    it('records renaming an already-identified speaker (Orlo -> Jonty) as a version, not an identification', async () => {
       const identified = [
-        { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
+        { id: 'A', label: 'A', displayName: 'Orlo', colorIndex: 0, rev: 1 },
         speakerRows[1],
       ];
 
@@ -463,15 +463,15 @@ describe('TranscriptEditingService', () => {
         TRANSCRIPT_ID,
         {
           baseVersion: 3,
-          clientBatchId: 'oscar-to-joe',
-          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' }],
+          clientBatchId: 'orlo-to-jonty',
+          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Jonty' }],
         } as never,
         USER,
       );
 
       expect(versionCreate).toHaveBeenCalled();
       expect(recordedOps()).toEqual([
-        { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' },
+        { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Jonty' },
       ]);
       expect(tx.transcriptSpeaker.updateMany).not.toHaveBeenCalled();
 
@@ -489,7 +489,7 @@ describe('TranscriptEditingService', () => {
 
     it('still answers a versioned rename when the emit throws (#405)', async () => {
       const identified = [
-        { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
+        { id: 'A', label: 'A', displayName: 'Orlo', colorIndex: 0, rev: 1 },
         speakerRows[1],
       ];
 
@@ -503,8 +503,8 @@ describe('TranscriptEditingService', () => {
         TRANSCRIPT_ID,
         {
           baseVersion: 3,
-          clientBatchId: 'oscar-to-joe-throws',
-          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' }],
+          clientBatchId: 'orlo-to-jonty-throws',
+          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Jonty' }],
         } as never,
         USER,
       );
@@ -517,8 +517,8 @@ describe('TranscriptEditingService', () => {
         TRANSCRIPT_ID,
         {
           baseVersion: 3,
-          clientBatchId: 'create-dana',
-          ops: [{ op: OP_TYPES.CREATE_SPEAKER, displayName: 'Dana' }],
+          clientBatchId: 'create-darcy',
+          ops: [{ op: OP_TYPES.CREATE_SPEAKER, displayName: 'Darcy' }],
         } as never,
         USER,
       );
@@ -546,10 +546,10 @@ describe('TranscriptEditingService', () => {
     });
 
     it('retires the identity entry when a versioned rename puts the speaker back on its placeholder', async () => {
-      speakerIdentities = { A: 'Oscar' };
+      speakerIdentities = { A: 'Orlo' };
 
       const identified = [
-        { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
+        { id: 'A', label: 'A', displayName: 'Orlo', colorIndex: 0, rev: 1 },
         speakerRows[1],
       ];
 
@@ -615,14 +615,14 @@ describe('TranscriptEditingService', () => {
       {
         baseVersion: 3,
         clientBatchId: 'batch-0003',
-        ops: [{ op: OP_TYPES.CREATE_SPEAKER, displayName: 'Dana' }],
+        ops: [{ op: OP_TYPES.CREATE_SPEAKER, displayName: 'Darcy' }],
       } as never,
       USER,
     );
 
     expect(recordedOps()[0]).toMatchObject({
       op: OP_TYPES.CREATE_SPEAKER,
-      displayName: 'Dana',
+      displayName: 'Darcy',
       // Two existing speakers at 0 and 1.
       colorIndex: 2,
     });
@@ -634,7 +634,7 @@ describe('TranscriptEditingService', () => {
       {
         baseVersion: 3,
         clientBatchId: 'batch-0005',
-        ops: [{ op: OP_TYPES.UPDATE_TEXT, segmentId: 's1', rev: 1, text: 'Oscar is great' }],
+        ops: [{ op: OP_TYPES.UPDATE_TEXT, segmentId: 's1', rev: 1, text: 'Orlo is great' }],
       } as never,
       USER,
       { summary: 'Applied 1 AI name correction' },
@@ -649,7 +649,7 @@ describe('TranscriptEditingService', () => {
       {
         baseVersion: 3,
         clientBatchId: 'batch-0006',
-        ops: [{ op: OP_TYPES.UPDATE_TEXT, segmentId: 's1', rev: 1, text: 'Oscar is great' }],
+        ops: [{ op: OP_TYPES.UPDATE_TEXT, segmentId: 's1', rev: 1, text: 'Orlo is great' }],
       } as never,
       USER,
     );

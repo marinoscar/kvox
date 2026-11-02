@@ -31,8 +31,8 @@ describe('containment', () => {
     expect(containment('al', 'alan smith')).toBeNull();
     expect(containment('ave', 'avery example')).toBeNull();
   });
-  it('needs at least 3 letters in the shorter name: Al / Al Pacino is noise', () => {
-    expect(containment('al', 'al pacino')).toBeNull();
+  it('needs at least 3 letters in the shorter name: Al / Alden Stubbs is noise', () => {
+    expect(containment('al', 'alden stubbs')).toBeNull();
     expect(containment('bob', 'bob jones')).toBe('prefix');
   });
   it('ignores stopword-only names and equal names', () => {

@@ -33,7 +33,7 @@ function table(rows: Row[]) {
 
 function db(): KvoxAskDb {
   const entities: Row[] = [
-    { id: id(1), ownerId: OWNER, label: 'Joe', type: 'Person', mergedIntoId: null, reviewStatus: 'accepted' },
+    { id: id(1), ownerId: OWNER, label: 'Jonty', type: 'Person', mergedIntoId: null, reviewStatus: 'accepted' },
     { id: id(2), ownerId: OWNER, label: 'Product X rollout', type: 'Project', mergedIntoId: null, reviewStatus: 'accepted' },
     { id: id(3), ownerId: STRANGER, label: 'Not mine', type: 'Person', mergedIntoId: null, reviewStatus: 'accepted' },
     { id: id(4), ownerId: OWNER, label: 'Merged', type: 'Person', mergedIntoId: id(1), reviewStatus: 'accepted' },
@@ -70,7 +70,7 @@ describe('resolveAskScope (GIC-17)', () => {
     });
     expect(resolved.missing).toBe(false);
     expect(resolved.subjects.map((s) => `${s.kind}:${s.label}`)).toEqual([
-      'ent:Joe',
+      'ent:Jonty',
       'ent:Product X rollout',
       'itm:commitment',
       'rel:INVOLVED_IN',

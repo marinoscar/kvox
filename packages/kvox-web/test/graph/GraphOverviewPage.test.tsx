@@ -28,7 +28,7 @@ import {
   overviewCaption,
 } from '../../src/graph/ui/pages/GraphOverviewPage.js';
 import type { GraphOverview } from '../../src/graph/headless/clients/graph.js';
-import { KAPPA_ID, ANA_ID, SIGMA_ID, JOE_ID, overviewFixture, overviewStates } from './graphData.js';
+import { KAPPA_ID, ANDERS_ID, SIGMA_ID, JONTY_ID, overviewFixture, overviewStates } from './graphData.js';
 import { server } from './msw-compat.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
 import { graphReader, graphWriter } from './graphTestUsers.js';
@@ -182,7 +182,7 @@ describe('GraphOverviewPage — layers', () => {
     await user.click(screen.getByRole('button', { name: 'Everything' }));
     await waitFor(() => expect(currentUrl().searchParams.get('layer')).toBe('nodes'));
     const canvas = screen.getByTestId('fake-canvas');
-    expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(within(canvas).getByRole('button', { name: 'Jonty Placeholder' })).toBeInTheDocument();
     expect(within(canvas).getAllByRole('button')).toHaveLength(overviewFixture().nodes.length + 1);
     expect(screen.getByTestId('edge-count')).toHaveTextContent('0');
 
@@ -194,11 +194,11 @@ describe('GraphOverviewPage — layers', () => {
     const user = userEvent.setup();
     renderOverview('/graph?layer=nodes');
     const canvas = await screen.findByTestId('fake-canvas');
-    await user.click(await within(canvas).findByRole('button', { name: 'Ana Diaz' }));
+    await user.click(await within(canvas).findByRole('button', { name: 'Anders Placeholder' }));
     await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBe('1'));
-    expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toHaveAttribute('data-dimmed', 'false');
+    expect(within(canvas).getByRole('button', { name: 'Anders Placeholder' })).toHaveAttribute('data-dimmed', 'false');
     expect(within(canvas).getByRole('button', { name: 'Org Sigma' })).toHaveAttribute('data-dimmed', 'false');
-    expect(within(canvas).getByRole('button', { name: 'Joe Rivera' })).toHaveAttribute('data-dimmed', 'true');
+    expect(within(canvas).getByRole('button', { name: 'Jonty Placeholder' })).toHaveAttribute('data-dimmed', 'true');
     expect(await screen.findByRole('complementary', { name: 'Org Sigma' })).toBeInTheDocument();
   });
 });
@@ -216,7 +216,7 @@ describe('GraphOverviewPage — cluster selection and drill-down', () => {
     const panel = await screen.findByRole('complementary', { name: 'Org Kappa' });
     expect(within(panel).getByText('6 entities')).toBeInTheDocument();
     expect(within(panel).getByText('Person 3')).toBeInTheDocument();
-    expect(within(panel).getByRole('link', { name: 'Joe Rivera' })).toHaveAttribute('href', `/graph/entities/${JOE_ID}`);
+    expect(within(panel).getByRole('link', { name: 'Jonty Placeholder' })).toHaveAttribute('href', `/graph/entities/${JONTY_ID}`);
     expect(within(panel).getByRole('link', { name: 'Open Org Kappa' })).toHaveAttribute('href', `/graph/entities/${KAPPA_ID}`);
 
     await user.click(within(panel).getByRole('button', { name: 'Close' }));
@@ -250,8 +250,8 @@ describe('GraphOverviewPage — cluster selection and drill-down', () => {
     expect(currentUrl().searchParams.get('cluster')).toBe('1');
     const handoff = takeExplorerHandoff();
     expect(handoff?.title).toBe('Org Sigma');
-    // Ana Diaz and Org Sigma share the top degree; label breaks the tie.
-    expect(handoff?.seedIds.slice(0, 2)).toEqual([ANA_ID, SIGMA_ID]);
+    // Anders Placeholder and Org Sigma share the top degree; label breaks the tie.
+    expect(handoff?.seedIds.slice(0, 2)).toEqual([ANDERS_ID, SIGMA_ID]);
     expect(handoff?.seedIds).toHaveLength(4);
     expect(handoff?.nodes).toContainEqual({ id: SIGMA_ID, label: 'Org Sigma', type: 'Organization', x: 380, y: -150, degree: 3 });
   });
@@ -261,8 +261,8 @@ describe('GraphOverviewPage — cluster selection and drill-down', () => {
     const canvas = await canvasReady();
     fireEvent.doubleClick(within(canvas).getByRole('button', { name: 'Org Kappa (6)' }));
     expect(await screen.findByRole('heading', { name: 'Explorer' })).toBeInTheDocument();
-    // Joe Rivera and Org Kappa share the top degree; label breaks the tie.
-    expect(takeExplorerHandoff()?.seedIds[0]).toBe(JOE_ID);
+    // Jonty Placeholder and Org Kappa share the top degree; label breaks the tie.
+    expect(takeExplorerHandoff()?.seedIds[0]).toBe(JONTY_ID);
   });
 
   it('renders the panel as a bottom sheet on a phone', async () => {
@@ -339,7 +339,7 @@ describe('GraphOverviewPage — list view', () => {
     rows[1].focus();
     await user.keyboard('{Enter}');
     await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBe('1'));
-    expect(within(list).getByRole('link', { name: 'Ana Diaz' })).toBeInTheDocument();
+    expect(within(list).getByRole('link', { name: 'Anders Placeholder' })).toBeInTheDocument();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
 
     await user.click(within(list).getByRole('button', { name: 'Explore this cluster: Org Sigma' }));

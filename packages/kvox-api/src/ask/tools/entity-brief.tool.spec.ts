@@ -7,7 +7,7 @@ import { EntityBriefTool } from './entity-brief.tool.js';
 // =============================================================================
 
 const KAPPA = uid(1);
-const SARAH = uid(2);
+const SASHA = uid(2);
 const EV = (n: number) => uid(100 + n);
 
 const entry = (itemId: string, kind: string, statement: string, over: Record<string, unknown> = {}) => ({
@@ -34,7 +34,7 @@ const brief = (digestStale: boolean) => ({
   digestPending: false,
   digestUnavailable: null,
   sections: {
-    whatChanged: [entry(uid(10), 'decision', 'Renew for a year'), entry(uid(11), 'person_fact', 'Sarah is on leave')],
+    whatChanged: [entry(uid(10), 'decision', 'Renew for a year'), entry(uid(11), 'person_fact', 'Sasha is on leave')],
     decisions: [entry(uid(10), 'decision', 'Renew for a year', { title: 'Renewal' })],
     openCommitments: {
       theirs: [entry(uid(12), 'commitment', 'Send the contract', { dueAt: '2026-10-01T00:00:00.000Z' })],
@@ -48,7 +48,7 @@ const brief = (digestStale: boolean) => ({
         change: 'started',
         at: '2026-09-05T00:00:00.000Z',
         precision: 'day',
-        person: { id: SARAH, label: 'Sarah', type: 'Person' },
+        person: { id: SASHA, label: 'Sasha', type: 'Person' },
         other: { id: KAPPA, label: 'Kappa', type: 'Organization' },
         title: 'CTO',
         evidenceIds: [EV(5)],
@@ -114,8 +114,8 @@ describe('EntityBriefTool', () => {
     expect(data.peopleChanges).toEqual([
       {
         ref: 'rel1',
-        text: 'Sarah started HAS_ROLE (CTO) with Kappa',
-        person: { ref: 'ent2', label: 'Sarah' },
+        text: 'Sasha started HAS_ROLE (CTO) with Kappa',
+        person: { ref: 'ent2', label: 'Sasha' },
         other: { ref: 'ent1', label: 'Kappa' },
         at: '2026-09-05',
         evidence: ['ev4'],

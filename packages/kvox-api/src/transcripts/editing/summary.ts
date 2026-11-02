@@ -4,7 +4,7 @@
 //
 // `transcript_versions.summary` is what a user reads when deciding whether to
 // restore something. "9 operations" tells them nothing; "Renamed Speaker A to
-// Dana, corrected 3 lines" tells them whether this is the save they are looking
+// Darcy, corrected 3 lines" tells them whether this is the save they are looking
 // for.
 //
 // ⚠ GENERATED FROM THE RECORDED OPS, AND FROM NOTHING ELSE. A summary written

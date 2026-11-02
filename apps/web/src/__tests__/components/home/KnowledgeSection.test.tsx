@@ -31,7 +31,7 @@ describe('KnowledgeSection', () => {
 
     const section = await screen.findByRole('region', { name: 'Knowledge' });
     expect(within(section).getAllByRole('listitem')).toHaveLength(6);
-    expect(within(section).getByRole('link', { name: /Joe Rivera/ })).toHaveAttribute(
+    expect(within(section).getByRole('link', { name: /Jonty Placeholder/ })).toHaveAttribute(
       'href',
       `/graph/entities/${graphEntitySummaries[0].id}`,
     );
@@ -59,7 +59,7 @@ describe('KnowledgeSection', () => {
   });
 
   it('is hidden, not crashed, on a 200 whose body is not an entity list', async () => {
-    // PR #415's visual regression: a stub answering `{}` reached render as
+    // PR #415's regression: a stub answering `{}` reached render as
     // `items: undefined` and threw on `.length`, taking the whole app into the
     // root ErrorBoundary. `listGraphEntities` now refuses the shape.
     server.use(http.get('*/api/graph/entities', () => HttpResponse.json({ data: {} })));

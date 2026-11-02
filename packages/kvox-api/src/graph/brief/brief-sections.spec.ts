@@ -4,7 +4,7 @@ import type { BriefEntityRef } from './dto/entity-brief.dto.js';
 // Deterministic ids: the section builder is pure, so readable uuids make failures legible.
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const KAPPA = id(1);
-const SARAH = id(2);
+const SASHA = id(2);
 const BOB = id(3);
 const MEETING = id(4);
 const ev = (n: number) => [id(900 + n)];
@@ -41,7 +41,7 @@ function relation(over: Partial<BriefRelationRow>): BriefRelationRow {
   return {
     id: id(seq),
     type: 'HAS_ROLE',
-    fromId: SARAH,
+    fromId: SASHA,
     toId: KAPPA,
     props: {},
     validFrom: null,
@@ -54,7 +54,7 @@ function relation(over: Partial<BriefRelationRow>): BriefRelationRow {
 
 const entities = new Map<string, BriefEntityRef>([
   [KAPPA, { id: KAPPA, label: 'Kappa', type: 'Organization' }],
-  [SARAH, { id: SARAH, label: 'Sarah', type: 'Person' }],
+  [SASHA, { id: SASHA, label: 'Sasha', type: 'Person' }],
   [BOB, { id: BOB, label: 'Bob', type: 'Person' }],
 ]);
 
@@ -98,11 +98,11 @@ describe('buildBriefSections', () => {
   });
 
   it('never includes a sensitive person fact in any section, and drops uncited rows', () => {
-    const sensitive = item({ kind: 'person_fact', subjectId: SARAH, sensitivity: 'sensitive' });
-    const personal = item({ kind: 'person_fact', subjectId: SARAH, sensitivity: 'personal' });
-    const uncited = item({ subjectId: SARAH, evidenceIds: [] });
+    const sensitive = item({ kind: 'person_fact', subjectId: SASHA, sensitivity: 'sensitive' });
+    const personal = item({ kind: 'person_fact', subjectId: SASHA, sensitivity: 'personal' });
+    const uncited = item({ subjectId: SASHA, evidenceIds: [] });
     const s = buildBriefSections(
-      input({ entity: { id: SARAH, type: 'Person' }, items: [sensitive, personal, uncited] }),
+      input({ entity: { id: SASHA, type: 'Person' }, items: [sensitive, personal, uncited] }),
     );
     const all = JSON.stringify(s);
     expect(all).not.toContain(sensitive.id);
@@ -111,21 +111,21 @@ describe('buildBriefSections', () => {
   });
 
   it('splits open commitments into theirs (owner) and yours (counterparty) for a Person', () => {
-    const theirs = item({ kind: 'commitment', status: 'open', ownerPersonId: SARAH, counterpartyId: BOB });
-    const yours = item({ kind: 'commitment', status: 'open', ownerPersonId: BOB, counterpartyId: SARAH });
-    const done = item({ kind: 'commitment', status: 'done', ownerPersonId: SARAH });
-    const s = buildBriefSections(input({ entity: { id: SARAH, type: 'Person' }, items: [theirs, yours, done] }));
+    const theirs = item({ kind: 'commitment', status: 'open', ownerPersonId: SASHA, counterpartyId: BOB });
+    const yours = item({ kind: 'commitment', status: 'open', ownerPersonId: BOB, counterpartyId: SASHA });
+    const done = item({ kind: 'commitment', status: 'done', ownerPersonId: SASHA });
+    const s = buildBriefSections(input({ entity: { id: SASHA, type: 'Person' }, items: [theirs, yours, done] }));
     expect(s.openCommitments.theirs.map((e) => e.itemId)).toEqual([theirs.id]);
     expect(s.openCommitments.yours.map((e) => e.itemId)).toEqual([yours.id]);
-    expect(s.openCommitments.theirs[0].ownerPerson).toEqual(entities.get(SARAH));
+    expect(s.openCommitments.theirs[0].ownerPerson).toEqual(entities.get(SASHA));
     expect(s.openCommitments.theirs[0].counterparty).toEqual(entities.get(BOB));
   });
 
   it("uses the Organization's current workers for theirs", () => {
-    const byWorker = item({ kind: 'commitment', status: 'open', ownerPersonId: SARAH });
+    const byWorker = item({ kind: 'commitment', status: 'open', ownerPersonId: SASHA });
     const byStranger = item({ kind: 'commitment', status: 'open', ownerPersonId: BOB });
     const toKappa = item({ kind: 'commitment', status: 'open', ownerPersonId: BOB, counterpartyId: KAPPA });
-    const s = buildBriefSections(input({ items: [byWorker, byStranger, toKappa], workerIds: new Set([SARAH]) }));
+    const s = buildBriefSections(input({ items: [byWorker, byStranger, toKappa], workerIds: new Set([SASHA]) }));
     expect(s.openCommitments.theirs.map((e) => e.itemId)).toEqual([byWorker.id]);
     expect(s.openCommitments.yours.map((e) => e.itemId)).toEqual([toKappa.id]);
   });
@@ -186,8 +186,8 @@ describe('buildBriefSections: Open risks (#664)', () => {
   });
 
   it('is omitted for other entity types and when the work domain is off', () => {
-    const r = risk({ subjectId: SARAH });
-    expect(buildBriefSections(input({ entity: { id: SARAH, type: 'Person' }, openRisksEnabled: true, items: [r] }))).not.toHaveProperty('openRisks');
+    const r = risk({ subjectId: SASHA });
+    expect(buildBriefSections(input({ entity: { id: SASHA, type: 'Person' }, openRisksEnabled: true, items: [r] }))).not.toHaveProperty('openRisks');
     expect(buildBriefSections(input({ items: [risk({})] }))).not.toHaveProperty('openRisks');
     expect(buildBriefSections(input({ openRisksEnabled: false, items: [risk({})] }))).not.toHaveProperty('openRisks');
   });
@@ -203,7 +203,7 @@ describe('buildPeopleChanges', () => {
       ['ended', 'Engineer', at.toISOString()],
       ['started', 'Staff Engineer', at.toISOString()],
     ]);
-    expect(changes[0].person).toEqual(entities.get(SARAH));
+    expect(changes[0].person).toEqual(entities.get(SASHA));
     expect(changes[0].other).toEqual(entities.get(KAPPA));
   });
 

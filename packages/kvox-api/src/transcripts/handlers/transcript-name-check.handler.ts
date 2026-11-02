@@ -53,8 +53,8 @@ import { loadNameCheckInput, type NameCheckInput } from '../name-check-input.js'
 // `transcript.name_check` (issues #328 and #330, epic #326)
 // =============================================================================
 //
-// After a user renames speaker "A" to "Oscar", the ASR text still says what the
-// provider heard: "Skar", "Oh scar". This job PROPOSES corrections; it never
+// After a user renames speaker "A" to "Orlo", the ASR text still says what the
+// provider heard: "Rolo", "Or low". This job PROPOSES corrections; it never
 // makes one. Its output is `transcript_name_suggestions` rows, and accepting
 // one is an ordinary `segment.update_text` through `TranscriptEditingService`
 // — the same versioned path every other correction takes.
