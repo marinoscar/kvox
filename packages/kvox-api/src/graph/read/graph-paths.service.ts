@@ -115,6 +115,8 @@ export class GraphPathsService {
     const relationTypes = resolveRelationTypes(schema, query.relationTypes, 'relationTypes');
     const asOf = asOfOr400(query.as_of);
     const ownerId = user.id;
+    // Before the transaction (#805): this read uses the root client.
+    const selfId = await this.neighborhood.selfEntityId(ownerId);
 
     const result = await withGraphStatementTimeout(
       this.prisma,
@@ -188,7 +190,7 @@ export class GraphPathsService {
           for (const n of p.nodeIds) chosenNodes.add(n);
           for (const e of p.edgeIds) chosenEdges.add(e);
         }
-        const nodes = await this.loadNodes(tx, ownerId, [...chosenNodes], from, to, degree);
+        const nodes = await this.loadNodes(tx, ownerId, [...chosenNodes], from, to, degree, selfId);
         const sliceEdges = enriched.filter((e) => chosenEdges.has(e.id));
 
         return { top, nodes, sliceEdges, truncated: capped || found.truncated };
@@ -297,6 +299,7 @@ export class GraphPathsService {
     from: string,
     to: string,
     degree: Map<string, number>,
+    selfId: string | null,
   ): Promise<GraphNode[]> {
     const [entities, items] = await Promise.all([
       this.neighborhood.loadEntities(tx, ownerId, ids, undefined),
@@ -306,7 +309,7 @@ export class GraphPathsService {
     const nodes: GraphNode[] = [...entities, ...items]
       .map((n) => ({ ...n, depth: n.id === from || n.id === to ? 0 : 1, degree: degree.get(n.id) ?? 0 }))
       .sort((a, b) => rank(a.id) - rank(b.id) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    return this.neighborhood.enrichNodes(tx, ownerId, nodes);
+    return this.neighborhood.enrichNodes(tx, ownerId, nodes, selfId);
   }
 }
 

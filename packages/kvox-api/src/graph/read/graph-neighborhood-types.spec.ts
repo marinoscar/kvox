@@ -57,18 +57,23 @@ describe('GraphNeighborhoodService.enrichNodes marks the owner (#778)', () => {
   const tx = { $queryRaw: jest.fn().mockResolvedValue([]) } as never;
 
   it('sets isSelf on the chosen Person and on no other node', async () => {
-    const self = { entityId: jest.fn().mockResolvedValue(ME) };
-    const svc = new GraphNeighborhoodService({} as never, {} as never, {} as never, self as never);
-    const out = await svc.enrichNodes(tx, 'o', [node(ME, 'Person'), node(OTHER, 'Person'), node('i1', 'decision', 'item')]);
+    const svc = new GraphNeighborhoodService({} as never, {} as never, {} as never);
+    const out = await svc.enrichNodes(tx, 'o', [node(ME, 'Person'), node(OTHER, 'Person'), node('i1', 'decision', 'item')], ME);
     expect(out.map((n) => n.isSelf)).toEqual([true, undefined, undefined]);
   });
 
-  it('does not look the owner up when the slice holds no Person, or when none is chosen', async () => {
-    const self = { entityId: jest.fn().mockResolvedValue(null) };
+  it('never reads the self identity itself: the caller resolves it before the transaction (#805)', async () => {
+    const self = { entityId: jest.fn().mockResolvedValue(ME) };
     const svc = new GraphNeighborhoodService({} as never, {} as never, {} as never, self as never);
-    await svc.enrichNodes(tx, 'o', [node(OTHER, 'Organization')]);
+    const out = await svc.enrichNodes(tx, 'o', [node(OTHER, 'Person')], null);
     expect(self.entityId).not.toHaveBeenCalled();
-    const out = await svc.enrichNodes(tx, 'o', [node(OTHER, 'Person')]);
     expect(out[0]).not.toHaveProperty('isSelf');
+  });
+
+  it('selfEntityId resolves through GraphSelfService, and is null without one', async () => {
+    const self = { entityId: jest.fn().mockResolvedValue(ME) };
+    await expect(new GraphNeighborhoodService({} as never, {} as never, {} as never, self as never).selfEntityId('o')).resolves.toBe(ME);
+    expect(self.entityId).toHaveBeenCalledWith('o');
+    await expect(new GraphNeighborhoodService({} as never, {} as never, {} as never).selfEntityId('o')).resolves.toBeNull();
   });
 });

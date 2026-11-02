@@ -597,6 +597,21 @@ describe('the graph and Ask on the bare host, end to end', () => {
     expect(await orphans('kg_items', 'item')).toBe(0);
   });
 
+  it('11d. reads a neighbourhood that holds the owner\'s own Person (#805: the self identity is resolved before the transaction)', { timeout: 120_000 }, async () => {
+    const joe = people.get('Joe Park') as string;
+    const { KVOX_SETTINGS } = load('@marinoscar/kvox-api/ports') as typeof import('@marinoscar/kvox-api/ports');
+    const { LOCAL_USER_ID } = load('../dist/seed.js') as typeof import('../src/seed.js');
+    const settings = host.resolve(KVOX_SETTINGS as never) as import('@marinoscar/kvox-api/ports').KvoxSettingsPort;
+    await settings.patchUser(LOCAL_USER_ID, 'graph', { self: { entityId: joe } } as never);
+    try {
+      const slice = await json(await guarded(`/api/graph/entities/${joe}/neighborhood`));
+      const self = (slice.nodes as Array<{ id: string; isSelf?: boolean }>).find((n) => n.id === joe);
+      expect(self?.isSelf).toBe(true);
+    } finally {
+      await settings.patchUser(LOCAL_USER_ID, 'graph', { self: { entityId: null } } as never);
+    }
+  });
+
   it('12. refuses at COMMIT a transaction that strips an accepted entity of its evidence (the trigger, proven)', async () => {
     // LAST on purpose: on PGlite the socket drops the connection after this SQL error.
     const joe = people.get('Joe Park') as string;
