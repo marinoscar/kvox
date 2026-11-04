@@ -4,9 +4,9 @@
 
 Claude Code loads the shared rules above (project overview, structure, every MANDATORY section, key commands) from [AGENTS.md](AGENTS.md). Area rules load from the nested `AGENTS.md` of the folder you work in (`apps/api`, `apps/web`, `apps/cli`). This file adds only what is specific to Claude Code: the documentation table, the subagent delegation rules and the cloud-session exception. How Claude Code and OpenCode share these files: [docs/AI-ASSISTANTS.md](docs/AI-ASSISTANTS.md).
 
-## MANDATORY: No real people, companies or user material
+## MANDATORY: No real people, companies, emails or user material
 
-Never use real people, companies or material a user shares as examples, fixtures or test data; use invented placeholders. Rule and exemptions: [AGENTS.md](AGENTS.md#mandatory-no-real-people-companies-or-user-material).
+Zero tolerance: never write a real person's name, a real company or organization name (any case, abbreviation, initials or ticker) or a real email address anywhere in the repo, issues, PRs or commits, and copy nothing from material a user shares. Use invented placeholders and `@example.test`. Scan the staged diff before every commit. Rule, exemptions and scan command: [AGENTS.md](AGENTS.md#mandatory-no-real-people-companies-emails-or-user-material).
 
 ## Cloud sessions
 
