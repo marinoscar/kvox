@@ -16,7 +16,7 @@ import type { RegenerateNoteFields } from '../../src/notes/headless/utils/regene
 function note(overrides: Partial<RegenerateNoteFields> = {}): RegenerateNoteFields {
   return {
     templateId: 'tpl-1',
-    contextText: 'Anders and Bram, the quarterly review.',
+    contextText: 'Person A and Person B, the quarterly review.',
     model: 'gpt-4o-mini',
     ...overrides,
   };
@@ -26,7 +26,7 @@ function note(overrides: Partial<RegenerateNoteFields> = {}): RegenerateNoteFiel
 function form(overrides: Partial<Record<'templateId' | 'contextText' | 'model', string>> = {}) {
   return {
     templateId: 'tpl-1',
-    contextText: 'Anders and Bram, the quarterly review.',
+    contextText: 'Person A and Person B, the quarterly review.',
     model: 'gpt-4o-mini',
     ...overrides,
   };
@@ -45,7 +45,7 @@ describe('buildRegenerateInput — nothing changed', () => {
     // A stray trailing newline in a textarea is not a reason to re-run a model
     // on somebody's own provider account.
     expect(
-      buildRegenerateInput(note(), form({ contextText: '  Anders and Bram, the quarterly review.\n' })),
+      buildRegenerateInput(note(), form({ contextText: '  Person A and Person B, the quarterly review.\n' })),
     ).toEqual({});
   });
 
@@ -92,8 +92,8 @@ describe('buildRegenerateInput — the template', () => {
 describe('buildRegenerateInput — the context', () => {
   it('sends the trimmed text when it was changed', () => {
     expect(
-      buildRegenerateInput(note(), form({ contextText: '  Anders, Bram and Cleo.  ' })),
-    ).toEqual({ contextText: 'Anders, Bram and Cleo.' });
+      buildRegenerateInput(note(), form({ contextText: '  Person A, Person B and Person C.  ' })),
+    ).toEqual({ contextText: 'Person A, Person B and Person C.' });
   });
 
   it('sends `null` — not an omission — when the user cleared text the note had', () => {
@@ -141,7 +141,7 @@ describe('buildRegenerateInput — several changes at once', () => {
     expect(
       buildRegenerateInput(
         note(),
-        form({ templateId: 'tpl-2', model: 'gpt-4o', contextText: 'Anders and Bram, the quarterly review.' }),
+        form({ templateId: 'tpl-2', model: 'gpt-4o', contextText: 'Person A and Person B, the quarterly review.' }),
       ),
     ).toEqual({ templateId: 'tpl-2', model: 'gpt-4o' });
   });

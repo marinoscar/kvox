@@ -163,6 +163,7 @@ describe('Prisma.NoteGenerationScalarFieldEnum', () => {
       'userContent',
       'sourceVersion',
       'contextCapturedAt',
+      'contextAttachments',
       'jobId',
       'expiresAt',
       'startedAt',
