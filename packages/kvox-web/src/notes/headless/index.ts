@@ -22,6 +22,13 @@ export * from './hooks/useNoteLibraries.js';
 export * from './sync/librarySync.js';
 // The per-library lock both the pages and a host's watcher sync through.
 export * from './sync/librarySyncCoordinator.js';
+// Bulk import (#813, #814): ZIP archives unpacked in the browser, the pre-flight
+// manifest, and the uploads that outlive the page that started them. Mount
+// `BatchUploadProvider` ONCE, at the app root; without it the import pages upload in place.
+export * from './sync/archiveExpand.js';
+export * from './sync/prepareNoteImport.js';
+export * from './upload/batchUploadEngine.js';
+export * from './upload/BatchUploadContext.js';
 
 // Pure helpers other screens use.
 export * from './utils/noteSource.js';

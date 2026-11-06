@@ -139,6 +139,9 @@
     "brand:sync": "node scripts/sync-brand-identity.mjs",
     "brand:check": "node scripts/sync-brand-identity.mjs --check"
   },
+  "dependencies": {
+    "fflate": "0.8.3"
+  },
   "peerDependencies": {
     "@antv/g6": "^5.1.1",
     "@marinoscar/kvox-contract": ">=0.0.0-0 || >=0.1.0-0",
