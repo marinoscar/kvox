@@ -1,10 +1,17 @@
 /**
- * `/notes/import-batches/:batchId`: the live progress of one import (issue #720,
- * epic #708). Hundreds of files flow in here: an overall bar (finished of total), the
- * pipeline funnel, status chips that filter the file list, the retries, the way to the
- * Review Queue, and a banner that says what happened once it is done. The page
- * re-reads the batch every two seconds while it works (and only while the tab is
- * visible), and the file list with it.
+ * `/notes/import-batches/:batchId`: the live progress of one import (issues #720, #814;
+ * epics #708, #811). Hundreds of files flow in here: an overall bar (finished of total,
+ * with the upload phase as its buffer), throughput and time left, the pipeline funnel,
+ * status chips, a file-name search and a sort over a virtualized file list, the retries,
+ * a CSV of the failures, the upload controls (pause, resume, cancel, retry) while this
+ * tab is still uploading, the way to the Review Queue, and a banner that says what
+ * happened once it is done.
+ *
+ * The page re-reads the batch every two seconds while it works (and only while the tab
+ * is visible); every read pulls just the items changed since the newest one it holds
+ * (`useAllImportBatchItems().poll`). Files this tab is still uploading come from
+ * `useBatchUpload(batchId)` and are merged with the server's items by path, so every
+ * file shows from the first second.
  */
 
 import Alert from '@mui/material/Alert';
@@ -12,23 +19,40 @@ import AlertTitle from '@mui/material/AlertTitle';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import InputAdornment from '@mui/material/InputAdornment';
 import LinearProgress from '@mui/material/LinearProgress';
 import Link from '@mui/material/Link';
+import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Snackbar from '@mui/material/Snackbar';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import DownloadIcon from '@mui/icons-material/Download';
+import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RateReviewIcon from '@mui/icons-material/RateReview';
 import ReplayIcon from '@mui/icons-material/Replay';
-import { useEffect, useState } from 'react';
+import SearchIcon from '@mui/icons-material/Search';
+import StopIcon from '@mui/icons-material/Stop';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useLocation, useParams } from 'react-router-dom';
 
 import { formatRelativeTime, useKvoxHost, useKvoxPermissionCheck } from '../../../core/headless/index.js';
-import { useImportBatch, useImportBatchItems } from '../../headless/index.js';
-import type { NoteImportBatch, NoteImportItemStatus } from '../../headless/index.js';
-import { ImportBatchItemList } from '../components/ImportBatchItemList.js';
+import { useAllImportBatchItems, useBatchUpload, useImportBatch } from '../../headless/index.js';
+import type { BatchUpload, NoteImportBatch } from '../../headless/index.js';
+import { ImportBatchItemTable } from '../components/ImportBatchItemTable.js';
 import { ImportStageFunnel } from '../components/ImportStageFunnel.js';
 import { pluralize } from '../library/format.js';
+import {
+  buildImportBatchRows,
+  filterImportBatchRows,
+  formatEta,
+  importBatchFailuresCsv,
+  importThroughput,
+  sortImportBatchRows,
+} from '../library/importBatchRows.js';
+import type { ImportBatchRowFilter, ImportBatchRowSort, ImportThroughputSample } from '../library/importBatchRows.js';
 import { summarizeImportFailures } from '../library/useAdHocNoteImport.js';
 import type { NoteImportNavigationState } from '../library/useAdHocNoteImport.js';
 
@@ -105,14 +129,41 @@ export function importCompletionSentence(batch: NoteImportBatch): string {
   return parts.length > 0 ? parts.join(' ') : 'Nothing needed importing.';
 }
 
-const FILTERS: ReadonlyArray<{ status: NoteImportItemStatus | undefined; label: string }> = [
+const FILTERS: ReadonlyArray<{ status: ImportBatchRowFilter | undefined; label: string }> = [
   { status: undefined, label: 'All' },
+  { status: 'uploading', label: 'Uploading' },
+  { status: 'upload_failed', label: 'Upload failed' },
   { status: 'imported', label: 'Imported' },
   { status: 'failed', label: 'Failed' },
   { status: 'missing', label: 'Missing' },
   { status: 'skipped', label: 'Skipped' },
   { status: 'queued', label: 'Queued' },
 ];
+
+const SORTS: ReadonlyArray<{ value: ImportBatchRowSort; label: string }> = [
+  { value: 'name', label: 'Name' },
+  { value: 'stage', label: 'Stage' },
+  { value: 'updated', label: 'Last change' },
+];
+
+/** Whether this tab still has files of the upload to send. */
+function uploadPending(upload: BatchUpload | null | undefined): boolean {
+  if (!upload) return false;
+  return upload.status === 'uploading' || (upload.status === 'paused' && upload.counts.queued + upload.counts.uploading > 0);
+}
+
+/** Hands a text file to the browser to save. */
+function downloadText(text: string, filename: string): void {
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return;
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 
 /**
  * `/notes/import-batches/:batchId`: one import, live.
@@ -135,20 +186,48 @@ export function NoteImportBatchPage({
   const canWrite = hasPermission('notes:write');
   const navState = (location.state ?? null) as NoteImportNavigationState | null;
   const [uploadFailuresOpen, setUploadFailuresOpen] = useState(true);
-  const [filter, setFilter] = useState<NoteImportItemStatus | undefined>(undefined);
-  const [busy, setBusy] = useState<'retry' | 'extractions' | null>(null);
+  const [filter, setFilter] = useState<ImportBatchRowFilter | undefined>(undefined);
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<ImportBatchRowSort>('name');
+  const [busy, setBusy] = useState<'retry' | 'extractions' | 'uploads' | null>(null);
   const [notice, setNotice] = useState<{ severity: 'success' | 'info' | 'error'; text: string } | null>(null);
 
   const batchState = useImportBatch(batchId, pollMs === undefined ? {} : { pollMs });
   const { batch, isLoading, error, notFound, isActive, retryFailed, retryExtractions, retryExtractionsAvailable } =
     batchState;
-  const items = useImportBatchItems(batchId, filter);
-  const { refresh: refreshItems } = items;
+  const items = useAllImportBatchItems(batchId, { q: search });
+  const { poll: pollItems } = items;
+  const uploadState = useBatchUpload(batchId);
+  const upload = uploadState?.upload ?? null;
+  const uploading = uploadPending(upload);
 
-  // Every fresh read of the batch re-reads the rows in view, so a polled page moves together.
+  // Every fresh read of the batch reads the items changed since, so a polled page moves together.
+  const firstBatch = useRef(true);
   useEffect(() => {
-    if (batch) void refreshItems();
+    if (!batch) return;
+    if (firstBatch.current) {
+      firstBatch.current = false;
+      return;
+    }
+    void pollItems();
   }, [batch]);
+
+  const allRows = useMemo(
+    () => buildImportBatchRows(items.searchResults ?? items.items, upload),
+    [items.items, items.searchResults, upload],
+  );
+  const rows = useMemo(
+    () => sortImportBatchRows(filterImportBatchRows(allRows, filter, search), sort),
+    [allRows, filter, search, sort],
+  );
+  const rowCounts = useMemo(() => {
+    const counts: Partial<Record<ImportBatchRowFilter, number>> = {};
+    for (const row of allRows) counts[row.filter] = (counts[row.filter] ?? 0) + 1;
+    return counts;
+  }, [allRows]);
+
+  // Throughput: readings of the finished count over time, kept in a ref (not state).
+  const samples = useRef<ImportThroughputSample[]>([]);
 
   if (notFound) {
     return (
@@ -163,9 +242,23 @@ export function NoteImportBatchPage({
 
   const backTo = batch?.libraryId ? `/notes/libraries/${encodeURIComponent(batch.libraryId)}` : '/notes';
   const backLabel = batch?.libraryId ? 'Library' : 'Notes';
-  const progress = batch ? finishedOf(batch) : { finished: 0, total: 0 };
+  const serverProgress = batch ? finishedOf(batch) : { finished: 0, total: 0 };
+  // Files this tab sends that are not items yet still count toward the whole.
+  const total = Math.max(serverProgress.total, upload ? upload.files.length - upload.counts.cancelled : 0);
+  const progress = { finished: serverProgress.finished, total };
   const percent = progress.total > 0 ? Math.round((progress.finished / progress.total) * 100) : isActive ? 0 : 100;
-  const isFinished = batch !== null && !isActive;
+  const sent = upload ? upload.counts.uploaded + upload.counts.skipped : 0;
+  const uploadPercent = upload && upload.files.length > 0 ? Math.round((sent / upload.files.length) * 100) : 100;
+  const isFinished = batch !== null && !isActive && !uploading;
+  if (batch) {
+    const now = Date.now();
+    const last = samples.current[samples.current.length - 1];
+    if (!last || last.finished !== progress.finished) {
+      samples.current = [...samples.current.filter((sample) => now - sample.at < 600_000), { at: now, finished: progress.finished }];
+    }
+  }
+  const throughput = importThroughput(samples.current, progress.total - progress.finished);
+  const failureCsv = importBatchFailuresCsv(allRows);
   const failedCount = batch?.counts?.failed ?? 0;
   const waitingReview = batch?.stageCounts?.extracted ?? 0;
   const graphAvailable = host.features().graphEnabled !== false && hasPermission('graph:read');
@@ -207,9 +300,33 @@ export function NoteImportBatchPage({
     }
   };
 
+  const onUploads = async (action: 'retry' | 'cancel') => {
+    if (!uploadState) return;
+    setBusy('uploads');
+    try {
+      if (action === 'retry') {
+        const failed = upload?.counts.failed ?? 0;
+        const run = uploadState.retry();
+        setNotice({ severity: 'info', text: `${pluralize(failed, 'upload')} started again.` });
+        await run;
+      } else {
+        await uploadState.cancel();
+        setNotice({ severity: 'info', text: 'Upload stopped. Files already sent are still imported.' });
+      }
+    } catch (err) {
+      setNotice({ severity: 'error', text: err instanceof Error ? err.message : 'That did not work.' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const statusLine = !batch
     ? ''
-    : isActive
+    : uploading
+      ? upload?.status === 'paused'
+        ? `Upload paused at ${sent.toLocaleString()} of ${upload.files.length.toLocaleString()} files`
+        : `Uploading ${sent.toLocaleString()} of ${(upload?.files.length ?? 0).toLocaleString()} files`
+      : isActive
       ? batch.status === 'running' || batch.status === 'scanning'
         ? `Importing ${progress.finished.toLocaleString()} of ${progress.total.toLocaleString()} files`
         : 'Extracting knowledge from the imported notes'
@@ -250,12 +367,25 @@ export function NoteImportBatchPage({
               </Typography>
             </Box>
             <LinearProgress
-              variant="determinate"
+              variant={upload && uploadPercent < 100 ? 'buffer' : 'determinate'}
               value={percent}
+              {...(upload && uploadPercent < 100 ? { valueBuffer: uploadPercent } : {})}
               aria-label="Files imported"
               aria-valuetext={`${progress.finished} of ${progress.total} files done`}
-              sx={{ height: 10, borderRadius: 5, mb: 2 }}
+              sx={{ height: 10, borderRadius: 5, mb: 1 }}
             />
+            {(uploading || (throughput.perMinute !== null && !isFinished)) && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }} aria-live="polite">
+                {[
+                  upload ? `${sent.toLocaleString()} of ${upload.files.length.toLocaleString()} uploaded` : null,
+                  throughput.perMinute !== null ? `${Math.max(1, Math.round(throughput.perMinute)).toLocaleString()} files/min` : null,
+                  throughput.etaMs !== null && throughput.etaMs > 0 ? `${formatEta(throughput.etaMs)} left` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Typography>
+            )}
+            <Box sx={{ mb: 1 }} />
             <ImportStageFunnel stageCounts={batch.stageCounts} />
           </Paper>
 
@@ -274,6 +404,40 @@ export function NoteImportBatchPage({
               <AlertTitle>{failedCount > 0 ? 'Finished with some failures' : 'Done'}</AlertTitle>
               {importCompletionSentence(batch)}
             </Alert>
+          )}
+
+          {upload && (uploading || upload.counts.failed > 0) && upload.status !== 'cancelled' && (
+            <Box
+              role="group"
+              aria-label="Upload controls"
+              sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', mb: 2 }}
+            >
+              {upload.status === 'uploading' && (
+                <Button variant="outlined" startIcon={<PauseIcon />} onClick={() => uploadState?.pause()}>
+                  Pause upload
+                </Button>
+              )}
+              {upload.status === 'paused' && (
+                <Button variant="outlined" startIcon={<PlayArrowIcon />} onClick={() => uploadState?.resume()}>
+                  Resume upload
+                </Button>
+              )}
+              {uploading && (
+                <Button color="error" startIcon={<StopIcon />} onClick={() => void onUploads('cancel')} disabled={busy !== null}>
+                  Cancel upload
+                </Button>
+              )}
+              {upload.counts.failed > 0 && (
+                <Button startIcon={<ReplayIcon />} onClick={() => void onUploads('retry')} disabled={busy !== null}>
+                  {`Retry uploads (${upload.counts.failed.toLocaleString()})`}
+                </Button>
+              )}
+              {uploading && (
+                <Typography variant="body2" color="text.secondary">
+                  Keep this tab open until the upload finishes.
+                </Typography>
+              )}
+            </Box>
           )}
 
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
@@ -299,9 +463,12 @@ export function NoteImportBatchPage({
           </Typography>
           <Box role="group" aria-label="Filter files by status" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
             {FILTERS.map(({ status, label }) => {
-              const count = status
-                ? (batch.counts?.[status] ?? 0)
-                : finishedOf(batch).total;
+              const count =
+                status === undefined
+                  ? Math.max(progress.total, allRows.length)
+                  : status === 'uploading' || status === 'upload_failed'
+                    ? (rowCounts[status] ?? 0)
+                    : (batch.counts?.[status] ?? rowCounts[status] ?? 0);
               if (status && count === 0 && filter !== status) return null;
               const selected = filter === status;
               return (
@@ -316,14 +483,61 @@ export function NoteImportBatchPage({
               );
             })}
           </Box>
-          <ImportBatchItemList
-            items={items.items}
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', mb: 1.5 }}>
+            <TextField
+              size="small"
+              type="search"
+              placeholder="Search files"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              slotProps={{
+                htmlInput: { 'aria-label': 'Search files' },
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              sx={{ flex: '1 1 200px', minWidth: 0 }}
+            />
+            <TextField
+              select
+              size="small"
+              label="Sort"
+              value={sort}
+              onChange={(event) => setSort(event.target.value as ImportBatchRowSort)}
+              sx={{ minWidth: 140 }}
+            >
+              {SORTS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
+            {failureCsv && (
+              <Button
+                startIcon={<DownloadIcon />}
+                onClick={() => downloadText(failureCsv, `import-${batchId ?? 'batch'}-failures.csv`)}
+              >
+                Export failures (CSV)
+              </Button>
+            )}
+          </Box>
+          <ImportBatchItemTable
+            rows={rows}
             isLoading={items.isLoading}
             error={items.error}
-            hasMore={items.hasMore}
-            isLoadingMore={items.isLoadingMore}
-            onLoadMore={() => void items.loadMore()}
-            emptyText={filter ? 'No files with this status.' : 'No files in this import yet.'}
+            canReview={graphAvailable}
+            {...(uploadState && canWrite ? { onRetryUpload: (path: string) => void uploadState.retry([path]) } : {})}
+            emptyText={
+              search.trim()
+                ? 'No files match your search.'
+                : filter
+                  ? 'No files with this status.'
+                  : 'No files in this import yet.'
+            }
           />
         </>
       )}
@@ -346,7 +560,9 @@ export function NoteImportBatchPage({
       </Snackbar>
       {batch && !isFinished && (
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          You can leave this page; the import keeps going.{' '}
+          {uploading
+            ? 'You can open other pages while the files upload; do not close this tab.'
+            : 'You can leave this page; the import keeps going.'}{' '}
           <Link component={RouterLink} to="/notes">
             Go to your notes
           </Link>
