@@ -120,7 +120,7 @@ export type { ResolvedSource, SourceSelector } from './generation/note-source.se
 export { NoteTitleService } from './generation/note-title.service.js';
 export type { TitleNoteInput } from './generation/note-title.service.js';
 export { assemblePrompt, parseTemplateStructure } from './generation/prompt.js';
-export type { AssemblePromptInput, AssembledPrompt } from './generation/prompt.js';
+export type { AssemblePromptInput, AssembledPrompt, PromptContextDocument } from './generation/prompt.js';
 export {
   budgetFromTarget,
   NOTE_GENERATE_AI_FEATURE,
@@ -229,6 +229,7 @@ export type {
   KvoxNotesTx,
   NoteExportRow,
   NoteGenerationRow,
+  NoteContextAttachmentRow,
   NoteRow,
   NoteLibraryRow,
   NoteLibraryFileRow,
