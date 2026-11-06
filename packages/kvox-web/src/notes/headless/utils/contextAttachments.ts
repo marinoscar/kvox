@@ -4,8 +4,8 @@
  * The files a user attaches to a note's Context: documents (their extracted text joins the
  * prompt) and images (sent to a vision-capable model). Everything here is free of React so
  * the type checks, the per-item state and the error sentences can be asserted by calling a
- * function. The hook (`hooks/useContextAttachments.ts`) and the field (`ui/components/
- * ContextAttachmentsField.tsx`) are built on it.
+ * function. The hook (`hooks/useContextAttachments.ts`) and the field
+ * (`ui/components/ContextAttachmentsField.tsx`) are built on it.
  *
  * ⚠ THE SERVER DECIDES. The checks below mirror the upload route so a user is told before a
  * byte is sent, but the route checks the type (and an image's leading bytes) again, and the
