@@ -86,6 +86,18 @@ export const KVOX_ERROR_CODES = {
     slice: 'graph',
     description: 'The resolved model cannot do what the task needs (structured output, tool calls).',
   },
+  ai_model_no_vision: {
+    code: 'ai_model_no_vision',
+    status: 409,
+    slice: 'notes',
+    description: 'An image is attached as note context but the resolved model cannot read images.',
+  },
+  context_attachment_not_ready: {
+    code: 'context_attachment_not_ready',
+    status: 409,
+    slice: 'notes',
+    description: 'A context attachment is still being extracted, or its extraction found no readable text.',
+  },
   graph_disabled: {
     code: 'graph_disabled',
     status: 409,
@@ -202,6 +214,18 @@ export const KVOX_ERROR_CODES = {
   },
 
   // --- 400: requests invalid in themselves ----------------------------------
+  context_attachment_unsupported_type: {
+    code: 'context_attachment_unsupported_type',
+    status: 400,
+    slice: 'notes',
+    description: 'A context attachment is not a type the notes slice accepts (documents and images only).',
+  },
+  context_attachment_limit: {
+    code: 'context_attachment_limit',
+    status: 400,
+    slice: 'notes',
+    description: 'More context attachments than a note may carry.',
+  },
   span_mismatch: {
     code: 'span_mismatch',
     status: 400,
