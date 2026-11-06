@@ -5137,13 +5137,22 @@ that has no items after 30 minutes is read as `cancelled`. **Error Cases:**
 ##### GET /notes/import-batches/{id}/items
 
 Items oldest first, cursor-paginated. Query: `status` (an item status),
-`cursor`, `limit` (default 50).
+`q` (1 to 200 characters after trimming; keeps items whose filename or path
+contains it, case-insensitive, `%` and `_` match literally), `updatedSince` (an
+ISO-8601 datetime with offset; keeps items whose `updatedAt` is later), `cursor`,
+`limit` (1 to 500, default 50). All filters combine. Without `updatedSince` the
+order is creation time then id; with it the order is `updatedAt` then id, both
+ascending, and `cursor` pages over whichever order applies. A client that holds
+the full list polls with `updatedSince` set to the newest `updatedAt` it has and
+merges the answer by item `id`.
 
 **Requires:** `notes:read`
 
 **Response:** `200` `{ items, nextCursor }`. An item is `{ id, filename, path,
 action (new|changed|missing), status, stage, failureReason, failureMessage,
 noteId, noteVersion, proposalId, proposalStatus, diverged, updatedAt }`.
+
+**Error Cases:** `400` for an empty or over-long `q`, an `updatedSince` that is not an ISO-8601 datetime with offset, a `limit` outside 1 to 500 or not a number, an unknown `status`; `404` for a batch that is not the caller's or does not exist.
 
 ##### POST /notes/import-batches/{id}/files
 
