@@ -120,6 +120,30 @@ export interface NoteRow {
 }
 
 /**
+ * A row of `note_context_attachments` (issue #810).
+ *
+ * @stability experimental
+ */
+export interface NoteContextAttachmentRow {
+  /** The `id` column. */
+  id: string;
+  /** The `note_id` column. */
+  noteId: string;
+  /** The `object_id` column. */
+  objectId: string;
+  /** The `kind` column: `document` or `image`. */
+  kind: string;
+  /** The `filename` column. */
+  filename: string;
+  /** The `mime_type` column. */
+  mimeType: string;
+  /** The `ordinal` column: the order the model sees the attachments in. */
+  ordinal: number;
+  /** The `created_at` column. */
+  createdAt: Date;
+}
+
+/**
  * A row of `note_templates`.
  *
  * @stability experimental
@@ -198,6 +222,8 @@ export interface NoteGenerationRow {
   templateNameSnapshot: string;
   /** The `context_text` column. */
   contextText: string | null;
+  /** The `context_attachments` column: the attachments as they were when requested (issue #810). */
+  contextAttachments?: JsonValue | null;
   /** The `source_type` column. */
   sourceType: NoteSourceTypeValue;
   /** The `source_transcript_id` column. */
@@ -480,6 +506,8 @@ export interface KvoxNotesDelegates {
   noteGeneration: RowDelegate<NoteGenerationRow>;
   /** `note_versions`. */
   noteVersion: RowDelegate<NoteVersionRow>;
+  /** `note_context_attachments` (issue #810). */
+  noteContextAttachment: RowDelegate<NoteContextAttachmentRow>;
   /** `note_exports`. */
   noteExport: RowDelegate<NoteExportRow>;
   /** `transcripts` (reads only: the source of a note). */

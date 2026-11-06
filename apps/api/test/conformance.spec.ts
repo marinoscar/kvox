@@ -713,6 +713,7 @@ describe('kvox-guarded routes', () => {
       'GraphSelfController',
       'GraphSynonymsController',
       'GraphTopicsPromoteController',
+      'NoteContextAttachmentsController',
       'NoteGenerationStreamController',
       'NoteImportController',
       'NoteLibrariesController',

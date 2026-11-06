@@ -51,6 +51,8 @@ export interface NotesServiceTestDeps {
   searchIndex: ConstructorParameters<typeof NotesService>[8];
   /** #309's origin resolver. Optional: only single-note responses reach it. */
   origins?: ConstructorParameters<typeof NotesService>[9];
+  /** The context-attachment service (#810). Optional: a spec without attachments leaves it out. */
+  contextAttachments?: ConstructorParameters<typeof NotesService>[11];
 }
 
 /**
@@ -72,5 +74,7 @@ export function createNotesServiceTestFactory(deps: NotesServiceTestDeps): Notes
     deps.sources,
     deps.searchIndex,
     deps.origins ?? (null as never),
+    undefined,
+    deps.contextAttachments,
   );
 }

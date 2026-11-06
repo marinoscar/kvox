@@ -158,6 +158,14 @@ export class NotePurgeHandler implements KvoxJobHandler, OnModuleInit {
       where: { id: noteId },
       include: { exports: { select: { id: true, objectId: true } } },
     });
+    const attachmentObjectIds = note
+      ? (
+          await this.prisma.noteContextAttachment.findMany({
+            where: { noteId: note.id },
+            select: { objectId: true },
+          })
+        ).map((row) => row.objectId)
+      : [];
 
     if (!note) {
       this.logger.log(`Note ${noteId} is already gone; purge job ${job.id} is a no-op`);
@@ -211,6 +219,10 @@ export class NotePurgeHandler implements KvoxJobHandler, OnModuleInit {
     if (sourceObjectId) {
       removed += await this.purgeSourceDocument(note.id, sourceObjectId);
     }
+
+    // Context attachments (#810): the rows went with the note (`Cascade`); the objects go too,
+    // unless another note still attaches the same one.
+    removed += await this.purgeContextAttachments(attachmentObjectIds);
 
     // ⚠ THE SOURCE CLAUSE IS ONLY TRUE FOR THE TWO POINTERS THIS HANDLER NEVER
     // FOLLOWS. A source DOCUMENT may legitimately have been deleted just above,
@@ -301,6 +313,31 @@ export class NotePurgeHandler implements KvoxJobHandler, OnModuleInit {
           `${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  /**
+   * The objects of a purged note's context attachments, and the extracted text of each document,
+   * except those another note still attaches. Asked AFTER the note row is gone, for the same
+   * reason `purgeSourceDocument` asks then.
+   */
+  private async purgeContextAttachments(objectIds: readonly string[]): Promise<number> {
+    let removed = 0;
+
+    for (const objectId of objectIds) {
+      // Another note may attach it as context, or name it as its source document.
+      const stillUsed =
+        (await this.prisma.noteContextAttachment.count({ where: { objectId } })) +
+        (await this.prisma.note.count({ where: { sourceObjectId: objectId } }));
+
+      if (stillUsed > 0) continue;
+
+      const object = (await this.store.describe([objectId])).get(objectId);
+
+      if (await this.objects.deleteIfPresent(readExtractedObjectId(object?.metadata ?? null))) removed += 1;
+      if (await this.objects.deleteIfPresent(objectId)) removed += 1;
+    }
+
+    return removed;
   }
 
   /**

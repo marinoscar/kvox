@@ -5,7 +5,17 @@ import type { KvoxNotesDb, NoteGenerationRow as NoteGeneration } from './data/no
 import type { NotesActor as RequestUser } from './notes-actor.js';
 import { NoteAccessService } from './access/note-access.service.js';
 import type { NoteGenerationContextResponse } from './dto/note.dto.js';
-import { assemblePrompt, CONTEXT_HEADING, parseTemplateStructure, SOURCE_HEADING } from './generation/prompt.js';
+import {
+  assemblePrompt,
+  ATTACHED_FILE_BEGIN,
+  ATTACHED_FILE_PREFIX,
+  CONTEXT_HEADING,
+  SOURCE_HEADING,
+  attachedFileEnd,
+  attachedImagesLine,
+  parseTemplateStructure,
+} from './generation/prompt.js';
+import { readContextAttachmentsSnapshot } from './context-attachment-snapshot.js';
 import { NoteSourceNameService } from './note-source-name.service.js';
 
 // =============================================================================
@@ -114,13 +124,15 @@ export class NoteGenerationContextService {
     const sourceReadable = (await this.sourceNames.resolveOne(generation, userId)) !== null;
     const sourceRedacted = !sourceReadable;
 
+    const attachments = readContextAttachmentsSnapshot(generation.contextAttachments);
+
     const systemPrompt = stored
       ? generation.systemPrompt
       : await this.rebuildSystemPrompt(generation.templateId);
 
     const userContent =
       stored && generation.userContent !== null && sourceRedacted
-        ? redactSourceMaterial(generation.userContent, generation.contextText)
+        ? redactSourceMaterial(generation.userContent, generation.contextText, attachments)
         : generation.userContent;
 
     return {
@@ -134,6 +146,7 @@ export class NoteGenerationContextService {
       provider: generation.providerId,
       model: generation.model,
       contextText: generation.contextText,
+      attachments,
       sourceType: generation.sourceType,
       sourceVersion: generation.sourceVersion,
       sourceRedacted,
@@ -176,18 +189,70 @@ export class NoteGenerationContextService {
  * ⚠ THE CUT POINT IS COMPUTED, NOT SEARCHED FOR. The user's own Context comes
  * first and can itself contain the words "Source material:", so the first
  * occurrence is not necessarily the heading. `assemblePrompt` writes exactly
- * `[<CONTEXT_HEADING>\n<context>\n\n]<SOURCE_HEADING>\n<source>`, so the
- * expected prefix is rebuilt from the row's `contextText`. If the stored text
- * does not start with it (a row assembled by a different build), EVERYTHING
- * after the heading is withheld — failing closed.
+ * `[<CONTEXT_HEADING>\n<section>[\n\n<section>...]\n\n]<SOURCE_HEADING>\n<source>`, where a
+ * section is the user's context text, an attached document (issue #810) or the attached-images
+ * line. The expected prefix is rebuilt from the row's `contextText` and its attachment snapshot;
+ * an attached document's text is walked past by its own closing line (the row does not keep it
+ * apart from the rest). If the stored text does not start with that prefix (a row assembled by
+ * a different build), EVERYTHING after the heading is withheld — failing closed.
+ *
+ * @param userContent - the stored user message.
+ * @param contextText - the row's `contextText`.
+ * @param attachments - the row's attachment snapshot (documents are walked by filename, images
+ * by count). Omitted for a row without any.
  */
-export function redactSourceMaterial(userContent: string, contextText: string | null): string {
+export function redactSourceMaterial(
+  userContent: string,
+  contextText: string | null,
+  attachments: ReadonlyArray<{ kind: string; filename: string }> = [],
+): string {
+  const withheld = `${SOURCE_HEADING}\n${SOURCE_WITHHELD_NOTICE}`;
   const context = typeof contextText === 'string' ? contextText.trim() : '';
-  const prefix = context.length > 0 ? `${CONTEXT_HEADING}\n${context}\n\n` : '';
+  const documents = attachments.filter((attachment) => attachment.kind !== 'image');
+  const imageCount = attachments.length - documents.length;
 
-  if (userContent.startsWith(`${prefix}${SOURCE_HEADING}`)) {
-    return `${prefix}${SOURCE_HEADING}\n${SOURCE_WITHHELD_NOTICE}`;
+  if (context.length === 0 && documents.length === 0 && imageCount === 0) {
+    // Nothing precedes the source: whatever the row holds, only the notice may remain.
+    return withheld;
   }
 
-  return `${SOURCE_HEADING}\n${SOURCE_WITHHELD_NOTICE}`;
+  // Walk the Context block piece by piece; `pos` ends just after its last section.
+  let pos = 0;
+  const expect = (text: string): boolean => {
+    if (!userContent.startsWith(text, pos)) return false;
+    pos += text.length;
+
+    return true;
+  };
+  let sections = 0;
+  const separator = (): boolean => (sections === 0 ? true : expect('\n\n'));
+
+  if (!expect(`${CONTEXT_HEADING}\n`)) return withheld;
+
+  if (context.length > 0) {
+    if (!expect(context)) return withheld;
+    sections += 1;
+  }
+
+  for (const document of documents) {
+    if (!separator() || !expect(`${ATTACHED_FILE_PREFIX}${document.filename}\n${ATTACHED_FILE_BEGIN}\n`)) {
+      return withheld;
+    }
+
+    const end = attachedFileEnd(document.filename);
+    const at = userContent.indexOf(end, pos);
+
+    if (at < 0) return withheld;
+
+    pos = at + end.length;
+    sections += 1;
+  }
+
+  if (imageCount > 0) {
+    if (!separator() || !expect(attachedImagesLine(imageCount))) return withheld;
+  }
+
+  if (!userContent.startsWith(`\n\n${SOURCE_HEADING}`, pos)) return withheld;
+
+  return `${userContent.slice(0, pos)}\n\n${withheld}`;
 }

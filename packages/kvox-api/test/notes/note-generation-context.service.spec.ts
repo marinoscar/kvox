@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import type { NoteGenerationRow as NoteGeneration } from '../../src/notes/data/notes-db.js';
 
+import { assemblePrompt } from '../../src/notes/generation/prompt.js';
 import { NOTE_NOT_FOUND_MESSAGE } from '../../src/notes/access/note-access.service.js';
 import {
   NO_GENERATION_REASON,
@@ -365,5 +366,65 @@ describe('redactSourceMaterial', () => {
     expect(result).toBe(
       `Context provided by the user:\n${context}\n\nSource material:\n${SOURCE_WITHHELD_NOTICE}`,
     );
+  });
+});
+
+describe('redactSourceMaterial with context attachments (#810)', () => {
+  const attachments = [
+    { kind: 'document', filename: 'agenda.md' },
+    { kind: 'image', filename: 'board.png' },
+    { kind: 'document', filename: 'slides.pptx' },
+  ];
+  const build = (extra: { context?: string | null; documents?: Array<{ filename: string; text: string }>; images?: number }) =>
+    assemblePrompt({
+      templateInstructions: 'x',
+      templateOutputFormat: 'x',
+      templateStructure: [],
+      templateTone: null,
+      templateLength: null,
+      contextText: extra.context ?? null,
+      contextDocuments: extra.documents ?? [],
+      contextImageCount: extra.images ?? 0,
+      sourceText: 'Anders: we ship on Friday.',
+    }).userContent;
+
+  it('keeps the user\'s context and the attached files, and withholds only the source', () => {
+    const userContent = build({
+      context: 'Focus on decisions.',
+      documents: [
+        { filename: 'agenda.md', text: 'Agenda: ship Friday.' },
+        { filename: 'slides.pptx', text: 'Slide 1' },
+      ],
+      images: 1,
+    });
+
+    const result = redactSourceMaterial(userContent, 'Focus on decisions.', attachments);
+
+    expect(result).toContain('Focus on decisions.');
+    expect(result).toContain('Agenda: ship Friday.');
+    expect(result).toContain('Slide 1');
+    expect(result).not.toContain('Anders');
+    expect(result.endsWith(`Source material:\n${SOURCE_WITHHELD_NOTICE}`)).toBe(true);
+  });
+
+  it('is not mis-cut when an attached file itself says "Source material:"', () => {
+    const text = 'Notes.\n\nSource material:\nA decoy.';
+    const userContent = build({ documents: [{ filename: 'agenda.md', text }] });
+
+    const result = redactSourceMaterial(userContent, null, [{ kind: 'document', filename: 'agenda.md' }]);
+
+    expect(result).toContain('A decoy.');
+    expect(result).not.toContain('Anders');
+    expect(result.endsWith(`Source material:\n${SOURCE_WITHHELD_NOTICE}`)).toBe(true);
+  });
+
+  it('fails CLOSED when the snapshot does not describe the stored text', () => {
+    const userContent = build({ documents: [{ filename: 'agenda.md', text: 'Agenda' }] });
+
+    const result = redactSourceMaterial(userContent, null, [{ kind: 'document', filename: 'other.md' }]);
+
+    expect(result).toBe(`Source material:\n${SOURCE_WITHHELD_NOTICE}`);
+    expect(result).not.toContain('Anders');
+    expect(result).not.toContain('Agenda');
   });
 });

@@ -192,6 +192,34 @@ export class NoteGenerationRequestService {
     };
   }
 
+  /**
+   * Refuse an image attachment on a model that cannot read images (issue #810).
+   *
+   * A 409 with `details.reason: ai_model_no_vision`, BEFORE a note, a generation or a job exists.
+   * The answer comes from the AI port's optional `supportsVision`: `false` refuses, and `true`,
+   * `null` (the host does not know) or a port without the method let the call through, so an
+   * unknown model surfaces the provider's own error rather than a guess.
+   */
+  async assertVisionSupported(
+    userId: string,
+    target: KvoxAiTarget,
+    attachments: ReadonlyArray<{ kind: string }>,
+  ): Promise<void> {
+    if (!attachments.some((attachment) => attachment.kind === 'image')) return;
+
+    const supported = await this.ai.supportsVision?.(
+      { userId, orgId: null, feature: NOTE_GENERATE_AI_FEATURE },
+      target,
+    );
+
+    if (supported === false) {
+      throw new NoteAiConflict(
+        'ai_model_no_vision',
+        `The model "${target.model}" cannot read images. Remove the image attachments, or choose a model that accepts images.`,
+      );
+    }
+  }
+
   /** The refusal one failed resolution becomes. */
   private refusal(error: unknown, requested: string | null, messages: GenerationRefusalMessages): unknown {
     if (!(error instanceof KvoxAiError)) return error;

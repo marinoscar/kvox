@@ -58,6 +58,10 @@ describe('NotePurgeHandler', () => {
       noteExport: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      noteContextAttachment: {
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      },
       transcript: { delete: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     };
 
@@ -155,6 +159,25 @@ describe('NotePurgeHandler', () => {
       sourceObjectId: SOURCE_OBJECT,
       id: { not: NOTE_ID },
     });
+  });
+
+  it('removes the objects of its context attachments (#810) unless another note still uses them', async () => {
+    prisma.note.findUnique.mockResolvedValue({
+      id: NOTE_ID,
+      sourceType: 'transcript',
+      sourceTranscriptId: 'transcript-1',
+      sourceObjectId: null,
+      exports: [],
+    });
+    prisma.noteContextAttachment.findMany.mockResolvedValue([{ objectId: 'attach-own' }, { objectId: 'attach-shared' }]);
+    prisma.noteContextAttachment.count.mockImplementation(async ({ where }: { where: { objectId: string } }) =>
+      where.objectId === 'attach-shared' ? 1 : 0,
+    );
+
+    await handler.process(job());
+
+    expect(objects.deleteIfPresent).toHaveBeenCalledWith('attach-own');
+    expect(objects.deleteIfPresent).not.toHaveBeenCalledWith('attach-shared');
   });
 
   it('NEVER touches the source transcript', async () => {

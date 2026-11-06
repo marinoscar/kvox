@@ -91,6 +91,18 @@ export const PLAIN_TEXT_CLOSING_LINE =
   'tables); use blank lines between paragraphs and simple numbered lines for lists, with ' +
   'no preamble and no closing commentary.';
 
+/**
+ * One attached document's extracted text, as the Context block carries it (issue #810).
+ *
+ * @stability experimental
+ */
+export interface PromptContextDocument {
+  /** The name the file was uploaded under. A single line (the upload sanitises it). */
+  filename: string;
+  /** The extracted plain text. */
+  text: string;
+}
+
 /** Everything one assembled prompt is a function of. */
 /**
  * AssemblePromptInput.
@@ -100,6 +112,18 @@ export const PLAIN_TEXT_CLOSING_LINE =
 export interface AssemblePromptInput extends PromptTemplateInput {
   /** `notes.context_text` — the optional free-text Context. */
   contextText: string | null;
+  /**
+   * The attached documents' extracted text (issue #810), in order. Each is rendered inside the
+   * Context block, after the user's own text, under a clear fence. Optional; absent or empty
+   * leaves the prompt byte-for-byte what it was before attachments existed.
+   */
+  contextDocuments?: readonly PromptContextDocument[];
+  /**
+   * How many images ride along with the message (issue #810). The images themselves are not text:
+   * the model receives them as vision input. A one-line note in the Context block tells it they
+   * are context, not source. Optional; 0 or absent adds nothing.
+   */
+  contextImageCount?: number;
   /** The resolved source text (spec §3.2). Never a row, never an id. */
   sourceText: string;
 }
@@ -124,7 +148,31 @@ export const STRUCTURE_HEADING = 'Structure the note with these sections, in thi
 export const TONE_HEADING = 'Tone:';
 export const LENGTH_HEADING = 'Length:';
 export const CONTEXT_HEADING = 'Context provided by the user:';
+/** The line that opens each attached document in the Context block (issue #810). */
+export const ATTACHED_FILE_PREFIX = 'Attached file: ';
+/** The line that opens an attached document's text. */
+export const ATTACHED_FILE_BEGIN = '----- BEGIN FILE CONTENT -----';
 export const SOURCE_HEADING = 'Source material:';
+
+/** The line that closes an attached document's text. Names the file, so one fence is not another's. */
+export function attachedFileEnd(filename: string): string {
+  return `----- END OF ATTACHED FILE: ${filename} -----`;
+}
+
+/** The sentence that tells the model attached images are context. */
+export function attachedImagesLine(count: number): string {
+  return `Attached images: ${count} (sent with this message, in the order attached). They are context, not the source material.`;
+}
+
+/** One attached document, rendered. */
+function renderAttachedFile(document: PromptContextDocument): string {
+  return [
+    `${ATTACHED_FILE_PREFIX}${document.filename}`,
+    ATTACHED_FILE_BEGIN,
+    document.text.trim(),
+    attachedFileEnd(document.filename),
+  ].join('\n');
+}
 
 /**
  * Collapse a stored value to the text that reaches a prompt.
@@ -216,9 +264,17 @@ export function assemblePrompt(input: AssemblePromptInput): AssembledPrompt {
   // ⚠ CONTEXT FIRST, ALWAYS — see the header. `?? ''` in the issue's own
   // wording: an absent context contributes an empty part, which is omitted
   // rather than rendered as an empty heading.
+  //
+  // The Context block is the user's own text, THEN each attached document (issue #810), THEN the
+  // image note. Every piece is optional and an absent one contributes nothing, so a note with no
+  // attachments assembles exactly as it did before.
+  const contextSections: string[] = [];
   const context = clean(input.contextText);
-  if (context.length > 0) {
-    userParts.push(`${CONTEXT_HEADING}\n${context}`);
+  if (context.length > 0) contextSections.push(context);
+  for (const document of input.contextDocuments ?? []) contextSections.push(renderAttachedFile(document));
+  if ((input.contextImageCount ?? 0) > 0) contextSections.push(attachedImagesLine(input.contextImageCount as number));
+  if (contextSections.length > 0) {
+    userParts.push(`${CONTEXT_HEADING}\n${contextSections.join('\n\n')}`);
   }
 
   // The source is pushed even when empty, so the model is never handed a user

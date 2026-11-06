@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type {
   KvoxNotesDb,
   KvoxNotesTx,
+  NoteContextAttachmentRow,
   NoteGenerationRow,
   NoteRow,
   NoteTemplateRow,
@@ -41,6 +42,8 @@ export interface InMemoryNotesDb {
   readonly versions: NoteVersionRow[];
   /** `note_templates`. */
   readonly templates: NoteTemplateRow[];
+  /** `note_context_attachments`. */
+  readonly attachments: NoteContextAttachmentRow[];
 }
 
 function matchesValue(actual: unknown, expected: unknown): boolean {
@@ -155,12 +158,14 @@ export function createInMemoryNotesDb(
     generations?: NoteGenerationRow[];
     versions?: NoteVersionRow[];
     templates?: NoteTemplateRow[];
+    attachments?: NoteContextAttachmentRow[];
   } = {},
 ): InMemoryNotesDb {
   const notes = seed.notes ?? [];
   const generations = seed.generations ?? [];
   const versions = seed.versions ?? [];
   const templates = seed.templates ?? [];
+  const attachments = seed.attachments ?? [];
   let depth = 0;
 
   const now = (): Date => new Date();
@@ -185,6 +190,7 @@ export function createInMemoryNotesDb(
       },
     ),
     noteVersion: delegate<NoteVersionRow>(versions, () => ({ id: randomUUID(), createdAt: now() })),
+    noteContextAttachment: delegate<NoteContextAttachmentRow>(attachments, () => ({ id: randomUUID(), createdAt: now() })),
   };
 
   const unsupported = (name: string) => async (): Promise<never> => {
@@ -216,5 +222,5 @@ export function createInMemoryNotesDb(
     },
   } as unknown as KvoxNotesDb;
 
-  return { db, inTransaction: () => depth > 0, notes, generations, versions, templates };
+  return { db, inTransaction: () => depth > 0, notes, generations, versions, templates, attachments };
 }
