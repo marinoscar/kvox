@@ -55,7 +55,11 @@ export interface ImportBatchItemTableProps {
   height?: number;
 }
 
-/** A row's height on a wide screen. */
+/**
+ * A row's height on a wide screen, in pixels.
+ *
+ * @stability experimental
+ */
 export const IMPORT_BATCH_ROW_HEIGHT = 48;
 /** A card's height on a phone. */
 const CARD_HEIGHT = 92;

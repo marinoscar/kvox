@@ -306,7 +306,12 @@ export function importThroughput(
   samples: readonly ImportThroughputSample[],
   remaining: number,
   windowMs = 120_000,
-): { perMinute: number | null; etaMs: number | null } {
+): {
+  /** Files finished per minute over the window; `null` before two samples. */
+  perMinute: number | null;
+  /** Time left at that rate, in milliseconds; `null` when unknown. */
+  etaMs: number | null;
+} {
   if (samples.length < 2) return { perMinute: null, etaMs: null };
   const last = samples[samples.length - 1]!;
   const first = samples.find((sample) => last.at - sample.at <= windowMs) ?? samples[0]!;

@@ -152,10 +152,15 @@ export interface ExpandZipArchiveOptions {
  * @stability experimental
  */
 export const ARCHIVE_EXPAND_LIMITS = {
+  /** Most entries taken from one archive. */
   maxEntries: 500,
+  /** Largest entry, uncompressed (25 MiB). */
   maxEntryBytes: 25 * 1024 * 1024,
+  /** Most bytes inflated in all (1 GiB). */
   maxTotalBytes: 1024 * 1024 * 1024,
+  /** Largest archive read at all (1 GiB). */
   maxArchiveBytes: 1024 * 1024 * 1024,
+  /** Largest compression ratio of one entry, checked from 1 MiB up. */
   maxRatio: 200,
   /** The ratio check applies to entries at least this large (inflated). */
   ratioFloorBytes: 1024 * 1024,

@@ -152,7 +152,12 @@ function SkippedRows({ rows, maxBytes }: { rows: readonly NoteImportManifestReje
  */
 export function groupImportRejections(
   rejected: readonly NoteImportManifestRejection[],
-): Array<{ reason: NoteImportRejectionReason; rows: NoteImportManifestRejection[] }> {
+): Array<{
+  /** Why the files of this group were skipped. */
+  reason: NoteImportRejectionReason;
+  /** The skipped files, in the order they were found. */
+  rows: NoteImportManifestRejection[];
+}> {
   const groups = new Map<NoteImportRejectionReason, NoteImportManifestRejection[]>();
   for (const row of rejected) {
     const list = groups.get(row.reason) ?? [];
