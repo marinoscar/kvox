@@ -32,7 +32,8 @@
     "20261021200000_add_kg_item_kind_risk",
     "20261023033028_add_note_libraries",
     "20261026184116_add_kg_synonyms",
-    "20261027120000_note_library_auto_commit_inherit"
+    "20261027120000_note_library_auto_commit_inherit",
+    "20261106120000_add_note_context_attachments"
   ],
   "deviations": [
     {

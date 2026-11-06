@@ -51,6 +51,10 @@
     {
       "name": "kg_synonyms_cardinality_chk",
       "table": "kg_synonyms"
+    },
+    {
+      "name": "note_context_attachments_kind_chk",
+      "table": "note_context_attachments"
     }
   ],
   "functions": [

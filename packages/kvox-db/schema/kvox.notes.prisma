@@ -381,6 +381,11 @@ model Note {
   versions     NoteVersion[]
   exports      NoteExport[]
 
+  // Context attachments (issue #810): documents and images the user attached
+  // to supply context for generation. Cascade: attachments are a property of
+  // the note and go with it.
+  contextAttachments NoteContextAttachment[]
+
   // Note libraries (issue #713, epic #708). A note imported from a library
   // file is pointed at by that file row and by the batch items that imported
   // it; both are SetNull, so deleting the note never deletes the library's
@@ -627,6 +632,12 @@ model NoteGeneration {
   userContent       String?   @map("user_content") @db.Text
   sourceVersion     Int?      @map("source_version")
   contextCapturedAt DateTime? @map("context_captured_at") @db.Timestamptz
+
+  // Snapshot of the attachments sent with this generation (issue #810):
+  // `[{ objectId, kind, filename, mimeType }]`. NULL when none were attached
+  // (and for every generation that predates the feature, no backfill). Plain
+  // JSON, no FK: it records what was sent even after an attachment is removed.
+  contextAttachments Json? @map("context_attachments") @db.JsonB
 
   // The `note.generate` job that produced (or is producing) this row, when
   // one exists. `@unique`/nullable/`SetNull`, mirroring `DatabaseBackupRun
@@ -983,6 +994,33 @@ model NoteImportBatchItem {
   @@map("note_import_batch_items")
 }
 
+// -----------------------------------------------------------------------------
+// `note_context_attachments` (issue #810): the documents and images a user
+// attaches to a note as extra generation context. `kind` is 'document' or
+// 'image' (a CHECK constraint in the migration, see schema-objects.json).
+// `objectId` is Restrict, the `Note.sourceObjectId` reasoning: only
+// `note.purge` deleting the referencing row first may remove the object.
+// -----------------------------------------------------------------------------
+model NoteContextAttachment {
+  id       String @id @default(uuid()) @db.Uuid
+  noteId   String @map("note_id") @db.Uuid
+  objectId String @map("object_id") @db.Uuid
+
+  kind     String
+  filename String @db.VarChar(1024)
+  mimeType String @map("mime_type") @db.VarChar(255)
+  ordinal  Int
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  note   Note          @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  object StorageObject @relation("NoteContextAttachmentObject", fields: [objectId], references: [id], onDelete: Restrict)
+
+  @@unique([noteId, objectId])
+  @@index([objectId])
+  @@map("note_context_attachments")
+}
+
 // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
 extend model User {
   // Notes (issue #48, epic #45). Four relations to the note tables, split by
@@ -1019,6 +1057,9 @@ extend model StorageObject {
   // Note libraries (issue #713): the bytes an import batch item reads.
   // SetNull, unlike the two Restrict relations above: an item is history.
   noteImportItems     NoteImportBatchItem[] @relation("NoteImportItemSourceObject")
+
+  // Context attachments (issue #810). Restrict, like `notesAsSourceObject`.
+  noteContextAttachments NoteContextAttachment[] @relation("NoteContextAttachmentObject")
 }
 
 // Back-relations onto the platform's Job (an `extend model` block holds back-relation fields only).
