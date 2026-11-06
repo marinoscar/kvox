@@ -487,3 +487,49 @@ describe('RegenerateNoteDialog — confirming a changed template only', () => {
     expect(onConfirm).toHaveBeenCalledWith({ templateId: 'tpl-2' });
   });
 });
+
+describe('RegenerateNoteDialog — context attachments (#810)', () => {
+  const ATTACHED = [
+    { objectId: 'o1', kind: 'document' as const, filename: 'agenda.pdf', mimeType: 'application/pdf' },
+    { objectId: 'o2', kind: 'image' as const, filename: 'board.png', mimeType: 'image/png' },
+  ];
+
+  it('opens with the note’s own attachments listed', async () => {
+    renderDialog({ note: note({ contextAttachments: ATTACHED }) });
+    const dialog = await screen.findByRole('dialog');
+    const list = within(dialog).getByRole('list', { name: 'Attached files' });
+    expect(within(list).getByText('agenda.pdf')).toBeInTheDocument();
+    expect(within(list).getByText('board.png')).toBeInTheDocument();
+  });
+
+  it('keeps them — omits the field — when they are left alone', async () => {
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog({ note: note({ contextAttachments: ATTACHED }) });
+    await confirm(user);
+    expect(onConfirm).toHaveBeenCalledWith({});
+  });
+
+  it('replaces them with the remaining list when one is removed', async () => {
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog({ note: note({ contextAttachments: ATTACHED }) });
+    await user.click(await screen.findByRole('button', { name: 'Remove agenda.pdf' }));
+    await confirm(user);
+    expect(onConfirm).toHaveBeenCalledWith({ contextAttachmentIds: ['o2'] });
+  });
+
+  it('clears them with an explicit null when every one is removed', async () => {
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog({ note: note({ contextAttachments: ATTACHED }) });
+    await user.click(await screen.findByRole('button', { name: 'Remove agenda.pdf' }));
+    await user.click(screen.getByRole('button', { name: 'Remove board.png' }));
+    await confirm(user);
+    expect(onConfirm).toHaveBeenCalledWith({ contextAttachmentIds: null });
+  });
+
+  it('sends nothing about attachments for a note that has none', async () => {
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog();
+    await confirm(user);
+    expect(onConfirm).toHaveBeenCalledWith({});
+  });
+});

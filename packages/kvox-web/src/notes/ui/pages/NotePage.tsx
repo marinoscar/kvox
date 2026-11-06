@@ -130,6 +130,7 @@ import { NoteSourceMedia } from '../components/NoteSourceMedia.js';
 import { NoteStatusChip } from '../components/NoteStatusChip.js';
 import { RegenerateMenuButton } from '../components/RegenerateMenuButton.js';
 import { RegenerateNoteDialogContainer } from '../components/RegenerateNoteDialogContainer.js';
+import { contextAttachmentErrorMessage } from '../../headless/utils/contextAttachments.js';
 import { RegenerateSameConfirmDialog } from '../components/RegenerateSameConfirmDialog.js';
 import { useNoteTemplateDetail } from '../../headless/hooks/useNoteTemplates.js';
 import { NOTE_ACTIVE_POLL_MS, isNoteInFlight, useNote } from '../../headless/hooks/useNotes.js';
@@ -688,7 +689,8 @@ function NotePageView({ id, slots, ai }: NotePageViewProps) {
       }
 
       setRegenerateError(
-        err instanceof KvoxApiError ? err.message : 'The note could not be regenerated',
+        contextAttachmentErrorMessage(err) ??
+          (err instanceof KvoxApiError ? err.message : 'The note could not be regenerated'),
       );
     } finally {
       setIsRegenerating(false);

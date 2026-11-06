@@ -81,6 +81,8 @@ import type { NoteTemplate } from '../../headless/clients/noteTemplates.js';
 import { ModelSelect } from './ModelSelect.js';
 import { REGENERATE_COST_SENTENCE, buildRegenerateInput } from '../../headless/utils/regenerateInput.js';
 import { TemplateSummary } from './TemplateSummary.js';
+import { useContextAttachments } from '../../headless/hooks/useContextAttachments.js';
+import { ContextAttachmentsField } from './ContextAttachmentsField.js';
 
 /**
  * `MAX_CONTEXT_CHARS` in `packages/kvox-api/src/notes/dto/note-template.dto.ts`.
@@ -185,6 +187,12 @@ export function RegenerateNoteDialog({
   const [templateId, setTemplateId] = useState('');
   const [contextText, setContextText] = useState('');
   const [model, setModel] = useState('');
+  /**
+   * The context attachments (#810), seeded with the note's own on open. Unchanged → omitted
+   * (keep); changed → the new list (replace); emptied → `null` (clear). See `regenerateInput.ts`.
+   */
+  const attachments = useContextAttachments({ initial: note.contextAttachments });
+  const resetAttachments = attachments.reset;
 
   /**
    * ⚠ INITIALISE ON THE FALSE → TRUE TRANSITION, NEVER ON EVERY DEP CHANGE.
@@ -202,10 +210,11 @@ export function RegenerateNoteDialog({
       setTemplateId(note.templateId ?? '');
       setContextText(note.contextText ?? '');
       setModel(initialModel(note, models, currentTemplate, defaultModel));
+      resetAttachments(note.contextAttachments ?? []);
     }
 
     wasOpen.current = open;
-  }, [currentTemplate, defaultModel, models, note, open]);
+  }, [currentTemplate, defaultModel, models, note, open, resetAttachments]);
 
   /**
    * Fill the model in once the list lands — and ONLY then.
@@ -428,6 +437,8 @@ export function RegenerateNoteDialog({
             slotProps={{ htmlInput: { maxLength: MAX_CONTEXT_CHARS } }}
           />
 
+          <ContextAttachmentsField attachments={attachments} disabled={busy} />
+
           <ModelSelect
             value={model}
             onChange={setModel}
@@ -460,9 +471,16 @@ export function RegenerateNoteDialog({
         <Button
           variant="contained"
           onClick={() =>
-            onConfirm(buildRegenerateInput(note, { templateId, contextText, model }))
+            onConfirm(
+              buildRegenerateInput(note, {
+                templateId,
+                contextText,
+                model,
+                contextAttachmentIds: attachments.ids,
+              }),
+            )
           }
-          disabled={busy || templateMissing || modelsUnavailable}
+          disabled={busy || templateMissing || modelsUnavailable || !attachments.allReady}
         >
           {busy ? 'Starting…' : 'Regenerate'}
         </Button>

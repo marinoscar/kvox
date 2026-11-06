@@ -30,6 +30,8 @@ export { ImportBatchItemList, importStageLabel } from './components/ImportBatchI
 export type { ImportBatchItemListProps } from './components/ImportBatchItemList.js';
 export { ImportStageFunnel, importFunnelSteps } from './components/ImportStageFunnel.js';
 export type { ImportFunnelStep, ImportStageFunnelProps } from './components/ImportStageFunnel.js';
+export { ContextAttachmentsField, ContextAttachmentList } from './components/ContextAttachmentsField.js';
+export type { ContextAttachmentsFieldProps, ContextAttachmentListProps } from './components/ContextAttachmentsField.js';
 export { NoteLibraryCard, noteLibraryPath } from './components/NoteLibraryCard.js';
 export type { NoteLibraryCardProps } from './components/NoteLibraryCard.js';
 export {

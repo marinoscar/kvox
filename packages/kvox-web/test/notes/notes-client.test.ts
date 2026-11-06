@@ -7,6 +7,7 @@ import { makeHost } from './helpers.js';
 import type { FakeKvoxWebHost } from '../../src/core/testing/index.js';
 import {
   createNote,
+  getNoteContextAttachmentStatus,
   getNoteDocumentExtraction,
   getNoteVersion,
   getNotes,
@@ -15,6 +16,7 @@ import {
   restoreNoteVersion,
   retitleNote,
   updateNote,
+  uploadNoteContextAttachment,
   uploadNoteSourceDocument,
   importNoteMarkdown,
 } from '../../src/notes/headless/clients/notes.js';
@@ -433,5 +435,81 @@ describe('retitleNote — #185', () => {
     await retitleNote(host, 'n1');
 
     expect(body).toBe('');
+  });
+});
+
+describe('context attachments (#810)', () => {
+  it('uploads multipart with a single "file" part to the context route', async () => {
+    const file = new File(['png'], 'board.png', { type: 'image/png' });
+    let body: FormData | null = null;
+    server.use(
+      http.post(`${API_BASE}/notes/context/attachments`, async ({ request }) => {
+        body = await request.formData();
+        return HttpResponse.json(
+          {
+            data: {
+              objectId: 'obj-9',
+              kind: 'image',
+              filename: 'board.png',
+              mimeType: 'image/png',
+              size: 3,
+              status: 'ready',
+              jobId: null,
+            },
+          },
+          { status: 201 },
+        );
+      }),
+    );
+
+    const result = await uploadNoteContextAttachment(host, file);
+    expect(host.callsTo('POST /notes/context/attachments')).toHaveLength(1);
+    expect([...(body as unknown as FormData).keys()]).toEqual(['file']);
+    expect(result).toMatchObject({ objectId: 'obj-9', kind: 'image', status: 'ready' });
+  });
+
+  function respondWith(data: unknown) {
+    server.use(http.get(`${API_BASE}/notes/context/attachments/:objectId`, () => HttpResponse.json({ data })));
+  }
+
+  it('reads ready and unextractable answers', async () => {
+    respondWith({ objectId: 'obj-1', kind: 'document', status: 'ready', message: null, characters: 50 });
+    await expect(getNoteContextAttachmentStatus(host, 'obj-1')).resolves.toEqual({
+      objectId: 'obj-1',
+      kind: 'document',
+      status: 'ready',
+      message: null,
+      characters: 50,
+    });
+
+    respondWith({ objectId: 'obj-1', kind: 'document', status: 'unextractable', message: 'No text.', characters: null });
+    await expect(getNoteContextAttachmentStatus(host, 'obj-1')).resolves.toMatchObject({
+      status: 'unextractable',
+      message: 'No text.',
+    });
+  });
+
+  it.each([
+    ['no answer', null],
+    ['a status this build does not know', { status: 'weird' }],
+  ])('reports "extracting" for %s', async (_label, data) => {
+    respondWith(data);
+    await expect(getNoteContextAttachmentStatus(host, 'obj-1')).resolves.toMatchObject({ status: 'extracting' });
+  });
+
+  it('sends contextAttachmentIds in the create body', async () => {
+    let sent: Record<string, unknown> | null = null;
+    server.use(
+      http.post(`${API_BASE}/notes`, async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: {} }, { status: 201 });
+      }),
+    );
+    await createNote(host, {
+      templateId: 'tpl-1',
+      source: { type: 'transcript', transcriptId: 't1' },
+      contextAttachmentIds: ['obj-1'],
+    });
+    expect(sent).toMatchObject({ contextAttachmentIds: ['obj-1'] });
   });
 });
