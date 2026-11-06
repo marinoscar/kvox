@@ -296,6 +296,78 @@ describe('NoteLibrariesService', () => {
     );
   });
 
+  describe('listItems filters', () => {
+    function setup() {
+      const ctx = build();
+      ctx.noteImportBatch.findFirst.mockResolvedValue({ id: 'b1' });
+      ctx.noteImportBatchItem.findMany.mockResolvedValue([]);
+      ctx.kgProposal.findMany.mockResolvedValue([]);
+      return ctx;
+    }
+    const lastArgs = (ctx: ReturnType<typeof build>) =>
+      ctx.noteImportBatchItem.findMany.mock.calls.at(-1)![0];
+
+    it('matches q on filename OR path, case-insensitively', async () => {
+      const ctx = setup();
+      await ctx.service.listItems(ACTOR, 'b1', { q: 'Plan_100%', limit: 50 });
+
+      expect(lastArgs(ctx).where).toEqual({
+        batchId: 'b1',
+        OR: [
+          { filename: { contains: 'Plan_100%', mode: 'insensitive' } },
+          { path: { contains: 'Plan_100%', mode: 'insensitive' } },
+        ],
+      });
+      expect(lastArgs(ctx).orderBy).toEqual([{ createdAt: 'asc' }, { id: 'asc' }]);
+    });
+
+    it('combines q with status', async () => {
+      const ctx = setup();
+      await ctx.service.listItems(ACTOR, 'b1', { q: 'a', status: 'failed', limit: 50 });
+
+      expect(lastArgs(ctx).where).toMatchObject({
+        batchId: 'b1',
+        status: 'failed',
+        OR: expect.any(Array),
+      });
+    });
+
+    it('filters by updatedSince and orders by updatedAt, id', async () => {
+      const ctx = setup();
+      await ctx.service.listItems(ACTOR, 'b1', {
+        updatedSince: '2026-11-06T10:00:00.000Z',
+        limit: 50,
+      });
+
+      expect(lastArgs(ctx).where).toEqual({
+        batchId: 'b1',
+        updatedAt: { gt: new Date('2026-11-06T10:00:00.000Z') },
+      });
+      expect(lastArgs(ctx).orderBy).toEqual([{ updatedAt: 'asc' }, { id: 'asc' }]);
+    });
+
+    it('keeps the legacy query unchanged without the new params', async () => {
+      const ctx = setup();
+      await ctx.service.listItems(ACTOR, 'b1', { limit: 50 });
+
+      expect(lastArgs(ctx)).toEqual({
+        where: { batchId: 'b1' },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: 51,
+      });
+    });
+
+    it('answers 404 for a foreign batch', async () => {
+      const ctx = setup();
+      ctx.noteImportBatch.findFirst.mockResolvedValue(null);
+
+      await expect(
+        ctx.service.listItems(ACTOR, 'b1', { q: 'x', limit: 50 })
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(ctx.noteImportBatchItem.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   it('refreshBatchStatus settles a batch with no queued items', async () => {
     const { service, noteImportBatch, noteImportBatchItem } = build();
     noteImportBatch.findUnique.mockResolvedValue({ id: 'b1', status: 'running' });

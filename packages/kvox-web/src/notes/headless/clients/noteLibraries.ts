@@ -245,8 +245,19 @@ export interface ListNoteImportBatchItemsOptions {
   status?: NoteImportItemStatus;
   /** The `nextCursor` of the previous page. */
   cursor?: string;
-  /** At most this many (1 to 200; the server's default is 50). */
+  /** At most this many (1 to 500 on a current server; the server's default is 50). */
   limit?: number;
+  /**
+   * Only items whose file name or path contains this (case-insensitive). A server
+   * without the filter ignores it.
+   */
+  q?: string;
+  /**
+   * Only items changed after this instant (ISO 8601), ordered by `updatedAt` ascending:
+   * the poll of a list already loaded. A server without the filter ignores it and
+   * answers oldest first.
+   */
+  updatedSince?: string;
 }
 
 /**
@@ -265,7 +276,13 @@ export async function listNoteImportBatchItems(
   options: ListNoteImportBatchItemsOptions = {},
 ): Promise<NoteImportBatchItemsPage> {
   const answer = await kvoxGet<unknown>(host, `/notes/import-batches/${enc(id)}/items`, {
-    query: { status: options.status, cursor: options.cursor, limit: options.limit },
+    query: {
+      status: options.status,
+      q: options.q,
+      updatedSince: options.updatedSince,
+      cursor: options.cursor,
+      limit: options.limit,
+    },
   });
   const page = lenient(noteImportBatchItemsPageSchema, answer);
   return {

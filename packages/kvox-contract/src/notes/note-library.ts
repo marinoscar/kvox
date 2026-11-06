@@ -375,6 +375,29 @@ export const noteImportBatchItemSchema = z.object({
 /** @stability experimental */
 export type NoteImportBatchItem = z.infer<typeof noteImportBatchItemSchema>;
 
+/** The most items one `GET /notes/import-batches/:id/items` request returns. @stability experimental */
+export const NOTE_IMPORT_ITEMS_MAX_PAGE_SIZE = 500;
+
+/**
+ * `GET /notes/import-batches/:id/items` query.
+ *
+ * `q` is a case-insensitive substring match on the item's filename or path. `updatedSince` keeps
+ * only items changed after that instant (for polling) and switches the order to
+ * `updatedAt, id` ascending; the cursor then pages over that order.
+ *
+ * @stability experimental
+ */
+export const noteImportBatchItemsQuerySchema = z.object({
+  status: z.enum(NOTE_IMPORT_ITEM_STATUSES).optional(),
+  q: z.string().trim().min(1).max(200).optional(),
+  updatedSince: z.string().datetime({ offset: true }).optional(),
+  cursor: z.string().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(NOTE_IMPORT_ITEMS_MAX_PAGE_SIZE).default(50),
+});
+
+/** @stability experimental */
+export type NoteImportBatchItemsQuery = z.infer<typeof noteImportBatchItemsQuerySchema>;
+
 /**
  * One page of batch items, cursor-paginated.
  *

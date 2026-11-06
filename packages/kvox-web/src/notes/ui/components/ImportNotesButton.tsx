@@ -1,7 +1,8 @@
 /**
  * "Import notes": choose one or more documents (Markdown, text, PDF, Word,
- * PowerPoint), upload them as an ad-hoc import batch, and open the batch's progress
- * page (issue #720, epic #708).
+ * PowerPoint) or ZIP archives of them, review what will be imported in the pre-flight
+ * dialog, then upload them as an ad-hoc import batch and open the batch's progress page
+ * (issues #720, #813, #814; epic #708, #811).
  *
  * A real `<button>` opens a `hidden` `<input type="file" multiple>` (out of the tab
  * order and the accessibility tree), the same pattern as `ImportTranscriptButton`.
@@ -24,6 +25,14 @@ import { useKvoxPermissionCheck } from '../../../core/headless/index.js';
 import { NOTE_IMPORT_DEFAULT_MAX_BYTES } from '../../headless/index.js';
 import { useAdHocNoteImport } from '../library/useAdHocNoteImport.js';
 import { visuallyHidden } from '../visuallyHidden.js';
+import { ImportPreflightDialog } from './ImportPreflightDialog.js';
+
+/**
+ * What the import pickers accept: the importable documents and ZIP archives of them.
+ *
+ * @stability experimental
+ */
+export const NOTE_IMPORT_ACCEPT_WITH_ARCHIVES = `${NOTE_IMPORT_ACCEPT},.zip,application/zip,application/x-zip-compressed`;
 
 /**
  * Props of {@link ImportNotesButton}.
@@ -55,7 +64,9 @@ export function ImportNotesButton({
 }: ImportNotesButtonProps = {}) {
   const hasPermission = useKvoxPermissionCheck();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const { importFiles, isImporting, progress, error, clearError } = useAdHocNoteImport(maxBytes);
+  const { review, confirm, dismiss, isPreparing, preparing, manifest, isImporting, progress, error, clearError } =
+    useAdHocNoteImport(maxBytes);
+  const busy = isImporting || isPreparing;
 
   if (!hasPermission('notes:write')) return null;
 
@@ -63,7 +74,7 @@ export function ImportNotesButton({
     const files = Array.from(event.target.files ?? []);
     // Cleared so choosing the SAME files again after a refusal still fires `change`.
     event.target.value = '';
-    if (files.length > 0) void importFiles(files);
+    if (files.length > 0) void review(files);
   };
 
   const busyLabel =
@@ -76,21 +87,30 @@ export function ImportNotesButton({
       <Button
         variant={variant}
         onClick={() => inputRef.current?.click()}
-        disabled={isImporting}
-        startIcon={isImporting ? <CircularProgress size={16} color="inherit" aria-hidden /> : <FileUploadIcon />}
+        disabled={busy}
+        startIcon={busy ? <CircularProgress size={16} color="inherit" aria-hidden /> : <FileUploadIcon />}
         sx={{ whiteSpace: 'nowrap' }}
       >
-        {isImporting ? busyLabel : label}
+        {isImporting ? busyLabel : isPreparing ? 'Reading files…' : label}
       </Button>
       <input
         ref={inputRef}
         type="file"
         hidden
         multiple
-        accept={NOTE_IMPORT_ACCEPT}
+        accept={NOTE_IMPORT_ACCEPT_WITH_ARCHIVES}
         aria-label="Choose notes to import"
         onChange={handleFiles}
-        disabled={isImporting}
+        disabled={busy}
+      />
+      <ImportPreflightDialog
+        open
+        isPreparing={isPreparing}
+        preparing={preparing}
+        manifest={manifest}
+        maxBytes={maxBytes}
+        onConfirm={() => void confirm()}
+        onCancel={dismiss}
       />
       <Box role="status" aria-live="polite" sx={visuallyHidden}>
         {isImporting ? busyLabel : ''}

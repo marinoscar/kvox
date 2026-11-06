@@ -3,7 +3,8 @@
  *
  * Wraps the page's content; while files are dragged over it an overlay reads "Drop
  * notes to import", and a drop goes through the same path as `ImportNotesButton`
- * (an ad-hoc batch, then its progress page). A folder dragged in contributes nothing:
+ * (the pre-flight dialog, an ad-hoc batch, then its progress page). ZIP archives are
+ * unpacked in the browser (#813). A folder dragged in contributes nothing:
  * folders are libraries ("Add folder"), which keep in sync.
  *
  * Only for a viewer holding `notes:write`; for anyone else the children render
@@ -24,6 +25,7 @@ import { useKvoxPermissionCheck } from '../../../core/headless/index.js';
 import { NOTE_IMPORT_DEFAULT_MAX_BYTES } from '../../headless/index.js';
 import { useAdHocNoteImport } from '../library/useAdHocNoteImport.js';
 import { visuallyHidden } from '../visuallyHidden.js';
+import { ImportPreflightDialog } from './ImportPreflightDialog.js';
 
 /**
  * Props of {@link NotesDropZone}.
@@ -51,7 +53,8 @@ function carriesFiles(event: DragEvent): boolean {
  */
 export function NotesDropZone({ children, maxBytes = NOTE_IMPORT_DEFAULT_MAX_BYTES }: NotesDropZoneProps) {
   const hasPermission = useKvoxPermissionCheck();
-  const { importFiles, isImporting, progress, error, clearError } = useAdHocNoteImport(maxBytes);
+  const { review, confirm, dismiss, isPreparing, preparing, manifest, isImporting, progress, error, clearError } =
+    useAdHocNoteImport(maxBytes);
   const [isOver, setIsOver] = useState(false);
   // dragenter/dragleave fire for every child crossed; count them so the overlay does not flicker.
   const depth = useRef(0);
@@ -81,7 +84,7 @@ export function NotesDropZone({ children, maxBytes = NOTE_IMPORT_DEFAULT_MAX_BYT
     setIsOver(false);
     // A dropped folder shows up as a zero-byte entry with no type: leave it out.
     const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => file.size > 0 || file.type !== '');
-    if (files.length > 0) void importFiles(files);
+    if (files.length > 0) void review(files);
   };
 
   return (
@@ -128,7 +131,7 @@ export function NotesDropZone({ children, maxBytes = NOTE_IMPORT_DEFAULT_MAX_BYT
             <Typography variant="body2" color="text.secondary">
               {isImporting && progress && progress.total > 0
                 ? `${progress.done.toLocaleString()} of ${progress.total.toLocaleString()}`
-                : 'Markdown, text, PDF, Word or PowerPoint'}
+                : 'Markdown, text, PDF, Word, PowerPoint or a ZIP of them'}
             </Typography>
           </Paper>
         </Box>
@@ -136,6 +139,15 @@ export function NotesDropZone({ children, maxBytes = NOTE_IMPORT_DEFAULT_MAX_BYT
       <Box role="status" aria-live="polite" sx={visuallyHidden}>
         {isOver ? 'Drop notes to import' : isImporting ? 'Uploading notes…' : ''}
       </Box>
+      <ImportPreflightDialog
+        open
+        isPreparing={isPreparing}
+        preparing={preparing}
+        manifest={manifest}
+        maxBytes={maxBytes}
+        onConfirm={() => void confirm()}
+        onCancel={dismiss}
+      />
       <Snackbar
         open={Boolean(error)}
         onClose={(_, reason) => {

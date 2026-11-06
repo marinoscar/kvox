@@ -486,3 +486,205 @@ export function useImportBatchItems(
 
   return { items, isLoading, isLoadingMore, error, hasMore: cursor !== null, loadMore, refresh };
 }
+
+// =============================================================================
+// Every item of a batch, kept current (#814)
+// =============================================================================
+
+/**
+ * The page size {@link useAllImportBatchItems} asks for: a current server's largest page,
+ * which is also the most files one batch takes.
+ *
+ * @stability experimental
+ */
+export const IMPORT_BATCH_ITEMS_FULL_PAGE = 500;
+
+/**
+ * Options of {@link useAllImportBatchItems}.
+ *
+ * @stability experimental
+ */
+export interface UseAllImportBatchItemsOptions {
+  /**
+   * A file-name filter. Applied by the server only while the full list is not loaded
+   * (`complete` false); the caller filters the loaded rows itself otherwise.
+   */
+  q?: string;
+  /** Pages read per load, at most. Default 10. */
+  maxPages?: number;
+}
+
+/**
+ * What {@link useAllImportBatchItems} returns.
+ *
+ * @stability experimental
+ */
+export interface UseAllImportBatchItemsResult {
+  /** Every item loaded, oldest first; a changed item keeps its place. */
+  items: NoteImportBatchItem[];
+  /** The first load is in flight. */
+  isLoading: boolean;
+  /** The last load's failure, as a sentence. */
+  error: string | null;
+  /** Every item of the batch is loaded. */
+  complete: boolean;
+  /** The server's answer to `q` while the list is not complete; `null` otherwise. */
+  searchResults: NoteImportBatchItem[] | null;
+  /** Reads every item again. */
+  refresh: () => Promise<void>;
+  /** Reads only the items changed since the newest one seen, and merges them. */
+  poll: () => Promise<void>;
+}
+
+function newestUpdate(items: Iterable<NoteImportBatchItem>): string | null {
+  let newest: string | null = null;
+  let newestMs = -Infinity;
+  for (const item of items) {
+    const ms = Date.parse(item.updatedAt);
+    if (Number.isFinite(ms) && ms > newestMs) {
+      newestMs = ms;
+      newest = item.updatedAt;
+    }
+  }
+  return newest;
+}
+
+/**
+ * Every item of a batch (a batch holds at most 500), read in full pages, then kept
+ * current by `poll`: only the items changed since the newest `updatedAt` seen are read
+ * and merged by id. A server that ignores `updatedSince` answers from the start; the
+ * merge is the same.
+ *
+ * @param id - The batch.
+ * @param options - The server-side search and the page cap.
+ * @returns The items, their state, `refresh` and `poll`.
+ *
+ * @stability experimental
+ */
+export function useAllImportBatchItems(
+  id: string | undefined,
+  options: UseAllImportBatchItemsOptions = {},
+): UseAllImportBatchItemsResult {
+  const host = useKvoxHost();
+  const isMounted = useIsMounted();
+  const maxPages = Math.max(1, options.maxPages ?? 10);
+  const [items, setItems] = useState<NoteImportBatchItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [complete, setComplete] = useState(false);
+  const [searchResults, setSearchResults] = useState<NoteImportBatchItem[] | null>(null);
+  const generation = useRef(0);
+  const inflight = useRef(false);
+  const latest = useRef<{ items: NoteImportBatchItem[]; complete: boolean }>({ items: [], complete: false });
+
+  const readAll = useCallback(
+    async (query: { updatedSince?: string; q?: string }) => {
+      const out: NoteImportBatchItem[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < maxPages; page += 1) {
+        const answer = await listNoteImportBatchItems(host, id!, {
+          ...query,
+          limit: IMPORT_BATCH_ITEMS_FULL_PAGE,
+          ...(cursor ? { cursor } : {}),
+        });
+        out.push(...answer.items);
+        if (!answer.nextCursor) return { items: out, complete: true };
+        cursor = answer.nextCursor;
+      }
+      return { items: out, complete: false };
+    },
+    [host, id, maxPages],
+  );
+
+  const apply = useCallback((next: NoteImportBatchItem[], isComplete: boolean) => {
+    latest.current = { items: next, complete: isComplete };
+    setItems(next);
+    setComplete(isComplete);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    if (!id) return;
+    const mine = generation.current;
+    try {
+      const answer = await readAll({});
+      if (!isMounted() || mine !== generation.current) return;
+      apply(answer.items, answer.complete);
+      setError(null);
+    } catch (err) {
+      if (isMounted() && mine === generation.current) setError(messageFor(err, 'Failed to load the files'));
+    } finally {
+      if (isMounted() && mine === generation.current) setIsLoading(false);
+    }
+  }, [apply, id, isMounted, readAll]);
+
+  const poll = useCallback(async () => {
+    if (!id || inflight.current) return;
+    const { items: current, complete: isComplete } = latest.current;
+    const since = newestUpdate(current);
+    if (!isComplete || since === null) {
+      inflight.current = true;
+      try {
+        await refresh();
+      } finally {
+        inflight.current = false;
+      }
+      return;
+    }
+    const mine = generation.current;
+    inflight.current = true;
+    try {
+      const answer = await readAll({ updatedSince: since });
+      if (!isMounted() || mine !== generation.current) return;
+      if (answer.items.length === 0) return;
+      const at = new Map(latest.current.items.map((item, index) => [item.id, index]));
+      const next = latest.current.items.slice();
+      for (const item of answer.items) {
+        const index = at.get(item.id);
+        if (index === undefined) {
+          at.set(item.id, next.length);
+          next.push(item);
+        } else {
+          next[index] = item;
+        }
+      }
+      apply(next, latest.current.complete && answer.complete);
+      setError(null);
+    } catch (err) {
+      if (isMounted() && mine === generation.current) setError(messageFor(err, 'Failed to load the files'));
+    } finally {
+      inflight.current = false;
+    }
+  }, [apply, id, isMounted, readAll, refresh]);
+
+  useEffect(() => {
+    generation.current += 1;
+    latest.current = { items: [], complete: false };
+    setItems([]);
+    setComplete(false);
+    setIsLoading(true);
+    void refresh();
+  }, [refresh]);
+
+  // The server-side search, only while the full list is not loaded.
+  const q = options.q?.trim() ?? '';
+  useEffect(() => {
+    if (!id || complete || q.length === 0) {
+      setSearchResults(null);
+      return;
+    }
+    let live = true;
+    void (async () => {
+      try {
+        const answer = await listNoteImportBatchItems(host, id, { q, limit: IMPORT_BATCH_ITEMS_FULL_PAGE });
+        if (live && isMounted()) setSearchResults(answer.items);
+      } catch {
+        if (live && isMounted()) setSearchResults(null);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [complete, host, id, isMounted, q]);
+
+  return { items, isLoading, error, complete, searchResults, refresh, poll };
+}

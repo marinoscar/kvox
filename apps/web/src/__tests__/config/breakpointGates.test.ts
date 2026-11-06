@@ -68,6 +68,8 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   '@marinoscar/kvox-web:core/ui/library/LibraryPageFrame.tsx': WHY.libraryFrame,
   '@marinoscar/kvox-web:transcripts/ui/components/TranscriptsLibraryView.tsx': WHY.libraryView,
   '@marinoscar/kvox-web:notes/ui/components/NotesLibraryView.tsx': WHY.libraryView,
+  // #814: the import batch's file list draws card rows on a phone instead of table columns.
+  '@marinoscar/kvox-web:notes/ui/components/ImportBatchItemTable.tsx': WHY.libraryView,
 
   '@marinoscar/kvox-web:transcripts/ui/components/ExportDialog.tsx': WHY.dialog,
   '@marinoscar/kvox-web:transcripts/ui/components/NameCheckDialog.tsx': WHY.dialog,

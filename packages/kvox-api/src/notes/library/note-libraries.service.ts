@@ -401,18 +401,46 @@ export class NoteLibrariesService {
     return { ...row, status: 'cancelled', finishedAt };
   }
 
-  /** A page of a batch's items, oldest first. */
+  /**
+   * A page of a batch's items: oldest first by default; with `updatedSince`, items changed after
+   * it, ordered `updatedAt, id` ascending (the cursor is the last row's id and pages over
+   * whichever order applies). `q` matches the filename or path case-insensitively; Prisma's
+   * `contains` binds the term as a parameter and escapes `%` and `_`, so they match literally.
+   *
+   * No index is added for `q` / `updatedSince`: a batch holds at most ~500 items and
+   * `@@index([batchId, status])` already scopes the scan to the batch.
+   */
   async listItems(
     actor: NotesActor,
     id: string,
-    query: { status?: NoteImportItemStatus | undefined; cursor?: string | undefined; limit: number }
+    query: {
+      status?: NoteImportItemStatus | undefined;
+      q?: string | undefined;
+      updatedSince?: string | undefined;
+      cursor?: string | undefined;
+      limit: number;
+    }
   ): Promise<NoteImportBatchItemsPage> {
     await this.ownedBatch(actor, id);
 
     const after = query.cursor ? decodeItemCursor(query.cursor) : null;
     const rows = await this.prisma.noteImportBatchItem.findMany({
-      where: { batchId: id, ...(query.status ? { status: query.status } : {}) },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      where: {
+        batchId: id,
+        ...(query.status ? { status: query.status } : {}),
+        ...(query.q
+          ? {
+              OR: [
+                { filename: { contains: query.q, mode: 'insensitive' as const } },
+                { path: { contains: query.q, mode: 'insensitive' as const } },
+              ],
+            }
+          : {}),
+        ...(query.updatedSince ? { updatedAt: { gt: new Date(query.updatedSince) } } : {}),
+      },
+      orderBy: query.updatedSince
+        ? [{ updatedAt: 'asc' }, { id: 'asc' }]
+        : [{ createdAt: 'asc' }, { id: 'asc' }],
       take: query.limit + 1,
       ...(after ? { cursor: { id: after }, skip: 1 } : {}),
     });

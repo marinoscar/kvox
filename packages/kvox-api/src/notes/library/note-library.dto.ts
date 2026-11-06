@@ -2,10 +2,11 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import {
-  NOTE_IMPORT_ITEM_STATUSES,
   createNoteImportBatchResponseSchema,
   createNoteLibraryRequestSchema,
   noteImportBatchItemsPageSchema,
+  noteImportBatchItemsQuerySchema,
+  type NoteImportBatchItemsQuery,
   noteImportBatchSchema,
   noteLibraryScanRequestSchema,
   noteLibraryScanResponseSchema,
@@ -13,7 +14,7 @@ import {
   updateNoteLibraryRequestSchema,
 } from '@marinoscar/kvox-contract/notes';
 
-/** The most batches / items one request returns. */
+/** The most batches one list request returns. */
 export const LIBRARY_MAX_PAGE_SIZE = 200;
 
 /** `GET /notes/import-batches` query. @stability experimental */
@@ -22,17 +23,13 @@ export const importBatchListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(LIBRARY_MAX_PAGE_SIZE).default(20),
 });
 
-/** `GET /notes/import-batches/:id/items` query. @stability experimental */
-export const importBatchItemsQuerySchema = z.object({
-  status: z.enum(NOTE_IMPORT_ITEM_STATUSES).optional(),
-  cursor: z.string().min(1).max(200).optional(),
-  limit: z.coerce.number().int().min(1).max(LIBRARY_MAX_PAGE_SIZE).default(50),
-});
+/** `GET /notes/import-batches/:id/items` query (shared with the web client). @stability experimental */
+export const importBatchItemsQuerySchema = noteImportBatchItemsQuerySchema;
 
 /** @stability experimental */
 export type ImportBatchListQuery = z.infer<typeof importBatchListQuerySchema>;
 /** @stability experimental */
-export type ImportBatchItemsQuery = z.infer<typeof importBatchItemsQuerySchema>;
+export type ImportBatchItemsQuery = NoteImportBatchItemsQuery;
 
 export class NoteLibraryDto extends createZodDto(noteLibrarySchema) {}
 export class NoteLibraryListDto extends createZodDto(

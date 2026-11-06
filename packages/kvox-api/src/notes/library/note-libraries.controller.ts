@@ -11,10 +11,11 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ZodValidationPipe } from 'nestjs-zod';
 
 import {
+  NOTE_IMPORT_ITEM_STATUSES,
   createNoteLibraryRequestSchema,
   noteLibraryScanRequestSchema,
   updateNoteLibraryRequestSchema,
@@ -229,9 +230,26 @@ export class NoteLibrariesController {
   @ApiOperation({
     summary: 'List the items of an import batch',
     description:
-      'Oldest first, cursor-paginated, optionally filtered by `status`. Requires `notes:read`.',
+      'Oldest first, cursor-paginated (up to 500 per page), optionally filtered by `status` and by ' +
+      '`q` (case-insensitive substring of the filename or path). With `updatedSince` only items ' +
+      'changed after that instant are returned, ordered by `updatedAt` then id. Requires `notes:read`.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiQuery({ name: 'status', required: false, enum: NOTE_IMPORT_ITEM_STATUSES })
+  @ApiQuery({
+    name: 'q',
+    required: false,
+    type: String,
+    description: 'Filename or path contains (1 to 200 characters)',
+  })
+  @ApiQuery({
+    name: 'updatedSince',
+    required: false,
+    type: String,
+    description: 'ISO-8601 datetime; only items updated after it',
+  })
+  @ApiQuery({ name: 'cursor', required: false, type: String })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: '1 to 500, default 50' })
   @ApiDataResponse(NoteImportBatchItemsPageDto, { description: 'A page of items' })
   @ApiResponse(NOT_FOUND)
   listItems(

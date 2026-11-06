@@ -20,7 +20,7 @@ export {
   importCompletionSentence,
 } from './pages/NoteImportBatchPage.js';
 export type { NoteImportBatchPageProps } from './pages/NoteImportBatchPage.js';
-export { ImportNotesButton } from './components/ImportNotesButton.js';
+export { ImportNotesButton, NOTE_IMPORT_ACCEPT_WITH_ARCHIVES } from './components/ImportNotesButton.js';
 export type { ImportNotesButtonProps } from './components/ImportNotesButton.js';
 export { NotesDropZone } from './components/NotesDropZone.js';
 export type { NotesDropZoneProps } from './components/NotesDropZone.js';
@@ -28,12 +28,35 @@ export { ScanConfirmDialog, scanPlanSummary } from './components/ScanConfirmDial
 export type { ScanConfirmDialogProps } from './components/ScanConfirmDialog.js';
 export { ImportBatchItemList, importStageLabel } from './components/ImportBatchItemList.js';
 export type { ImportBatchItemListProps } from './components/ImportBatchItemList.js';
+// Bulk import (#813, #814): the pre-flight dialog and the virtualized file list.
+export { ImportPreflightDialog, groupImportRejections } from './components/ImportPreflightDialog.js';
+export type { ImportPreflightDialogProps } from './components/ImportPreflightDialog.js';
+export { ImportBatchItemTable, IMPORT_BATCH_ROW_HEIGHT } from './components/ImportBatchItemTable.js';
+export type { ImportBatchItemTableProps } from './components/ImportBatchItemTable.js';
+export {
+  buildImportBatchRows,
+  filterImportBatchRows,
+  formatEta,
+  importBatchFailuresCsv,
+  importThroughput,
+  sortImportBatchRows,
+} from './library/importBatchRows.js';
+export type {
+  ImportBatchRow,
+  ImportBatchRowFilter,
+  ImportBatchRowSort,
+  ImportBatchRowTone,
+  ImportThroughputSample,
+} from './library/importBatchRows.js';
 export { ImportStageFunnel, importFunnelSteps } from './components/ImportStageFunnel.js';
 export type { ImportFunnelStep, ImportStageFunnelProps } from './components/ImportStageFunnel.js';
 export { NoteLibraryCard, noteLibraryPath } from './components/NoteLibraryCard.js';
 export type { NoteLibraryCardProps } from './components/NoteLibraryCard.js';
 export {
   noteImportBatchPath,
+  noteImportRejectionFailure,
+  noteImportRejectionHeading,
+  noteImportRejectionText,
   summarizeImportFailures,
   useAdHocNoteImport,
 } from './library/useAdHocNoteImport.js';

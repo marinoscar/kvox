@@ -130,6 +130,8 @@ describe('the overlays of this app', () => {
     expect(uploads).toContain('location = /api/graph/imports');
     expect(uploads).toContain('location = /api/notes/sources/documents');
     expect(uploads).toMatch(/client_max_body_size 21m;/);
+    // One file of a batch import per request, up to 25 MiB (#812).
+    expect(uploads).toContain('location ~ ^/api/notes/import-batches/[^/]+/files$');
   });
 });
 
