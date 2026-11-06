@@ -1135,3 +1135,138 @@ describe('NewNotePage — hidden templates', () => {
     await waitFor(() => expect(screen.getByLabelText('Template')).toHaveTextContent('Brief'));
   });
 });
+
+describe('NewNotePage — context attachments (#810)', () => {
+  /** Whatever `GET /api/notes/context/attachments/:objectId` should answer with next. */
+  let attachmentStatus: Record<string, unknown>;
+
+  beforeEach(() => {
+    attachmentStatus = { status: 'extracting', message: null, characters: null };
+    server.use(
+      http.post(`${API_BASE}/notes/context/attachments`, async ({ request }) => {
+        const form = await request.formData();
+        const file = form.get('file') as File;
+        const image = file.type.startsWith('image/');
+        return HttpResponse.json(
+          {
+            data: {
+              objectId: image ? '11111111-1111-4111-8111-111111111111' : '22222222-2222-4222-8222-222222222222',
+              kind: image ? 'image' : 'document',
+              filename: file.name,
+              mimeType: file.type,
+              size: file.size,
+              status: image ? 'ready' : 'extracting',
+              jobId: image ? null : 'job-ctx',
+            },
+          },
+          { status: 201 },
+        );
+      }),
+      http.get(`${API_BASE}/notes/context/attachments/:objectId`, ({ params }) =>
+        HttpResponse.json({
+          data: { objectId: String(params.objectId), kind: 'document', ...attachmentStatus },
+        }),
+      ),
+    );
+  });
+
+  it('offers the field under the context, and says images need a vision model', async () => {
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    expect(screen.getByRole('button', { name: 'Attach files' })).toBeInTheDocument();
+    expect(screen.getByText(/Images need a model that can read images/)).toBeInTheDocument();
+  });
+
+  it('omits contextAttachmentIds when nothing is attached', async () => {
+    const user = userEvent.setup();
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    expect(createdBodies[0]).not.toHaveProperty('contextAttachmentIds');
+  });
+
+  it('sends the ready attachments’ ids', async () => {
+    const user = userEvent.setup();
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    await user.upload(
+      screen.getByLabelText('Choose context files'),
+      new File(['png'], 'whiteboard.png', { type: 'image/png' }),
+    );
+    expect(await screen.findByText('Ready · image')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    expect(createdBodies[0].contextAttachmentIds).toEqual(['11111111-1111-4111-8111-111111111111']);
+  });
+
+  it('holds Generate while a document is being read, and says why', async () => {
+    const user = userEvent.setup();
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    await user.upload(
+      screen.getByLabelText('Choose context files'),
+      new File(['# agenda'], 'agenda.md', { type: 'text/markdown' }),
+    );
+    expect(await screen.findByText('Reading the document…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
+    expect(screen.getByText(/Wait for the attached files to finish/)).toBeInTheDocument();
+
+    attachmentStatus = { status: 'ready', message: null, characters: 8 };
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled(), {
+      timeout: 6000,
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    expect(createdBodies[0].contextAttachmentIds).toEqual(['22222222-2222-4222-8222-222222222222']);
+  });
+
+  it('holds Generate on a file that could not be attached until it is removed', async () => {
+    // The chooser's accept list would filter it; a drop or another platform may not.
+    const user = userEvent.setup({ applyAccept: false });
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    await user.upload(
+      screen.getByLabelText('Choose context files'),
+      new File(['x'], 'clip.mp4', { type: 'video/mp4' }),
+    );
+    expect(await screen.findByText(/This type of file cannot be attached/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Remove clip.mp4' }));
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled();
+  });
+
+  it('explains a model that cannot read images, instead of the raw 409', async () => {
+    const user = userEvent.setup();
+    createResponse = () =>
+      HttpResponse.json(
+        {
+          statusCode: 409,
+          code: 'CONFLICT',
+          message: 'ai_model_no_vision raw',
+          details: { reason: 'ai_model_no_vision' },
+        },
+        { status: 409 },
+      );
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    await user.upload(
+      screen.getByLabelText('Choose context files'),
+      new File(['png'], 'whiteboard.png', { type: 'image/png' }),
+    );
+    await screen.findByText('Ready · image');
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    expect(await screen.findByText(/The chosen model cannot read images/)).toBeInTheDocument();
+    expect(screen.queryByText('ai_model_no_vision raw')).toBeNull();
+  });
+});

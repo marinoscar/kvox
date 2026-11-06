@@ -102,7 +102,7 @@ interface Harness {
     commit: jest.Mock;
     markFailed: jest.Mock;
   };
-  sources: { resolve: jest.Mock };
+  sources: { resolve: jest.Mock; resolveContextDocuments: jest.Mock };
   settings: { readSystem: jest.Mock };
   prisma: { noteTemplate: { findUnique: jest.Mock } };
 }
@@ -133,6 +133,7 @@ function harness(options: {
       describe: 'transcript transcript-1 at version 7',
       sourceVersion: 7,
     }),
+    resolveContextDocuments: jest.fn().mockResolvedValue([{ filename: 'agenda.md', text: 'Agenda: ship Friday.' }]),
   };
 
   const settings = {
@@ -688,5 +689,59 @@ describe('classify / describe', () => {
   it('never echoes an unknown error message to the user', () => {
     expect(describeError(new Error('at /srv/app/dist/main.js:12'))).not.toContain('/srv');
     expect(describeError(new KvoxAiError('other', 'a vendor stack trace'))).not.toContain('vendor');
+  });
+});
+
+describe('NoteGenerateHandler: context attachments (#810)', () => {
+  const DOC = { objectId: 'doc-1', kind: 'document', filename: 'agenda.md', mimeType: 'text/markdown' };
+  const IMG = { objectId: 'img-1', kind: 'image', filename: 'board.png', mimeType: 'image/png' };
+
+  it('puts the documents\' text in the Context block and sends the images as vision input', async () => {
+    const h = harness({ generation: generationRow({ contextText: 'Focus on decisions.', contextAttachments: [DOC, IMG] }) });
+
+    await h.handler.process(job());
+
+    expect(h.sources.resolveContextDocuments).toHaveBeenCalledWith([DOC]);
+
+    const request = streamRequest(h.ai) as unknown as { user: string; images?: unknown[] };
+    expect(request.images).toEqual([{ storageObjectId: 'img-1' }]);
+    expect(request.user).toContain('Focus on decisions.');
+    expect(request.user).toContain('Attached file: agenda.md');
+    expect(request.user).toContain('Agenda: ship Friday.');
+    // The fixed order: context (with its files), then the source.
+    expect(request.user.indexOf('Agenda: ship Friday.')).toBeLessThan(request.user.indexOf('Source material:'));
+
+    // What was sent is recorded, text and all.
+    expect(h.generations.recordContext.mock.calls[0][1].userContent).toContain('Agenda: ship Friday.');
+  });
+
+  it('sends no images field, and reads no documents, when there are no attachments', async () => {
+    const h = harness();
+
+    await h.handler.process(job());
+
+    expect(h.sources.resolveContextDocuments).not.toHaveBeenCalled();
+    expect(streamRequest(h.ai)).not.toHaveProperty('images');
+  });
+
+  it('refuses before the provider when the model is known not to read images', async () => {
+    const h = harness({ generation: generationRow({ contextAttachments: [IMG] }) });
+    h.ai.supportsVision = jest.fn().mockResolvedValue(false);
+
+    await h.handler.process(job());
+
+    expect(generateCalls(h.ai)).toHaveLength(0);
+    expect(h.generations.markFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ errorClass: 'refusal', reason: expect.stringContaining('cannot read images') }),
+    );
+  });
+
+  it('lets an unknown model through (the provider answers)', async () => {
+    const h = harness({ generation: generationRow({ contextAttachments: [IMG] }) });
+    h.ai.supportsVision = jest.fn().mockResolvedValue(null);
+
+    await h.handler.process(job());
+
+    expect(generateCalls(h.ai)).toHaveLength(1);
   });
 });

@@ -115,6 +115,9 @@ import {
 } from '../../headless/utils/newNote.js';
 import type { NewNoteDraft } from '../../headless/utils/newNote.js';
 import { useImportBatch, useImportBatchItems } from '../../headless/hooks/useNoteLibraries.js';
+import { useContextAttachments } from '../../headless/hooks/useContextAttachments.js';
+import { contextAttachmentErrorMessage } from '../../headless/utils/contextAttachments.js';
+import { ContextAttachmentsField } from '../components/ContextAttachmentsField.js';
 import { checkNoteImportFiles, importFilesAdHoc } from '../../headless/sync/librarySync.js';
 import type { NoteImportRejectedFile } from '../../headless/sync/librarySync.js';
 import { describeNoteImportFailure, noteImportUploadErrorMessage } from '../../headless/utils/noteImportFailure.js';
@@ -308,6 +311,9 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
   const [activeStep, setActiveStep] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  /** Files attached to the context (#810): uploaded and read as they are chosen. */
+  const attachments = useContextAttachments();
 
   // ---------------------------------------------------------------------------
   // The two pickers' candidates
@@ -608,6 +614,8 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
         // Omitted rather than sent empty: the API treats an absent context as
         // "none", and a blank string would be an empty paragraph in the prompt.
         contextText: draft.contextText.trim() || undefined,
+        // Omitted when none, like the context text (#810).
+        contextAttachmentIds: attachments.ids.length > 0 ? attachments.ids : undefined,
         // ⚠ ONLY WHEN THE USER CHANGED IT. The API resolves the same default
         // this form displays — the template's model, else the deployment's — so
         // sending the unchanged value would pin a model into the request that
@@ -631,6 +639,11 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
           'AI features are not enabled for this deployment, so a note cannot be generated. ' +
             'Your administrator can turn them on.',
         );
+        return;
+      }
+      const attachmentMessage = contextAttachmentErrorMessage(err);
+      if (attachmentMessage) {
+        setSubmitError(attachmentMessage);
         return;
       }
       setSubmitError(err instanceof KvoxApiError ? err.message : 'The note could not be created');
@@ -997,6 +1010,7 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
         placeholder="Who was there, why this happened, and what matters most — anything someone writing this up from the outside would need to know."
         helperText="Placed ahead of the source in the prompt, for this note and every regeneration of it."
       />
+      <ContextAttachmentsField attachments={attachments} disabled={isSubmitting} />
     </Stack>
   );
 
@@ -1015,7 +1029,9 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
       variant="contained"
       startIcon={<AutoAwesomeIcon />}
       onClick={() => void handleGenerate()}
-      disabled={!ready || isSubmitting}
+      // An attachment still uploading or reading, or one that failed, holds Generate: the
+      // field says which (#810).
+      disabled={!ready || isSubmitting || !attachments.allReady}
     >
       {isSubmitting ? 'Starting…' : 'Generate'}
     </Button>

@@ -8,3 +8,4 @@ export * from './note-source-extract.js';
 export * from './note-events.js';
 export * from './note-import.js';
 export * from './note-library.js';
+export * from './note-context-attachment.js';

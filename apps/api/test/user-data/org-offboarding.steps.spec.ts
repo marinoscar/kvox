@@ -70,6 +70,7 @@ describe('runKvoxOrgContent', () => {
     const relation = [
       'kgExport.deleteMany',
       'noteExport.deleteMany',
+      'noteContextAttachment.deleteMany',
       'note.updateMany',
       'transcriptNameCheck.deleteMany',
       'transcriptExport.deleteMany',
@@ -95,6 +96,7 @@ describe('runKvoxOrgContent', () => {
 
     const noteWhere = calls.find((c) => c.call === 'note.updateMany')?.args;
 
+    expect(calls.find((c) => c.call === 'noteContextAttachment.deleteMany')?.args.where).toEqual({ object: { orgId: ORG } });
     expect(noteWhere.where).toEqual({ OR: [{ sourceTranscript: { orgId: ORG } }, { sourceObject: { orgId: ORG } }] });
     expect(noteWhere.data).toEqual({ sourceTranscriptId: null, sourceObjectId: null });
     expect(calls.find((c) => c.call === 'grant.deleteMany')?.args.where.resourceType).toBe('transcript');
@@ -115,6 +117,7 @@ describe('runKvoxOrgContent', () => {
 
     before('kgExport.deleteMany', 'transcript.deleteMany');
     before('noteExport.deleteMany', 'transcript.deleteMany');
+    before('noteContextAttachment.deleteMany', 'transcript.deleteMany');
     before('note.updateMany', 'transcript.deleteMany');
     before('transcriptExport.deleteMany', 'transcript.deleteMany');
     before('transcriptVersion.deleteMany', 'transcript.deleteMany');

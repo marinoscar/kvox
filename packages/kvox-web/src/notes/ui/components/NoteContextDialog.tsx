@@ -36,6 +36,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNoteGenerationContext } from '../../headless/hooks/useNoteGenerationContext.js';
 import type { NoteGenerationContext } from '../../headless/clients/notes.js';
 import { KvoxCopyButton as CopyButton } from '../../../core/ui/index.js';
+import { ContextAttachmentList } from './ContextAttachmentsField.js';
 import { formatDateTime, useDisplayTimeZone } from '@marinoscar/platform-web/timezone/headless';
 
 /** Above this many characters the view is truncated (copy/download are not). */
@@ -288,6 +289,19 @@ export function NoteContextDialog({
             are rebuilt from the template as it is today, and the source material was not
             recorded.
           </Alert>
+        )}
+
+        {context.attachments && context.attachments.length > 0 && (
+          <Box>
+            <Typography variant="subtitle2" component="h3">
+              Attached files
+            </Typography>
+            <Typography variant="caption" color="text.secondary" component="p" sx={{ m: 0 }}>
+              Sent with this generation: a document&apos;s text is in the source material, an
+              image went to the model as an image.
+            </Typography>
+            <ContextAttachmentList attachments={context.attachments} label="Attached files" />
+          </Box>
         )}
 
         {context.sourceRedacted && (

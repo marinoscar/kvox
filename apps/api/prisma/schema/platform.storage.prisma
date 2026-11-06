@@ -69,6 +69,9 @@ model StorageObject {
   // SetNull, unlike the two Restrict relations above: an item is history.
   noteImportItems     NoteImportBatchItem[] @relation("NoteImportItemSourceObject")
 
+  // Context attachments (issue #810). Restrict, like `notesAsSourceObject`.
+  noteContextAttachments NoteContextAttachment[] @relation("NoteContextAttachmentObject")
+
   // composed from app:kvox.transcripts.prisma
   // Back-relations onto the platform's StorageObject (an `extend model` block holds back-relation fields only).
   // Five back-relations from transcripts (issue #24, epic #19), one per

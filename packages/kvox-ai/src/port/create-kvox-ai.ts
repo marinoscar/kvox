@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
-import { AiError, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-ai-providers';
+import { AiError, type AiInputItem, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-ai-providers';
 import {
   KvoxAiError,
   type KvoxAiCapabilities,
   type KvoxAiContext,
+  type KvoxAiImageInput,
   type KvoxAiPort,
   type KvoxAiTarget,
   type KvoxChatEvent as PortChatEvent,
@@ -151,6 +152,34 @@ import { createKvoxAiReadiness, reasoningEffortFor, type KvoxAiReadinessReader }
 // =============================================================================
 
 /** Zero-pads each vector to `width` (a vector already that wide is returned as is). */
+/**
+ * The `input` of a text call: the plain user string, or - when images ride along - one user
+ * message of a text part followed by one image part per stored object (issue #810).
+ *
+ * ⚠ With no images the string is returned untouched, so every existing caller sends exactly what
+ * it sent before.
+ *
+ * @internal
+ */
+export function userInput(user: string, images: readonly KvoxAiImageInput[] | undefined): string | AiInputItem[] {
+  if (images === undefined || images.length === 0) return user;
+
+  return [
+    {
+      type: 'message',
+      role: 'user',
+      content: [
+        { type: 'text', text: user },
+        ...images.map((image) => ({
+          type: 'image' as const,
+          storageObjectId: image.storageObjectId,
+          ...(image.detail !== undefined ? { detail: image.detail } : {}),
+        })),
+      ],
+    },
+  ];
+}
+
 function padVectors(vectors: number[][], width: number): number[][] {
   return vectors.map((vector) =>
     vector.length === width ? vector : [...vector, ...new Array<number>(width - vector.length).fill(0)],
@@ -365,7 +394,14 @@ class KvoxAi implements KvoxAiPort {
 
   async *generateText(
     ctx: KvoxAiContext,
-    req: { target: KvoxAiTarget; system: string; user: string; maxOutputTokens?: number },
+    req: {
+      target: KvoxAiTarget;
+      system: string;
+      user: string;
+      maxOutputTokens?: number;
+      /** Images sent with the user message, by stored object (issue #810). */
+      images?: readonly KvoxAiImageInput[];
+    },
   ): AsyncIterable<PortTextEvent> {
     const feature = this.featureFor(ctx);
     const guard = await this.guard(ctx.signal);
@@ -375,7 +411,7 @@ class KvoxAi implements KvoxAiPort {
       const effort = await this.effortFor(ctx.userId, feature, req.target.model ?? null, req.target.reasoningEffort);
       const stream = this.runtime.stream(this.call(ctx, feature, req.target, guard.signal), {
         instructions: req.system,
-        input: req.user,
+        input: userInput(req.user, req.images),
         ...(req.maxOutputTokens !== undefined ? { maxOutputTokens: req.maxOutputTokens } : {}),
         ...(effort !== undefined ? { reasoning: { effort } } : {}),
       });
@@ -589,6 +625,15 @@ class KvoxAi implements KvoxAiPort {
   }
 
   /**
+   * Whether the target model accepts image input: the task-model state's row (when the
+   * state's provider is the target's), else the catalog, else unknown (`null`).
+   */
+  async supportsVision(ctx: KvoxAiContext, target: KvoxAiTarget): Promise<boolean | null> {
+    const flags = await this.modelFlagsOrNone(ctx.userId, target.provider, target.model);
+    return flags.vision ?? null;
+  }
+
+  /**
    * How the target model is held to a schema: the task-model state's row (when the
    * state's provider is the target's), else the catalog, else `native`.
    */
@@ -607,7 +652,7 @@ class KvoxAi implements KvoxAiPort {
     userId: string,
     provider: string | null | undefined,
     model: string | null | undefined,
-  ): Promise<{ toolCalling?: boolean; structuredOutputMode?: KvoxStructuredOutputMode }> {
+  ): Promise<{ toolCalling?: boolean; structuredOutputMode?: KvoxStructuredOutputMode; vision?: boolean }> {
     if (typeof model !== 'string' || model.length === 0) return {};
     try {
       const state = await this.taskModels.load(userId);
@@ -617,9 +662,11 @@ class KvoxAi implements KvoxAiPort {
       const known = this.options.catalog?.lookup(providerId, model) ?? null;
       const toolCalling = row?.toolCalling ?? known?.toolCalling;
       const structuredOutputMode = row?.structuredOutputMode ?? known?.structuredOutputMode;
+      const vision = row?.vision ?? known?.vision;
       return {
         ...(toolCalling !== undefined ? { toolCalling } : {}),
         ...(structuredOutputMode !== undefined ? { structuredOutputMode } : {}),
+        ...(vision !== undefined ? { vision } : {}),
       };
     } catch {
       return {};

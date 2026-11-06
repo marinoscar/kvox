@@ -62,6 +62,7 @@ import type { Note } from '../../headless/clients/notes.js';
 import { NOTE_OUTPUT_FORMAT_LABELS } from '../../headless/clients/noteTemplates.js';
 import type { NoteTemplate } from '../../headless/clients/noteTemplates.js';
 import { noteSourceFallbackLabel, noteSourcePath, noteSourceRef } from '../../headless/utils/noteSource.js';
+import { ContextAttachmentList } from './ContextAttachmentsField.js';
 
 /**
  * The id `aria-controls` names.
@@ -347,6 +348,13 @@ export function NoteGenerationContext({
               </Typography>
             )}
           </Field>
+
+          {/* #810: shown only when there are some — "None" would be noise on every note. */}
+          {note.contextAttachments && note.contextAttachments.length > 0 && (
+            <Field label="Attached files">
+              <ContextAttachmentList attachments={note.contextAttachments} />
+            </Field>
+          )}
 
           <Field label="Model">
             {note.model ?? (

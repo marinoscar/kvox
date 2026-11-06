@@ -148,6 +148,8 @@ describe('Notes API (#53)', () => {
     prismaMock.note.findMany.mockResolvedValue([]);
     prismaMock.note.count.mockResolvedValue(0);
     prismaMock.noteVersion.findMany.mockResolvedValue([]);
+    // Context attachments (#810): a note read lists them; none here.
+    prismaMock.noteContextAttachment.findMany.mockResolvedValue([]);
     prismaMock.job.create.mockResolvedValue({ id: JOB_ID });
     // The job runs in an organization: the enqueue resolves the default one.
     prismaMock.organization.findFirst.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' } as never);

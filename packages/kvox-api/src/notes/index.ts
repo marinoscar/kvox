@@ -65,6 +65,7 @@ export {
 export { NoteObjectsService, MissingUploadedNoteObjectError } from './note-objects.service.js';
 export type { ManagedObjectRef } from './note-objects.service.js';
 export { NoteSourcesService } from './note-sources.service.js';
+export { NoteContextAttachmentsService } from './note-context-attachments.service.js';
 export { NoteSourceDownloadService, noteSourceFilename } from './note-source-download.service.js';
 // The Markdown note import (#585): the service and its typed 400. The parser is the
 // contract's (`parseNoteMarkdownExport` in `@marinoscar/kvox-contract/notes`).
@@ -119,7 +120,7 @@ export type { ResolvedSource, SourceSelector } from './generation/note-source.se
 export { NoteTitleService } from './generation/note-title.service.js';
 export type { TitleNoteInput } from './generation/note-title.service.js';
 export { assemblePrompt, parseTemplateStructure } from './generation/prompt.js';
-export type { AssemblePromptInput, AssembledPrompt } from './generation/prompt.js';
+export type { AssemblePromptInput, AssembledPrompt, PromptContextDocument } from './generation/prompt.js';
 export {
   budgetFromTarget,
   NOTE_GENERATE_AI_FEATURE,
@@ -228,6 +229,7 @@ export type {
   KvoxNotesTx,
   NoteExportRow,
   NoteGenerationRow,
+  NoteContextAttachmentRow,
   NoteRow,
   NoteLibraryRow,
   NoteLibraryFileRow,

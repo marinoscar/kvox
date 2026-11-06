@@ -42,6 +42,11 @@ export interface RegenerateFormValues {
   contextText: string;
   /** `''` means "the model list has not arrived" — likewise unsubmittable. */
   model: string;
+  /**
+   * The ready context attachments the dialog holds (#810), in order. Absent means the dialog
+   * offered no attachment control, which keeps the note's.
+   */
+  contextAttachmentIds?: readonly string[];
 }
 
 /**
@@ -51,7 +56,8 @@ export interface RegenerateFormValues {
  * the body, the status or the version, because any of those creeping into the
  * decision would make the request depend on state the user was not editing.
  */
-export type RegenerateNoteFields = Pick<Note, 'templateId' | 'contextText' | 'model'>;
+export type RegenerateNoteFields = Pick<Note, 'templateId' | 'contextText' | 'model'> &
+  Partial<Pick<Note, 'contextAttachments'>>;
 
 export function buildRegenerateInput(
   note: RegenerateNoteFields,
@@ -84,6 +90,20 @@ export function buildRegenerateInput(
 
   if (trimmedContext !== currentContext) {
     input.contextText = trimmedContext === '' ? null : trimmedContext;
+  }
+
+  // --- The context attachments (#810) ---------------------------------------
+  // The same three states as the context text, compared as an ordered list (the order is the
+  // order the model sees them):
+  //
+  //   same ids, same order      → omit (keep what the note has)
+  //   none, note had some       → `null` (the explicit clear)
+  //   anything else             → the array (replace)
+  if (form.contextAttachmentIds !== undefined) {
+    const next = [...form.contextAttachmentIds];
+    const current = (note.contextAttachments ?? []).map((attachment) => attachment.objectId);
+    const same = next.length === current.length && next.every((id, index) => id === current[index]);
+    if (!same) input.contextAttachmentIds = next.length === 0 ? null : next;
   }
 
   // --- The model ------------------------------------------------------------

@@ -423,3 +423,26 @@ describe('NoteGenerationContext — accessibility', () => {
     localStorage.setItem('theme_mode', 'light');
   });
 });
+
+describe('NoteGenerationContext — attached files (#810)', () => {
+  it('lists the note’s context attachments by name', () => {
+    renderPanel({
+      defaultExpanded: true,
+      note: note({
+        contextAttachments: [
+          { objectId: 'o1', kind: 'document', filename: 'agenda.pdf', mimeType: 'application/pdf' },
+          { objectId: 'o2', kind: 'image', filename: 'board.png', mimeType: 'image/png' },
+        ],
+      }),
+    });
+    expect(screen.getByText('Attached files')).toBeInTheDocument();
+    const list = screen.getByRole('list', { name: 'Attached files' });
+    expect(within(list).getByText('agenda.pdf')).toBeInTheDocument();
+    expect(within(list).getByText('board.png')).toBeInTheDocument();
+  });
+
+  it('shows no attachments row for a note without any', () => {
+    renderPanel({ defaultExpanded: true });
+    expect(screen.queryByText('Attached files')).toBeNull();
+  });
+});

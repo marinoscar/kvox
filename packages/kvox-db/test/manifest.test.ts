@@ -43,7 +43,7 @@ describe('migrations/manifest.json', () => {
       expect(fragments.has(entry.slice), `${entry.id} slice ${entry.slice}`).toBe(true);
       for (const table of entry.requiresHostTables) expect(KVOX_HOST_TABLES).toContain(table);
     }
-    expect(ids).toHaveLength(23);
+    expect(ids).toHaveLength(24);
   });
 
   it('derives requiresHostTables from the foreign keys in the SQL', () => {
@@ -104,7 +104,7 @@ describe('inventories', () => {
     expect(inventories.schemaObjects.generatedColumns).toHaveLength(3);
     expect(inventories.schemaObjects.functions.map((fn) => fn.name)).toEqual(['kg_assert_has_evidence']);
     expect(inventories.schemaObjects.triggers).toHaveLength(4);
-    expect(inventories.schemaObjects.checkConstraints.every((c) => /^kg_.*_chk$/.test(c.name))).toBe(true);
+    expect(inventories.schemaObjects.checkConstraints.every((c) => /^(kg|note)_.*_chk$/.test(c.name))).toBe(true);
   });
 
   it('is consistent with the migrations and the fragments (the package check)', () => {
