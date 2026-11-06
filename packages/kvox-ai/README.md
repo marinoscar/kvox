@@ -222,6 +222,10 @@ The Copilot adapter is proven on two levels. Its own unit specs (`src/copilot/*.
 
 First release. The provider types and the `AiError` class come from `@marinoscar/platform-ai-providers` (issue #578), no longer from `@marinoscar/platform-api/ai`. The web edition's second mapping hop is gone: `mapAiError` and the port adapter's `toKvoxAiError` are one function, `toKvoxAiError` of the `errors` slice, proven equal by `test/fixtures/error-parity.v1.json`. For code that imported these files from `apps/api/src/ai-port/` (`strict-json-schema`, `chat-mapping`, `count-tokens`, `embedding-catalog`, `features`, `ai-task-keys`, `task-models`, the type half of `kvox-ai.ts`): import the same names from `@marinoscar/kvox-ai`. `KvoxAiReason` moved from `kvox-ai-errors.ts` with `KvoxAiReadiness`. Nothing was renamed.
 
+### Images and vision (issue #810, additive, minor)
+
+`generateText` of `createKvoxAi` accepts an optional `images` list (`KvoxAiImageInput`: `storageObjectId` and an optional `detail`). With images the call's `input` is one user message of a text part followed by one `image` part per object (`userInput`); without images it is the plain string, exactly as before. The runtime resolves each `storageObjectId` (the web edition's `PlatformAiRuntime` does); a custom `KvoxAiRuntime`, Desktop's included, must handle `image` parts or refuse. The port also gains an optional `supportsVision(ctx, target)`: the task-model row's `vision` flag, else the catalog's, else `null` (unknown, so callers do not refuse up front). `KvoxModelCatalog` entries and task-model rows take an optional `vision` flag (the platform's `vision_input` capability).
+
 ## Troubleshooting
 
 | Symptom | Fix |

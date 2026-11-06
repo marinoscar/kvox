@@ -4447,9 +4447,17 @@ behind.
   "templateId": "…",
   "source": { "type": "transcript", "transcriptId": "…" },
   "contextText": "Focus on decisions, not discussion.",
+  "contextAttachmentIds": ["…", "…"],
   "model": "gpt-4o"
 }
 ```
+
+`contextAttachmentIds` (optional, issue #810) lists up to 10 object ids returned
+by [`POST /notes/context/attachments`](#post-notescontextattachments), in the
+order the model should see them, no duplicates. Each must be yours and ready.
+Documents' extracted text is rendered in the prompt's Context block under an
+`Attached file: <name>` fence; images are sent as vision input and need a
+vision-capable model.
 
 `title` defaults to the template's name — sending one records `titleSource:
 "user"`, omitting it records `"template"`. `source` is a discriminated union —
@@ -4481,9 +4489,9 @@ deployment's. Watch it arrive on `GET /notes/{id}/stream`; it completes
 identically with nobody watching.
 
 **Error Cases:**
-- `400` - The assembled prompt does not fit the model's context window (the message names the numbers), or the model is not one this deployment permits
-- `404` - The caller cannot read the source, or the template is not theirs and not a built-in
-- `409` - `ai_key_missing` (the caller has saved no API key) or `ai_not_configured` (the deployment has not enabled AI, or permits no model this build can run)
+- `400` - The assembled prompt does not fit the model's context window (the message names the numbers), or the model is not one this deployment permits; or `details.reason: context_attachment_limit` (more than 10 attachments) or `context_attachment_unsupported_type`
+- `404` - The caller cannot read the source, or the template is not theirs and not a built-in, or a `contextAttachmentIds` entry is not the caller's upload
+- `409` - `ai_key_missing` (the caller has saved no API key) or `ai_not_configured` (the deployment has not enabled AI, or permits no model this build can run); `details.reason: context_attachment_not_ready` (a document is still extracting, or no text could be read from it); `details.reason: ai_model_no_vision` (an image is attached and the resolved model is known not to read images)
 
 ---
 
@@ -4630,6 +4638,13 @@ be their own, not deleting or soft-deleted), or a transcript that is deleted,
 is no partial object, and any break in the chain answers `null` for the whole
 field rather than a title with no id or an id the caller may not follow.
 
+The note also carries **`contextAttachments`** (issue #810): the files attached
+as context, in the order the model sees them, each `{ objectId, kind,
+filename, mimeType }` with `kind` `document` or `image`. `[]` when there are
+none. Like `originTranscript` and `contextText` it is detail-only: on this
+response and on create, update, regenerate, restore and retitle, never on
+`GET /notes` or `GET /notes/summary` rows.
+
 ⚠ **`originTranscript` is detail-only** — it is on this response and on
 create/update/regenerate/restore/retitle, and deliberately **not** on
 `GET /notes` or `GET /notes/summary` rows, where resolving it per row would
@@ -4714,6 +4729,9 @@ ETag.
     "provider": "openai",
     "model": "gpt-4o",
     "contextText": "Focus on decisions, not discussion.",
+    "attachments": [
+      { "objectId": "…", "kind": "document", "filename": "agenda.pdf", "mimeType": "application/pdf" }
+    ],
     "sourceType": "transcript",
     "sourceVersion": 3,
     "sourceRedacted": false,
@@ -4724,6 +4742,11 @@ ETag.
   }
 }
 ```
+
+`attachments` (issue #810) is the snapshot of the files attached as context
+when the generation was requested, so it is unchanged by a later replace or
+clear; `[]` for a generation without any. A document's extracted text is part
+of `userContent`, under its `Attached file: <name>` fence.
 
 `stored: false` marks a generation from before this feature existed:
 `systemPrompt` is then **rebuilt from the template as it stands today** (or
@@ -4774,7 +4797,11 @@ kept**: the previous body is already a version and stays one.
 
 **Requires:** `notes:write`
 
-**Request:** `{ "templateId": "…", "contextText": null, "model": "…" }` — every field optional; an empty body re-runs exactly what the note already records.
+**Request:** `{ "templateId": "…", "contextText": null, "contextAttachmentIds": ["…"], "model": "…" }` — every field optional; an empty body re-runs exactly what the note already records.
+
+`contextAttachmentIds` (issue #810) follows the keep, replace, clear rule
+`contextText` has: omitted keeps the note's attachments, an array replaces them
+(for this and every later generation), and `[]` or `null` clears them.
 
 The web client sends **only the fields the user actually changed**: an
 untouched form posts `{}`, and clearing the context box posts
@@ -4786,8 +4813,9 @@ generation alone.
 ⚠ Billed to **your** provider account.
 
 **Error Cases:**
-- `404` - No such note, template or source, or no access
-- `409` - `generating` (already generating), `ai_key_missing`, or `ai_not_configured`
+- `400` - `details.reason: context_attachment_limit` or `context_attachment_unsupported_type`
+- `404` - No such note, template or source, or no access, or a `contextAttachmentIds` entry is not the caller's upload
+- `409` - `generating` (already generating), `ai_key_missing`, or `ai_not_configured`; `details.reason: context_attachment_not_ready` or `ai_model_no_vision` (see `POST /notes`)
 
 ---
 
@@ -5020,6 +5048,95 @@ readable text; `message` carries the reason). `message` and `characters` are
 **Error Cases:**
 - `400` - `objectId` is not a UUID
 - `404` - No such object, or no access to it
+
+---
+
+#### POST /notes/context/attachments
+Uploads a file to attach to a note as context (issue #810). Multipart, single
+`file` part. The upload is not tied to a note: pass the returned `objectId` as
+`contextAttachmentIds` on `POST /notes` or `POST /notes/{id}/regenerate`.
+
+**Requires:** `notes:write` (for the same reason as `POST /notes/sources/documents`).
+
+Accepted types:
+
+- **Documents**: txt, md, pdf, docx, pptx. Stored like a source document, and a
+  `note.source.extract` job is queued; the extracted text joins the prompt, so
+  it works with every provider.
+- **Images**: png, jpeg, webp, gif. The leading bytes must match the declared
+  type. Nothing to extract, so `ready` at once; sent to the model as vision
+  input, which needs a vision-capable model.
+
+The size ceiling is the `ai.maxDocumentBytes` system setting. A note carries at
+most 10 attachments.
+
+**Response:** `201`
+```json
+{
+  "data": {
+    "objectId": "…",
+    "kind": "document",
+    "filename": "agenda.pdf",
+    "mimeType": "application/pdf",
+    "size": 90211,
+    "status": "extracting",
+    "jobId": "…"
+  }
+}
+```
+
+`status` is `extracting` for a document and `ready` for an image; `jobId` is
+`null` for an image.
+
+**Error Cases:**
+- `400` - Missing file, invalid multipart body, an empty file, or `details.reason: context_attachment_unsupported_type` (a type that is neither a document nor an image, or an image whose bytes are not the image it claims to be)
+- `413` - File exceeds `ai.maxDocumentBytes`
+
+An upload that is never named by a create or regenerate request is not swept
+(a known gap, `docs/specs/notes.md` §4.9).
+
+---
+
+#### GET /notes/context/attachments/{objectId}
+Readiness of an uploaded context attachment (issue #810). Poll a document until
+it leaves `extracting`.
+
+**Requires:** `notes:read`. Owner-scoped: a missing id, an object the notes
+module does not manage and another user's attachment all answer the same `404`.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "objectId": "…",
+    "kind": "document",
+    "status": "ready",
+    "message": null,
+    "characters": 18423
+  }
+}
+```
+
+`status` is `extracting` (a document's text is not recorded yet), `ready` (an
+image, or a document whose text exists; `characters` counts it) or
+`unextractable` (no readable text; `message` says why, and the attachment
+cannot be used). An image is always `ready` with `characters: null`.
+
+**Error Cases:**
+- `400` - `objectId` is not a UUID
+- `404` - No such attachment, or no access to it
+
+---
+
+#### Context attachment error reasons
+All four travel under `details.reason`, never in the top-level `code`:
+
+| `details.reason` | Status | Meaning |
+|---|---|---|
+| `context_attachment_unsupported_type` | 400 | The file is not a supported document or image type |
+| `context_attachment_limit` | 400 | More than 10 `contextAttachmentIds` |
+| `context_attachment_not_ready` | 409 | A document is still extracting, or no text could be read from it |
+| `ai_model_no_vision` | 409 | An image is attached and the resolved model is known not to accept images; answered before anything is created |
 
 ---
 
