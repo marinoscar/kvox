@@ -327,6 +327,34 @@ describe('createKvoxAi', () => {
       expect(runtime.stream.mock.calls[0][0].signal).toBeInstanceOf(AbortSignal);
     });
 
+    it('sends images as one user message of a text part then image parts, and a plain string without them', async () => {
+      const { port, runtime } = build();
+      runtime.stream.mockImplementation(() => events(completed()));
+
+      await collect(
+        port.generateText(jobCtx(), {
+          target: target(),
+          system: 'SYSTEM',
+          user: 'USER',
+          images: [{ storageObjectId: 'obj-1' }, { storageObjectId: 'obj-2', detail: 'low' }],
+        }),
+      );
+      expect(runtime.stream.mock.calls[0][1].input).toEqual([
+        {
+          type: 'message',
+          role: 'user',
+          content: [
+            { type: 'text', text: 'USER' },
+            { type: 'image', storageObjectId: 'obj-1' },
+            { type: 'image', storageObjectId: 'obj-2', detail: 'low' },
+          ],
+        },
+      ]);
+
+      await collect(port.generateText(jobCtx(), { target: target(), system: 'S', user: 'U', images: [] }));
+      expect(runtime.stream.mock.calls[1][1].input).toBe('U');
+    });
+
     it('leaves the org and job out of the call when the caller has none (a route)', async () => {
       const { port, runtime } = build();
       runtime.stream.mockReturnValue(events(completed()));
@@ -853,5 +881,18 @@ describe('createKvoxAi', () => {
 
       expect(runtime.embed.mock.calls[0][0]).toMatchObject({ feature: 'search_embed' });
     });
+  });
+});
+
+describe('createKvoxAi: supportsVision (issue #810)', () => {
+  it('answers from the task-model row, and null when the row does not say', async () => {
+    const { port } = build({
+      state: state({ models: [model('gpt-4o', { vision: true }), model('text-only', { vision: false }), model('unsure')] }),
+    });
+
+    await expect(port.supportsVision!(routeCtx(), target({ model: 'gpt-4o' }))).resolves.toBe(true);
+    await expect(port.supportsVision!(routeCtx(), target({ model: 'text-only' }))).resolves.toBe(false);
+    await expect(port.supportsVision!(routeCtx(), target({ model: 'unsure' }))).resolves.toBeNull();
+    await expect(port.supportsVision!(routeCtx(), target({ model: 'not-listed' }))).resolves.toBeNull();
   });
 });

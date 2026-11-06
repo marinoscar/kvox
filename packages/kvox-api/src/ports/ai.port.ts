@@ -129,6 +129,18 @@ export interface KvoxAiTarget {
 }
 
 /**
+ * One image sent with a text call, by the stored object that holds it (issue #810).
+ *
+ * @stability experimental
+ */
+export interface KvoxAiImageInput {
+  /** The storage object holding the image. The runtime resolves it; the bytes never cross this port. */
+  storageObjectId: string;
+  /** How closely the model looks at the image (the provider's default when absent). */
+  detail?: 'low' | 'high' | 'auto';
+}
+
+/**
  * Token counts of one call. `null` means the provider did not report it; never
  * `0` for "unknown" (zero means free).
  *
@@ -511,8 +523,26 @@ export interface KvoxAiPort {
    */
   generateText(
     ctx: KvoxAiContext,
-    req: { target: KvoxAiTarget; system: string; user: string; maxOutputTokens?: number },
+    req: {
+      target: KvoxAiTarget;
+      system: string;
+      user: string;
+      maxOutputTokens?: number;
+      /** Images sent with the user message (issue #810). Needs a vision-capable model. Optional and additive. */
+      images?: readonly KvoxAiImageInput[];
+    },
   ): AsyncIterable<KvoxTextEvent>;
+
+  /**
+   * Whether `target` accepts image input. Optional and additive (issue #810): a host that does
+   * not implement it is treated as "unknown".
+   *
+   * @param ctx - who and what for.
+   * @param target - the model, as `resolveTask` answered.
+   * @returns `true` or `false` when the host knows, `null` when it does not (the caller then lets
+   * the provider answer rather than refusing up front).
+   */
+  supportsVision?(ctx: KvoxAiContext, target: KvoxAiTarget): Promise<boolean | null>;
 
   /**
    * One structured answer, validated against `schema`.
