@@ -34,7 +34,7 @@ Works on `kg_proposals`, `kg_proposal_items`, `kg_mentions`, `kg_merges`, `kg_di
 
 ### Security notes
 
-A `sensitive` PersonFact is never embedded, never sent to an adjudication prompt, and a stale vector on one is cleared. The automatic extraction only enqueues, after the gate (the graph switch, `graph:write`, the owner's preference, a resolvable model); a failure is logged and swallowed because the note is already ready. Every row the pipeline proposes carries evidence, and the commit refuses a row whose evidence the owner can no longer read. No log line or error carries a provider key.
+A `sensitive` PersonFact is never embedded, never sent to an adjudication prompt, and a stale vector on one is cleared. The automatic extraction only enqueues, after the gate (the graph switch, `graph:write`, the owner's preference, a resolvable model); a failure is logged and swallowed because the note is already ready. A note generated from a document is extracted from the document's stored text, chunked, with the generated note shown as context, and the rows cite that text (`kg_evidence.source_object_id`, spec ontology §5.3 and §6.6). Every row the pipeline proposes carries evidence, and the commit refuses a row whose evidence the owner can no longer read. No log line or error carries a provider key.
 
 ### Conformance suite
 

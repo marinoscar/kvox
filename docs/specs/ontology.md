@@ -604,6 +604,7 @@ material that supports it, via `kg_evidence` (§10) rows shaped:
  subject_id,
  transcript_id?, segment_id?, segment_rev?, start_ms?, end_ms?,
  note_id?, note_version?, char_start?, char_end?,
+ source_object_id?, source_text_length?,
  quote)
 ```
 
@@ -630,6 +631,25 @@ state. Both offsets `NULL` on a note citation means the note's **Context**
 field (#440, §6) rather than a span of the body — it has no body offsets, so
 the `quote` alone carries what was cited; the two offsets are always both set
 or both `NULL`, never one of each.
+
+**Source-text anchoring (#789) cites the document a note was generated from.** A note made
+from an uploaded document keeps the document's full text as a second `storage_objects` row (the
+`{ extractedObjectId }` that `note.source.extract` records on the upload, notes spec §4.7), and
+`kg.extract` reads that text instead of the short generated summary (§6.6). A citation of it sets
+`source_object_id` (that text object, `SET NULL` like every anchor) and `source_text_length` (the
+length, in characters, of the text the offsets were measured against), with `char_start`/`char_end`
+as absolute offsets into **that text**, not into the note body. It also sets `note_id` and
+`note_version`, naming the generated note for the deep link
+(`/notes/<id>?source=<start>-<end>`) and so that note-scoped deletes and queries still find it. A
+reader therefore tests `source_text_length` **first**: it is the durable discriminator, because
+`source_object_id` goes `NULL` when the text object is purged while the length (and the quote)
+survive, and without it the row would read as a note span whose offsets point at the wrong text.
+`kg_evidence_source_text_chk` keeps the pair coherent (an object always has a length; the span never
+runs past the length). The text object is immutable, so this anchor is never "edited since"; it is
+unavailable once purged. The deferred no-orphans trigger counts such a row like any other evidence
+row, and a reviewer can add one with the evidence span `source: 'source_text'` (the validator reads
+the note's own source text, so the client never names an object). The RDF export omits the offsets
+of such a citation: they do not index the note version its IRI names.
 
 **`quote` is the exact text at anchoring time, kept even though the source
 it points to might move or be corrected later.** A citation is only useful if
@@ -1179,6 +1199,15 @@ document (a note whose body is the whole document), is read in **chunks**, insid
   part's last paragraph marked `[context only — do not cite]`. The known-entities list, the meeting
   header and the Context are shared by every chunk. The role line asks for everything the text
   supports with a citation; rule 2 (never propose a row you cannot cite) is unchanged.
+- **A note generated from a document (#789).** The chunker reads the document's stored extracted
+  text (`readNoteSourceText`: only an AI-generated note, `provider` set, from a `document` source
+  whose extracted text object is the owner's own and at most 1.5 million characters; an imported
+  note's body already is the document, and any other case falls back to the note body) instead of
+  the summary. The generated note is shown whole in every call under `# Note` as context, the
+  document part under `# Source document` (`Part i of n of one document`), and the model cites the
+  text as `D` (the note stays `N`). A `D` quote is located in its chunk and stored as a source-text
+  citation (§5.3) with offsets made absolute in the whole text. The rest of this section applies
+  unchanged.
 - **Citations.** Each chunk is validated against its own text, so a quote is found only if it is in
   that part (the lead-in is not citable). A located note quote's offsets are shifted by the chunk's
   start, so evidence spans are absolute offsets into the note version's body.

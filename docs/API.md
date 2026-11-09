@@ -6881,7 +6881,13 @@ audited — the commit is.
 `span_mismatch`). A `segment` span must be a line of the note's **origin
 transcript** (`400` `span_outside_source` for any other, even one you can
 read), at its current `rev` (`409` `stale_segment_rev`), with the same quote
-check; the stored citation carries the line's `startMs`/`endMs`.
+check; the stored citation carries the line's `startMs`/`endMs`. A
+`source_text` span (#789) is a span of the full text the proposal's note was
+generated from (an AI-generated note made from a document, whose extracted text
+is stored): `0 ≤ charStart < charEnd ≤ text length` and the same quote check
+(`400` `span_mismatch`); a note with no such text answers `400`
+`span_outside_source`. The stored citation records the text object and its
+length, and keeps the note for the deep link.
 
 ##### POST /graph/proposals/:id/items/bulk
 
@@ -7787,6 +7793,19 @@ A citation you made BY HAND (a manager, employer or role set on an entity
 page, #586) has no document: `source` is `{ "kind": "manual", "available":
 true, "href": null }` and `quote` says what was set ("Set by hand: Jarek Stubbs
 reports to Marta Sample").
+
+A citation of the full text of the document a note was generated from (#789)
+has `source.kind: "source_text"`: `noteId`, `noteTitle`, `noteVersion`,
+`sourceObjectId` (the stored text; `null` once purged), `charStart`/`charEnd`
+(offsets into **that text**, not the note body), `sourceTextLength`,
+`available` (the note is readable and the text is still stored) and `href`
+(`/notes/:id?source=<start>-<end>`, or `null`). A newer note version never
+sets a "changed" flag on it: the text is immutable. The proposal review
+endpoints report the same citation as an evidence entry with
+`source: "source_text"`, `sourceObjectId` and `sourceTextLength`, and
+an `evidence.add` span
+`{ "source": "source_text", charStart, charEnd, quote }` names a span of the
+proposal note's own source text.
 
 **Errors:** `401` · `403` without `graph:read` · `404` no such evidence, or
 not yours.
