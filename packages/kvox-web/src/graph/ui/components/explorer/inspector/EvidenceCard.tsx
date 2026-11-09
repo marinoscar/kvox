@@ -10,6 +10,7 @@
  * readable.
  */
 
+import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import EditNoteOutlinedIcon from '@mui/icons-material/EditNoteOutlined';
 import GraphicEqIcon from '@mui/icons-material/GraphicEq';
@@ -36,6 +37,13 @@ export function evidenceSourceTitle(link: EvidenceLink): string {
       return source.transcriptTitle ?? (source.available ? 'Transcript' : 'Transcript no longer available');
     case 'note':
       return source.noteTitle ?? (source.available ? 'Note' : 'Note no longer available');
+    case 'source_text':
+      // #789: the full text the note was generated from.
+      return source.noteTitle
+        ? `Source of ${source.noteTitle}`
+        : source.available
+          ? 'Source document'
+          : 'Source document no longer available';
     case 'manual':
       return 'Set by hand';
     default:
@@ -50,6 +58,8 @@ function SourceIcon({ link }: { link: EvidenceLink }) {
       return <GraphicEqIcon aria-hidden sx={sx} />;
     case 'note':
       return <DescriptionOutlinedIcon aria-hidden sx={sx} />;
+    case 'source_text':
+      return <ArticleOutlinedIcon aria-hidden sx={sx} />;
     case 'manual':
       return <EditNoteOutlinedIcon aria-hidden sx={sx} />;
     default:

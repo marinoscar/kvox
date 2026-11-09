@@ -98,6 +98,87 @@ describe('EvidenceChip', () => {
     expect(within(dialog).queryByRole('button', { name: /Play|Open/ })).not.toBeInTheDocument();
   });
 
+  it('shows a citation of the source document (#789) with its quote and a link to the note at the span', async () => {
+    const id = gid(798);
+    server.use(
+      http.get('*/api/graph/evidence', () =>
+        HttpResponse.json({
+          data: {
+            items: [
+              {
+                id,
+                subjectKind: 'item',
+                subjectId: gid(497),
+                quote: 'Person K1 leads Project P1 for Org Alpha.',
+                createdAt: '2026-11-07T00:00:00.000Z',
+                source: {
+                  kind: 'source_text',
+                  noteId: 'n-plan',
+                  noteTitle: 'Plan summary',
+                  noteVersion: 2,
+                  sourceObjectId: gid(496),
+                  charStart: 120,
+                  charEnd: 160,
+                  sourceTextLength: 900,
+                  available: true,
+                  href: '/notes/n-plan?source=120-160',
+                },
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderChips([id]);
+    await user.click(await screen.findByRole('button', { name: 'Source 1: Source of Plan summary' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Source of Plan summary' });
+    expect(within(dialog).getByText('Person K1 leads Project P1 for Org Alpha.').tagName).toBe('BLOCKQUOTE');
+    // A newer note version does not call the source edited: the text is immutable.
+    expect(within(dialog).queryByText(/has been edited/)).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Open source document' }));
+    expect(await screen.findByTestId('where')).toHaveTextContent('/notes/n-plan?source=120-160');
+  });
+
+  it('says a purged source text is no longer available and offers nothing, but keeps the quote (#789)', async () => {
+    const id = gid(797);
+    server.use(
+      http.get('*/api/graph/evidence', () =>
+        HttpResponse.json({
+          data: {
+            items: [
+              {
+                id,
+                subjectKind: 'item',
+                subjectId: gid(497),
+                quote: 'Person K1 leads Project P1 for Org Alpha.',
+                createdAt: '2026-11-07T00:00:00.000Z',
+                source: {
+                  kind: 'source_text',
+                  noteId: 'n-plan',
+                  noteTitle: 'Plan summary',
+                  noteVersion: 2,
+                  sourceObjectId: null,
+                  charStart: 120,
+                  charEnd: 160,
+                  sourceTextLength: 900,
+                  available: false,
+                  href: null,
+                },
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderChips([id]);
+    await user.click(await screen.findByRole('button', { name: 'Source 1: Source no longer available' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Person K1 leads Project P1 for Org Alpha.')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button')).not.toBeInTheDocument();
+  });
+
   it('coalesces the chips of one render into one batch request', async () => {
     renderChips([EV_SEGMENT, EV_NOTE, EV_GONE]);
 

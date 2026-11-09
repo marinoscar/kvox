@@ -603,6 +603,35 @@ export interface NoteEvidenceSource {
 }
 
 /**
+ * A citation of the full text of the document a note was generated from (#789).
+ * Its offsets index that stored text, not the note body.
+ *
+ * @stability experimental
+ */
+export interface SourceTextEvidenceSource {
+  /** Discriminator for a source-document source. */
+  kind: 'source_text';
+  /** The note generated from the document, or `null` when the anchor no longer carries one. */
+  noteId: string | null;
+  /** Note title, or `null` when the note is unavailable to the caller. */
+  noteTitle: string | null;
+  /** Version of the note the citation was recorded against. */
+  noteVersion: number | null;
+  /** The stored text the offsets index, or `null` once it was purged. */
+  sourceObjectId: string | null;
+  /** Offset of the first quoted character in the SOURCE TEXT. */
+  charStart: number | null;
+  /** Offset just past the last quoted character in the SOURCE TEXT. */
+  charEnd: number | null;
+  /** Length, in characters, of the text the offsets were measured against. */
+  sourceTextLength: number | null;
+  /** `false` when the note is gone or unreadable, or the stored text was purged; the quote is still returned. */
+  available: boolean;
+  /** App link to the generated note at the cited span (`/notes/<id>?source=<start>-<end>`), or `null` when unavailable. */
+  href: string | null;
+}
+
+/**
  * A citation that came from an imported graph file.
  *
  * @stability experimental
@@ -640,7 +669,12 @@ export interface ManualEvidenceSource {
  *
  * @stability experimental
  */
-export type EvidenceSource = SegmentEvidenceSource | NoteEvidenceSource | ImportEvidenceSource | ManualEvidenceSource;
+export type EvidenceSource =
+  | SegmentEvidenceSource
+  | NoteEvidenceSource
+  | SourceTextEvidenceSource
+  | ImportEvidenceSource
+  | ManualEvidenceSource;
 
 /**
  * One citation resolved to a link: the quote, its source and whether the source is still available. Alias of the contract's `EvidenceLink`.
@@ -2199,8 +2233,8 @@ export interface ProposalSummary {
 export interface ProposalEvidence {
   /** Evidence id (UUID). */
   id: string;
-  /** Where the quote comes from. `import` means it is cited to the uploaded RDF file itself, with nothing to play or highlight. */
-  source: 'segment' | 'note' | 'import';
+  /** Where the quote comes from. `import` means it is cited to the uploaded RDF file itself, with nothing to play or highlight. `source_text` (#789) is the full text of the document the note was generated from: `charStart`/`charEnd` index that text, not the note. */
+  source: 'segment' | 'note' | 'import' | 'source_text';
   /** Transcript the quote is in; segment evidence only. */
   transcriptId: string | null;
   /** Transcript segment the quote is in; segment evidence only. */
@@ -2225,6 +2259,10 @@ export interface ProposalEvidence {
   importObjectId?: string | null;
   /** Import evidence: the node's IRI in that file. */
   sourceIri?: string | null;
+  /** Source-text evidence (#789): the stored text the offsets index, or `null` once purged. */
+  sourceObjectId?: string | null;
+  /** Source-text evidence (#789): the length of that text. */
+  sourceTextLength?: number | null;
   /** Segment evidence: the speaker's display name at read time, or `null` when unknown. */
   speakerName: string | null;
   /** `true` when the cited text changed since (the segment revision or note version moved on) or its source is gone. */
