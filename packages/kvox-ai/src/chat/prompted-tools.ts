@@ -6,6 +6,8 @@ import { toolParametersSchema } from './chat-mapping.js';
 /**
  * One thing wrong with a prompted tool reply. The same shape as the structured slice's issue,
  * declared here so `chat` does not import `structured` (slice boundary).
+ *
+ * @stability experimental
  */
 export interface PromptedToolIssue {
   /** The path of the offending value inside the reply; empty for the whole reply. */
