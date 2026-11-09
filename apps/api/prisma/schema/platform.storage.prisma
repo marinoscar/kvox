@@ -51,6 +51,11 @@ model StorageObject {
   // the block comment above `KgEvidence`.
   kgEvidenceImports KgEvidence[]
 
+  // #789 — the extracted text of a source document a graph row cites. SetNull,
+  // the same reasoning as `kgEvidenceImports`: the citation keeps its quote and
+  // `source_text_length` once the text object is purged.
+  kgEvidenceSourceTexts KgEvidence[] @relation("KgEvidenceSourceObject")
+
   // #386 — a rendered graph export (`managed_by: 'graph'`). Restrict, the
   // `noteExportFiles` reasoning: only the export sweep / `kg.purge`, clearing
   // the `kg_exports` reference first, may remove the file.

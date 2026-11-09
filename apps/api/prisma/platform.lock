@@ -33,7 +33,8 @@
     "20261023033028_add_note_libraries",
     "20261026184116_add_kg_synonyms",
     "20261027120000_note_library_auto_commit_inherit",
-    "20261106120000_add_note_context_attachments"
+    "20261106120000_add_note_context_attachments",
+    "20261107120000_add_kg_evidence_source_text"
   ],
   "deviations": [
     {

@@ -154,6 +154,9 @@
 //     ABOUT something; a commitment/decision may stand on its own.
 //   - `kg_evidence_char_range_chk` / `kg_evidence_ms_range_chk` — an end
 //     offset, when both ends are given, is never before its start.
+//   - `kg_evidence_source_text_chk` (#789) — a source-text citation names the
+//     length of the text its offsets index (`source_text_length`), a named
+//     text object always comes with one, and the span never runs past it.
 //   - `kg_proposal_items_kind_payload_chk` (`jsonb_typeof(payload) =
 //     'object'`) — `payload` is always a JSON object, never a bare array or
 //     scalar, so every reader can assume key access without a type guard.
@@ -604,6 +607,12 @@ model KgItem {
 // On a NOTE citation, both NULL means "the note's Context field" (#440): the
 // Context has no body offsets, so the quote alone carries the span.
 // #363 relies on this exact convention; do not reinterpret it per-caller.
+// A SOURCE-TEXT citation (#789) is the one exception to "offsets index the
+// note version body": when `source_text_length` is set, `char_start`/`char_end`
+// index the extracted text of the document the note was generated from
+// (`source_object_id`), and `note_id`/`note_version` name the note only for the
+// deep link. The no-orphans trigger counts the row like any other: it checks
+// that SOME evidence row exists, never which anchor it carries.
 // -----------------------------------------------------------------------------
 model KgEvidence {
   id          String                @id @default(uuid()) @db.Uuid
@@ -641,6 +650,19 @@ model KgEvidence {
   importObjectId String? @map("import_object_id") @db.Uuid
   sourceIri      String? @map("source_iri")
 
+  // Source-text anchor (#789). A note GENERATED FROM A DOCUMENT keeps the full
+  // extracted text as a second `storage_objects` row (`note.source.extract`);
+  // `source_object_id` names that row and `char_start`/`char_end` are offsets
+  // into ITS text, not into the note version body. `note_id`/`note_version`
+  // stay set on such a row (the note the citation belongs to, and the deep
+  // link), so a reader must test `source_text_length` FIRST: it is the durable
+  // discriminator, because `source_object_id` goes NULL (SetNull) when the text
+  // object is purged while `source_text_length` survives with the quote.
+  // `source_text_length` is the length, in characters, of the text the offsets
+  // were measured against. See the block comment above the model.
+  sourceObjectId   String? @map("source_object_id") @db.Uuid
+  sourceTextLength Int?    @map("source_text_length")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   owner        User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -648,11 +670,13 @@ model KgEvidence {
   segment      TranscriptSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
   note         Note?              @relation(fields: [noteId], references: [id], onDelete: SetNull)
   importObject StorageObject?     @relation(fields: [importObjectId], references: [id], onDelete: SetNull)
+  sourceObject StorageObject?     @relation("KgEvidenceSourceObject", fields: [sourceObjectId], references: [id], onDelete: SetNull)
 
   @@index([subjectKind, subjectId])
   @@index([ownerId, transcriptId])
   @@index([segmentId])
   @@index([ownerId, noteId])
+  @@index([sourceObjectId])
   @@map("kg_evidence")
 }
 
