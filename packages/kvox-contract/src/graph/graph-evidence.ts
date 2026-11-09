@@ -13,6 +13,10 @@ import { z } from 'zod';
 // `charStart`/`charEnd` are offsets into the cited NOTE VERSION BODY when
 // `noteId` is set, or into the cited SEGMENT'S TEXT when `segmentId` is set
 // (NULL = the whole segment) — the `kg_evidence` convention #351 documents.
+// ONE EXCEPTION (#789): a SOURCE-TEXT citation carries `sourceObjectId` (the
+// stored text extracted from the document a note was generated from) and
+// `sourceTextLength`, and its offsets index THAT text. It also carries
+// `noteId`/`noteVersion`, naming the generated note for the deep link.
 // A NOTE citation with both offsets NULL means "the note's Context field"
 // (#440): `kg.extract` offers the Context as a citable source (`C`), and it
 // has no body offsets — the quote alone carries the span. The two offsets are
@@ -52,6 +56,18 @@ export const evidenceInputSchema = z
     quote: z.string().trim().min(1).max(2000),
     importObjectId: z.uuid().nullable().default(null),
     sourceIri: z.string().url().max(2048).nullable().default(null),
+    sourceObjectId: z
+      .uuid()
+      .nullable()
+      .default(null)
+      .describe('Source-text citation (#789): the stored text extracted from the document the note was generated from.'),
+    sourceTextLength: z
+      .number()
+      .int()
+      .min(0)
+      .nullable()
+      .default(null)
+      .describe('Source-text citation (#789): the length, in characters, of the text `charStart`/`charEnd` index.'),
   })
   .refine(
     (e) =>
@@ -60,6 +76,25 @@ export const evidenceInputSchema = z
       e.importObjectId ||
       e.sourceIri,
     { message: 'Evidence needs a segment, a note span (or the note Context), or an import source.' },
+  )
+  .refine(
+    (e) =>
+      e.sourceObjectId === null && e.sourceTextLength === null
+        ? true
+        : e.sourceObjectId !== null &&
+          e.sourceTextLength !== null &&
+          e.noteId !== null &&
+          e.noteVersion !== null &&
+          e.charStart !== null &&
+          e.charEnd !== null &&
+          e.charEnd <= e.sourceTextLength &&
+          e.segmentId === null &&
+          e.importObjectId === null,
+    {
+      message:
+        'A source-text citation needs the source object, its text length, the note and a span inside that text, and no segment or import.',
+      path: ['sourceObjectId'],
+    },
   )
   .refine((e) => e.sourceIri !== MANUAL_EVIDENCE_SOURCE_IRI, {
     message: 'That source is reserved for edits made by hand.',

@@ -141,7 +141,13 @@ export type ProposalSummary = z.infer<typeof proposalSummarySchema>;
  */
 export const evidenceViewSchema = z.object({
   id: z.guid(),
-  source: z.enum(['segment', 'note', 'import']).describe('`import` (#387): the row came from an uploaded RDF file — cited to the file itself.'),
+  source: z
+    .enum(['segment', 'note', 'import', 'source_text'])
+    .describe(
+      '`import` (#387): the row came from an uploaded RDF file — cited to the file itself. ' +
+        '`source_text` (#789): a span of the full text of the document the note was generated from; ' +
+        '`charStart`/`charEnd` index that text, not the note body.',
+    ),
   transcriptId: z.guid().nullable(),
   segmentId: z.guid().nullable(),
   segmentRev: z.number().int().nullable(),
@@ -154,6 +160,8 @@ export const evidenceViewSchema = z.object({
   quote: z.string(),
   importObjectId: z.guid().nullable().describe('Import evidence: the stored file the row was imported from.'),
   sourceIri: z.string().nullable().describe('Import evidence: the node’s IRI in that file.'),
+  sourceObjectId: z.guid().nullable().describe('Source-text evidence (#789): the stored text extracted from the source document; null once purged.'),
+  sourceTextLength: z.number().int().nullable().describe('Source-text evidence (#789): the length of the text `charStart`/`charEnd` index.'),
   speakerName: z.string().nullable().describe('Segment evidence: the speaker\'s display name at read time.'),
   hasAudio: z
     .boolean()
@@ -360,6 +368,15 @@ export const evidenceSpanInputSchema = z.discriminatedUnion('source', [
       quote: z.string().min(1).max(2000),
     })
     .strict(),
+  z
+    .object({
+      source: z.literal('source_text'),
+      charStart: z.number().int().min(0),
+      charEnd: z.number().int().min(1),
+      quote: z.string().min(1).max(2000),
+    })
+    .strict()
+    .describe('A span of the full text of the document the proposal note was generated from (#789).'),
 ]);
 /**
  * The parsed shape of {@link evidenceSpanInputSchema}.
