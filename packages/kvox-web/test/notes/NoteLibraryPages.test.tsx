@@ -97,6 +97,11 @@ describe('ImportNotesButton', () => {
       target: { files: [new File(['# a'], 'a.md'), new File(['b'], 'b.txt')] },
     });
 
+    // The pre-flight dialog asks first (#813); nothing is sent before the go-ahead.
+    const dialog = await screen.findByRole('dialog', { name: /import these files/i });
+    expect(host.callsTo('POST /notes/import-batches')).toHaveLength(0);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Import 2 files' }));
+
     expect(await screen.findByText('Batch page')).toBeInTheDocument();
     expect(host.callsTo('POST /notes/import-batches/adhoc-9/files')).toHaveLength(2);
   });
@@ -332,15 +337,16 @@ describe('NoteImportBatchPage', () => {
   });
 
   it('filters the file list by status', async () => {
+    // Every item is loaded once (a batch holds at most 500); the chips filter in the browser (#814).
     const host = hostFor(WRITER, {
       'GET /notes/import-batches/:id': batchOf({ status: 'completed_with_errors', counts: { imported: 1, failed: 1 } }),
-      'GET /notes/import-batches/:id/items': (request: { query: URLSearchParams }) => ({
-        items:
-          request.query.get('status') === 'failed'
-            ? [item({ id: 'f', path: 'broken.docx', status: 'failed', stage: 'failed', failureReason: 'corrupt_file', noteId: null })]
-            : [item({}), item({ id: 'f', path: 'broken.docx', status: 'failed', stage: 'failed', noteId: null })],
+      'GET /notes/import-batches/:id/items': {
+        items: [
+          item({}),
+          item({ id: 'f', path: 'broken.docx', status: 'failed', stage: 'failed', failureReason: 'corrupt_file', noteId: null }),
+        ],
         nextCursor: null,
-      }),
+      },
     });
     render(<NoteImportBatchPage batchId="batch-1" pollMs={0} />, { host });
 
@@ -394,6 +400,7 @@ describe('NotesDropZone', () => {
     fireEvent.dragEnter(zone, { dataTransfer });
     expect(screen.getAllByText('Drop notes to import').length).toBeGreaterThan(0);
     fireEvent.drop(zone, { dataTransfer });
+    fireEvent.click(await screen.findByRole('button', { name: 'Import 1 file' }));
 
     expect(await screen.findByText('Batch page')).toBeInTheDocument();
     expect(host.callsTo('POST /notes/import-batches/drop-1/files')).toHaveLength(1);

@@ -56,6 +56,9 @@ import { darkTheme, lightTheme } from './theme';
 // Issue #22, epic #19 — the app-wide upload manager. Mounted around the
 // authenticated shell (see the route element below), never per-page.
 import { KvoxUploadManagerProvider } from '@marinoscar/kvox-web/transcripts/headless';
+// Issue #814, epic #811 — the note import uploads, mounted next to the transcript
+// upload manager for the same reason: a bulk import outlives the page that started it.
+import { BatchUploadProvider } from '@marinoscar/kvox-web/notes/headless';
 // Issue #499, epic #498. The domain web host binding, and the transcription slice's
 // routes (data, spread where the literal route used to be).
 import { AppKvoxHostProvider } from './platform-kvox/KvoxHostBinding';
@@ -372,7 +375,11 @@ function AppRoutes() {
                           not significant — neither reads the other — but the
                           order is fixed so the tree is stable to read. */}
                       <KvoxUploadManagerProvider>
-                        <Layout />
+                        {/* The note import uploads (#814): the batch page opens at
+                            once and the files keep going up across navigation. */}
+                        <BatchUploadProvider>
+                          <Layout />
+                        </BatchUploadProvider>
                       </KvoxUploadManagerProvider>
                     </NotificationProvider>
                   }

@@ -533,6 +533,12 @@ export interface ImportFilesAdHocOptions {
   onProgress?: (progress: LibrarySyncProgress) => void;
   /** Parallel uploads. Default 3; 1 uploads one at a time. */
   concurrency?: number;
+  /**
+   * The path of each file, in the same order (a `prepareNoteImport` manifest's paths, for
+   * files unpacked from an archive). Absent: a file's folder path, else its name. Made
+   * unique either way.
+   */
+  paths?: readonly string[];
 }
 
 /**
@@ -583,7 +589,9 @@ async function importIntoBatch(options: ImportFilesAdHocOptions, batchId: string
   // A file from a dropped or picked folder keeps its folder path; a loose file its name.
   // Two files with the same path in one batch are told apart (`uniqueNoteImportPaths`).
   const paths = uniqueNoteImportPaths(
-    files.map((file) => {
+    files.map((file, at) => {
+      const given = options.paths?.[at];
+      if (given) return given;
       const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
       return relative && relative.length > 0 ? relative : file.name;
     }),

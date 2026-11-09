@@ -2001,7 +2001,7 @@ the note is still active.
 | `POST /api/notes/libraries`, `GET /api/notes/libraries`, `GET`/`PATCH`/`DELETE /api/notes/libraries/:id` | `notes:write` (`notes:read` for the reads) | Library CRUD; `PATCH` takes `name`, `autoExtract`, `autoCommit`. Deleting keeps the notes. |
 | `POST /api/notes/libraries/:id/scan` | `notes:write` | Diff a manifest; answers `batchId`, `upload`, `hashNeeded`, `missing`, `unchanged`, `estimate`. |
 | `POST /api/notes/import-batches` | `notes:write` | Open an ad-hoc batch (loose files). |
-| `GET /api/notes/import-batches?libraryId=&limit=`, `GET /api/notes/import-batches/:id`, `GET /api/notes/import-batches/:id/items?status=&cursor=&limit=` | `notes:read` | Batches, counts, items. |
+| `GET /api/notes/import-batches?libraryId=&limit=`, `GET /api/notes/import-batches/:id`, `GET /api/notes/import-batches/:id/items?status=&q=&updatedSince=&cursor=&limit=` | `notes:read` | Batches, counts, items. |
 | `POST /api/notes/import-batches/:id/files` | `notes:write` | Multipart upload of one file (`path`, `mtime`, `file`). |
 | `POST /api/notes/import-batches/:id/retry` | `notes:write` | Re-queue the failed items. |
 | `POST /api/notes/import-batches/:id/close` | `notes:write` | The client is done uploading. |
@@ -2159,6 +2159,85 @@ path of the batch uses (`notes.md`, `notes (2).md`; `README (2)` without an
 extension; a second `a (2).md` becomes `a (3).md`). A host that uploads into an
 ad-hoc batch itself applies the same function. The server does not rename: two
 items with one path in a batch are two items that read alike.
+
+**ZIP archives and bulk imports (epics #811, #812, #813, #814).** The import
+drop accepts `.zip` files next to loose files (one drop may mix both). A person
+can import a few hundred documents in one batch and watch them move through the
+stages.
+
+*Expansion runs in the browser.* `expandZipArchive`
+(`packages/kvox-web/src/notes/headless/sync/archiveExpand.ts`) streams the
+archive with fflate and hands each accepted entry to the existing per-file
+upload as a `File` named `<zip name>/<path in the zip>`; that name becomes the
+item `path`, so the folder structure survives and `uniqueNoteImportPaths`
+resolves collisions. The server has no archive code, no new table and no new job
+type; every inner file goes through `POST .../files` and `note.library.import`
+unchanged. Why in the browser: the feature then works in every host that mounts
+the package (KVox Desktop included) with no server change, and the archive
+never has to be uploaded whole. The browser checks are UX only. The server
+still validates each file (type, 25 MiB, extraction), so they are not a security
+boundary.
+
+*Skip reasons.* An entry that is not taken is reported with a reason, never
+dropped silently:
+
+| Reason | Entry |
+|---|---|
+| `system_file` | Directories, `__MACOSX/`, dotfiles, `~$` Office lock files |
+| `unsafe_path` | Absolute path or a `..` segment |
+| `nested_archive` | A ZIP inside the ZIP (not expanded) |
+| `encrypted` | Password-protected entry |
+| `in_archive_unsupported` | Not md, txt, pdf, docx or pptx |
+| `empty`, `too_large`, `unreadable` | No bytes; over the per-entry limit; could not be inflated |
+| `archive_limit` | Over the entry count, the inflated total or the ratio |
+
+A whole archive that is not a ZIP, is damaged or is over the size limit is
+refused as `archive_unreadable`. These reasons join the existing ones in
+`NoteImportRejectionReason`.
+
+*Limits* (`ARCHIVE_EXPAND_LIMITS`, `NOTE_IMPORT_MAX_BATCH_FILES`): at most 500
+files per batch (loose and from archives together; over it the browser refuses
+and suggests splitting), 25 MiB per file (counted while inflating, the entry is
+aborted once over), 1 GiB inflated in total, 1 GiB for the archive itself, and a
+200:1 compression ratio cap (applied to entries of at least 1 MiB inflated),
+mirroring `OOXML_LIMITS` in `kvox-api`. Nested archives are not expanded.
+
+*Pre-flight dialog.* `prepareNoteImport` checks and expands the selection into
+a manifest (files to import, rejected files with reasons, an optional refusal)
+without uploading anything. `ImportPreflightDialog`, opened by `ImportNotesButton`
+and `NotesDropZone`, shows the counts by type, the total size and the skipped
+files grouped by reason (virtualized), with **Import N files** and **Cancel**.
+Nothing is created on the server until the person confirms.
+
+*Background upload.* After confirmation the batch is created and the app opens
+`/notes/import-batches/:batchId` at once. The uploads continue in
+`BatchUploadProvider` (`headless/upload/BatchUploadContext.tsx`), which the host
+mounts once at the app root; the engine behind it is `createBatchUploadEngine`
+(3 parallel uploads by default). The batch page merges the tab's upload state
+(queued, uploading, failed) with the server's items, so every file is listed from
+the first second. The person can pause, resume, cancel (closes the batch) and
+retry failed uploads; the `File` handles live in memory for the life of the tab.
+While uploads are pending a `beforeunload` guard asks before the tab closes,
+because closing it loses the files not yet sent. Without a provider
+(`useOptionalBatchUploads()` answers `null`, e.g. KVox Desktop) the hook uploads
+in place as before and has no pause or cancel.
+
+*High-volume batch page.* `NoteImportBatchPage` renders items in
+`ImportBatchItemTable`, a virtualized table (48 px rows, `@tanstack/react-virtual`)
+that stays smooth at 500 rows, and a card list at `sm` and below (no new
+breakpoint gate). The toolbar has status chips with counts, filename search,
+sort by name, stage or last change, retry buttons for failed imports and failed
+extractions, and **Export failures CSV** (client-side). The header shows
+overall progress, throughput in files per minute and an ETA, next to
+`ImportStageFunnel`. Row building, filter, sort, CSV and throughput are pure
+functions in `ui/library/importBatchRows.ts`. The page loads every item once
+(pages of 500) and then, on each 2 s poll while the tab is visible, reads only
+the items changed since the last read through `updatedSince`. `q` is also
+available server-side ([API.md](../API.md#get-notesimport-batchesiditems)).
+
+*Follow-ups, not built.* Server-side ZIP expansion, so an upload survives
+closing the tab; OCR for scanned PDFs (they are reported as `scanned`).
+Nested archives, RAR and 7z are out of scope.
 
 ## 9. Privacy — what leaves this deployment, to whose account
 
