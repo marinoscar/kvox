@@ -1302,6 +1302,28 @@ precise at this stage:
   model and dimension contract is a second place for those two facts to
   drift apart.
 
+**Per-model cosine calibration (issue #681).** The cosine cut-offs the graph
+compares against are properties of the embedding MODEL, not constants: a
+bge-style model sits much higher than OpenAI's for the same pair, so the OpenAI
+numbers would over-link and over-merge on it. The catalog entry
+(`KvoxEmbeddingModel.graphCalibration` of `@marinoscar/kvox-ai`) carries three:
+`vectorFloor` (entity resolution: the cosine where vector evidence starts to
+count in the score, `0.30 + 0.30 × (c − F) / (1 − F)`), `itemCosine` (item dedup:
+the cosine a candidate needs to be adjudicated) and `itemSameConfidentCosine`
+(a `same` verdict at or above it is not flagged `possible_duplicate`). They
+travel on `capabilities().embeddings` (with the entry's `provider`), `GraphEmbedder`
+reads them, and `ResolutionService` / `work-item-dedup` use them. An entry that
+records none gets the OpenAI baseline, 0.75 / 0.80 / 0.92, so the web edition's
+text-embedding-3-small behaves exactly as before; `bge-small-en-v1.5-int8`
+records 0.83 / 0.87 / 0.95. The user-facing `autoLinkThreshold` and
+`newThreshold` stay thresholds on the final SCORE and are not per model. Vectors
+of different models are never compared (`embedding_model` filters the vector
+arm and the item candidates), so switching model costs a re-embed, never a wrong
+link. The bge numbers are DERIVED (the OpenAI cut-offs re-mapped onto the
+headroom above each model's unrelated-pair ceiling, 0.35 against 0.55, rounded
+up), not yet measured on real vectors; re-measure with
+`kvox-eval calibrate` ([calibration slice](../../packages/kvox-eval/src/calibration/README.md)).
+
 **Scoring** combines name similarity with context signals, weighted
 qualitatively (strong/medium/weak) rather than as a single opaque number,
 because the signals genuinely differ in kind: **same-meeting
@@ -1412,10 +1434,10 @@ registers three proposal stages after `resolution`: **`work-item-dedup`**
 same kind, subject and statement hash (flag `known`, pre-accepted, collapsed);
 otherwise live candidates with the same kind and subject (and owner, for a
 commitment) are ranked by cosine against the proposed text, embedded in one
-batched call per proposal (≥ 0.80, top five), or by token-set Jaccard ≥ 0.5 when
+batched call per proposal (at or above the model's `itemCosine`, 0.80 for OpenAI, top five), or by token-set Jaccard ≥ 0.5 when
 no embedding is available (`stats["work-item-dedup"].fallback: "lexical"`), and
 adjudicated by `graph.adjudicate` (`AdjudicationService.adjudicateItems`) into
-`same` (flagged `possible_duplicate` below cosine 0.92; status/due-date
+`same` (flagged `possible_duplicate` below the model's confident cosine, 0.92 for OpenAI; status/due-date
 `changes` honoured for a commitment only), `supersedes` (flag `supersedes`) or
 `new`; with adjudication off or unavailable the row stays `new`, pointing at its
 best candidate, flagged `possible_duplicate`. A `sensitive` PersonFact is never
