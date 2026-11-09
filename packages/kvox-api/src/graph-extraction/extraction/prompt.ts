@@ -21,6 +21,7 @@ import type { EffectiveAttribute } from '@marinoscar/kvox-contract/ontology';
 import {
   CONTEXT_ALIAS,
   NOTE_ALIAS,
+  SOURCE_ALIAS,
   offeredAttributes,
   offeredContextText,
   type ExtractionContext,
@@ -44,7 +45,15 @@ export const HEADING_KNOWN_ENTITIES = '# Known entities';
 export const HEADING_YOU = '# You';
 export const HEADING_SPEAKERS = '# Speakers';
 export const HEADING_NOTE = '# Note';
+/** The full text of the document the note was generated from (#789); omitted when there is none. */
+export const HEADING_SOURCE = '# Source document';
 export const HEADING_TRANSCRIPT = '# Transcript';
+
+/** The line that frames the `# Source document` section (#789). */
+export const SOURCE_FRAMING = `The full text of the document the note below was generated from. Propose what it states and cite it as \`${SOURCE_ALIAS}\`.`;
+
+/** The line that frames the `# Note` section when a source document is offered (#789). */
+export const NOTE_AS_CONTEXT_FRAMING = `A summary generated from the source document, shown whole as context. Use it to understand what the document is about; cite it as \`${NOTE_ALIAS}\` only for what the document does not state.`;
 
 /** The line that frames the `# Context` section (#440). */
 export const CONTEXT_FRAMING = `Background the note's author wrote for this meeting. Treat it as authoritative: use it to identify who took part, the company, business unit and role of each person, and how names map to known entities. Cite it as \`${CONTEXT_ALIAS}\`.`;
@@ -255,9 +264,20 @@ export function documentMeetingsRule(ctx: ExtractionContext): string | null {
   );
 }
 
+/**
+ * The citation rule of a run that reads a source document (#789). The document is
+ * the evidence; the note is the summary generated from it, kept as context.
+ */
+function sourceCiteRule(hasContext: boolean): string {
+  const ids = `\`s#\` for a transcript line, \`${SOURCE_ALIAS}\` for the source document, \`${NOTE_ALIAS}\` for the note${hasContext ? `, \`${CONTEXT_ALIAS}\` for the Context` : ''}`;
+  return `1. Cite only ids you were given: ${ids}. Each citation copies an exact quote of at most 200 characters from that source. Quote the source document (\`${SOURCE_ALIAS}\`), not the note, whenever it states the row: the note is only a summary of it.`;
+}
+
 function rules(ctx: ExtractionContext, caps?: ExtractionRowCaps): string[] {
   const hasContext = offeredContextText(ctx.note.contextText) !== null;
-  const citeRule = hasContext
+  const citeRule = ctx.source
+    ? sourceCiteRule(hasContext)
+    : hasContext
     ? `1. Cite only ids you were given: \`s#\` for a transcript line, \`${NOTE_ALIAS}\` for the note, \`${CONTEXT_ALIAS}\` for the Context. Each citation copies an exact quote of at most 200 characters from that line, from the note or from the Context.`
     : `1. Cite only ids you were given: \`s#\` for a transcript line, \`${NOTE_ALIAS}\` for the note. Each citation copies an exact quote of at most 200 characters from that line or from the note.`;
   const extra: string[] = [];
@@ -401,13 +421,25 @@ export function assembleExtractionPrompt(
     }
   }
 
-  user.push('', `${HEADING_NOTE} (version ${ctx.note.version})`);
-  if (chunk && chunk.count > 1) {
-    // #777: `ctx.note.body` is this part only; quotes are located in it.
-    user.push(`Part ${chunk.index + 1} of ${chunk.count} of one note; propose only what this part supports.`);
-    if (chunk.leadIn) user.push(CHUNK_CONTEXT_MARKER, chunk.leadIn, '[end of context]');
+  if (ctx.source) {
+    // #789: the document the note was generated from is the input; the note below is context.
+    user.push('', HEADING_SOURCE, SOURCE_FRAMING);
+    if (chunk && chunk.count > 1) {
+      // #777: `ctx.source.text` is this part only; quotes are located in it.
+      user.push(`Part ${chunk.index + 1} of ${chunk.count} of one document; propose only what this part supports.`);
+      if (chunk.leadIn) user.push(CHUNK_CONTEXT_MARKER, chunk.leadIn, '[end of context]');
+    }
+    user.push(ctx.source.text);
+    user.push('', `${HEADING_NOTE} (version ${ctx.note.version})`, NOTE_AS_CONTEXT_FRAMING, ctx.note.body);
+  } else {
+    user.push('', `${HEADING_NOTE} (version ${ctx.note.version})`);
+    if (chunk && chunk.count > 1) {
+      // #777: `ctx.note.body` is this part only; quotes are located in it.
+      user.push(`Part ${chunk.index + 1} of ${chunk.count} of one note; propose only what this part supports.`);
+      if (chunk.leadIn) user.push(CHUNK_CONTEXT_MARKER, chunk.leadIn, '[end of context]');
+    }
+    user.push(ctx.note.body);
   }
-  user.push(ctx.note.body);
 
   if (ctx.transcript !== null) {
     user.push('', HEADING_TRANSCRIPT);

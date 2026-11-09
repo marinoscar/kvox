@@ -51,6 +51,7 @@ import {
 import { statementHash } from '../../graph/index.js';
 import {
   CONTEXT_ALIAS,
+  SOURCE_ALIAS,
   DOCUMENT_REF,
   MEETING_REF,
   NOTE_ALIAS,
@@ -96,6 +97,21 @@ export type EvidenceDraft =
        */
       charStart: number | null;
       charEnd: number | null;
+      quote: string;
+    }
+  | {
+      /**
+       * A span of the full text the note was generated from (#789). `charStart`/`charEnd`
+       * index that text (`sourceObjectId`, `sourceTextLength` long), never the note body;
+       * `noteId`/`noteVersion` name the note for the deep link.
+       */
+      source: 'source_text';
+      noteId: string;
+      noteVersion: number;
+      sourceObjectId: string;
+      sourceTextLength: number;
+      charStart: number;
+      charEnd: number;
       quote: string;
     };
 
@@ -211,6 +227,21 @@ function resolveCites(ctx: ExtractionContext, cites: RawCite[]): CiteOutcome {
         quote: contextText.slice(located.start, located.end).slice(0, MAX_QUOTE_CHARS),
       };
       key = `C:${located.start}:${located.end}`;
+    } else if (source === SOURCE_ALIAS) {
+      if (!ctx.source) continue; // `D` was never offered.
+      const located = locateQuote(ctx.source.text, cite.quote);
+      if (!located) continue; // A source quote we cannot find is not evidence.
+      draft = {
+        source: 'source_text',
+        noteId: ctx.note.id,
+        noteVersion: ctx.note.version,
+        sourceObjectId: ctx.source.objectId,
+        sourceTextLength: ctx.source.length,
+        charStart: located.start,
+        charEnd: located.end,
+        quote: ctx.source.text.slice(located.start, located.end).slice(0, MAX_QUOTE_CHARS),
+      };
+      key = `D:${located.start}:${located.end}`;
     } else if (source === NOTE_ALIAS) {
       const located = locateQuote(ctx.note.body, cite.quote);
       if (!located) continue; // A note quote we cannot find is not evidence.
@@ -673,6 +704,12 @@ type EntityRow = Extract<ProposedRow, { kind: 'entity' }>;
 /** Where in the note body a row's first citation starts; null when it cites no located note text. */
 function firstNoteOffset(row: ProposedRow): number | null {
   let first: number | null = null;
+  for (const e of row.evidence) {
+    if (e.source === 'source_text' && (first === null || e.charStart < first)) first = e.charStart;
+  }
+  // A run with a source document orders by the source text's offsets; a note's own offsets
+  // are a different space, used only when a row cites no source text.
+  if (first !== null) return first;
   for (const e of row.evidence) {
     if (e.source === 'note' && e.charStart !== null && (first === null || e.charStart < first)) first = e.charStart;
   }

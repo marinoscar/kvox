@@ -64,6 +64,14 @@ export function offeredContextText(contextText: string | null | undefined): stri
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/**
+ * The alias of the source document's full text in a citation (#789). Offered only
+ * when the note was generated from a document whose extracted text is stored
+ * (`ExtractionInput.sourceText`). A `D` citation is stored as a source-text
+ * citation: `source_object_id` plus offsets into that text.
+ */
+export const SOURCE_ALIAS = 'D';
+
 /** The ref of the deterministic Meeting row, and the endpoint the model uses for it. */
 export const MEETING_REF = 'meeting';
 
@@ -96,6 +104,15 @@ export interface ExtractionInput {
     contextText: string | null;
     createdAt: Date;
   };
+  /**
+   * The full text a note was GENERATED FROM, for a note made from a document (#789):
+   * the stored extracted-text object and its text. When present the extraction reads
+   * this text (chunked, #777) and the generated note is shown as context; a citation
+   * of the text is anchored to `objectId`. Absent or null (a transcript note, an
+   * imported note whose body already is the document, a source that was purged):
+   * the note body is the extraction input, as before.
+   */
+  sourceText?: { objectId: string; text: string } | null;
   /** `NoteOriginService.resolve()`; null = a note-only meeting. */
   transcript: { id: string; title: string; recordedAt: Date; createdAt: Date } | null;
   /** Compact, ordinal order, no words. */
@@ -203,6 +220,12 @@ export type DateSource = 'stated' | 'note_created_at';
 
 export interface ExtractionContext {
   note: { id: string; title: string; body: string; version: number; contextText: string | null };
+  /**
+   * The source document's text this call reads (#789), or null. In a chunked run
+   * `text` is the CHUNK's text (`chunkContext`) while `length` stays the whole
+   * text's length, because a citation's offsets are absolute in the whole text.
+   */
+  source: { objectId: string; text: string; length: number } | null;
   transcript: { id: string; title: string } | null;
   meetingTitle: string;
   /** `YYYY-MM-DD`, the day of the recording (or the note) in the owner's zone; stored as a floating date. */
@@ -459,6 +482,10 @@ export function buildExtractionContext(input: ExtractionInput): ExtractionContex
       version: input.note.version,
       contextText: input.note.contextText,
     },
+    source:
+      input.sourceText && input.sourceText.text.trim().length > 0
+        ? { objectId: input.sourceText.objectId, text: input.sourceText.text, length: input.sourceText.text.length }
+        : null,
     transcript: input.transcript ? { id: input.transcript.id, title: input.transcript.title } : null,
     meetingTitle: (input.transcript?.title ?? input.note.title).trim() || input.note.title,
     meetingDate,

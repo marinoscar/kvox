@@ -124,7 +124,21 @@ export class ProposalWriter {
     });
     const evidence = rows.flatMap((row, i) =>
       row.evidence.map((e) =>
-        e.source === 'segment'
+        e.source === 'source_text'
+          ? {
+              ownerId,
+              subjectKind: 'proposal_item' as const,
+              subjectId: ids[i],
+              // The note is named for the deep link; the offsets index the source text.
+              noteId: e.noteId,
+              noteVersion: e.noteVersion,
+              sourceObjectId: e.sourceObjectId,
+              sourceTextLength: e.sourceTextLength,
+              charStart: e.charStart,
+              charEnd: e.charEnd,
+              quote: e.quote,
+            }
+          : e.source === 'segment'
           ? {
               ownerId,
               subjectKind: 'proposal_item' as const,

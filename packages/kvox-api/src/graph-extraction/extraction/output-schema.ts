@@ -24,7 +24,7 @@ import { buildPropsJsonSchema, type EffectiveEntityType } from '@marinoscar/kvox
 import { z } from 'zod';
 
 type JsonSchema = Record<string, unknown>;
-import { CONTEXT_ALIAS, offeredContextText, type ExtractionContext } from './extraction-context.js';
+import { CONTEXT_ALIAS, SOURCE_ALIAS, offeredContextText, type ExtractionContext } from './extraction-context.js';
 import type { ExtractionRowCaps } from './row-caps.js';
 
 export const EXTRACTION_SCHEMA_NAME = 'kg_extraction';
@@ -42,6 +42,27 @@ const nullableString = (description: string): JsonSchema => ({ type: ['string', 
  */
 function citeSchema(ctx: ExtractionContext): JsonSchema {
   const hasContext = offeredContextText(ctx.note.contextText) !== null;
+  if (ctx.source) {
+    return {
+      type: 'array',
+      description: 'Where this row is stated. At least one.',
+      items: {
+        type: 'object',
+        properties: {
+          source: {
+            type: 'string',
+            description: `\`${SOURCE_ALIAS}\` for the source document, an \`s#\` transcript line id, \`N\` for the note${hasContext ? ` or \`${CONTEXT_ALIAS}\` for the Context` : ''} — only ids you were given.`,
+          },
+          quote: {
+            type: 'string',
+            description: 'An exact quote of at most 200 characters from that source.',
+          },
+        },
+        required: ['source', 'quote'],
+        additionalProperties: false,
+      },
+    };
+  }
   return {
     type: 'array',
     description: 'Where this row is stated. At least one.',

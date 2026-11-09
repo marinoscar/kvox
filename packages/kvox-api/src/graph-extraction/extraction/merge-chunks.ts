@@ -38,6 +38,7 @@ const KNOWN_REF = /^k\d+$/;
 const MAX_ALIASES = 10;
 
 function evidenceKey(e: EvidenceDraft): string {
+  if (e.source === 'source_text') return `D:${e.sourceObjectId}:${e.charStart}:${e.charEnd}`;
   return e.source === 'segment'
     ? `S:${e.segmentId}:${e.charStart}:${e.charEnd}`
     : `N:${e.noteVersion}:${e.charStart}:${e.charEnd}:${e.charStart === null ? e.quote : ''}`;

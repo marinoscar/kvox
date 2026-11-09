@@ -357,7 +357,7 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
 
       const validated = validateExtraction(result.value, chunkCtx);
       if (!validated.ok) throw new TerminalExtractionError('invalid_output', validated.message);
-      outcomes.push(shiftToNote(validated, chunk));
+      outcomes.push(shiftToNote(validated, chunk, ctx.source !== null));
 
       if (multi && i < chunks.length - 1) {
         stats.chunks = { total: chunks.length, completed: outcomes.length };

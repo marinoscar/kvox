@@ -11,7 +11,7 @@
 // user's private content.
 // =============================================================================
 
-import { Injectable, NotFoundException, Inject, Optional } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, Optional } from '@nestjs/common';
 
 import { KvoxTimeZoneService } from '../../core/index.js';
 
@@ -20,8 +20,9 @@ import { defaultSpeakerName, parseSpeakerIdentities } from '../../transcripts/in
 import { NOTE_NOT_FOUND_MESSAGE, NoteOriginService } from '../../notes/index.js';
 import { GraphOntologyService, GraphSelfService } from '../../graph/index.js';
 import type { UserGuidance } from './dto/extraction.dto.js';
+import { readNoteSourceText, type NoteSourceFields, type NoteSourceText } from './source-text.js';
 import { MAX_KNOWN_ENTITIES, type ExtractionInput, type KnownEntityRow } from './extraction-context.js';
-import { KVOX_PRISMA } from '../../ports/index.js';
+import { KVOX_OBJECT_STORE, KVOX_PRISMA, type KvoxObjectStorePort } from '../../ports/index.js';
 import type { KvoxGraphDb } from '../../graph/index.js';
 
 /** How far back "recently mentioned" looks (§6). */
@@ -41,12 +42,15 @@ export interface LoadExtractionInput {
 
 @Injectable()
 export class ExtractionInputLoader {
+  private readonly logger = new Logger(ExtractionInputLoader.name);
+
   constructor(
     @Inject(KVOX_PRISMA) private readonly prisma: KvoxGraphDb,
     private readonly origin: NoteOriginService,
     private readonly ontology: GraphOntologyService,
     @Optional() private readonly zones?: KvoxTimeZoneService,
     @Optional() private readonly selfIdentity?: GraphSelfService,
+    @Optional() @Inject(KVOX_OBJECT_STORE) private readonly store?: KvoxObjectStorePort,
   ) {}
 
   async load(args: LoadExtractionInput): Promise<ExtractionInput> {
@@ -104,6 +108,8 @@ export class ExtractionInputLoader {
       const name = overlaid && overlaid.trim().length > 0 ? overlaid : null;
       return { id: s.id, label: s.label, displayName: name, personEntityId: personBySpeaker.get(s.id) ?? null };
     });
+
+    const sourceText = await this.loadSourceText(note, userId);
 
     const effectiveSchema = await this.ontology.effectiveSchemaFor(userId);
 
@@ -174,6 +180,7 @@ export class ExtractionInputLoader {
         contextText: note.contextText,
         createdAt: note.createdAt,
       },
+      sourceText,
       transcript: transcript
         ? { id: transcript.id, title: transcript.title, recordedAt: transcript.recordedAt, createdAt: transcript.createdAt }
         : null,
@@ -194,6 +201,15 @@ export class ExtractionInputLoader {
       // The note owner's zone: the meeting date is the local day of the recording.
       timeZone: (await this.zones?.forUser(userId)) ?? 'UTC',
     };
+  }
+
+  /** The stored text of the document the note was generated from (#789), or null: see `readNoteSourceText`. */
+  private loadSourceText(note: NoteSourceFields, userId: string): Promise<NoteSourceText | null> {
+    if (!this.store) return Promise.resolve(null);
+    return readNoteSourceText(this.store, note, userId, (reason) =>
+      // Never the text, never an error message: the note is the fallback.
+      this.logger.warn(`kg.extract: the source text of a note is ${reason === 'too_large' ? 'too large' : 'unreadable'}; reading the note instead`),
+    );
   }
 
   /** Entities with their alias strings, as `KnownEntityRow`s. */
