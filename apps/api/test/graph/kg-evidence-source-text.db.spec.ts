@@ -46,9 +46,10 @@ describeWithDb('kg_evidence source-text anchor (real Postgres)', () => {
     // exactly what the trigger refuses.
     await prisma.kgEntity.deleteMany({ where: owner });
     await prisma.kgEvidence.deleteMany({ where: owner });
-    await prisma.storageObject.deleteMany({ where: { uploadedBy: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.noteVersion.deleteMany({ where: { note: owner } });
+    // Notes BEFORE storage objects: `notes.source_object_id` is a Restrict FK to the object.
     await prisma.note.deleteMany({ where: owner });
+    await prisma.storageObject.deleteMany({ where: { uploadedBy: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.user.deleteMany({ where: { email: { startsWith: EMAIL_PREFIX } } });
   });
 

@@ -72,9 +72,10 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
     await prisma.transcriptSegment.deleteMany({ where: { transcript: owner } });
     await prisma.transcriptSpeaker.deleteMany({ where: { transcript: owner } });
     await prisma.transcript.deleteMany({ where: owner });
-    await prisma.storageObject.deleteMany({ where: { uploadedBy: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.noteVersion.deleteMany({ where: { note: owner } });
+    // Notes BEFORE storage objects: `notes.source_object_id` is a Restrict FK to the object.
     await prisma.note.deleteMany({ where: owner });
+    await prisma.storageObject.deleteMany({ where: { uploadedBy: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.user.deleteMany({ where: { email: { startsWith: EMAIL_PREFIX } } });
   });
 
