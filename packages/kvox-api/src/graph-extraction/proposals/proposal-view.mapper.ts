@@ -79,6 +79,9 @@ export interface EvidenceRowInput {
   /** #387 — an import citation's stored file and the node's source IRI. */
   importObjectId?: string | null;
   sourceIri?: string | null;
+  /** #789 — a source-text citation's stored text (null once purged) and the length its offsets index. */
+  sourceObjectId?: string | null;
+  sourceTextLength?: number | null;
   /**
    * #604 — the cited transcript's provider, joined on the evidence read
    * (`include: { transcript: { select: { provider: true } } }`). `null` once the
@@ -294,8 +297,11 @@ export function displayOf(
 
 export function evidenceViewOf(e: EvidenceRowInput, lookups: ViewLookups): EvidenceView {
   const isSegment = e.segmentId !== null || e.transcriptId !== null || e.segmentRev !== null || e.startMs !== null;
+  // #789: a source-text citation also names its note (the deep link), so it is told apart first, by
+  // the length that survives the text being purged.
+  const isSourceText = !isSegment && e.sourceTextLength != null;
   // #387: an import citation names the uploaded file, never a segment or a note.
-  const isImport = !isSegment && e.noteId === null && (Boolean(e.importObjectId) || Boolean(e.sourceIri));
+  const isImport = !isSegment && !isSourceText && e.noteId === null && (Boolean(e.importObjectId) || Boolean(e.sourceIri));
   let stale: boolean;
   let speakerName: string | null = null;
   // #604: only segment evidence can play, and only from a transcript with audio
@@ -303,6 +309,9 @@ export function evidenceViewOf(e: EvidenceRowInput, lookups: ViewLookups): Evide
   const hasAudio = isSegment && e.transcript != null && transcriptHasAudio(e.transcript.provider);
   if (isImport) {
     stale = false;
+  } else if (isSourceText) {
+    // The text object is immutable; it is stale only once purged (the FK went NULL).
+    stale = e.sourceObjectId == null;
   } else if (isSegment) {
     const current = e.segmentId ? lookups.segments.get(e.segmentId) : undefined;
     speakerName = current?.speakerName ?? null;
@@ -313,7 +322,7 @@ export function evidenceViewOf(e: EvidenceRowInput, lookups: ViewLookups): Evide
   }
   return {
     id: e.id,
-    source: isImport ? 'import' : isSegment ? 'segment' : 'note',
+    source: isImport ? 'import' : isSegment ? 'segment' : isSourceText ? 'source_text' : 'note',
     transcriptId: e.transcriptId,
     segmentId: e.segmentId,
     segmentRev: e.segmentRev,
@@ -326,6 +335,8 @@ export function evidenceViewOf(e: EvidenceRowInput, lookups: ViewLookups): Evide
     quote: e.quote,
     importObjectId: e.importObjectId ?? null,
     sourceIri: e.sourceIri ?? null,
+    sourceObjectId: e.sourceObjectId ?? null,
+    sourceTextLength: e.sourceTextLength ?? null,
     speakerName,
     hasAudio,
     stale,

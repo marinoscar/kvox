@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+
 import { BadRequestException, ConflictException } from '@nestjs/common';
 
 import type { EvidenceSpanInput } from './dto/proposal.dto.js';
@@ -10,12 +12,24 @@ const OTHER_TRANSCRIPT = '0c000000-0000-4000-8000-000000000002';
 const SEG = '0d000000-0000-4000-8000-000000000001';
 const BODY = '# Kickoff\n\nSasha   Example\njoined Lambda.';
 const SEG_TEXT = "Hi, I'm Sasha Example.";
+const SOURCE_OBJECT = '0e000000-0000-4000-8000-000000000001';
+const SOURCE_TEXT = 'Intro paragraph.\n\nPerson K1 leads   Project P1 for Org Alpha.\n\nClosing paragraph.';
 
-function setup(opts: { originId?: string | null; segmentTranscript?: string; segmentRev?: number } = {}) {
+function setup(
+  opts: { originId?: string | null; segmentTranscript?: string; segmentRev?: number; sourceText?: string | null; provider?: string | null } = {},
+) {
   const origin = { resolve: jest.fn(async () => (opts.originId === null ? null : { id: opts.originId ?? TRANSCRIPT })) };
   const tx = {
     note: {
-      findFirst: jest.fn(async () => ({ id: NOTE, currentVersion: 2, sourceType: 'transcript', sourceTranscriptId: TRANSCRIPT, sourceNoteId: null })),
+      findFirst: jest.fn(async () => ({
+        id: NOTE,
+        currentVersion: 2,
+        sourceType: opts.sourceText === undefined ? 'transcript' : 'document',
+        sourceTranscriptId: TRANSCRIPT,
+        sourceNoteId: null,
+        sourceObjectId: opts.sourceText === undefined ? null : '0e000000-0000-4000-8000-0000000000aa',
+        provider: opts.provider === undefined ? 'openai' : opts.provider,
+      })),
     },
     noteVersion: { findUnique: jest.fn(async ({ where }: any) => (where.noteId_version.version === 2 ? { body: BODY } : null)) },
     transcriptSegment: {
@@ -28,12 +42,25 @@ function setup(opts: { originId?: string | null; segmentTranscript?: string; seg
   };
   // The mock serves both phases (#615): `prepare` reads the note through the root
   // client before the transaction, `validate` reads it again on `tx`.
-  const real = new SpanValidator(origin as never, tx as never);
+  const store = {
+    describe: jest.fn(async (ids: readonly string[]) => {
+      const out = new Map<string, unknown>();
+      if (ids.includes('0e000000-0000-4000-8000-0000000000aa')) {
+        out.set('0e000000-0000-4000-8000-0000000000aa', { id: 'x', metadata: { extractedObjectId: SOURCE_OBJECT } });
+      }
+      if (ids.includes(SOURCE_OBJECT) && opts.sourceText) {
+        out.set(SOURCE_OBJECT, { id: SOURCE_OBJECT, ownerId: OWNER, managedBy: 'notes', size: opts.sourceText.length });
+      }
+      return out;
+    }),
+    openRead: jest.fn(async () => Readable.from([Buffer.from(opts.sourceText ?? '', 'utf8')])),
+  };
+  const real = new SpanValidator(origin as never, tx as never, store as never);
   const validator = {
     validate: async (t: never, source: SpanSource, spans: readonly EvidenceSpanInput[]) =>
       real.validate(t, source, spans, await real.prepare(source, spans)),
   };
-  return { validator, tx: tx as never, origin };
+  return { validator, tx: tx as never, origin, store };
 }
 
 const reasonOf = (e: unknown) => ((e as BadRequestException).getResponse() as { details: { reason: string } }).details.reason;
@@ -76,6 +103,86 @@ describe('SpanValidator', () => {
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(BadRequestException);
     expect(reasonOf(err)).toBe('span_mismatch');
+  });
+
+  describe('a source-text span (#789)', () => {
+    const start = SOURCE_TEXT.indexOf('Person K1');
+    const end = SOURCE_TEXT.indexOf('Org Alpha.') + 'Org Alpha.'.length;
+    const span = (over: Partial<Extract<EvidenceSpanInput, { source: 'source_text' }>> = {}): EvidenceSpanInput => ({
+      source: 'source_text',
+      charStart: start,
+      charEnd: end,
+      quote: 'Person K1 leads Project P1 for Org Alpha.',
+      ...over,
+    });
+
+    it('becomes source-text evidence: the text object, its length, the note, offsets into the text', async () => {
+      const { validator, tx } = setup({ sourceText: SOURCE_TEXT });
+      const [e] = await validator.validate(tx, { ownerId: OWNER, noteId: NOTE }, [span()]);
+      expect(e).toEqual({
+        transcriptId: null,
+        segmentId: null,
+        segmentRev: null,
+        startMs: null,
+        endMs: null,
+        noteId: NOTE,
+        noteVersion: 2,
+        charStart: start,
+        charEnd: end,
+        // Whitespace is collapsed, like every other span.
+        quote: 'Person K1 leads Project P1 for Org Alpha.',
+        importObjectId: null,
+        sourceIri: null,
+        sourceObjectId: SOURCE_OBJECT,
+        sourceTextLength: SOURCE_TEXT.length,
+      });
+    });
+
+    it('reads the text in prepare (before the transaction), never in validate', async () => {
+      const { tx, store } = setup({ sourceText: SOURCE_TEXT });
+      const validator = new SpanValidator({ resolve: jest.fn() } as never, tx as never, store as never);
+      const spans = [span()];
+      const context = await validator.prepare({ ownerId: OWNER, noteId: NOTE }, spans);
+      expect(context.sourceText).toEqual({ objectId: SOURCE_OBJECT, text: SOURCE_TEXT });
+      expect(context.originTranscriptId).toBeUndefined();
+      store.describe.mockClear();
+      store.openRead.mockClear();
+      await validator.validate(tx, { ownerId: OWNER, noteId: NOTE }, spans, context);
+      expect(store.describe).not.toHaveBeenCalled();
+      expect(store.openRead).not.toHaveBeenCalled();
+    });
+
+    it('a span that does not match the source text at those positions is 400 span_mismatch', async () => {
+      const { validator, tx } = setup({ sourceText: SOURCE_TEXT });
+      for (const bad of [span({ quote: 'Person K9 leads nothing' }), span({ charEnd: SOURCE_TEXT.length + 50 })]) {
+        const err = await validator.validate(tx, { ownerId: OWNER, noteId: NOTE }, [bad]).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(BadRequestException);
+        expect(reasonOf(err)).toBe('span_mismatch');
+      }
+    });
+
+    it('a note with no stored source text (imported, transcript, purged) is 400 span_outside_source', async () => {
+      for (const opts of [{}, { sourceText: null }, { sourceText: SOURCE_TEXT, provider: null }]) {
+        const { validator, tx } = setup(opts);
+        const err = await validator.validate(tx, { ownerId: OWNER, noteId: NOTE }, [span()]).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(BadRequestException);
+        expect(reasonOf(err)).toBe('span_outside_source');
+      }
+    });
+
+    it('a proposal with no note cannot cite a source', async () => {
+      const { validator, tx } = setup({ sourceText: SOURCE_TEXT });
+      const err = await validator.validate(tx, { ownerId: OWNER, noteId: null }, [span()]).catch((e: unknown) => e);
+      expect(reasonOf(err)).toBe('span_outside_source');
+    });
+
+    it('reads nothing from the store when no span cites the source', async () => {
+      const { validator, tx, store } = setup({ sourceText: SOURCE_TEXT });
+      await validator.validate(tx, { ownerId: OWNER, noteId: NOTE }, [
+        { source: 'note', noteVersion: 2, charStart: 0, charEnd: 9, quote: '# Kickoff' },
+      ]);
+      expect(store.describe).not.toHaveBeenCalled();
+    });
   });
 
   it('a segment span of the origin transcript carries its timing', async () => {

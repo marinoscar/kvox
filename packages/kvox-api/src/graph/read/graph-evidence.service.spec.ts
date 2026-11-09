@@ -3,7 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { MANUAL_EVIDENCE_SOURCE_IRI, evidenceLinkSchema } from '@marinoscar/kvox-contract/graph';
 
 import type { KgEvidenceRow } from '../data/graph-db.js';
-import { GraphEvidenceService, evidenceSourceKind, noteHref, segmentHref } from './graph-evidence.service.js';
+import { GraphEvidenceService, evidenceSourceKind, noteHref, segmentHref, sourceTextHref } from './graph-evidence.service.js';
 
 // =============================================================================
 // GraphEvidenceService (#370): href building and the available / textChanged /
@@ -37,6 +37,8 @@ function ev(over: Partial<KgEvidenceRow>): KgEvidenceRow {
     quote: 'the quote',
     importObjectId: null,
     sourceIri: null,
+    sourceObjectId: null,
+    sourceTextLength: null,
     createdAt: CREATED,
     ...over,
   } as KgEvidenceRow;
@@ -114,6 +116,68 @@ describe('href builders', () => {
     expect(evidenceSourceKind(ev({ sourceIri: MANUAL_EVIDENCE_SOURCE_IRI }))).toBe('manual');
     expect(evidenceSourceKind(ev({ subjectKind: 'relation', sourceIri: MANUAL_EVIDENCE_SOURCE_IRI }))).toBe('manual');
     expect(evidenceSourceKind(ev({ sourceIri: 'https://example.test/x' }))).toBe('import');
+  });
+});
+
+describe('a source-text citation (#789)', () => {
+  const TEXT = '00000000-0000-4000-8000-0000000000f1';
+  const cited = (over: Partial<KgEvidenceRow> = {}) =>
+    ev({ noteId: NOTE, noteVersion: 2, sourceObjectId: TEXT, sourceTextLength: 4000, charStart: 120, charEnd: 160, ...over });
+
+  it('is told apart from a note citation by source_text_length, even once the text object is gone', () => {
+    expect(evidenceSourceKind(cited())).toBe('source_text');
+    // SetNull cleared the text object and the note: the length still says what it was.
+    expect(evidenceSourceKind(cited({ sourceObjectId: null, noteId: null }))).toBe('source_text');
+    // A plain note span with the same note and offsets stays a note citation.
+    expect(evidenceSourceKind(ev({ noteId: NOTE, noteVersion: 2, charStart: 120, charEnd: 160 }))).toBe('note');
+  });
+
+  it('builds the deep link to the note at the span in the SOURCE text', () => {
+    expect(sourceTextHref(NOTE, 120, 160)).toBe(`/notes/${NOTE}?source=120-160`);
+    expect(sourceTextHref(NOTE, null, null)).toBe(`/notes/${NOTE}`);
+  });
+
+  it('links an owned note whose text is still stored, with the quote and the contract shape', async () => {
+    const { svc } = build({ notes: [{ id: NOTE, ownerId: USER, title: 'Plan summary', deletedAt: null, currentVersion: 5 }] });
+    const [link] = await svc.resolve(USER, [cited()]);
+    expect(link.source).toEqual({
+      kind: 'source_text',
+      noteId: NOTE,
+      noteTitle: 'Plan summary',
+      noteVersion: 2,
+      sourceObjectId: TEXT,
+      charStart: 120,
+      charEnd: 160,
+      sourceTextLength: 4000,
+      available: true,
+      href: `/notes/${NOTE}?source=120-160`,
+    });
+    // A newer note version does not make the SOURCE citation stale: the text is immutable.
+    expect(evidenceLinkSchema.parse(link)).toEqual(link);
+  });
+
+  it('keeps the quote but drops title and link once the stored text was purged', async () => {
+    const { svc } = build({ notes: [{ id: NOTE, ownerId: USER, title: 'Plan summary', deletedAt: null, currentVersion: 2 }] });
+    const [link] = await svc.resolve(USER, [cited({ sourceObjectId: null })]);
+    expect(link.quote).toBe('the quote');
+    expect(link.source).toMatchObject({
+      kind: 'source_text',
+      available: false,
+      href: null,
+      sourceObjectId: null,
+      sourceTextLength: 4000,
+      noteTitle: 'Plan summary',
+    });
+  });
+
+  it('is unavailable when the note is deleted or not the caller\'s', async () => {
+    const { svc } = build({
+      notes: [
+        { id: NOTE, ownerId: 'someone-else', title: 'Their plan', deletedAt: null, currentVersion: 2 },
+      ],
+    });
+    const [link] = await svc.resolve(USER, [cited()]);
+    expect(link.source).toMatchObject({ available: false, href: null, noteTitle: null });
   });
 });
 

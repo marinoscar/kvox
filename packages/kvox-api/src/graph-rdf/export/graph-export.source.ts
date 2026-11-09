@@ -386,7 +386,11 @@ export class GraphExportSource {
       SELECT ev.id::text AS id, ev.subject_kind::text AS subject_kind,
              (SELECT i.sensitivity::text FROM kg_items i WHERE ev.subject_kind = 'item' AND i.id = ev.subject_id) AS subject_sensitivity,
              ev.quote, ev.segment_id::text AS segment_id, ev.start_ms, ev.end_ms,
-             ev.note_id::text AS note_id, ev.note_version, ev.char_start, ev.char_end
+             ev.note_id::text AS note_id, ev.note_version,
+             -- A source-text citation's offsets index the document text, not the note version: a
+             -- TextPositionSelector on the note's IRI would point at the wrong characters (#789).
+             CASE WHEN ev.source_text_length IS NULL THEN ev.char_start END AS char_start,
+             CASE WHEN ev.source_text_length IS NULL THEN ev.char_end END AS char_end
       FROM kg_evidence ev
       WHERE ev.owner_id = ${ownerId}::uuid ${cursor}
         AND (

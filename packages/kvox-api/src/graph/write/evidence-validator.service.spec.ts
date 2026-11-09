@@ -143,6 +143,57 @@ describe('EvidenceValidator', () => {
     ).resolves.toEqual([0]);
   });
 
+  describe('a source-text citation (#789)', () => {
+    const TEXT = 'aaaaaaaa-0000-4000-8000-000000000001';
+    const STRANGER_TEXT = 'aaaaaaaa-0000-4000-8000-000000000002';
+    const sourceEv = (sourceObjectId: string, noteId = NOTE) =>
+      ({
+        noteId,
+        noteVersion: 1,
+        sourceObjectId,
+        sourceTextLength: 900,
+        charStart: 10,
+        charEnd: 40,
+        quote: 'Person K1 leads Project P1',
+      }) as EvidenceInput;
+
+    beforeEach(() => {
+      managed.describe.mockImplementation(async (ids: readonly string[]) => {
+        const rows: Array<[string, { id: string; ownerId: string | null; managedBy: string | null }]> = [];
+        if (ids.includes(TEXT)) rows.push([TEXT, { id: TEXT, ownerId: OWNER, managedBy: 'notes' }]);
+        if (ids.includes(STRANGER_TEXT)) rows.push([STRANGER_TEXT, { id: STRANGER_TEXT, ownerId: OTHER_OWNER, managedBy: 'notes' }]);
+        return new Map(rows);
+      });
+    });
+    afterEach(() => managed.describe.mockImplementation(async () => new Map()));
+
+    it("accepts the owner's own text object on a note the owner can read", async () => {
+      const parsed = await validator.assertReadable(OWNER, [sourceEv(TEXT)], fakeTx() as unknown as KvoxGraphTx);
+      expect(parsed[0]).toMatchObject({ sourceObjectId: TEXT, sourceTextLength: 900, noteId: NOTE });
+    });
+
+    it("refuses another user's text object, by index, without touching the other rows", async () => {
+      await expect(invalidIndexes([sourceEv(TEXT), sourceEv(STRANGER_TEXT)])).resolves.toEqual([1]);
+    });
+
+    it('refuses a text object that does not exist', async () => {
+      await expect(invalidIndexes([sourceEv('aaaaaaaa-0000-4000-8000-0000000000ff')])).resolves.toEqual([0]);
+    });
+
+    it('refuses a text on a note the owner cannot read', async () => {
+      await expect(invalidIndexes([sourceEv(TEXT, FOREIGN_NOTE)])).resolves.toEqual([0]);
+    });
+
+    it('prefetch decides a text object like an import object: the owner\'s own module-managed upload', async () => {
+      const access = await new EvidenceValidator(managed as never, transcriptAccess as never, { transcript: { findMany: jest.fn(async () => []) } } as never).prefetch(
+        OWNER,
+        [sourceEv(TEXT), sourceEv(STRANGER_TEXT)],
+      );
+      expect(access.importObjects.get(TEXT)).toBe(true);
+      expect(access.importObjects.get(STRANGER_TEXT)).toBe(false);
+    });
+  });
+
   it('makes at most one query per source table, whatever the batch size', async () => {
     const tx = fakeTx();
     const batch = Array.from({ length: 40 }, (_, i) => (i % 2 === 0 ? noteEv(NOTE) : segEv(TRANSCRIPT, SEGMENT)));

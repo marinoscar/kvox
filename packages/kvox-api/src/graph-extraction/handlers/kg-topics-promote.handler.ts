@@ -171,6 +171,8 @@ export function evidenceDraftOf(row: {
   charStart: number | null;
   charEnd: number | null;
   quote: string;
+  sourceObjectId?: string | null;
+  sourceTextLength?: number | null;
 }): EvidenceDraft | null {
   if (row.transcriptId && row.segmentId && row.segmentRev !== null && row.startMs !== null && row.endMs !== null) {
     return {
@@ -185,7 +187,27 @@ export function evidenceDraftOf(row: {
       quote: row.quote,
     };
   }
-  if (row.noteId && row.noteVersion !== null) {
+  // #789: a source-text citation keeps its source-text anchor; it is not a note span.
+  if (
+    row.noteId &&
+    row.noteVersion !== null &&
+    row.sourceObjectId &&
+    row.sourceTextLength != null &&
+    row.charStart !== null &&
+    row.charEnd !== null
+  ) {
+    return {
+      source: 'source_text',
+      noteId: row.noteId,
+      noteVersion: row.noteVersion,
+      sourceObjectId: row.sourceObjectId,
+      sourceTextLength: row.sourceTextLength,
+      charStart: row.charStart,
+      charEnd: row.charEnd,
+      quote: row.quote,
+    };
+  }
+  if (row.noteId && row.noteVersion !== null && row.sourceTextLength == null) {
     return {
       source: 'note',
       noteId: row.noteId,
