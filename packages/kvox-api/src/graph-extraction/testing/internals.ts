@@ -28,3 +28,4 @@ export { decide } from '../resolution/resolution.service.js';
 export { ResolutionStage } from '../resolution/resolution.stage.js';
 export { SCORE_WEIGHTS, bandFor, rankCandidates, scoreCandidate } from '../resolution/score.js';
 export { DEFAULT_GRAPH_CALIBRATION, resolveGraphCalibration } from '../resolution/graph-calibration.js';
+export { buildEntityProfileText, buildItemProfileText } from '../resolution/profile-text.js';

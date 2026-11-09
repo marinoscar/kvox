@@ -72,8 +72,9 @@
     "real-data": [],
     "live": [],
     "kg": ["fixtures"],
+    "calibration": ["fixtures"],
     "parity": ["fixtures", "kg"],
-    "cli": ["ask", "ask-run", "fixtures", "kg", "live", "real-data"],
+    "cli": ["ask", "ask-run", "calibration", "fixtures", "kg", "live", "real-data"],
     "ask-run": ["ask", "fixtures", "live"]
   }
 }
