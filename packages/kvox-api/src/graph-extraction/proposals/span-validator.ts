@@ -19,6 +19,13 @@
 //                 400 `span_outside_source` otherwise; `segment.rev ===
 //                 segmentRev` (409 `stale_segment_rev`); bounds and quote as
 //                 above. The stored row carries the segment's `start_ms/end_ms`.
+//   source span   (#789) a span of the full text the proposal's note was
+//                 generated from (`readNoteSourceText`: the stored extracted
+//                 text of its source document). The note must have such a text
+//                 (400 `span_outside_source` otherwise); `0 ≤ charStart <
+//                 charEnd ≤ text.length`; the slice equals `quote` as above. The
+//                 stored row anchors the text object, keeps the note for the
+//                 deep link, and records the text's length.
 //
 // A citation must never become a side channel (§12): a segment of some other
 // transcript — even one the caller can read — is outside this proposal's
@@ -37,12 +44,13 @@
 // snapshot the write commits against.
 // =============================================================================
 
-import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, Optional } from '@nestjs/common';
 
 import { NoteOriginService } from '../../notes/index.js';
 import type { EvidenceInput } from '@marinoscar/kvox-contract/graph';
 import type { KvoxGraphDb, KvoxGraphTx } from '../../graph/index.js';
-import { KVOX_PRISMA } from '../../ports/index.js';
+import { KVOX_OBJECT_STORE, KVOX_PRISMA, type KvoxObjectStorePort } from '../../ports/index.js';
+import { readNoteSourceText, type NoteSourceText } from '../extraction/source-text.js';
 import { GRAPH_CONFLICT_REASONS } from '../../graph/index.js';
 import { PROPOSAL_BAD_REQUEST_REASONS, type EvidenceSpanInput } from './dto/proposal.dto.js';
 
@@ -87,6 +95,11 @@ export interface SpanContext {
    * span, so nothing was resolved.
    */
   readonly originTranscriptId?: string | null;
+  /**
+   * The text the proposal note was generated from (#789), or `null` when it has none.
+   * Absent when the prepared spans held no source span, so nothing was read.
+   */
+  readonly sourceText?: NoteSourceText | null;
 }
 
 /** The note predicate both phases apply: the owner's own, live note. */
@@ -105,6 +118,7 @@ export class SpanValidator {
   constructor(
     private readonly origin: NoteOriginService,
     @Inject(KVOX_PRISMA) private readonly prisma: KvoxGraphDb,
+    @Optional() @Inject(KVOX_OBJECT_STORE) private readonly store?: KvoxObjectStorePort,
   ) {}
 
   /**
@@ -116,15 +130,24 @@ export class SpanValidator {
    */
   async prepare(source: SpanSource, spans: readonly EvidenceSpanInput[]): Promise<SpanContext> {
     const base = { ownerId: source.ownerId, noteId: source.noteId };
-    if (!spans.some((span) => span.source === 'segment')) return base;
-    if (!source.noteId) return { ...base, originTranscriptId: null };
+    const needsOrigin = spans.some((span) => span.source === 'segment');
+    const needsSource = spans.some((span) => span.source === 'source_text');
+    if (!needsOrigin && !needsSource) return base;
+    if (!source.noteId) {
+      return { ...base, ...(needsOrigin ? { originTranscriptId: null } : {}), ...(needsSource ? { sourceText: null } : {}) };
+    }
 
     const note = await this.prisma.note.findFirst({
       where: liveNoteWhere({ ...source, noteId: source.noteId }),
-      select: { id: true, sourceType: true, sourceTranscriptId: true, sourceNoteId: true },
+      select: { id: true, sourceType: true, sourceTranscriptId: true, sourceNoteId: true, sourceObjectId: true, provider: true },
     });
-    const origin = note ? await this.origin.resolve(note, source.ownerId) : null;
-    return { ...base, originTranscriptId: origin?.id ?? null };
+    const origin = note && needsOrigin ? await this.origin.resolve(note, source.ownerId) : null;
+    const sourceText = note && needsSource && this.store ? await readNoteSourceText(this.store, note, source.ownerId) : null;
+    return {
+      ...base,
+      ...(needsOrigin ? { originTranscriptId: origin?.id ?? null } : {}),
+      ...(needsSource ? { sourceText } : {}),
+    };
   }
 
   /**
@@ -166,9 +189,42 @@ export class SpanValidator {
       return context.originTranscriptId;
     };
 
+    // The source text was read by `prepare`, before the transaction (#615).
+    const sourceText = (): NoteSourceText | null => {
+      if (context.sourceText === undefined) {
+        // A programming bug: `prepare` was handed spans without this source span.
+        throw new Error('SpanValidator.validate: a source span needs a context prepared with it');
+      }
+      return context.sourceText;
+    };
+
     const out: EvidenceInput[] = [];
     for (const [index, span] of spans.entries()) {
       if (!note) throw outside(index);
+      if (span.source === 'source_text') {
+        const text = sourceText();
+        if (!text) throw outside(index);
+        if (!spanMatches(text.text, span.charStart, span.charEnd, span.quote)) {
+          throw badSpan(PROPOSAL_BAD_REQUEST_REASONS.SPAN_MISMATCH, index, 'The selected text does not match the source document at those positions.');
+        }
+        out.push({
+          transcriptId: null,
+          segmentId: null,
+          segmentRev: null,
+          startMs: null,
+          endMs: null,
+          noteId: note.id,
+          noteVersion: note.currentVersion,
+          charStart: span.charStart,
+          charEnd: span.charEnd,
+          quote: normalizeSpanText(text.text.slice(span.charStart, span.charEnd)),
+          importObjectId: null,
+          sourceIri: null,
+          sourceObjectId: text.objectId,
+          sourceTextLength: text.text.length,
+        });
+        continue;
+      }
       if (span.source === 'note') {
         if (span.noteVersion !== note.currentVersion) {
           throw new ConflictException({
@@ -196,6 +252,8 @@ export class SpanValidator {
           quote: normalizeSpanText(version.body.slice(span.charStart, span.charEnd)),
           importObjectId: null,
           sourceIri: null,
+          sourceObjectId: null,
+          sourceTextLength: null,
         });
         continue;
       }
@@ -230,6 +288,8 @@ export class SpanValidator {
         quote: normalizeSpanText(segment.text.slice(span.charStart, span.charEnd)),
         importObjectId: null,
         sourceIri: null,
+        sourceObjectId: null,
+        sourceTextLength: null,
       });
     }
     return out;

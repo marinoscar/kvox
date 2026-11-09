@@ -142,3 +142,29 @@ describe('selfMatchScore (#778)', () => {
     expect(selfMatchScore(0.9)).toBeGreaterThan(0.9);
   });
 });
+
+describe('scoreCandidate with a calibrated vector floor (#681)', () => {
+  it('is unchanged when no floor is given: the OpenAI baseline of 0.75', () => {
+    expect(scoreCandidate(f({ cosine: 0.875 })).score).toBeCloseTo(0.45, 4);
+    expect(scoreCandidate(f({ cosine: 0.875 }), 0.75).score).toBeCloseTo(0.45, 4);
+  });
+
+  it('gives a higher-baseline model no vector evidence below its own floor', () => {
+    // A cosine that is strong evidence for OpenAI (0.875 -> 0.45) is below bge's 0.83 floor-and-a-bit.
+    const bge = scoreCandidate(f({ cosine: 0.8 }), 0.83);
+    expect(bge.score).toBeCloseTo(0.3, 4);
+    expect(scoreCandidate(f({ cosine: 0.8 })).score).toBeGreaterThan(bge.score);
+  });
+
+  it('scores the same fraction of its headroom the same on every model', () => {
+    const openai = scoreCandidate(f({ cosine: 0.75 + 0.5 * (1 - 0.75) }), 0.75);
+    const bge = scoreCandidate(f({ cosine: 0.83 + 0.5 * (1 - 0.83) }), 0.83);
+    expect(bge.score).toBeCloseTo(openai.score, 4);
+  });
+
+  it('never lets a vector-only candidate auto-link at the default 0.9 preference, whatever the floor', () => {
+    for (const floor of [0.75, 0.83, 0.9]) {
+      expect(scoreCandidate(f({ cosine: 1 }), floor).score).toBeLessThan(thresholds.autoLinkThreshold);
+    }
+  });
+});

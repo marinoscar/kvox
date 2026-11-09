@@ -174,7 +174,7 @@ export class WorkItemDedupStage implements ProposalStage, OnModuleInit {
         statement: item.row.payload.statement,
         vector: embedded.vectors[i] ?? null,
       });
-      const keep = new Set(selectCandidates(all).map((c) => c.itemId));
+      const keep = new Set(selectCandidates(all, embedded.calibration).map((c) => c.itemId));
       item.candidates = all.filter((c) => keep.has(c.itemId));
     }
 
@@ -213,7 +213,7 @@ export class WorkItemDedupStage implements ProposalStage, OnModuleInit {
           if (at && at.rowId === item.row.id) byItem.set(at.itemId, v);
         }
       }
-      const mapped = mapItemVerdicts(item.row.payload.kind, item.candidates, byItem, unavailable);
+      const mapped = mapItemVerdicts(item.row.payload.kind, item.candidates, byItem, unavailable, embedded.calibration);
       stats[mapped.dedup.verdict] += 1;
       if (mapped.flags.includes('possible_duplicate')) stats.possibleDuplicates += 1;
       await this.write(ctx, item.row, { ...item.row.payload, dedup: mapped.dedup }, mapped.flags);

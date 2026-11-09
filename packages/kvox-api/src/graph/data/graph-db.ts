@@ -287,6 +287,10 @@ export interface KgEvidenceRow {
   importObjectId: string | null;
   /** The `source_iri` column. */
   sourceIri: string | null;
+  /** The `source_object_id` column (#789): the stored text a source-text citation indexes. */
+  sourceObjectId: string | null;
+  /** The `source_text_length` column (#789): set on every source-text citation, even once the text is purged. */
+  sourceTextLength: number | null;
   /** The `created_at` column. */
   createdAt: Date;
 }

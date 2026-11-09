@@ -10,6 +10,7 @@
 // =============================================================================
 
 import type * as AskRun from '../ask-run/index.js';
+import { runCalibrateCommand } from '../calibration/index.js';
 import { KG_EVAL_EXIT, runKgCommand, type EvalCommandIo, type KgCommandOptions } from './kg-command.js';
 
 /**
@@ -20,6 +21,7 @@ import { KG_EVAL_EXIT, runKgCommand, type EvalCommandIo, type KgCommandOptions }
 export const KVOX_EVAL_USAGE = `usage: kvox-eval kg [flags]    score knowledge-graph extraction against the golden set
        kvox-eval ask [flags]   run the Ask evaluation headless (in-memory database, live model)
        kvox-eval ask --replay  the Ask harness's scripted self-test (no model, no key)
+       kvox-eval calibrate ... measure the graph's embedding thresholds per model (see --help)
        kvox-eval kg --help     the kg flags
        kvox-eval ask --help    the ask flags`;
 
@@ -35,6 +37,7 @@ export const KVOX_EVAL_USAGE = `usage: kvox-eval kg [flags]    score knowledge-g
 export async function main(argv: string[], io: EvalCommandIo = defaultIo(), options: KgCommandOptions = {}): Promise<number> {
   const [command, ...rest] = argv;
   if (command === 'kg') return runKgCommand(rest, io, options);
+  if (command === 'calibrate') return runCalibrateCommand(rest, io);
   if (command === 'ask') {
     // Loaded only here: the ask command brings Nest, the domain slices, PGlite and
     // the generated Prisma client, which `kvox-eval kg` and `--help` never need.

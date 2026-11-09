@@ -80,7 +80,7 @@ function entityItem(id: string, ref: string, label: string, extra: Partial<Row> 
 function build(options: {
   items: Row[];
   candidates?: Record<string, RawCandidate[]>;
-  embedder?: { ok: false; reason: string } | { ok: true };
+  embedder?: { ok: false; reason: string } | { ok: true; calibration?: { vectorFloor: number; itemCosine: number; itemSameConfidentCosine: number } };
   speakerLinked?: boolean;
   adjudicate?: jest.Mock;
   self?: { entityId: string; label: string; aliases: string[] } | null;
@@ -119,7 +119,7 @@ function build(options: {
   const embedder = {
     resolve: jest.fn(async () =>
       embedResult.ok
-        ? { ok: true, model: 'emb', providerId: 'openai', maxBatchSize: 128, embed: async (t: string[]) => t.map(() => [0.1]) }
+        ? { ok: true, model: 'emb', providerId: 'openai', calibration: embedResult.calibration ?? { vectorFloor: 0.75, itemCosine: 0.8, itemSameConfidentCosine: 0.92 }, maxBatchSize: 128, embed: async (t: string[]) => t.map(() => [0.1]) }
         : embedResult,
     ),
   };
@@ -251,6 +251,30 @@ describe('ResolutionService.resolveProposal', () => {
     const stats = await t.service.resolveProposal(t.ctx(), 'kg.extract');
     expect(stats.vectorArm).toBe('ok');
     expect(t.candidates.forMention.mock.calls[0][1]).toMatchObject({ vector: { values: [0.1], model: 'emb' } });
+  });
+
+  it('scores a vector candidate against the embedding model\'s own floor (#681)', async () => {
+    const candidates = { 'Sasha Example': [raw(SASHA, { cosine: 0.9 })] };
+    const openai = build({ items: [entityItem('i1', 'e1', 'Sasha Example')], candidates, embedder: { ok: true } });
+    await openai.service.resolveProposal(openai.ctx(), 'kg.extract');
+    // 0.30 + 0.30 * (0.9 - 0.75) / 0.25 = 0.48: below newThreshold 0.55, so new, with the score recorded.
+    expect(openai.updates[0].resolution.score).toBeCloseTo(0.48, 4);
+
+    const bge = build({
+      items: [entityItem('i1', 'e1', 'Sasha Example')],
+      candidates,
+      embedder: { ok: true, calibration: { vectorFloor: 0.83, itemCosine: 0.87, itemSameConfidentCosine: 0.95 } },
+    });
+    await bge.service.resolveProposal(bge.ctx(), 'kg.extract');
+    // 0.30 + 0.30 * (0.9 - 0.83) / 0.17 = 0.4235: the same cosine is weaker evidence on a higher-baseline model.
+    expect(bge.updates[0].resolution.score).toBeCloseTo(0.4235, 4);
+    expect(bge.updates[0].resolution.score).toBeLessThan(openai.updates[0].resolution.score);
+  });
+
+  it('keeps a vector-free ranking on the baseline without asking the embedder', async () => {
+    const t = build({ items: [], embedder: { ok: true } });
+    await t.service.rankMentions(USER, [{ key: 'k', type: 'Person', label: 'Nobody', aliases: [], context: {} as never }], t.ctx().preferences.resolution);
+    expect(t.embedder.resolve).not.toHaveBeenCalled();
   });
 
   it('adjudicates the middle band, and makes no provider call with adjudication off', async () => {

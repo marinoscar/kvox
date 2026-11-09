@@ -208,6 +208,28 @@ export interface KvoxAiRuntime {
 export type KvoxStructuredOutputMode = 'native' | 'prompted';
 
 /**
+ * How `createKvoxAi.chat` gets tool calls out of a model (#654).
+ *
+ * - `native` (the default): the request carries the tools and the provider's own
+ *   tool calling answers (the OpenAI-compatible wire, or the Copilot adapter's
+ *   session bridge). The request is unchanged byte for byte.
+ * - `prompted`: the provider (an OpenAI-compatible server that does not implement
+ *   tool calls) is given no tools. Each Ask step is ONE plain call whose system
+ *   prompt lists the tools and asks for a single JSON value, either the tool calls
+ *   to make or the final answer; the answer is parsed and validated, ONE repair
+ *   call is made when it does not validate, and the result is mapped back to the
+ *   same chat events a native step produces (`tool_call`, `delta`, `step_end`,
+ *   `done`). See `chat/prompted-tools.ts`.
+ *
+ * A `prompted` model is still a model that can run an Ask loop, so the host lists
+ * its row with `toolCalling: true` (as a `prompted` structured-output row keeps
+ * `structuredOutput: true`).
+ *
+ * @stability experimental
+ */
+export type KvoxToolCallingMode = 'native' | 'prompted';
+
+/**
  * One model the host enabled, as task-to-model choice reads it: the chooser's
  * candidate flags plus the numbers the token budget takes.
  *
@@ -240,6 +262,11 @@ export interface KvoxAiEnabledModel {
    * Absent means unknown: the port then does not refuse an image up front.
    */
   vision?: boolean;
+  /**
+   * How `chat` gets tool calls out of the model (#654). Absent means `native`,
+   * so every existing row keeps its behaviour.
+   */
+  toolCallingMode?: KvoxToolCallingMode;
 }
 
 /**
@@ -339,6 +366,8 @@ export interface KvoxModelInfo {
   structuredOutputMode?: KvoxStructuredOutputMode;
   /** Whether the model accepts image input (`vision_input`, issue #810). Absent means unknown. */
   vision?: boolean;
+  /** How `chat` gets tool calls out of the model (#654). Absent means `native`. */
+  toolCallingMode?: KvoxToolCallingMode;
 }
 
 /**

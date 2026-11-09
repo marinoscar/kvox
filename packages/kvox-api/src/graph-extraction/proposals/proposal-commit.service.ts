@@ -275,6 +275,8 @@ function toEvidenceInputs(
     quote: string;
     importObjectId: string | null;
     sourceIri: string | null;
+    sourceObjectId: string | null;
+    sourceTextLength: number | null;
   }>,
 ): EvidenceInput[] {
   return rows.map((e) => ({
@@ -290,6 +292,8 @@ function toEvidenceInputs(
     quote: e.quote,
     importObjectId: e.importObjectId,
     sourceIri: e.sourceIri,
+    sourceObjectId: e.sourceObjectId,
+    sourceTextLength: e.sourceTextLength,
   }));
 }
 

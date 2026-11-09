@@ -34,7 +34,7 @@ import type { EvidenceLink } from './dto/graph-read.dto.js';
 import { isManualEvidenceRow } from '../write/manual-evidence.js';
 import type { KvoxGraphDb, KgEvidenceRow as KgEvidence } from '../data/graph-db.js';
 
-export type EvidenceSourceKind = 'segment' | 'note' | 'import' | 'manual';
+export type EvidenceSourceKind = 'segment' | 'note' | 'source_text' | 'import' | 'manual';
 
 /** The subjects `listForSubject` accepts — the three kinds of curated graph row. */
 export type EvidenceSubjectKind = 'entity' | 'relation' | 'item';
@@ -56,15 +56,19 @@ export const SUBJECT_EVIDENCE_MAX = 50;
 /**
  * Which anchor a row cites. `note_version`/`segment_rev` survive `SetNull`, so
  * the kind does too. A manual citation (#586) is told apart from a row whose
- * anchors all went NULL by its reserved `source_iri`.
+ * anchors all went NULL by its reserved `source_iri`. A source-text citation
+ * (#789) is told apart from a note citation by `source_text_length`, tested
+ * FIRST because its `note_id`/`note_version` are set too and its offsets index
+ * the source text, not the note body; the length survives `SetNull` of the text.
  */
 export function evidenceSourceKind(
   row: Pick<
     KgEvidence,
     'importObjectId' | 'sourceIri' | 'noteId' | 'noteVersion' | 'charStart' | 'transcriptId' | 'segmentId'
-  > & { subjectKind: string },
+  > & { subjectKind: string; sourceTextLength?: number | null },
 ): EvidenceSourceKind {
   if (isManualEvidenceRow(row)) return 'manual';
+  if (row.sourceTextLength != null) return 'source_text';
   if (row.subjectKind === 'import' || row.importObjectId !== null || row.sourceIri !== null) return 'import';
   if (row.noteId !== null || row.noteVersion !== null) return 'note';
   return 'segment';
@@ -77,6 +81,11 @@ export function segmentHref(transcriptId: string, segmentId: string | null, star
   if (startMs !== null) params.set('t', String(startMs));
   const query = params.toString();
   return `/transcripts/${transcriptId}${query ? `?${query}` : ''}`;
+}
+
+/** `/notes/<id>?source=<start>-<end>`: the note a source-text citation belongs to, at the cited span. */
+export function sourceTextHref(noteId: string, charStart: number | null, charEnd: number | null): string {
+  return charStart === null || charEnd === null ? `/notes/${noteId}` : `/notes/${noteId}?source=${charStart}-${charEnd}`;
 }
 
 /** `/notes/<id>?v=<version>`. */
@@ -237,6 +246,27 @@ export class GraphEvidenceService {
         case 'manual': {
           // The owner is the source: nothing to open, nothing that can disappear.
           return { ...base, source: { kind: 'manual' as const, available: true as const, href: null } };
+        }
+        case 'source_text': {
+          // Available while the caller can still open the note the citation belongs to AND the
+          // stored text is still there (`source_object_id` is NULL once it was purged).
+          const note = row.noteId ? viewableNotes.get(row.noteId) : undefined;
+          const available = note !== undefined && row.sourceObjectId !== null;
+          return {
+            ...base,
+            source: {
+              kind: 'source_text' as const,
+              noteId: row.noteId,
+              noteTitle: note?.title ?? null,
+              noteVersion: row.noteVersion,
+              sourceObjectId: row.sourceObjectId,
+              charStart: row.charStart,
+              charEnd: row.charEnd,
+              sourceTextLength: row.sourceTextLength,
+              available,
+              href: available && row.noteId ? sourceTextHref(row.noteId, row.charStart, row.charEnd) : null,
+            },
+          };
         }
         case 'import': {
           return {

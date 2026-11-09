@@ -1045,10 +1045,12 @@ The domain tables below (transcripts, notes, search, the `kg_*` graph tables, As
   raw-SQL contract and the hand-written GiST/HNSW indexes.
 - `kg_evidence` - The §5.3 citation contract. `subject_kind`/`subject_id` are **polymorphic, no
   FK** — the identical `jobs.subject_type`/`subject_id` pattern. Every real anchor FK
-  (`transcript_id`/`segment_id`/`note_id`/`import_object_id`) is **SetNull, not Restrict** — a
+  (`transcript_id`/`segment_id`/`note_id`/`import_object_id`/`source_object_id`) is **SetNull, not Restrict** — a
   deliberate divergence from most of this schema's sideways pointers: an evidence row is a
   citation that must survive losing what it pointed to, and `quote` (NOT NULL) is precisely what
-  keeps it readable once every anchor has gone to NULL. There is deliberately **no CHECK**
+  keeps it readable once every anchor has gone to NULL. `source_object_id` + `source_text_length`
+  (#789) anchor a span of the stored text a note was generated from: the offsets index that text,
+  and `source_text_length` is the durable marker of the kind (it survives the SetNull). There is deliberately **no CHECK**
   requiring any anchor to be present. `char_start`/`char_end` are offsets into the cited **note
   version body** when `note_id` is set, or into the cited **segment's text** when `segment_id` is
   set — NULL means the whole segment, and on a **note** citation both NULL means the note's

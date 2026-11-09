@@ -362,8 +362,21 @@ export interface ExtractionStats {
     /**
      * `truncated` (#435): the answer hit its output ceiling even after the
      * halved re-ask — distinct from `invalid_output` (a malformed answer).
+     * `network` (#759): the provider could not be reached or the connection broke;
+     * `timeout`: it did not answer in time; `unavailable`: it answered 5xx or
+     * "overloaded". All three are transient: trying again is the remedy.
      */
-    errorClass: 'auth' | 'refusal' | 'rate_limit' | 'budget' | 'truncated' | 'invalid_output' | 'other';
+    errorClass:
+      | 'auth'
+      | 'refusal'
+      | 'rate_limit'
+      | 'budget'
+      | 'truncated'
+      | 'invalid_output'
+      | 'network'
+      | 'timeout'
+      | 'unavailable'
+      | 'other';
     message: string;
   };
   discardReason?: 'superseded' | 'user';

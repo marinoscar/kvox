@@ -98,6 +98,18 @@ function parametersOf(def: KvoxToolDefinition): z.ZodType {
 }
 
 /**
+ * The Zod form of a tool's JSON Schema (converted once per process per tool name),
+ * for a caller that validates a model's arguments itself (the prompted tool path).
+ *
+ * @param def - the tool.
+ * @returns the validator.
+ * @stability experimental
+ */
+export function toolParametersSchema(def: KvoxToolDefinition): z.ZodType {
+  return parametersOf(def);
+}
+
+/**
  * The port's tool definitions as platform function tools, strict, each with the
  * Zod form of its JSON Schema (converted once per process per tool name).
  *

@@ -8,7 +8,11 @@
 //   - a NOTE the owner owns, not being deleted, at a VERSION that exists;
 //   - a TRANSCRIPT the owner can VIEW — owned, or shared with them at either
 //     role — not soft-deleted, and a SEGMENT that belongs to that transcript;
-//   - an IMPORT OBJECT the owner uploaded.
+//   - an IMPORT OBJECT the owner uploaded;
+//   - a SOURCE TEXT object (#789) the owner holds: the text extracted from the
+//     document a cited note was generated from. Same ownership rule as an
+//     import object (the owner's own module-managed object), and the citation
+//     must also name a note the owner can read, a length and an in-range span.
 //
 // The transcript rule mirrors `TranscriptAccessService` exactly (owner, or a
 // platform grant to the owner; `deleted_at IS NULL`), but as ONE `findMany` and ONE
@@ -100,7 +104,8 @@ export class EvidenceValidator {
         return typeof value === 'string' && value !== '' ? [value] : [];
       })),
     ];
-    const importObjectIds = ids((r) => r.importObjectId);
+    // Source-text objects (#789) are decided exactly like import objects: the owner's own upload.
+    const importObjectIds = [...new Set([...ids((r) => r.importObjectId), ...ids((r) => r.sourceObjectId)])];
     const transcriptIds = ids((r) => r.transcriptId);
 
     const [objects, rows] = await Promise.all([
@@ -237,7 +242,7 @@ export class EvidenceValidator {
     const noteIds = collect((r) => r.noteId);
     const transcriptIds = collect((r) => r.transcriptId);
     const segmentIds = collect((r) => r.segmentId);
-    const importObjectIds = collect((r) => r.importObjectId);
+    const importObjectIds = [...new Set([...collect((r) => r.importObjectId), ...collect((r) => r.sourceObjectId)])];
 
     const [notes, versions, transcripts, segments, objects] = await Promise.all([
       noteIds.length === 0
@@ -284,6 +289,7 @@ export class EvidenceValidator {
       if (row.transcriptId && !viewableTranscripts.has(row.transcriptId)) invalid.add(index);
       if (row.segmentId && segmentTranscript.get(row.segmentId) !== row.transcriptId) invalid.add(index);
       if (row.importObjectId && !ownedObjects.has(row.importObjectId)) invalid.add(index);
+      if (row.sourceObjectId && !ownedObjects.has(row.sourceObjectId)) invalid.add(index);
     });
 
     if (invalid.size > 0) {

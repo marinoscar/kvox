@@ -67,6 +67,8 @@ export class ManualEvidence {
       quote: this.quote,
       importObjectId: null,
       sourceIri: MANUAL_EVIDENCE_SOURCE_IRI,
+      sourceObjectId: null,
+      sourceTextLength: null,
     };
   }
 }

@@ -59,6 +59,8 @@ export function evidenceTitle(link: EvidenceLink | null | undefined): string | n
       return link.source.transcriptTitle ?? 'Transcript';
     case 'note':
       return link.source.noteTitle ?? 'Note';
+    case 'source_text':
+      return link.source.noteTitle ? `Source of ${link.source.noteTitle}` : 'Source document';
     case 'import':
       return link.source.sourceIri ?? 'Imported source';
     case 'manual':
@@ -133,6 +135,12 @@ function EvidenceBody({
       action = (
         <Button size="small" variant="contained" startIcon={<DescriptionOutlinedIcon />} onClick={() => onGo(href)}>
           Open note
+        </Button>
+      );
+    } else if (source.kind === 'source_text') {
+      action = (
+        <Button size="small" variant="contained" startIcon={<DescriptionOutlinedIcon />} onClick={() => onGo(href)}>
+          Open source document
         </Button>
       );
     }

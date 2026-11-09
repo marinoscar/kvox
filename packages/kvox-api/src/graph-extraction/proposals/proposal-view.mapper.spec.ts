@@ -212,6 +212,32 @@ describe('proposal view mapper', () => {
       expect(evidenceViewOf({ ...seg, transcript: null }, l).hasAudio).toBe(false);
     });
 
+    it('source text (#789): its own kind, fresh while the text is stored, stale once purged', () => {
+      const cited = { ...note, noteVersion: 2, charStart: 40, charEnd: 90, sourceObjectId: 't1', sourceTextLength: 900 };
+      // The note moved on (current version 3) but the source text is immutable: not stale.
+      expect(evidenceViewOf(cited, lookups({ noteVersions: new Map([['n', 3]]) }))).toEqual(
+        expect.objectContaining({
+          source: 'source_text',
+          stale: false,
+          noteId: 'n',
+          charStart: 40,
+          charEnd: 90,
+          sourceObjectId: 't1',
+          sourceTextLength: 900,
+          speakerName: null,
+          hasAudio: false,
+        }),
+      );
+      // SetNull cleared the object: the length keeps the kind, and the citation is stale.
+      expect(evidenceViewOf({ ...cited, sourceObjectId: null }, lookups({ noteVersions: new Map([['n', 3]]) }))).toEqual(
+        expect.objectContaining({ source: 'source_text', stale: true, sourceObjectId: null, sourceTextLength: 900 }),
+      );
+      // A plain note citation is untouched.
+      expect(evidenceViewOf(note, lookups({ noteVersions: new Map([['n', 3]]) }))).toEqual(
+        expect.objectContaining({ source: 'note', sourceObjectId: null, sourceTextLength: null }),
+      );
+    });
+
     it('import (#387): cited to the file, never stale, carrying its object and IRI', () => {
       const imported = { ...base, charStart: null, charEnd: null, quote: 'Imported from a.ttl', importObjectId: 'f1', sourceIri: 'https://s.example/jonty' };
       expect(evidenceViewOf(imported, lookups({}))).toEqual(

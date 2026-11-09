@@ -317,6 +317,7 @@
     "real-data": { "peers": [] },
     "live": { "peers": ["@marinoscar/kvox-ai", "@marinoscar/kvox-api", "@marinoscar/platform-ai-providers", "openai"] },
     "kg": { "peers": ["@marinoscar/kvox-api", "@marinoscar/kvox-contract", "zod"] },
+    "calibration": { "peers": ["@marinoscar/kvox-ai", "@marinoscar/kvox-api", "zod"] },
     "parity": {
       "peers": ["@marinoscar/kvox-ai", "@marinoscar/kvox-api", "@marinoscar/kvox-contract", "@marinoscar/platform-ai-providers"]
     },

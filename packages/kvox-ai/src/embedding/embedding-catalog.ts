@@ -45,6 +45,28 @@ export const EMBEDDING_DIMENSIONS = 1536;
 export const KVOX_EMBEDDING_PROVIDER = 'openai';
 
 /**
+ * The cosine cut-offs the knowledge graph decides with for one embedding model (#681).
+ *
+ * @remarks
+ * Models differ in how similar UNRELATED texts look: bge-style models sit far above
+ * OpenAI's, so the graph's resolution and dedup cut-offs (tuned to
+ * text-embedding-3-small) would over-link on them. An entry that omits this gets the
+ * OpenAI baseline (`vectorFloor` 0.75, `itemCosine` 0.80, `itemSameConfidentCosine`
+ * 0.92), which is what the web edition's model is calibrated to. Measure and re-derive
+ * with `kvox-eval calibrate` (packages/kvox-eval/src/calibration/README.md).
+ *
+ * @stability experimental
+ */
+export interface KvoxGraphCalibration {
+  /** Entity resolution: the cosine at which vector evidence starts to count toward a link score. */
+  vectorFloor: number;
+  /** Item dedup: the cosine a candidate needs to be adjudicated at all. */
+  itemCosine: number;
+  /** Item dedup: a `same` verdict at or above this cosine is not flagged `possible_duplicate`. */
+  itemSameConfidentCosine: number;
+}
+
+/**
  * One embedding model a host can choose, as a static description.
  *
  * @remarks
@@ -71,6 +93,8 @@ export interface KvoxEmbeddingModel extends KvoxEmbeddingCapability {
   documentPrefix?: string;
   /** The cosine similarity below which a semantic hit is noise, when the model needs a floor. */
   minSimilarity?: number;
+  /** The graph's resolution and dedup cut-offs for this model (#681); absent means the OpenAI baseline. */
+  graphCalibration?: KvoxGraphCalibration;
 }
 
 /**
@@ -97,6 +121,14 @@ export const KVOX_EMBEDDING: KvoxEmbeddingModel = {
  * id is permanent once vectors are stored under it. `minSimilarity` 0.45 was
  * measured with the query prefix: relevant pairs 0.51-0.80, unrelated 0.28-0.55.
  *
+ * `graphCalibration` (#681) is DERIVED, not yet measured on real vectors: the OpenAI
+ * baseline cut-offs re-mapped onto bge's headroom above its unrelated ceiling (0.55
+ * against OpenAI's ~0.35), rounded UP to the next 0.01: vectorFloor 0.83, itemCosine
+ * 0.87, itemSameConfidentCosine 0.95, all higher than OpenAI's. Conservative on
+ * purpose: too high costs a missed link (a person confirms it); too low merges two
+ * things that are only topically close. Re-run `kvox-eval calibrate` on recorded
+ * vectors to replace them with measured values.
+ *
  * @stability experimental
  */
 export const KVOX_LOCAL_EMBEDDING: KvoxEmbeddingModel = {
@@ -109,4 +141,5 @@ export const KVOX_LOCAL_EMBEDDING: KvoxEmbeddingModel = {
   keyless: true,
   queryPrefix: 'Represent this sentence for searching relevant passages: ',
   minSimilarity: 0.45,
+  graphCalibration: { vectorFloor: 0.83, itemCosine: 0.87, itemSameConfidentCosine: 0.95 },
 };

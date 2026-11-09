@@ -44,6 +44,13 @@ export function transcriptHref(evidence: ProposalEvidence): string | null {
   return evidence.segmentId ? `${base}?segment=${encodeURIComponent(evidence.segmentId)}` : base;
 }
 
+/** `/notes/<id>?source=<start>-<end>`: the note a source-text citation belongs to, at its span (#789). */
+export function sourceTextHref(evidence: ProposalEvidence): string | null {
+  if (evidence.source !== 'source_text' || !evidence.noteId || evidence.stale) return null;
+  const base = `/notes/${encodeURIComponent(evidence.noteId)}`;
+  return evidence.charStart !== null && evidence.charEnd !== null ? `${base}?source=${evidence.charStart}-${evidence.charEnd}` : base;
+}
+
 function EvidenceEntry({
   evidence,
   onPlay,
@@ -54,12 +61,15 @@ function EvidenceEntry({
   const long = evidence.quote.length > LONG_QUOTE;
   const at = evidence.startMs !== null ? formatTimestamp(evidence.startMs) : null;
   const href = transcriptHref(evidence);
+  const sourceHref = sourceTextHref(evidence);
   const origin =
     evidence.source === 'segment'
       ? [evidence.speakerName ?? 'Speaker', at].filter(Boolean).join(' · ')
       : evidence.source === 'import'
         ? 'From the imported file'
-        : 'From the note';
+        : evidence.source === 'source_text'
+          ? 'From the source document'
+          : 'From the note';
 
   return (
     <Box component="li" sx={{ listStyle: 'none', py: 0.75 }}>
@@ -87,7 +97,11 @@ function EvidenceEntry({
       </Typography>
       <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.25 }}>
         {origin}
-        {evidence.stale ? ' · The text has changed since' : ''}
+        {evidence.stale
+          ? evidence.source === 'source_text'
+            ? ' · The source text is no longer stored'
+            : ' · The text has changed since'
+          : ''}
       </Typography>
       <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', alignItems: 'center', mt: 0.25 }}>
         {long && (
@@ -113,6 +127,11 @@ function EvidenceEntry({
         {href && (
           <Link component={RouterLink} to={href} variant="body2" onClick={onNavigate} sx={{ px: 0.5 }}>
             Open in transcript
+          </Link>
+        )}
+        {sourceHref && (
+          <Link component={RouterLink} to={sourceHref} variant="body2" onClick={onNavigate} sx={{ px: 0.5 }}>
+            Open source document
           </Link>
         )}
       </Stack>

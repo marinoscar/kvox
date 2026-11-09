@@ -1133,6 +1133,8 @@ export class GraphWriteService {
       quote: e.quote,
       importObjectId: e.importObjectId,
       sourceIri: e.sourceIri,
+      sourceObjectId: e.sourceObjectId,
+      sourceTextLength: e.sourceTextLength,
     };
   }
 

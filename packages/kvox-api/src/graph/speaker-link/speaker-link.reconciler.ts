@@ -560,6 +560,8 @@ export class SpeakerLinkReconciler {
         quote: s.text.slice(0, MAX_QUOTE),
         importObjectId: null,
         sourceIri: null,
+        sourceObjectId: null,
+        sourceTextLength: null,
       }));
   }
 }

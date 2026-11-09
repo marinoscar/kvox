@@ -256,6 +256,8 @@ function evidenceInput(fields: Partial<EvidenceInput> & { quote: string }): Evid
     charEnd: null,
     importObjectId: null,
     sourceIri: null,
+    sourceObjectId: null,
+    sourceTextLength: null,
     ...fields,
   };
 }

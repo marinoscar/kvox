@@ -900,6 +900,20 @@ export const evidenceLinkSchema = z
         available: z.boolean(),
         href: z.string().nullable(),
       }),
+      z
+        .object({
+          kind: z.literal('source_text'),
+          noteId: z.uuid().nullable(),
+          noteTitle: z.string().nullable(),
+          noteVersion: z.number().int().nullable(),
+          sourceObjectId: z.uuid().nullable().describe('The stored text the offsets index; null once that text was purged.'),
+          charStart: z.number().int().nullable().describe('Offsets into the SOURCE TEXT, not into the note body.'),
+          charEnd: z.number().int().nullable(),
+          sourceTextLength: z.number().int().nullable(),
+          available: z.boolean(),
+          href: z.string().nullable().describe('The generated note, scrolled to the span: `/notes/<id>?source=<start>-<end>`.'),
+        })
+        .describe('A span of the full text of the document a note was generated from (#789).'),
       z.object({
         kind: z.literal('import'),
         importObjectId: z.uuid().nullable(),

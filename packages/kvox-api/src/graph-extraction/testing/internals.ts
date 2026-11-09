@@ -5,7 +5,7 @@
 export * from './extraction-fixtures.js';
 
 // The internals.
-export { candidateEdge, entityView, existingId, isExclusiveTemporal, placeholderId, proposedRelationRange, relationKnown, resolveEndpoint, ruleForEffectiveRelation } from '../dedup/dedup-core.js';
+export { ITEM_COSINE_THRESHOLD, ITEM_SAME_CONFIDENT_COSINE, candidateEdge, entityView, mapItemVerdicts, selectCandidates, existingId, isExclusiveTemporal, placeholderId, proposedRelationRange, relationKnown, resolveEndpoint, ruleForEffectiveRelation } from '../dedup/dedup-core.js';
 export type { ProposalEntityView } from '../dedup/dedup-core.js';
 export { buildItemAdjudicationOutputSchema } from '../dedup/item-adjudication-prompt.js';
 export { RejectionMemoryStage } from '../dedup/rejection-memory.stage.js';
@@ -26,4 +26,6 @@ export { DuplicatesService } from '../resolution/duplicates.service.js';
 export { ContextFeatureService, emptyContext } from '../resolution/context-features.service.js';
 export { decide } from '../resolution/resolution.service.js';
 export { ResolutionStage } from '../resolution/resolution.stage.js';
-export { bandFor, rankCandidates, scoreCandidate } from '../resolution/score.js';
+export { SCORE_WEIGHTS, bandFor, rankCandidates, scoreCandidate } from '../resolution/score.js';
+export { DEFAULT_GRAPH_CALIBRATION, resolveGraphCalibration } from '../resolution/graph-calibration.js';
+export { buildEntityProfileText, buildItemProfileText } from '../resolution/profile-text.js';

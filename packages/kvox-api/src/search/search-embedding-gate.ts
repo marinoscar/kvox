@@ -1,4 +1,4 @@
-import type { KvoxAiCapabilities } from '../ports/index.js';
+import type { KvoxAiCapabilities, KvoxGraphCalibration } from '../ports/index.js';
 import { SEARCH_EMBEDDING_DIMENSIONS } from './search.options.js';
 
 // =============================================================================
@@ -46,6 +46,10 @@ export interface EmbeddingGateOpen {
   nativeDimensions?: number;
   /** The model's own cosine floor for the semantic arm; absent means the default. */
   minSimilarity?: number;
+  /** The provider that serves the model, when the host names it. */
+  provider?: string;
+  /** The model's graph resolution and dedup cut-offs (#681); absent means the OpenAI defaults. */
+  graphCalibration?: KvoxGraphCalibration;
 }
 
 /**
@@ -114,5 +118,7 @@ export function embeddingGateFor(capabilities: KvoxAiCapabilities): EmbeddingGat
     dimensions: embeddings.dimensions,
     ...(embeddings.nativeDimensions !== undefined && { nativeDimensions: embeddings.nativeDimensions }),
     ...(embeddings.minSimilarity !== undefined && { minSimilarity: embeddings.minSimilarity }),
+    ...(embeddings.provider !== undefined && { provider: embeddings.provider }),
+    ...(embeddings.graphCalibration !== undefined && { graphCalibration: embeddings.graphCalibration }),
   };
 }

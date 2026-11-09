@@ -74,7 +74,8 @@ describe('createKvoxAi embedding entry', () => {
     it('reports storage width, native width and no floor', async () => {
       const { port } = build();
       const caps = await port.capabilities(ctx);
-      expect(caps.embeddings).toEqual({ model: KVOX_EMBEDDING.model, dimensions: 1536, nativeDimensions: 1536 });
+      // The web edition's model records no graph calibration: the graph then uses its OpenAI baseline (#681).
+      expect(caps.embeddings).toEqual({ provider: 'openai', model: KVOX_EMBEDDING.model, dimensions: 1536, nativeDimensions: 1536 });
     });
   });
 
@@ -126,15 +127,17 @@ describe('createKvoxAi embedding entry', () => {
       expect(runtime.embed).not.toHaveBeenCalled();
     });
 
-    it('reports nativeDimensions and minSimilarity', async () => {
+    it('reports provider, nativeDimensions, minSimilarity and the graph calibration', async () => {
       const entry = { ...KVOX_LOCAL_EMBEDDING, minSimilarity: 0.4 };
       const { port } = build(entry);
       const caps = await port.capabilities(ctx);
       expect(caps.embeddings).toEqual({
+        provider: 'local',
         model: 'bge-small-en-v1.5-int8',
         dimensions: 1536,
         nativeDimensions: 384,
         minSimilarity: 0.4,
+        graphCalibration: { vectorFloor: 0.83, itemCosine: 0.87, itemSameConfidentCosine: 0.95 },
       });
     });
 
@@ -143,6 +146,17 @@ describe('createKvoxAi embedding entry', () => {
       const target = await port.resolveTask(ctx, 'search_embed');
       expect(target).toMatchObject({ provider: 'local', model: 'bge-small-en-v1.5-int8', contextWindowTokens: 512 });
       expect(runtime.readiness).toHaveBeenCalledWith(expect.objectContaining({ provider: 'local' }));
+    });
+
+    it('lets graph.embed run on the on-device model: available with no chat provider, naming its provider and calibration (#681)', async () => {
+      const { port } = build(KVOX_LOCAL_EMBEDDING, true);
+      const caps = await port.capabilities({ ...ctx, feature: 'graph.embed' });
+      expect(caps.available).toBe(true);
+      expect(caps.embeddings).toMatchObject({
+        provider: 'local',
+        model: 'bge-small-en-v1.5-int8',
+        graphCalibration: { itemCosine: 0.87 },
+      });
     });
 
     it('is ai_not_configured when the runtime says the model is absent', async () => {

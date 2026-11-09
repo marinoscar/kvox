@@ -215,3 +215,38 @@ describe('toKvoxAiError on an error of a foreign AiError class', () => {
     }
   });
 });
+
+describe('transport failures carry a safe reason (#759)', () => {
+  const unavailable = (details: Record<string, unknown>, cause?: unknown) =>
+    new AiError('AI_PROVIDER_UNAVAILABLE', 'The AI provider is unavailable.', { details, cause });
+  const dns = () =>
+    Object.assign(new TypeError('fetch failed'), {
+      cause: Object.assign(new Error('getaddrinfo EAI_AGAIN api.example.test'), { code: 'EAI_AGAIN' }),
+    });
+  const ctx = { feature: 'note_generate' as const, inJob: true };
+
+  it('reads a DNS failure out of the cause chain as unreachable, class unchanged', () => {
+    const out = toKvoxAiError(unavailable({ transport: 'connection' }, dns()), ctx);
+    expect(out.errorClass).toBe('other');
+    expect(out.transient).toBe('unreachable');
+    expect(out.message).not.toContain('EAI_AGAIN');
+  });
+
+  it('maps the adapter transport detail when the cause has no system code', () => {
+    expect(toKvoxAiError(unavailable({ transport: 'connection' }), ctx).transient).toBe('network');
+    expect(toKvoxAiError(unavailable({ transport: 'timeout' }), ctx).transient).toBe('timeout');
+    expect(toKvoxAiError(unavailable({ status: 503 }), ctx).transient).toBe('provider_unavailable');
+    expect(toKvoxAiError(unavailable({ aborted: true }), ctx).transient).toBeUndefined();
+  });
+
+  it('applies on a route too, and leaves other codes without a reason', () => {
+    expect(toKvoxAiError(unavailable({ transport: 'connection' }, dns()), { ...ctx, inJob: false }).transient).toBe('unreachable');
+    expect(toKvoxAiError(new AiError('AI_INVALID_REQUEST', 'bad'), ctx).transient).toBeUndefined();
+  });
+
+  it('reads a raw throwable by its system code, and never from an ordinary message', () => {
+    expect(toKvoxAiError(dns(), ctx).transient).toBe('unreachable');
+    expect(toKvoxAiError(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }), ctx).transient).toBe('network');
+    expect(toKvoxAiError(new Error('something odd'), ctx).transient).toBeUndefined();
+  });
+});

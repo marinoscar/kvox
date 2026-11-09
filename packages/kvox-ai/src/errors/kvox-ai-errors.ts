@@ -1,5 +1,5 @@
 import { AiError, isAiErrorCode } from '@marinoscar/platform-ai-providers';
-import { KvoxAiError } from '@marinoscar/kvox-api/ports';
+import { KvoxAiError, transientFailureOf, type KvoxAiTransient } from '@marinoscar/kvox-api/ports';
 
 import type { KvoxAiFeatureId } from '../features/index.js';
 import type { KvoxAiReadiness } from '../types/index.js';
@@ -151,8 +151,27 @@ export function toKvoxAiError(error: unknown, ctx: KvoxAiErrorContext): KvoxAiEr
     isErrorLike(error) ? error.message : typeof error === 'string' ? error : 'Unknown AI failure',
   );
   const name = (error as { name?: unknown } | null)?.name;
-  if (name === 'TimeoutError' || TIMEOUT_SENTENCE.test(message)) return new KvoxAiError('timeout', message);
-  return new KvoxAiError('other', message);
+  const transient = transientFailureOf(error);
+  if (name === 'TimeoutError' || TIMEOUT_SENTENCE.test(message)) {
+    return new KvoxAiError('timeout', message, undefined, undefined, transient ?? 'timeout');
+  }
+  return new KvoxAiError('other', message, undefined, undefined, transient);
+}
+
+/**
+ * Why a platform `AiError` of code `AI_PROVIDER_UNAVAILABLE` happened, from the safe parts the
+ * adapter recorded (`details.transport`, `details.status`) and the cause chain's system code.
+ * Only that code is read, never a message.
+ */
+function transientOfAiError(err: AiError): KvoxAiTransient | undefined {
+  if (err.code !== 'AI_PROVIDER_UNAVAILABLE') return undefined;
+  const details = (err.getResponse().details ?? {}) as { transport?: unknown; aborted?: unknown };
+  if (details.aborted === true) return undefined;
+  const fromCause = transientFailureOf(err);
+  if (fromCause) return fromCause;
+  if (details.transport === 'timeout') return 'timeout';
+  if (details.transport === 'connection') return 'network';
+  return 'provider_unavailable';
 }
 
 /** A platform `AiError`, by code, route or job. */
@@ -181,7 +200,7 @@ function fromAiError(err: AiError, ctx: KvoxAiErrorContext): KvoxAiError {
       default:
         // AI_INVALID_REQUEST, AI_TOOL_DISABLED, AI_STRUCTURED_OUTPUT_INVALID, the
         // unavailable codes and any code a later platform release adds.
-        return new KvoxAiError('other', message);
+        return new KvoxAiError('other', message, undefined, undefined, transientOfAiError(err));
     }
   }
 
@@ -206,7 +225,13 @@ function fromAiError(err: AiError, ctx: KvoxAiErrorContext): KvoxAiError {
       return new KvoxAiError('invalid_output', message);
     default:
       // AI_PROVIDER_UNAVAILABLE, AI_STORAGE_UNAVAILABLE, anything else: retryable.
-      return new KvoxAiError(TIMEOUT_SENTENCE.test(message) ? 'timeout' : 'other', message);
+      return new KvoxAiError(
+        TIMEOUT_SENTENCE.test(message) ? 'timeout' : 'other',
+        message,
+        undefined,
+        undefined,
+        transientOfAiError(err),
+      );
   }
 }
 

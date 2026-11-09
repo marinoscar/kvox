@@ -420,3 +420,29 @@ describe('commit contract (#366 applies it)', () => {
     expect(() => closedRangeLiteral('["2027-01-01 00:00:00+00",)', { closeAt: '2026-03-01' })).toThrow();
   });
 });
+
+describe('per-model item calibration (#681)', () => {
+  const OPENAI = { itemCosine: 0.8, itemSameConfidentCosine: 0.92 };
+  const BGE = { itemCosine: 0.87, itemSameConfidentCosine: 0.95 };
+  const at = (id: string, cosine: number) => ({ itemId: id, cosine, lexical: null });
+
+  it('defaults to the OpenAI cut-offs, exactly as the constants', () => {
+    expect(ITEM_COSINE_THRESHOLD).toBe(OPENAI.itemCosine);
+    expect(selectCandidates([at('a', 0.8), at('b', 0.79)]).map((c) => c.itemId)).toEqual(['a']);
+    expect(selectCandidates([at('a', 0.8), at('b', 0.79)], OPENAI)).toEqual(selectCandidates([at('a', 0.8), at('b', 0.79)]));
+  });
+
+  it('drops a candidate a higher-baseline model would only reach by topical closeness', () => {
+    const cands = [at('a', 0.84), at('b', 0.9)];
+    expect(selectCandidates(cands, OPENAI).map((c) => c.itemId)).toEqual(['b', 'a']);
+    expect(selectCandidates(cands, BGE).map((c) => c.itemId)).toEqual(['b']);
+  });
+
+  it('flags a same verdict as possible_duplicate until the model\'s own confident cosine', () => {
+    const c = { itemId: ITEM_A, cosine: 0.93, lexical: null };
+    const v = new Map([[ITEM_A, verdict('same')]]);
+    expect(mapItemVerdicts('claim', [c], v, null, OPENAI).flags).toEqual([]);
+    expect(mapItemVerdicts('claim', [c], v, null, BGE).flags).toEqual(['possible_duplicate']);
+    expect(mapItemVerdicts('claim', [{ ...c, cosine: 0.96 }], v, null, BGE).flags).toEqual([]);
+  });
+});

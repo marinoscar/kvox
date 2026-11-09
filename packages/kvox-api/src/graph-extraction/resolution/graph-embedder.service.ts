@@ -26,6 +26,7 @@ import {
   GRAPH_EXTRACTION_OPTIONS,
   type ResolvedGraphExtractionOptions,
 } from '../graph-extraction.options.js';
+import { DEFAULT_GRAPH_CALIBRATION, resolveGraphCalibration, type GraphCalibration } from './graph-calibration.js';
 
 /**
  * Whether the graph can embed for a user, and how.
@@ -38,6 +39,8 @@ export type GraphEmbedderResolution =
       providerId: string;
       /** The embedding model id — part of every profile hash. */
       model: string;
+      /** The model's cosine cut-offs for resolution and dedup (#681); the OpenAI baseline when the host records none. */
+      calibration: GraphCalibration;
       maxBatchSize: number;
       /** One vector per text, in order. Throws on any provider failure. */
       embed: (texts: readonly string[]) => Promise<number[][]>;
@@ -56,6 +59,15 @@ export class GraphEmbedder {
     @Inject(KVOX_AI) private readonly ai: KvoxAiPort,
     @Inject(GRAPH_EXTRACTION_OPTIONS) private readonly options: ResolvedGraphExtractionOptions,
   ) {}
+
+  /**
+   * The cosine cut-offs for the model `userId` embeds with, without embedding anything: the
+   * OpenAI baseline when the graph cannot embed at all (no vectors are compared then).
+   */
+  async calibrationFor(userId: string): Promise<GraphCalibration> {
+    const resolution = await this.resolve(userId);
+    return resolution.ok ? resolution.calibration : { ...DEFAULT_GRAPH_CALIBRATION };
+  }
 
   /**
    * Whether `userId` can embed for the graph, and the function that does it.
@@ -79,8 +91,10 @@ export class GraphEmbedder {
 
     return {
       ok: true,
-      providerId: 'openai',
+      // The catalog entry's provider (`local` for an on-device model); a host that names none is the web edition's OpenAI.
+      providerId: gate.provider ?? 'openai',
       model: gate.model,
+      calibration: resolveGraphCalibration(gate.graphCalibration),
       maxBatchSize,
       embed: async (texts) => {
         const out: number[][] = [];

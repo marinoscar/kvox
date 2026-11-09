@@ -6479,7 +6479,13 @@ connected knowledge is on, you hold `graph:write` and your
 The proposal exists at once with `status: "extracting"`; it becomes `draft`
 when the job finishes (or `failed`, with `stats.failure.errorClass` one of
 `auth`, `refusal`, `rate_limit`, `budget`, `truncated`, `invalid_output`,
-`other` and a message). A newer draft for the same note **discards** the
+`network`, `timeout`, `unavailable`, `other` and a message; #759: `network`,
+`timeout` and `unavailable` mean the provider could not be reached, did not
+answer in time or answered 5xx, and the message says so; `other` carries the
+job id as a reference and never a thrown message). A request that never left
+the API host (DNS failure, connection refused) is retried inside the job with
+a short back-off before it fails; a reset or timeout mid-call is not, because
+it may have been billed. A newer draft for the same note **discards** the
 older one (`stats.discardReason: "superseded"`). The model, provider, exact
 system prompt and user content are recorded on the proposal **before** the
 provider is called, so a failed run still shows what was asked. Every
@@ -6875,7 +6881,13 @@ audited — the commit is.
 `span_mismatch`). A `segment` span must be a line of the note's **origin
 transcript** (`400` `span_outside_source` for any other, even one you can
 read), at its current `rev` (`409` `stale_segment_rev`), with the same quote
-check; the stored citation carries the line's `startMs`/`endMs`.
+check; the stored citation carries the line's `startMs`/`endMs`. A
+`source_text` span (#789) is a span of the full text the proposal's note was
+generated from (an AI-generated note made from a document, whose extracted text
+is stored): `0 ≤ charStart < charEnd ≤ text length` and the same quote check
+(`400` `span_mismatch`); a note with no such text answers `400`
+`span_outside_source`. The stored citation records the text object and its
+length, and keeps the note for the deep link.
 
 ##### POST /graph/proposals/:id/items/bulk
 
@@ -7781,6 +7793,19 @@ A citation you made BY HAND (a manager, employer or role set on an entity
 page, #586) has no document: `source` is `{ "kind": "manual", "available":
 true, "href": null }` and `quote` says what was set ("Set by hand: Jarek Stubbs
 reports to Marta Sample").
+
+A citation of the full text of the document a note was generated from (#789)
+has `source.kind: "source_text"`: `noteId`, `noteTitle`, `noteVersion`,
+`sourceObjectId` (the stored text; `null` once purged), `charStart`/`charEnd`
+(offsets into **that text**, not the note body), `sourceTextLength`,
+`available` (the note is readable and the text is still stored) and `href`
+(`/notes/:id?source=<start>-<end>`, or `null`). A newer note version never
+sets a "changed" flag on it: the text is immutable. The proposal review
+endpoints report the same citation as an evidence entry with
+`source: "source_text"`, `sourceObjectId` and `sourceTextLength`, and
+an `evidence.add` span
+`{ "source": "source_text", charStart, charEnd, quote }` names a span of the
+proposal note's own source text.
 
 **Errors:** `401` · `403` without `graph:read` · `404` no such evidence, or
 not yours.

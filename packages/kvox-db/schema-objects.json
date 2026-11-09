@@ -13,6 +13,10 @@
       "table": "kg_evidence"
     },
     {
+      "name": "kg_evidence_source_text_chk",
+      "table": "kg_evidence"
+    },
+    {
       "name": "kg_items_sensitivity_chk",
       "table": "kg_items"
     },

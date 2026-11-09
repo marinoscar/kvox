@@ -52,6 +52,7 @@ import type { AdjudicationPair } from './adjudication-prompt.js';
 import { AdjudicationService, type AdjudicationResult } from './adjudication.service.js';
 import { CandidateService, type CandidateMention } from './candidate.service.js';
 import { ContextFeatureService, ORG_AFFILIATION_RELATIONS, type ResolutionContext } from './context-features.service.js';
+import { DEFAULT_GRAPH_CALIBRATION, type GraphCalibration } from './graph-calibration.js';
 import { GraphEmbedder } from './graph-embedder.service.js';
 import { buildEntityProfileText } from './profile-text.js';
 import {
@@ -187,13 +188,18 @@ export class ResolutionService {
   // ===========================================================================
 
   /**
-   * Rank mentions.
+   * Rank mentions. `calibration` is the embedding model's cut-offs (#681): callers that just
+   * embedded pass `embedMentions`' answer; the bulk scan, which compares stored vectors, omits it
+   * and the current embedder's is read.
    */
   async rankMentions(
     ownerId: string,
     mentions: readonly MentionToRank[],
     thresholds: Thresholds,
+    calibration?: GraphCalibration,
   ): Promise<Map<string, MentionOutcome>> {
+    const usesVectors = mentions.some((m) => ('vector' in m && m.vector) || ('vectorOfEntityId' in m && m.vectorOfEntityId));
+    const cal = calibration ?? (usesVectors ? await this.embedder.calibrationFor(ownerId) : DEFAULT_GRAPH_CALIBRATION);
     const out = new Map<string, MentionOutcome>();
     for (const mention of mentions) {
       const raw = await this.candidates.forMention(ownerId, mention);
@@ -204,7 +210,7 @@ export class ResolutionService {
       );
       const scored: RankedMentionCandidate[] = raw.map((r) => {
         const f = feats.get(r.entityId)!;
-        const s = scoreCandidate({ aliasExact: r.aliasExact, trigram: r.trigram, cosine: r.cosine, ...f });
+        const s = scoreCandidate({ aliasExact: r.aliasExact, trigram: r.trigram, cosine: r.cosine, ...f }, cal.vectorFloor);
         return { entityId: r.entityId, label: r.label, type: r.type, ...s };
       });
       const ranked = rankCandidates(scored, thresholds);
@@ -227,14 +233,27 @@ export class ResolutionService {
     texts: readonly string[],
     jobType: string,
     jobId?: string,
-  ): Promise<{ vectors: Array<{ values: number[]; model: string } | null>; vectorArm: string }> {
-    const none = (reason: string) => ({ vectors: texts.map(() => null), vectorArm: `skipped:${reason}` });
-    if (texts.length === 0) return { vectors: [], vectorArm: 'ok' };
+  ): Promise<{
+    vectors: Array<{ values: number[]; model: string } | null>;
+    vectorArm: string;
+    /** The embedding model's cosine cut-offs (#681); the OpenAI baseline when nothing was embedded. */
+    calibration: GraphCalibration;
+  }> {
+    const none = (reason: string) => ({
+      vectors: texts.map(() => null),
+      vectorArm: `skipped:${reason}`,
+      calibration: { ...DEFAULT_GRAPH_CALIBRATION },
+    });
+    if (texts.length === 0) return { vectors: [], vectorArm: 'ok', calibration: { ...DEFAULT_GRAPH_CALIBRATION } };
     const embedder = await this.embedder.resolve(userId, jobId);
     if (!embedder.ok) return none(embedder.reason);
     try {
       const vectors = await embedder.embed(texts);
-      return { vectors: vectors.map((v) => ({ values: v, model: embedder.model })), vectorArm: 'ok' };
+      return {
+        vectors: vectors.map((v) => ({ values: v, model: embedder.model })),
+        vectorArm: 'ok',
+        calibration: embedder.calibration,
+      };
     } catch (error) {
       rethrowRateLimit(error, userId);
       return none('embedding_failed');
@@ -353,6 +372,7 @@ export class ResolutionService {
         context: context.features,
       })),
       thresholds,
+      embedded.calibration,
     );
 
     // Middle band → adjudication, one pair per mention (its top candidate).

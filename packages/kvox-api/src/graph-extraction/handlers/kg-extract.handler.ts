@@ -30,7 +30,11 @@
 // charging an attempt; the proposal stays `extracting`); an auth / refusal /
 // budget / truncated / invalid-output failure — or a configuration refusal
 // from the resolver — marks the proposal `failed` with `stats.failure` and the
-// job RETURNS; anything else marks it `failed` and rethrows. Token usage is
+// job RETURNS; anything else marks it `failed` and rethrows. A transport
+// failure (#759) is recorded as `network` / `timeout` / `unavailable` with a fixed
+// sentence, an unrecognised one as `other` with the job id: a thrown message
+// never reaches the proposal. A request that never left this host (DNS,
+// refused) is retried in place with a back-off; nothing was billed. Token usage is
 // summed over every call, failed ones included (`stats.usage`, #435): a
 // truncated answer is billed all the same.
 //
@@ -72,6 +76,7 @@ import {
   KVOX_JOBS,
   KVOX_PRISMA,
   KvoxAiError,
+  transientFailureOf,
   type KvoxAiPort,
   type KvoxJob,
   type KvoxJobHandler,
@@ -120,9 +125,29 @@ class StageError extends Error {
   }
 }
 
+/**
+ * A transport failure's class (#759): the provider could not be reached, did not answer in
+ * time, or answered 5xx. `undefined` for anything that is not recognisably one.
+ */
+function transientClassOf(error: unknown): 'network' | 'timeout' | 'unavailable' | undefined {
+  const transient = error instanceof KvoxAiError ? error.transient : transientFailureOf(error);
+  switch (transient) {
+    case 'unreachable':
+    case 'network':
+      return 'network';
+    case 'timeout':
+      return 'timeout';
+    case 'provider_unavailable':
+      return 'unavailable';
+    default:
+      return error instanceof KvoxAiError && error.errorClass === 'timeout' ? 'timeout' : undefined;
+  }
+}
+
 /** Which failure class a thrown value belongs to. Total; never throws. */
 export function classifyExtractionError(error: unknown): ExtractionFailureClass {
   if (error instanceof TerminalExtractionError) return error.errorClass;
+  if (error instanceof StageError) return 'other';
   if (error instanceof KvoxAiError) {
     switch (error.errorClass) {
       case 'auth':
@@ -139,21 +164,40 @@ export function classifyExtractionError(error: unknown): ExtractionFailureClass 
       case 'capability':
         return 'refusal';
       default:
-        return 'other';
+        return transientClassOf(error) ?? 'other';
     }
   }
-  return 'other';
+  return transientClassOf(error) ?? 'other';
 }
 
-/** The sentence stored on the proposal. Never an arbitrary thrown message. */
-function describeFailure(error: unknown): string {
+/** The sentences stored for a transport failure (#759). Fixed text: nothing from the thrown error. */
+const TRANSIENT_MESSAGES = {
+  network:
+    'The AI provider could not be reached because of a network problem. Nothing was lost; try again in a few minutes.',
+  timeout: 'The AI provider did not answer in time. Try again.',
+  unavailable: 'The AI provider is temporarily unavailable. Try again in a few minutes.',
+} as const;
+
+/**
+ * The sentence stored on the proposal. Never an arbitrary thrown message: a vendor's wording or a
+ * stack can carry a key, a host name or note text, so anything unrecognised gets a fixed sentence
+ * plus the job id (not a secret) an administrator can look up in the Jobs page and the logs.
+ *
+ * Exported for the unit spec; `KgExtractHandler` is the only caller.
+ */
+export function describeFailure(error: unknown, jobId?: string): string {
   if (error instanceof StageError) return `Extraction failed in the '${error.stage}' step.`;
   if (error instanceof TerminalExtractionError) return error.message;
+  const transient = transientClassOf(error);
+  if (transient) return TRANSIENT_MESSAGES[transient];
   if (error instanceof KvoxAiError && error.errorClass !== 'other' && error.errorClass !== 'timeout') {
     return error.message;
   }
-  return 'Extraction failed because of an unexpected error.';
+  return `Extraction failed because of an unexpected error${jobId ? ` (job ${jobId})` : ''}. Try again; if it keeps failing, give an administrator this reference.`;
 }
+
+/** Retries of a call whose request never left this host (DNS, refused): none billed, so all safe. */
+export const KG_EXTRACT_UNREACHABLE_BACKOFF_MS: readonly number[] = [2_000, 5_000, 15_000];
 
 /**
  * KgExtractHandler: wiring the slice registers itself; a host configures it through the slice module's `forRoot` and never calls it directly.
@@ -173,6 +217,9 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
   readonly label = 'Knowledge graph extraction';
 
   readonly profile: KvoxJobProfile = { maxRuntimeMs: KG_EXTRACT_MAX_RUNTIME_MS, maxAttempts: 1 };
+
+  /** The wait between retries of an unreachable provider; a spec replaces it. */
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   constructor(
     @Inject(KVOX_JOBS) private readonly jobs: KvoxJobsPort,
@@ -217,7 +264,7 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
 
       const errorClass =
         error instanceof HttpException ? (isKeyMissing(error) ? 'auth' : 'refusal') : classifyExtractionError(error);
-      const message = error instanceof HttpException ? httpMessage(error) : describeFailure(error);
+      const message = error instanceof HttpException ? httpMessage(error) : describeFailure(error, job.id);
       await this.writer.markFailed(payload.proposalId, stats, { errorClass, message });
 
       if (error instanceof StageError) {
@@ -227,7 +274,14 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
         );
         throw error.cause instanceof Error ? error.cause : error;
       }
-      if (errorClass === 'other' && !(error instanceof HttpException) && !(error instanceof TerminalExtractionError)) {
+      const unclassified =
+        errorClass === 'other' || errorClass === 'network' || errorClass === 'timeout' || errorClass === 'unavailable';
+      if (unclassified && !(error instanceof HttpException) && !(error instanceof TerminalExtractionError)) {
+        // The proposal says why; the job still fails so the Jobs page and the logs show it too.
+        this.logger.warn(
+          `${KG_EXTRACT_JOB_TYPE} proposal=${payload.proposalId} job=${job.id} failed: class=${errorClass} ` +
+            `error=${error instanceof Error ? error.name : typeof error}`,
+        );
         throw error;
       }
     }
@@ -303,7 +357,7 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
 
       const validated = validateExtraction(result.value, chunkCtx);
       if (!validated.ok) throw new TerminalExtractionError('invalid_output', validated.message);
-      outcomes.push(shiftToNote(validated, chunk));
+      outcomes.push(shiftToNote(validated, chunk, ctx.source !== null));
 
       if (multi && i < chunks.length - 1) {
         stats.chunks = { total: chunks.length, completed: outcomes.length };
@@ -400,7 +454,7 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
     });
 
     try {
-      const result = await this.callProvider(resolution, userId, jobId, {
+      const result = await this.callProviderWithRetry(resolution, userId, jobId, proposalId, {
         systemPrompt: plan.prompt.systemPrompt,
         userContent: plan.prompt.userContent,
         schema: plan.schema,
@@ -411,6 +465,34 @@ export class KgExtractHandler implements KvoxJobHandler, OnModuleInit {
     } catch (error) {
       if (error instanceof KvoxAiError && error.usage) addUsage(stats, error.usage);
       throw error;
+    }
+  }
+
+  /**
+   * #759: a transient DNS or connection-refused failure (the API container's intermittent
+   * `EAI_AGAIN`) means the request never left this host, so nothing was billed and a retry
+   * cannot double-spend the user's key. Those are retried with a back-off. A reset or timeout
+   * mid-call may have been billed: those are NOT retried (the profile's `maxAttempts: 1`).
+   */
+  private async callProviderWithRetry(
+    resolution: GraphAiRun,
+    userId: string,
+    jobId: string,
+    proposalId: string,
+    request: { systemPrompt: string; userContent: string; schema: Record<string, unknown>; maxOutputTokens: number },
+  ) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.callProvider(resolution, userId, jobId, request);
+      } catch (error) {
+        const transient = error instanceof KvoxAiError ? error.transient : transientFailureOf(error);
+        const wait = KG_EXTRACT_UNREACHABLE_BACKOFF_MS[attempt];
+        if (transient !== 'unreachable' || wait === undefined) throw error;
+        this.logger.warn(
+          `${KG_EXTRACT_JOB_TYPE} proposal=${proposalId} job=${jobId}: provider unreachable; retry ${attempt + 1} in ${wait} ms`,
+        );
+        await this.sleep(wait);
+      }
     }
   }
 

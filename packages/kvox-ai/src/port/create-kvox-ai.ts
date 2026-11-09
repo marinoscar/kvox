@@ -18,13 +18,19 @@ import {
 
 import {
   ReasoningReplayCache,
+  buildPromptedToolInstructions,
+  buildPromptedToolRepairInput,
+  countToolCalls,
   createChatMappingState,
   fromPlatformEvent,
   missingToolCalls,
+  parsePromptedToolAnswer,
+  promptedToolCallId,
   replayScope,
   toPlatformInput,
   toPlatformToolChoice,
   toPlatformTools,
+  toPromptedToolInput,
   toolCallIdsOf,
 } from '../chat/index.js';
 import { KVOX_EMBEDDING, type KvoxEmbeddingModel } from '../embedding/index.js';
@@ -38,6 +44,7 @@ import type {
   KvoxModelCatalog,
   KvoxStructuredOutputMode,
   KvoxTaskModelSource,
+  KvoxToolCallingMode,
 } from '../runtime/index.js';
 import {
   buildPromptedRepairInput,
@@ -125,6 +132,14 @@ import { createKvoxAiReadiness, reasoningEffortFor, type KvoxAiReadinessReader }
 // resolved model's `toolCalling` flag (the row's, else the catalog's, else true),
 // so a host whose model cannot call tools never offers Ask. GitHub Copilot's catalog
 // says true (the adapter bridges the tool steps, #654) unless its live listing says no.
+//
+// PROMPTED TOOL CALLING (#654). A model whose `toolCallingMode` is `prompted` (looked
+// up like the structured mode: the row, else the catalog, else `native`) sits behind a
+// server that does not implement tool calls. For it `chat()` sends NO `tools`: each
+// step is ONE plain `create` whose system prompt lists the tools and asks for a JSON
+// value (tool calls, or the answer), parsed and validated, with ONE repair, then mapped
+// back to the same `tool_call` / `delta` / `step_end` / `done` events (`chat/prompted-
+// tools.ts`). A prompted step is not streamed. The native request is unchanged.
 //
 // ⚠ A KEY NEVER CROSSES THIS PORT. The context carries a user id; the runtime
 // resolves that user's own key per call. `scrub` removes anything shaped like a
@@ -336,10 +351,12 @@ class KvoxAi implements KvoxAiPort {
         structuredOutput: readiness.ok,
         toolCalling: readiness.ok && (flags.toolCalling ?? true),
         embeddings: {
+          provider: this.entry.provider,
           model: this.entry.model,
           dimensions: this.entry.storageDimensions,
           nativeDimensions: this.entry.dimensions,
           ...(this.entry.minSimilarity !== undefined ? { minSimilarity: this.entry.minSimilarity } : {}),
+          ...(this.entry.graphCalibration !== undefined ? { graphCalibration: { ...this.entry.graphCalibration } } : {}),
         },
         graphEnabled,
       };
@@ -642,6 +659,12 @@ class KvoxAi implements KvoxAiPort {
     return flags.structuredOutputMode ?? 'native';
   }
 
+  /** How the target model gets tool calls: the state's row, else the catalog, else `native`. */
+  private async toolCallingModeFor(userId: string, target: KvoxAiTarget): Promise<KvoxToolCallingMode> {
+    const flags = await this.modelFlagsOrNone(userId, target.provider, target.model);
+    return flags.toolCallingMode ?? 'native';
+  }
+
   /**
    * The capability flags of one model: the state's row when the state's provider is
    * `provider` (an absent provider means the state's own), else the catalog's. A
@@ -652,7 +675,12 @@ class KvoxAi implements KvoxAiPort {
     userId: string,
     provider: string | null | undefined,
     model: string | null | undefined,
-  ): Promise<{ toolCalling?: boolean; structuredOutputMode?: KvoxStructuredOutputMode; vision?: boolean }> {
+  ): Promise<{
+    toolCalling?: boolean;
+    structuredOutputMode?: KvoxStructuredOutputMode;
+    toolCallingMode?: KvoxToolCallingMode;
+    vision?: boolean;
+  }> {
     if (typeof model !== 'string' || model.length === 0) return {};
     try {
       const state = await this.taskModels.load(userId);
@@ -663,9 +691,11 @@ class KvoxAi implements KvoxAiPort {
       const toolCalling = row?.toolCalling ?? known?.toolCalling;
       const structuredOutputMode = row?.structuredOutputMode ?? known?.structuredOutputMode;
       const vision = row?.vision ?? known?.vision;
+      const toolCallingMode = row?.toolCallingMode ?? known?.toolCallingMode;
       return {
         ...(toolCalling !== undefined ? { toolCalling } : {}),
         ...(structuredOutputMode !== undefined ? { structuredOutputMode } : {}),
+        ...(toolCallingMode !== undefined ? { toolCallingMode } : {}),
         ...(vision !== undefined ? { vision } : {}),
       };
     } catch {
@@ -744,6 +774,10 @@ class KvoxAi implements KvoxAiPort {
           ? toPlatformReasoningEffort(req.target.reasoningEffort)
           : await this.effortFor(ctx.userId, feature, req.target.model ?? null);
       const messages = req.messages.map(toMappingMessage);
+      if (req.tools.length > 0 && (await this.toolCallingModeFor(ctx.userId, req.target)) === 'prompted') {
+        yield* this.promptedChat(ctx, feature, guard, req, messages, effort);
+        return;
+      }
       const { instructions, input } = toPlatformInput(
         messages,
         this.reasoningReplay.recall(scope, toolCallIdsOf(messages)),
@@ -783,6 +817,83 @@ class KvoxAi implements KvoxAiPort {
       // The reasoning of this response waits for the request that replays its step.
       this.reasoningReplay.remember(scope, state.reasoningByCall);
     }
+  }
+
+  /**
+   * One Ask step on a model whose `toolCallingMode` is `prompted` (see the file
+   * header and `chat/prompted-tools.ts`): ONE plain call, the tools in the system
+   * prompt, the reply parsed and validated, ONE repair call when it does not
+   * validate, and the step mapped back to the port's chat events. The usage of a
+   * repaired step is the sum of both calls.
+   */
+  private async *promptedChat(
+    ctx: KvoxAiContext,
+    feature: KvoxAiFeatureId,
+    guard: CallGuard,
+    req: { target: KvoxAiTarget; tools: KvoxToolDef[]; toolChoice: 'auto' | 'none' },
+    messages: KvoxChatMessage[],
+    effort: Awaited<ReturnType<KvoxAi['effortFor']>>,
+  ): AsyncGenerator<PortChatEvent> {
+    const tools = req.tools.map(toToolDefinition);
+    const { system, input } = toPromptedToolInput(messages);
+    const instructions = buildPromptedToolInstructions({ system, tools, toolChoice: req.toolChoice });
+    // The same ceiling and effort as the native request; NO `tools`, NO `structuredOutput`.
+    const rest: Omit<KvoxAiRuntimeRequest, 'instructions' | 'input'> = {
+      maxOutputTokens: req.target.maxOutputTokens,
+      ...(effort !== undefined ? { reasoning: { effort } } : {}),
+    };
+
+    let response: AiResponse = await this.runtime.create(this.call(ctx, feature, req.target, guard.signal), {
+      instructions,
+      input,
+      ...rest,
+    });
+    let usage = response.usage;
+    let parsed = parsePromptedToolAnswer(response.outputText, tools, req.toolChoice);
+
+    if (!parsed.ok && response.finishReason !== 'length' && response.finishReason !== 'content_filter') {
+      // The one repair: the same request, the bad reply and its problems.
+      const second = await this.runtime.create(this.call(ctx, feature, req.target, guard.signal), {
+        instructions,
+        input: buildPromptedToolRepairInput(input, response.outputText, parsed.issues),
+        ...rest,
+      });
+      usage = addUsage(usage, second.usage);
+      response = second;
+      parsed = parsePromptedToolAnswer(second.outputText, tools, req.toolChoice);
+    }
+
+    const finishReason: 'stop' | 'length' | 'content_filter' =
+      response.finishReason === 'length' || response.finishReason === 'content_filter' ? response.finishReason : 'stop';
+
+    if (!parsed.ok) {
+      // A reply cut off, or filtered, is reported as that finish reason, as a native step would.
+      if (finishReason !== 'stop') {
+        yield { type: 'step_end' };
+        yield { type: 'done', usage: usageOf(usage), finishReason };
+        return;
+      }
+      throw this.mark(
+        new KvoxAiError(
+          'invalid_output',
+          scrub('The model did not answer in the tool-calling format the prompt asked for, even after one repair.'),
+          undefined,
+          usageEstimate(usage),
+        ),
+      );
+    }
+
+    if (parsed.step.kind === 'calls') {
+      let n = countToolCalls(messages);
+      for (const requested of parsed.step.calls) {
+        n += 1;
+        yield { type: 'tool_call', id: promptedToolCallId(n), name: requested.name, arguments: requested.arguments };
+      }
+    } else if (parsed.step.text.length > 0) {
+      yield { type: 'delta', text: parsed.step.text };
+    }
+    yield { type: 'step_end' };
+    yield { type: 'done', usage: usageOf(usage), finishReason };
   }
 
   // ---------------------------------------------------------------------------

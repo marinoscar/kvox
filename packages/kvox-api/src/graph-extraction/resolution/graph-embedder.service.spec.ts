@@ -91,3 +91,44 @@ describe('GraphEmbedder (#475)', () => {
     expect(vectorLiteral([1, 2.5])).toBe('[1,2.5]');
   });
 });
+
+describe('GraphEmbedder per-model provider and calibration (#681)', () => {
+  const LOCAL = {
+    provider: 'local',
+    model: 'bge-small-en-v1.5-int8',
+    dimensions: SEARCH_EMBEDDING_DIMENSIONS,
+    nativeDimensions: 384,
+    graphCalibration: { vectorFloor: 0.83, itemCosine: 0.87, itemSameConfidentCosine: 0.95 },
+  };
+
+  it('keeps the OpenAI provider and baseline calibration when the host names neither', async () => {
+    const resolution = await ready(fakeAi());
+    expect(resolution.providerId).toBe('openai');
+    expect(resolution.calibration).toEqual({ vectorFloor: 0.75, itemCosine: 0.8, itemSameConfidentCosine: 0.92 });
+  });
+
+  it('reads the provider and the cut-offs from the catalog entry of an on-device model', async () => {
+    const ai = fakeAi({ script: { capabilities: { embeddings: LOCAL } as never } });
+    const resolution = await ready(ai);
+    expect(resolution).toEqual(
+      expect.objectContaining({
+        providerId: 'local',
+        model: 'bge-small-en-v1.5-int8',
+        calibration: { vectorFloor: 0.83, itemCosine: 0.87, itemSameConfidentCosine: 0.95 },
+      }),
+    );
+  });
+
+  it('falls back to the baseline for an incomplete or inverted calibration', async () => {
+    const bad = { ...LOCAL, graphCalibration: { vectorFloor: 0.9, itemCosine: 0.9, itemSameConfidentCosine: 0.5 } };
+    const resolution = await ready(fakeAi({ script: { capabilities: { embeddings: bad } as never } }));
+    expect(resolution.calibration.itemCosine).toBe(0.8);
+  });
+
+  it('answers calibrationFor with the model\'s cut-offs, and the baseline when it cannot embed', async () => {
+    const local = fakeAi({ script: { capabilities: { embeddings: LOCAL } as never } });
+    expect((await embedder(local).calibrationFor(USER)).itemCosine).toBe(0.87);
+    const none = fakeAi({ script: { capabilities: { embeddings: null } as never } });
+    expect((await embedder(none).calibrationFor(USER)).itemCosine).toBe(0.8);
+  });
+});

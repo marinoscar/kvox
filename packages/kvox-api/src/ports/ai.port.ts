@@ -70,11 +70,33 @@ export interface KvoxAiContext {
 }
 
 /**
+ * The cosine cut-offs the graph's entity resolution and item dedup use for one embedding model (#681).
+ *
+ * @remarks
+ * Models differ in how similar unrelated texts look (bge-style models sit well above
+ * OpenAI's), so a cut-off tuned to one model silently over-links on another. A host that
+ * offers a model records its own here; a model that records none gets the OpenAI
+ * text-embedding-3-small numbers the graph was tuned with.
+ *
+ * @stability experimental
+ */
+export interface KvoxGraphCalibration {
+  /** Entity resolution: the cosine at which vector evidence starts to count (OpenAI: 0.75). */
+  vectorFloor: number;
+  /** Item dedup: the cosine a candidate needs to be adjudicated at all (OpenAI: 0.80). */
+  itemCosine: number;
+  /** Item dedup: a `same` verdict at or above this cosine is not flagged `possible_duplicate` (OpenAI: 0.92). */
+  itemSameConfidentCosine: number;
+}
+
+/**
  * The embeddings model a host offers.
  *
  * @stability experimental
  */
 export interface KvoxEmbeddingsInfo {
+  /** The provider that serves the model (`local` for an on-device model); absent means `openai`. */
+  provider?: string;
   /** The embeddings model id. */
   model: string;
   /** The width of every STORED vector it returns (the column width; a narrower model is zero-padded). */
@@ -83,6 +105,8 @@ export interface KvoxEmbeddingsInfo {
   nativeDimensions?: number;
   /** The cosine similarity below which a semantic hit is noise, when the model needs a floor. */
   minSimilarity?: number;
+  /** The graph's per-model resolution and dedup cut-offs; absent means the OpenAI defaults. */
+  graphCalibration?: KvoxGraphCalibration;
 }
 
 /**
@@ -395,6 +419,77 @@ export const KVOX_AI_ERROR_CLASSES: readonly KvoxAiErrorClass[] = [
 ];
 
 /**
+ * Why a transport-level failure happened, when the adapter could tell. Carried by
+ * {@link KvoxAiError.transient} so a caller can say "network problem" instead of
+ * "unexpected error" and decide whether a retry is safe.
+ *
+ * - `unreachable`: the request never left this host (DNS lookup failed, connection refused,
+ *   network unreachable). Nothing was sent, so nothing was billed: safe to retry.
+ * - `network`: the connection broke mid-flight (reset, socket hang up). The provider may have
+ *   seen the request: do NOT retry a paid call.
+ * - `timeout`: the provider did not answer in time.
+ * - `provider_unavailable`: the provider answered 5xx or "overloaded".
+ *
+ * @stability experimental
+ */
+export type KvoxAiTransient = 'unreachable' | 'network' | 'timeout' | 'provider_unavailable';
+
+/** Error codes that mean the request never left this host. */
+const UNREACHABLE_CODES: ReadonlySet<string> = new Set([
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  'EAI_FAIL',
+  'ECONNREFUSED',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+]);
+
+/** Error codes that mean the connection broke after it was made. */
+const NETWORK_CODES: ReadonlySet<string> = new Set([
+  'ECONNRESET',
+  'EPIPE',
+  'ECONNABORTED',
+  'UND_ERR_SOCKET',
+  'UND_ERR_CLOSED',
+]);
+
+/** Error codes that mean the peer was too slow. */
+const TIMEOUT_CODES: ReadonlySet<string> = new Set([
+  'ETIMEDOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT',
+]);
+
+/**
+ * Reads the network failure out of a thrown value by walking its `cause` chain for a Node
+ * system error code (`EAI_AGAIN`, `ECONNRESET`, ...). Pure and total: it never throws and
+ * reads only `code`, `name` and `cause`, never a message it would pass on.
+ *
+ * @param error - anything caught.
+ * @returns the transport failure, or `undefined` when the value is not recognisably one.
+ * @stability experimental
+ */
+export function transientFailureOf(error: unknown): Exclude<KvoxAiTransient, 'provider_unavailable'> | undefined {
+  let found: Exclude<KvoxAiTransient, 'provider_unavailable'> | undefined;
+  let current: unknown = error;
+  for (let depth = 0; depth < 6 && typeof current === 'object' && current !== null; depth++) {
+    const { code, name, cause } = current as { code?: unknown; name?: unknown; cause?: unknown };
+    if (typeof code === 'string') {
+      if (UNREACHABLE_CODES.has(code)) return 'unreachable';
+      if (NETWORK_CODES.has(code)) found ??= 'network';
+      else if (TIMEOUT_CODES.has(code)) found ??= 'timeout';
+    }
+    if (name === 'TimeoutError') found ??= 'timeout';
+    current = cause;
+  }
+  if (found) return found;
+  const message = error instanceof Error ? error.message : '';
+  if (/socket hang up|fetch failed|network error|connection (?:error|reset|closed)/i.test(message)) return 'network';
+  return undefined;
+}
+
+/**
  * What `generateStructured` returns.
  *
  * @stability experimental
@@ -437,18 +532,29 @@ export class KvoxAiError extends Error {
    */
   readonly usage?: KvoxAiUsage;
 
+  /** Why the transport failed, when the adapter could tell (class `other` or `timeout`). */
+  readonly transient?: KvoxAiTransient;
+
   /**
    * @param errorClass - the failure's class.
    * @param message - a sentence for the log and the user. Never key material.
    * @param retryAfterMs - the provider's retry hint, in milliseconds.
    * @param usage - what the failed call consumed.
+   * @param transient - why the transport failed, when known.
    */
-  constructor(errorClass: KvoxAiErrorClass, message: string, retryAfterMs?: number, usage?: KvoxAiUsage) {
+  constructor(
+    errorClass: KvoxAiErrorClass,
+    message: string,
+    retryAfterMs?: number,
+    usage?: KvoxAiUsage,
+    transient?: KvoxAiTransient,
+  ) {
     super(message);
     this.name = 'KvoxAiError';
     this.errorClass = errorClass;
     this.retryAfterMs = retryAfterMs;
     this.usage = usage;
+    if (transient) this.transient = transient;
     // Required under a downlevelled target, or `instanceof` is false.
     Object.setPrototypeOf(this, new.target.prototype);
   }

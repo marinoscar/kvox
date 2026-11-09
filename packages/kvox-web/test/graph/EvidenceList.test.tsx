@@ -9,7 +9,7 @@ import 'vitest-axe/extend-expect';
 import { EvidenceList, transcriptHref } from '../../src/graph/ui/components/review/EvidenceList.js';
 import { ProposalReviewSheet } from '../../src/graph/ui/components/review/ProposalReviewSheet.js';
 import { invalidateGraphOntology } from '../../src/graph/headless/hooks/useGraphOntology.js';
-import { mockProposalDetail, noteEvidence, proposalMock, segmentEvidence } from './graphData.js';
+import { PROPOSAL_NOTE_ID, mockProposalDetail, noteEvidence, proposalMock, segmentEvidence } from './graphData.js';
 import { server } from './msw-compat.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
 import { mockAdminUser, render } from './helpers.js';
@@ -68,6 +68,41 @@ describe('EvidenceList', () => {
   it('says when the text has changed', () => {
     render(<EvidenceList evidence={[segmentEvidence({ stale: true })]} />);
     expect(screen.getByText(/The text has changed since/)).toBeInTheDocument();
+  });
+
+  describe('a citation of the source document (#789)', () => {
+    const cited = (over = {}) =>
+      noteEvidence({
+        source: 'source_text',
+        charStart: 120,
+        charEnd: 160,
+        sourceObjectId: 'text-1',
+        sourceTextLength: 900,
+        quote: 'Person K1 leads Project P1',
+        ...over,
+      });
+
+    it('says it is from the source document and links to the note at the span in that text', async () => {
+      const onShowInNote = vi.fn();
+      const { container } = render(<EvidenceList evidence={[cited()]} onShowInNote={onShowInNote} />);
+      expect(screen.getByText('“Person K1 leads Project P1”')).toBeInTheDocument();
+      expect(screen.getByText('From the source document')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Open source document' })).toHaveAttribute(
+        'href',
+        `/notes/${PROPOSAL_NOTE_ID}?source=120-160`,
+      );
+      // The offsets index the source text, not the note body: "Show in note" would highlight the wrong place.
+      expect(screen.queryByRole('button', { name: 'Show in note' })).not.toBeInTheDocument();
+      expect(onShowInNote).not.toHaveBeenCalled();
+      expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+    });
+
+    it('keeps the quote but offers no link once the stored text was purged', () => {
+      render(<EvidenceList evidence={[cited({ sourceObjectId: null, stale: true })]} />);
+      expect(screen.getByText('“Person K1 leads Project P1”')).toBeInTheDocument();
+      expect(screen.getByText(/The source text is no longer stored/)).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Open source document' })).not.toBeInTheDocument();
+    });
   });
 
   it('offers Play and Show in note only with handlers', async () => {
