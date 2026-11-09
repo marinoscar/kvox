@@ -551,6 +551,86 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
         await expect(prisma.kgEntity.count({ where: { ownerId: owner.id } })).resolves.toBe(0);
       });
 
+      it('commits an accepted entity cited only by a span of a note\'s source text (#789), through the service', async () => {
+        const owner = await createUser('src-owner');
+        const note = await createNote(owner.id);
+        const text = await createStorageObject(prisma, {
+          data: {
+            name: 'plan.txt',
+            size: BigInt(40),
+            mimeType: 'text/plain',
+            storageKey: `${EMAIL_PREFIX}/${randomUUID()}`,
+            managedBy: 'notes',
+            uploadedById: owner.id,
+          },
+        });
+        const cited = {
+          noteId: note.id,
+          noteVersion: 1,
+          sourceObjectId: text.id,
+          sourceTextLength: 400,
+          charStart: 100,
+          charEnd: 130,
+          quote: 'Person K1 leads Project P1',
+        } as EvidenceInput;
+
+        const entity = await prisma.$transaction((tx) =>
+          write.createEntity(
+            tx,
+            { ownerId: owner.id, type: 'Person', label: 'Person K1', reviewStatus: 'accepted', labelSource: 'extraction', evidence: [cited] },
+            schema,
+          ),
+        );
+
+        // The deferred no-orphans trigger counted the source-text citation as evidence.
+        const rows = await prisma.kgEvidence.findMany({ where: { subjectKind: 'entity', subjectId: entity.id } });
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+          noteId: note.id,
+          noteVersion: 1,
+          sourceObjectId: text.id,
+          sourceTextLength: 400,
+          charStart: 100,
+          charEnd: 130,
+          quote: 'Person K1 leads Project P1',
+        });
+      });
+
+      it("refuses a source text the owner does not hold, and one past its own length, naming each index (#789)", async () => {
+        const owner = await createUser('src-refuse-owner');
+        const stranger = await createUser('src-refuse-stranger');
+        const note = await createNote(owner.id);
+        const mine = await createStorageObject(prisma, {
+          data: { name: 'a.txt', size: BigInt(4), mimeType: 'text/plain', storageKey: `${EMAIL_PREFIX}/${randomUUID()}`, managedBy: 'notes', uploadedById: owner.id },
+        });
+        const theirs = await createStorageObject(prisma, {
+          data: { name: 'b.txt', size: BigInt(4), mimeType: 'text/plain', storageKey: `${EMAIL_PREFIX}/${randomUUID()}`, managedBy: 'notes', uploadedById: stranger.id },
+        });
+        const cite = (sourceObjectId: string, over: Record<string, unknown> = {}) =>
+          ({ noteId: note.id, noteVersion: 1, sourceObjectId, sourceTextLength: 400, charStart: 0, charEnd: 30, quote: 'Person K1', ...over }) as EvidenceInput;
+
+        const err = await prisma
+          .$transaction((tx) =>
+            write.createEntity(
+              tx,
+              {
+                ownerId: owner.id,
+                type: 'Person',
+                label: 'X',
+                reviewStatus: 'accepted',
+                labelSource: 'user',
+                evidence: [cite(mine.id), cite(theirs.id), cite(mine.id, { charEnd: 401 })],
+              },
+              schema,
+            ),
+          )
+          .catch((e: unknown) => e);
+
+        expect(err).toBeInstanceOf(BadRequestException);
+        expect((err as BadRequestException).getResponse()).toMatchObject({ details: { invalidEvidence: [1, 2] } });
+        await expect(prisma.kgEntity.count({ where: { ownerId: owner.id } })).resolves.toBe(0);
+      });
+
       it('accepts a segment of a transcript shared with the owner, and refuses a segment of another transcript', async () => {
         const owner = await createUser('seg-owner');
         const sharer = await createUser('seg-sharer');
