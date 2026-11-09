@@ -6479,7 +6479,13 @@ connected knowledge is on, you hold `graph:write` and your
 The proposal exists at once with `status: "extracting"`; it becomes `draft`
 when the job finishes (or `failed`, with `stats.failure.errorClass` one of
 `auth`, `refusal`, `rate_limit`, `budget`, `truncated`, `invalid_output`,
-`other` and a message). A newer draft for the same note **discards** the
+`network`, `timeout`, `unavailable`, `other` and a message; #759: `network`,
+`timeout` and `unavailable` mean the provider could not be reached, did not
+answer in time or answered 5xx, and the message says so; `other` carries the
+job id as a reference and never a thrown message). A request that never left
+the API host (DNS failure, connection refused) is retried inside the job with
+a short back-off before it fails; a reset or timeout mid-call is not, because
+it may have been billed. A newer draft for the same note **discards** the
 older one (`stats.discardReason: "superseded"`). The model, provider, exact
 system prompt and user content are recorded on the proposal **before** the
 provider is called, so a failed run still shows what was asked. Every

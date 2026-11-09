@@ -345,13 +345,70 @@ describe('KgExtractHandler (#363)', () => {
 
   it('an unexpected error marks the proposal failed and rethrows', async () => {
     const { handler, writer, ai } = harness();
-    ai.queueError(new Error('socket hang up'));
-    await expect(handler.process(job())).rejects.toThrow('socket hang up');
-    expect(writer.markFailed).toHaveBeenCalledWith(PROPOSAL, expect.anything(), {
-      errorClass: 'other',
-      message: 'Extraction failed because of an unexpected error.',
+    ai.queueError(new Error('the vendor said: key sk-abcdefghijklmnop is wrong'));
+    await expect(handler.process(job())).rejects.toThrow('the vendor said');
+    const failure = (writer.markFailed.mock.calls[0] as unknown as [string, unknown, { errorClass: string; message: string }])[2];
+    expect(failure.errorClass).toBe('other');
+    // A fixed sentence and the job id: nothing the thrown error said reaches the proposal (#759).
+    expect(failure.message).toBe(
+      'Extraction failed because of an unexpected error (job job-1). Try again; if it keeps failing, give an administrator this reference.',
+    );
+    expect(failure.message).not.toContain('sk-');
+  });
+
+  describe('transport failures (#759)', () => {
+    const dns = () => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('getaddrinfo EAI_AGAIN api.example.test'), { code: 'EAI_AGAIN' }) });
+
+    it.each([
+      ['a reset connection', new KvoxAiError('other', 'x', undefined, undefined, 'network'), 'network', 'network problem'],
+      ['a provider timeout', new KvoxAiError('other', 'x', undefined, undefined, 'timeout'), 'timeout', 'did not answer in time'],
+      ['the call backstop', new KvoxAiError('timeout', 'The AI request timed out after 600000 ms.'), 'timeout', 'did not answer in time'],
+      ['a 5xx', new KvoxAiError('other', 'x', undefined, undefined, 'provider_unavailable'), 'unavailable', 'temporarily unavailable'],
+      ['a raw socket hang up', new Error('socket hang up'), 'network', 'network problem'],
+      ['a raw ECONNRESET', Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }), 'network', 'network problem'],
+    ])('%s is recorded as a specific, safe reason and the job still fails', async (_name, thrown, errorClass, words) => {
+      const { handler, writer, ai } = harness();
+      ai.queueError(thrown);
+      await expect(handler.process(job())).rejects.toBe(thrown);
+      const failure = (writer.markFailed.mock.calls[0] as unknown as [string, unknown, { errorClass: string; message: string }])[2];
+      expect(failure.errorClass).toBe(errorClass);
+      expect(failure.message).toContain(words);
+      expect(failure.message).not.toContain('socket');
+      expect(failure.message).not.toContain('ECONNRESET');
+      // Not retried: the request may have been billed.
+      expect(ai.calls).toHaveLength(1);
+    });
+
+    it('retries an unreachable provider (DNS failure) with a back-off, then succeeds without failing the proposal', async () => {
+      const { handler, writer, ai } = harness();
+      const sleeps: number[] = [];
+      handler.sleep = async (ms) => {
+        sleeps.push(ms);
+      };
+      ai.queueError(new KvoxAiError('other', 'Connection error.', undefined, undefined, 'unreachable'));
+      ai.queueError(dns());
+      await handler.process(job());
+      expect(ai.calls).toHaveLength(3);
+      expect(sleeps).toEqual([2_000, 5_000]);
+      expect(writer.markFailed).not.toHaveBeenCalled();
+      expect(writer.finalize).toHaveBeenCalled();
+    });
+
+    it('gives up after the back-off is spent and says it is a network problem', async () => {
+      const { handler, writer, ai } = harness();
+      handler.sleep = async () => undefined;
+      for (let i = 0; i < 4; i++) ai.queueError(new KvoxAiError('other', 'Connection error.', undefined, undefined, 'unreachable'));
+      await expect(handler.process(job())).rejects.toBeInstanceOf(KvoxAiError);
+      expect(ai.calls).toHaveLength(4);
+      expect(writer.markFailed).toHaveBeenCalledWith(PROPOSAL, expect.anything(), expect.objectContaining({ errorClass: 'network' }));
+    });
+
+    it('classifies a raw DNS failure from the cause chain', () => {
+      expect(classifyExtractionError(dns())).toBe('network');
+      expect(classifyExtractionError(new Error('plain'))).toBe('other');
     });
   });
+
 
   it('runs stages in order, after the items are written and before finalize, merging their stats', async () => {
     const order: string[] = [];
@@ -446,7 +503,8 @@ describe('classifyExtractionError (#435)', () => {
   });
 
   it('maps anything else (a plain Error) to other', () => {
-    expect(classifyExtractionError(new Error('socket hang up'))).toBe('other');
+    expect(classifyExtractionError(new Error('boom'))).toBe('other');
+    expect(classifyExtractionError(new Error('socket hang up'))).toBe('network');
     expect(classifyExtractionError('not even an Error')).toBe('other');
     expect(classifyExtractionError(undefined)).toBe('other');
   });

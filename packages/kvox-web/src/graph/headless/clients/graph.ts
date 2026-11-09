@@ -2132,6 +2132,9 @@ export type ExtractionFailureClass =
   | 'budget'
   | 'truncated'
   | 'invalid_output'
+  | 'network'
+  | 'timeout'
+  | 'unavailable'
   | 'other'
   | (string & {});
 
