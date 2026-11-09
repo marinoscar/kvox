@@ -15,9 +15,11 @@
   },
   "changesets": [
     "brand-subpath-document-theme",
+    "bulk-document-import-zip",
     "ci-flake-headroom",
     "copilot-runtime-reuse-plan-hosts-patch-schema",
     "embedding-catalog-choice",
+    "fix-extraction-failure-reason",
     "fix-neighbors-relation-example",
     "fix-speaker-link-one-connection",
     "g6-graph-canvas",
@@ -36,9 +38,11 @@
     "gic-17-lenses-history-ask-selection",
     "gic-18-docs-final",
     "graph-autocommit-default-on",
+    "graph-embedding-calibration",
     "graph-overview-landing",
     "graph-self-identity",
     "graph-self-one-connection",
+    "graph-source-text-evidence",
     "graph-tx-reads-one-connection",
     "kg-extract-chunking",
     "kg-multi-meeting-documents",
@@ -83,6 +87,8 @@
     "kvox-job-reasons",
     "kvox-library-sync-hardening",
     "kvox-new-note-keep",
+    "kvox-note-context-attachments-db",
+    "kvox-note-context-attachments",
     "kvox-note-first-home",
     "kvox-note-libraries-api",
     "kvox-note-libraries-bulk-graph",
@@ -139,8 +145,10 @@
     "platform-next-17-pin",
     "platform-next-19-pin",
     "platform-next-20-pin",
+    "prompted-tool-calling",
     "remove-epic-visual-specs",
     "replace-borrowed-brands",
+    "replace-person-names",
     "search-model-filter"
   ]
 }
