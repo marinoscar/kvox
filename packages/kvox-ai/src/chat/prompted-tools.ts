@@ -166,6 +166,18 @@ function replayedTurn(message: Extract<KvoxChatMessage, { role: 'assistant' }>):
 }
 
 /**
+ * A transcript as a prompted tool step sends it.
+ *
+ * @stability experimental
+ */
+export interface PromptedToolInput {
+  /** The leading `system` messages, joined by a blank line; empty when there are none. */
+  system: string;
+  /** Every other message, in order, as plain platform messages. */
+  input: AiInputItem[];
+}
+
+/**
  * The transcript as plain messages a server without tool calls can take: the
  * leading `system` messages are the instructions' business (returned as `system`),
  * an assistant turn is the JSON it would have said, and the results of one step's
@@ -176,7 +188,7 @@ function replayedTurn(message: Extract<KvoxChatMessage, { role: 'assistant' }>):
  * @returns the leading system text and the input items.
  * @stability experimental
  */
-export function toPromptedToolInput(messages: readonly KvoxChatMessage[]): { system: string; input: AiInputItem[] } {
+export function toPromptedToolInput(messages: readonly KvoxChatMessage[]): PromptedToolInput {
   let lead = 0;
   while (lead < messages.length && messages[lead].role === 'system') lead += 1;
   const system = messages

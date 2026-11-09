@@ -1,0 +1,5 @@
+---
+"@marinoscar/kvox-ai": minor
+---
+
+Ask runs on an OpenAI-compatible server that cannot call tools (#654). A model's `toolCallingMode` (`native` by default, or `prompted`; a `KvoxAiEnabledModel` row or a `KvoxModelInfo` catalog entry, like `structuredOutputMode`) decides how `createKvoxAi.chat` gets tool calls. For `prompted` the request carries no `tools`: each Ask step is one plain call whose system prompt lists the tools and asks for a single JSON value (the tool calls to make, several allowed, or the final answer), the reply is parsed and validated (each call's arguments against the tool's JSON Schema) with one repair call, and the step is mapped back to the same `tool_call`, `delta`, `step_end` and `done` events. The Ask loop is unchanged and the native request is byte for byte unchanged. A prompted step is not streamed. New exports: `KvoxToolCallingMode`, `buildPromptedToolInstructions`, `toPromptedToolInput`, `parsePromptedToolAnswer`, `buildPromptedToolRepairInput`, `countToolCalls`, `promptedToolCallId`, `toolParametersSchema`. Copilot's native tool calling through the session bridge shipped earlier in this issue.

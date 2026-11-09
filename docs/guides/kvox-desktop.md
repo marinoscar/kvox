@@ -480,6 +480,7 @@ const kvoxAi = createKvoxAi({ runtime, taskModels: localTaskModelSource, catalog
 
 - Build the adapter only when the setting is on. `createCopilotAdapter` throws a plain `Error` otherwise, so a code path that forgot the check fails loudly.
 - `catalog: copilot.kvox.catalog` is how `createKvoxAi` learns, per model, whether `toolCalling` holds (true unless the live listing said otherwise) and whether structured output is `native` or `prompted`. Without it a Claude model would be sent a native schema it may not honour.
+- A local or self-hosted OpenAI-compatible model that does not implement tool calls can still run Ask: give its task-model row (or catalog entry) `toolCallingMode: 'prompted'` and keep `toolCalling: true`. `createKvoxAi.chat` then sends no `tools`; each step is one plain call that returns either the tool calls or the answer as JSON, with one repair, mapped to the same chat events (#654). A prompted answer arrives whole instead of streamed. The Copilot adapter does not need this: it serves native tool calling through the session bridge.
 - The task-model source lists Copilot models from `adapter.listModels(...)` (needs sign-in; models whose policy is `disabled` are dropped). When the live listing is unavailable, `COPILOT_CATALOG` (version `COPILOT_CATALOG_VERSION`) is a small fallback with conservative limits.
 - Install the optional peer in the Desktop app only: `npm install @github/copilot-sdk`. The web edition never installs it, and the package root never imports it.
 
