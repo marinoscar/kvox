@@ -1,8 +1,20 @@
 import type { AiInputItem } from '@marinoscar/platform-ai-providers';
 
 import type { KvoxChatMessage, KvoxToolChoice, KvoxToolDefinition } from '../types/index.js';
-import type { PromptedStructuredIssue } from '../structured/index.js';
 import { toolParametersSchema } from './chat-mapping.js';
+
+/**
+ * One thing wrong with a prompted tool reply. The same shape as the structured slice's issue,
+ * declared here so `chat` does not import `structured` (slice boundary).
+ */
+export interface PromptedToolIssue {
+  /** The path of the offending value inside the reply; empty for the whole reply. */
+  path: Array<string | number>;
+  /** The validator's code (`invalid_json` when the reply is not JSON at all). */
+  code: string;
+  /** What is wrong, in the validator's words. */
+  message: string;
+}
 
 // =============================================================================
 // Prompted tool calling: the tools in the prompt, one repair (issue #654)
@@ -88,7 +100,7 @@ export type PromptedToolParse =
       /** True when the reply is not JSON at all. */
       notJson: boolean;
       /** Why, in order. */
-      issues: PromptedStructuredIssue[];
+      issues: PromptedToolIssue[];
     };
 
 /** The tools a step may call under a tool choice. */
@@ -263,7 +275,7 @@ export function promptedToolCallId(n: number): string {
 export function buildPromptedToolRepairInput(
   input: readonly AiInputItem[],
   answer: string,
-  issues: readonly PromptedStructuredIssue[],
+  issues: readonly PromptedToolIssue[],
 ): AiInputItem[] {
   const listed = issues.slice(0, 20).map((issue) => `- ${formatPath(issue.path)}: ${issue.message.slice(0, 200)}`);
   if (issues.length > 20) listed.push(`- ...and ${issues.length - 20} more`);
@@ -313,8 +325,8 @@ export function parsePromptedToolAnswer(
     };
   }
 
-  const fail = (issues: PromptedStructuredIssue[]): PromptedToolParse => ({ ok: false, notJson: false, issues });
-  const issue = (path: Array<string | number>, message: string, code = 'invalid_value'): PromptedStructuredIssue => ({
+  const fail = (issues: PromptedToolIssue[]): PromptedToolParse => ({ ok: false, notJson: false, issues });
+  const issue = (path: Array<string | number>, message: string, code = 'invalid_value'): PromptedToolIssue => ({
     path,
     code,
     message,
@@ -340,7 +352,7 @@ export function parsePromptedToolAnswer(
       return fail([issue(['calls'], 'expected a non-empty array of tool calls', 'invalid_type')]);
     }
     const calls: PromptedToolCall[] = [];
-    const issues: PromptedStructuredIssue[] = [];
+    const issues: PromptedToolIssue[] = [];
     body.calls.forEach((entry: unknown, index: number) => {
       const at: Array<string | number> = ['calls', index];
       if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
