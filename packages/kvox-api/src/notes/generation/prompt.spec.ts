@@ -13,7 +13,10 @@
 // =============================================================================
 
 import {
+  ATTACHED_FILE_BEGIN,
   CONTEXT_HEADING,
+  attachedFileEnd,
+  attachedImagesLine,
   LENGTH_HEADING,
   OUTPUT_FORMAT_HEADING,
   PLAIN_TEXT_CLOSING_LINE,
@@ -230,5 +233,49 @@ describe('parseTemplateStructure', () => {
     expect(parseTemplateStructure('Overview')).toEqual([]);
     expect(parseTemplateStructure({ sections: ['A'] })).toEqual([]);
     expect(parseTemplateStructure([1, null, 'A', '', '  ', { x: 1 }])).toEqual(['A']);
+  });
+});
+
+describe('assemblePrompt: context attachments (issue #810)', () => {
+  const docs = [
+    { filename: 'agenda.md', text: '  Agenda: ship Friday.  ' },
+    { filename: 'slides.pptx', text: 'Slide 1: Kestrel' },
+  ];
+
+  it('is byte-identical to the old output when there are no attachments', () => {
+    expect(assemblePrompt({ ...base, contextDocuments: [], contextImageCount: 0 })).toEqual(assemblePrompt(base));
+  });
+
+  it('renders each document inside the Context block after the user\'s text, fenced and named, before the source', () => {
+    const { userContent } = assemblePrompt({ ...base, contextDocuments: docs });
+
+    expect(userContent).toBe(
+      [
+        `${CONTEXT_HEADING}\n${base.contextText}`,
+        `Attached file: agenda.md\n${ATTACHED_FILE_BEGIN}\nAgenda: ship Friday.\n${attachedFileEnd('agenda.md')}`,
+        `Attached file: slides.pptx\n${ATTACHED_FILE_BEGIN}\nSlide 1: Kestrel\n${attachedFileEnd('slides.pptx')}`,
+        `${SOURCE_HEADING}\n${base.sourceText.trim()}`,
+      ].join('\n\n'),
+    );
+  });
+
+  it('opens the Context block for documents alone, with no user text', () => {
+    const { userContent } = assemblePrompt({ ...base, contextText: null, contextDocuments: [docs[0]] });
+
+    expect(userContent.startsWith(`${CONTEXT_HEADING}\nAttached file: agenda.md\n`)).toBe(true);
+  });
+
+  it('tells the model attached images are context, after the documents', () => {
+    const { userContent } = assemblePrompt({ ...base, contextDocuments: [docs[0]], contextImageCount: 2 });
+
+    expect(userContent).toContain(attachedImagesLine(2));
+    expect(userContent.indexOf(attachedImagesLine(2))).toBeGreaterThan(userContent.indexOf('Agenda: ship Friday.'));
+    expect(userContent.indexOf(attachedImagesLine(2))).toBeLessThan(userContent.indexOf(SOURCE_HEADING));
+  });
+
+  it('leaves the system prompt untouched', () => {
+    expect(assemblePrompt({ ...base, contextDocuments: docs, contextImageCount: 1 }).systemPrompt).toBe(
+      assemblePrompt(base).systemPrompt,
+    );
   });
 });

@@ -173,6 +173,14 @@
       "requiresHostTables": [],
       "sha256": "db3cce90ebe04c6b60b3f71c54089d2d0f4d7abc3622ad9c8f97f3d8803f3499",
       "slice": "notes"
+    },
+    {
+      "id": "20261106120000_add_note_context_attachments",
+      "requiresHostTables": [
+        "storage_objects"
+      ],
+      "sha256": "19e1fc2cb29e304a260e5140e70a5d20c62f9135afb72ba1102790a3c1c8aa2b",
+      "slice": "notes"
     }
   ]
 }

@@ -44,6 +44,7 @@ export const KVOX_MODEL_OWNERSHIP: readonly Def[] = [
   user('NoteTemplate', 'A custom template belongs to its author; a built-in has no owner.'),
   user('UserHiddenNoteTemplate', 'Which templates one user hid from their own picker.'),
   user('NoteGeneration', 'A generation belongs to its note, and so to the note’s owner.'),
+  user('NoteContextAttachment', 'An attachment belongs to its note, and so to the note’s owner.'),
   user('NoteVersion', 'A snapshot belongs to its note, and so to the note’s owner.'),
   user('NoteExport', 'An export is requested by, and served to, one user.'),
   user('NoteLibrary', 'A library belongs to the user who chose the folder.'),

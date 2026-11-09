@@ -58,6 +58,8 @@
 
 import { noteSourceDownloadSchema } from '@marinoscar/kvox-contract/notes';
 import type {
+  NoteContextAttachment as ContractNoteContextAttachment,
+  NoteContextAttachmentKind as ContractNoteContextAttachmentKind,
   NoteConflictReason as ContractNoteConflictReason,
   NoteSourceDownload as ContractNoteSourceDownload,
   NoteTitleSource as ContractNoteTitleSource,
@@ -202,6 +204,11 @@ export interface Note {
   sourceName: string | null;
   /** The extra context the author gave the generation, or `null`. */
   contextText: string | null;
+  /**
+   * The files attached as context (#810), in the order the model sees them. DETAIL ONLY,
+   * and absent from an older server: read `undefined` as "none".
+   */
+  contextAttachments?: NoteContextAttachment[];
   /** The generation to watch. Never cleared once set. */
   currentGenerationId: string | null;
   /** Why the generation failed, or `null`. */
@@ -347,6 +354,11 @@ export interface CreateNoteInput {
   source: NoteSource;
   /** Extra context for the generation. Omit it for none. */
   contextText?: string;
+  /**
+   * Ready context attachments (#810), at most `MAX_CONTEXT_ATTACHMENTS`, in the order the model
+   * sees them. Omit it for none.
+   */
+  contextAttachmentIds?: string[];
   /** A model to generate on. Omit it for the template's or the deployment's default. */
   model?: string;
 }
@@ -379,6 +391,11 @@ export interface RegenerateNoteInput {
   templateId?: string;
   /** `null` clears the note's context; omitting it keeps what the note has. */
   contextText?: string | null;
+  /**
+   * The context attachments (#810), with the same three states as `contextText`: omitted keeps
+   * the note's, an array replaces them, `null` clears them.
+   */
+  contextAttachmentIds?: string[] | null;
   /** A different model to regenerate on. */
   model?: string;
 }
@@ -672,6 +689,11 @@ export interface NoteGenerationContext {
   model: string | null;
   /** The extra context the author gave, or `null`. */
   contextText: string | null;
+  /**
+   * The files attached as context for this generation (#810), as they were when it was
+   * requested. Absent from an older server: read `undefined` as "none".
+   */
+  attachments?: NoteContextAttachment[];
   /** What the generation read. */
   sourceType: 'transcript' | 'note' | 'document';
   /** The version of the source note that was read, or `null`. */
@@ -1027,4 +1049,121 @@ export async function getNoteSourceDownload(
     `/notes/${encodeURIComponent(noteId)}/source${suffix}`,
   );
   return noteSourceDownloadSchema.parse(answer);
+}
+
+// =============================================================================
+// Context attachments (#810)
+// =============================================================================
+
+/**
+ * One file attached to a note's context — the contract's `NoteContextAttachment`:
+ * `objectId`, `kind` (`document` or `image`), `filename`, `mimeType`.
+ *
+ * @stability experimental
+ */
+export type NoteContextAttachment = ContractNoteContextAttachment;
+
+/**
+ * The kind of a context attachment: `document` (its text is extracted) or `image`
+ * (sent to a vision-capable model).
+ *
+ * @stability experimental
+ */
+export type NoteContextAttachmentKind = ContractNoteContextAttachmentKind;
+
+/**
+ * What `POST /api/notes/context/attachments` answers (201).
+ *
+ * @stability experimental
+ */
+export interface NoteContextAttachmentUpload extends NoteContextAttachment {
+  /** Bytes the server accepted. */
+  size: number;
+  /** `ready` at once for an image; `extracting` for a document until its text is read. */
+  status: 'extracting' | 'ready';
+  /** The extraction job for a document; `null` for an image. */
+  jobId: string | null;
+}
+
+/**
+ * Where one attachment stands, as `GET /api/notes/context/attachments/{objectId}` reports it.
+ *
+ * `unextractable` is terminal: the document has no readable text and cannot be attached.
+ *
+ * @stability experimental
+ */
+export interface NoteContextAttachmentStatus {
+  /** The attachment's object id. */
+  objectId: string;
+  /** `document` or `image`. */
+  kind: NoteContextAttachmentKind;
+  /** `extracting`, `ready` or `unextractable`. */
+  status: 'extracting' | 'ready' | 'unextractable';
+  /** For `unextractable`, the sentence to show the user; otherwise `null`. */
+  message: string | null;
+  /** Characters of extracted text for a ready document; otherwise `null`. */
+  characters: number | null;
+}
+
+/**
+ * `POST /api/notes/context/attachments` — store one file as a note context attachment.
+ *
+ * Multipart with a single `file` part, like {@link uploadNoteSourceDocument}. A document
+ * answers `status: 'extracting'` and queues its extraction (poll
+ * {@link getNoteContextAttachmentStatus}); an image answers `ready`. A type that can be
+ * neither is a 400 whose `details.reason` is `context_attachment_unsupported_type`; over the
+ * deployment's size limit is a 413.
+ *
+ * @param host - the host.
+ * @param file - the file.
+ * @returns the stored attachment.
+ * @stability experimental
+ */
+export async function uploadNoteContextAttachment(
+  host: KvoxWebHost,
+  file: File,
+): Promise<NoteContextAttachmentUpload> {
+  const form = new FormData();
+  form.append('file', file);
+  return kvoxPostFormData<NoteContextAttachmentUpload>(host, '/notes/context/attachments', form);
+}
+
+/**
+ * `GET /api/notes/context/attachments/{objectId}` — whether an attachment can be used yet.
+ *
+ * TOTAL OVER GARBAGE, like {@link getNoteDocumentExtraction}: any shape this client cannot
+ * read is reported as `extracting`, the only answer that cannot enable Generate too early.
+ *
+ * @param host - the host.
+ * @param objectId - the attachment's object id.
+ * @returns where it stands.
+ * @stability experimental
+ */
+export async function getNoteContextAttachmentStatus(
+  host: KvoxWebHost,
+  objectId: string,
+): Promise<NoteContextAttachmentStatus> {
+  const answer = await kvoxGet<unknown>(
+    host,
+    `/notes/context/attachments/${encodeURIComponent(objectId)}`,
+  );
+  const fallback: NoteContextAttachmentStatus = {
+    objectId,
+    kind: 'document',
+    status: 'extracting',
+    message: null,
+    characters: null,
+  };
+  if (typeof answer !== 'object' || answer === null) return fallback;
+
+  const record = answer as Record<string, unknown>;
+  const kind: NoteContextAttachmentKind = record.kind === 'image' ? 'image' : 'document';
+  const message = typeof record.message === 'string' ? record.message : null;
+  const characters = typeof record.characters === 'number' ? record.characters : null;
+
+  if (record.status === 'ready') return { objectId, kind, status: 'ready', message: null, characters };
+  if (record.status === 'unextractable') {
+    return { objectId, kind, status: 'unextractable', message, characters: null };
+  }
+  return { ...fallback, kind };
 }

@@ -235,6 +235,11 @@ export interface KvoxAiEnabledModel {
    * `native`, so every existing row keeps its behaviour.
    */
   structuredOutputMode?: KvoxStructuredOutputMode;
+  /**
+   * Whether the model accepts image input (the platform's `vision_input` capability, issue #810).
+   * Absent means unknown: the port then does not refuse an image up front.
+   */
+  vision?: boolean;
 }
 
 /**
@@ -332,6 +337,8 @@ export interface KvoxModelInfo {
   toolCalling: boolean;
   /** How `generateStructured` holds the model to a schema (#581). Absent means `native`. */
   structuredOutputMode?: KvoxStructuredOutputMode;
+  /** Whether the model accepts image input (`vision_input`, issue #810). Absent means unknown. */
+  vision?: boolean;
 }
 
 /**

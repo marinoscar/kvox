@@ -39,6 +39,8 @@ import { NoteGenerationStreamController } from './note-generation-stream.control
 import { NoteObjectsService } from './note-objects.service.js';
 import { NoteOriginService } from './note-origin.service.js';
 import { NoteSourceNameService } from './note-source-name.service.js';
+import { NoteContextAttachmentsController } from './note-context-attachments.controller.js';
+import { NoteContextAttachmentsService } from './note-context-attachments.service.js';
 import { NoteSourcesController } from './note-sources.controller.js';
 import { NoteSourcesService } from './note-sources.service.js';
 import { NoteImportController } from './import/note-import.controller.js';
@@ -178,6 +180,7 @@ export class NotesModule {
       // registered beside the `:id` routes without depending on their order.
       NoteImportController,
       NoteSourcesController,
+      NoteContextAttachmentsController,
       NoteTemplatesController,
       NoteGenerationStreamController,
     ];
@@ -215,6 +218,8 @@ export class NotesModule {
       // stores an object, and every object it stores is `managed_by: 'notes'`.
       NoteObjectsService,
       NoteSourcesService,
+      // Context attachments (#810): documents reuse the extraction above, images are ready at once.
+      NoteContextAttachmentsService,
       // Download of an imported note's original file (#732).
       NoteSourceDownloadService,
       // Note import (#585): a Markdown note export back into a note.

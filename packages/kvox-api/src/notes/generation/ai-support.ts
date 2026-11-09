@@ -115,7 +115,11 @@ export function providerLabelOf(providerId: string | null): string {
 }
 
 /** The reasons a route answers an unready AI feature with (`details.reason`). @stability experimental */
-export type NoteAiConflictReason = 'ai_not_configured' | 'ai_key_missing' | 'model_lacks_capability';
+export type NoteAiConflictReason =
+  | 'ai_not_configured'
+  | 'ai_key_missing'
+  | 'model_lacks_capability'
+  | 'ai_model_no_vision';
 
 /**
  * A 409 with `details.reason`, the shape every AI conflict of the product has always had.

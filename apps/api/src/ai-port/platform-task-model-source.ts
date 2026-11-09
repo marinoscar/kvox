@@ -38,7 +38,7 @@ export type KvoxEnabledModel = KvoxAiEnabledModel;
 /** The policy and the enabled models, read once. */
 export type KvoxAiResolverState = KvoxAiModelState;
 
-function flagsOf(capabilities: unknown): { structuredOutput: boolean; toolCalling: boolean } {
+function flagsOf(capabilities: unknown): { structuredOutput: boolean; toolCalling: boolean; vision: boolean } {
   const list =
     typeof capabilities === 'object' && capabilities !== null
       ? (capabilities as { capabilities?: unknown }).capabilities
@@ -47,6 +47,8 @@ function flagsOf(capabilities: unknown): { structuredOutput: boolean; toolCallin
   return {
     structuredOutput: ids.includes('structured_output'),
     toolCalling: ids.includes('tools'),
+    // Issue #810: lets `KvoxAiPort.supportsVision` refuse an image attachment up front.
+    vision: ids.includes('vision_input'),
   };
 }
 

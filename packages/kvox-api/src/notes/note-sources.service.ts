@@ -268,6 +268,11 @@ export class NoteSourcesService {
    * control characters come out and a bounded length goes in.
    */
   private safeFilename(raw: string, mimeType: NoteDocumentMimeType): string {
+    return this.safeDisplayName(raw, `document${documentExtension(mimeType)}`);
+  }
+
+  /** {@link safeFilename} for any file: the fallback name is the caller's. */
+  safeDisplayName(raw: string, fallback: string): string {
     const stripped = (raw ?? '')
       // Path separators, so a name can never read as a path anywhere it is
       // later joined to one.
@@ -277,7 +282,7 @@ export class NoteSourcesService {
       .trim();
 
     if (stripped.length === 0) {
-      return `document${documentExtension(mimeType)}`;
+      return fallback;
     }
 
     return stripped.slice(0, MAX_FILENAME_LENGTH);

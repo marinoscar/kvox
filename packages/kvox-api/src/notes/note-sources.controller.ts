@@ -57,15 +57,12 @@
 // =============================================================================
 
 import {
-  BadRequestException,
   Controller,
   Get,
   HttpCode,
   HttpStatus,
-  InternalServerErrorException,
   Param,
   ParseUUIDPipe,
-  PayloadTooLargeException,
   Post,
   Req,
 } from '@nestjs/common';
@@ -85,53 +82,8 @@ import { NOTES_READ_PERMISSION, NOTES_WRITE_PERMISSION } from './notes.permissio
 
 import { NoteSourceDocumentDto, NoteSourceDocumentStatusDto } from './dto/note-source.dto.js';
 import { acceptedDocumentTypesSentence } from './extraction/document-format.js';
+import { assertMultipart, readSingleFileUpload } from './multipart-upload.js';
 import { NoteSourcesService } from './note-sources.service.js';
-
-/** The 500 a request gets when the host never registered `@fastify/multipart` (a host duty, `$hostPlugins`). */
-const HOST_MULTIPART_MISSING =
-  'This host has not registered @fastify/multipart on its Fastify app, so uploads cannot be read ' +
-  '(a kvox host duty: see docs/guides/kvox-desktop.md and $hostPlugins in packages/kvox-slice-peers.json).';
-
-/**
- * Turn Fastify's multipart failures into the status they mean.
- *
- * `FST_REQ_FILE_TOO_LARGE` is a 413 and everything else in the `FST_` family is
- * a malformed body, which is a 400. Without this they surface as 500s, which
- * tells the user their file broke the server rather than that it is too big.
- */
-/** The part of `@fastify/multipart`'s request decoration this controller uses. */
-interface MultipartRequest {
-  isMultipart(): boolean;
-  file(options: { limits: { fileSize: number; files: number }; throwFileSizeLimit: boolean }): Promise<
-    | {
-        fieldname: string;
-        filename: string;
-        mimetype: string;
-        toBuffer(): Promise<Buffer>;
-        file?: { truncated?: boolean };
-      }
-    | undefined
-  >;
-}
-
-function toClientError(error: unknown, maxBytes: number): unknown {
-  const code = (error as { code?: unknown } | null)?.code;
-
-  if (code === 'FST_REQ_FILE_TOO_LARGE') {
-    return new PayloadTooLargeException(
-      `This document is larger than the ${maxBytes}-byte limit this deployment allows for a ` +
-        'note source document.',
-    );
-  }
-
-  if (typeof code === 'string' && code.startsWith('FST_')) {
-    return new BadRequestException(
-      'Invalid multipart body. Send multipart/form-data with a single "file" field.',
-    );
-  }
-
-  return error;
-}
 
 /**
  * NoteSourcesController: routes the slice registers itself; a host mounts them through `NotesModule.forRoot` and never instantiates the controller.
@@ -185,54 +137,10 @@ export class NoteSourcesController {
     @Req() request: FastifyRequest,
     @CurrentActor('id') userId: string,
   ) {
-    // `@fastify/multipart` decorates the request; its types are the host's, so the slice states
-    // the two members it uses.
-    const req = request as unknown as MultipartRequest;
-
-    // A host that skipped the plugin has no decoration: say so instead of a bare TypeError.
-    if (typeof req.isMultipart !== 'function') {
-      throw new InternalServerErrorException(HOST_MULTIPART_MISSING);
-    }
-
-    if (!req.isMultipart()) {
-      throw new BadRequestException(
-        'Expected multipart/form-data with a single "file" field.',
-      );
-    }
-
+    assertMultipart(request);
     // READ THE CEILING FIRST — it bounds the read itself. See the header.
     const maxBytes = await this.sources.maxDocumentBytes();
-
-    let filename: string;
-    let mimeType: string;
-    let body: Buffer;
-
-    try {
-      const part = await req.file({
-        limits: { fileSize: maxBytes, files: 1 },
-        throwFileSizeLimit: true,
-      });
-
-      if (!part) {
-        throw new BadRequestException('No file provided');
-      }
-
-      if (part.fieldname !== 'file') {
-        throw new BadRequestException('The document must be sent in the "file" field.');
-      }
-
-      filename = part.filename;
-      mimeType = part.mimetype;
-      // Bounded by `fileSize` above. Over it must be a 413, never a truncated
-      // file: that is the difference between a 413 and a corrupt document stored
-      // as valid (the check below covers the case `toBuffer` does not throw).
-      body = await part.toBuffer();
-      // ⚠ `toBuffer` can return the first `fileSize` bytes WITHOUT throwing when the limit is
-      // hit as the last chunk is read (#585); a truncated file is over the limit, never valid.
-      if (part.file?.truncated) throw Object.assign(new Error('File too large'), { code: 'FST_REQ_FILE_TOO_LARGE' });
-    } catch (error) {
-      throw toClientError(error, maxBytes);
-    }
+    const { filename, mimeType, body } = await readSingleFileUpload(request, maxBytes, 'document');
 
     return this.sources.uploadDocument({ filename, mimeType, body }, userId);
   }

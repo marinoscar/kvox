@@ -5,6 +5,7 @@ import {
   bodyFormatSchema,
   previewSourceSchema,
 } from './note-template.js';
+import { contextAttachmentIdsSchema, noteContextAttachmentSchema } from './note-context-attachment.js';
 import { PLAYBACK_STATUSES, TRANSCRIPT_STATUSES } from '../transcripts/index.js';
 
 // =============================================================================
@@ -257,6 +258,7 @@ export const createNoteSchema = z
       .describe('Which template to generate with. Your own, or a built-in.'),
     source: noteSourceSchema,
     contextText: contextTextSchema.optional(),
+    contextAttachmentIds: contextAttachmentIdsSchema.optional(),
     model: z
       .string()
       .trim()
@@ -348,6 +350,13 @@ export const regenerateNoteSchema = z
       .describe(
         'Replace the note\'s context text for this and every later generation. `null` clears it; ' +
           'omitting it keeps what the note has.',
+      ),
+    contextAttachmentIds: contextAttachmentIdsSchema
+      .nullable()
+      .optional()
+      .describe(
+        'Replace the note\'s context attachments for this and every later generation: an array ' +
+          'replaces them (`[]` and `null` both clear them); omitting it keeps what the note has.',
       ),
     model: z
       .string()
@@ -594,6 +603,9 @@ export const noteResponseSchema = z.object({
         'never on list or summary rows.',
     ),
   contextText: z.string().nullable().describe('The free-text context carried into every generation.'),
+  contextAttachments: z
+    .array(noteContextAttachmentSchema)
+    .describe('The files attached as context, in the order the model sees them. Empty when none. Detail only.'),
   currentGenerationId: z
     .string()
     .nullable()
@@ -620,7 +632,7 @@ export type NoteResponse = z.infer<typeof noteResponseSchema>;
 export const noteListItemSchema = noteResponseSchema
   // `originTranscript` is detail-only (#309): resolving it can cost a read per
   // hop, which on a page of rows is an N+1.
-  .omit({ body: true, contextText: true, originTranscript: true })
+  .omit({ body: true, contextText: true, contextAttachments: true, originTranscript: true })
   .extend({
     excerpt: z
       .string()
@@ -808,6 +820,12 @@ export const noteGenerationContextResponseSchema = z.object({
   provider: z.string().nullable().describe('The AI provider id the generation was submitted to.'),
   model: z.string().nullable().describe('The model it was submitted to.'),
   contextText: z.string().nullable().describe('The optional Context the user supplied for this generation.'),
+  attachments: z
+    .array(noteContextAttachmentSchema)
+    .describe(
+      'The files attached as context for this generation, as they were when it was requested. ' +
+        'Empty for a generation without any.',
+    ),
   sourceType: z.enum(['transcript', 'note', 'document']).describe('What kind of source it was generated from.'),
   sourceVersion: z
     .number()

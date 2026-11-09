@@ -60,8 +60,8 @@ import { runKvoxOrgStorageObjects } from '../../kvox-objects/factory-reset-stora
 //   transcripts, storage_objects          `org_id` (direct)
 //   transcript segments, speakers,        through `transcript.orgId`
 //     versions, exports, name checks
-//   kg_exports, note_exports              through `object.orgId` (the storage object they
-//                                         Restrict)
+//   kg_exports, note_exports,             through `object.orgId` (the storage object they
+//     note_context_attachments            Restrict)
 //   notes                                 NO organization column. A note belongs to its owner,
 //                                         who may belong to several organizations, so it is NOT
 //                                         deleted; the references that Restrict a transcript or
@@ -115,7 +115,12 @@ export async function runKvoxOrgContent(tx: any, orgId: string): Promise<Record<
   counts.graphExports = await wipe(tx, 'kgExport', { object: { orgId } });
   counts.noteExports = await wipe(tx, 'noteExport', { object: { orgId } });
 
-  // 2. Notes keep existing, but a note that cites a transcript or a source document of the
+  // 2. The context attachments (#810) that point at an object of the organization.
+  //    `note_context_attachments.object_id` is `onDelete: Restrict`; the note stays (it is
+  //    user-owned), only the attachment row goes.
+  counts.noteContextAttachments = await wipe(tx, 'noteContextAttachment', { object: { orgId } });
+
+  // 3. Notes keep existing, but a note that cites a transcript or a source document of the
   //    organization would Restrict it (`source_transcript_id`, `source_object_id`).
   counts.notesDetached = (
     await tx.note.updateMany({
@@ -124,7 +129,7 @@ export async function runKvoxOrgContent(tx: any, orgId: string): Promise<Record<
     })
   ).count as number;
 
-  // 3. The search index rows and the share grants of the organization's transcripts. No foreign
+  // 4. The search index rows and the share grants of the organization's transcripts. No foreign
   //    key points at a document, so nothing else removes them. Page the ids by cursor so a large
   //    organization never loads them all; only the platform helper touches the grants table.
   counts.searchChunks = 0;

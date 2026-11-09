@@ -39,6 +39,7 @@ import {
 } from '../generation/note-generation.service.js';
 import { NoteSourceService } from '../generation/note-source.service.js';
 import { assemblePrompt, parseTemplateStructure } from '../generation/prompt.js';
+import { readContextAttachmentsSnapshot } from '../context-attachment-snapshot.js';
 import { NOTES_MODULE_OPTIONS, type ResolvedNotesOptions } from '../notes.options.js';
 
 // =============================================================================
@@ -276,6 +277,26 @@ export class NoteGenerateHandler implements KvoxJobHandler, OnModuleInit {
       sourceObjectId: generation.sourceObjectId,
     });
 
+    // Context attachments (#810), from the snapshot taken when this generation was requested:
+    // a document contributes its extracted text, an image rides along as vision input.
+    const attachments = readContextAttachmentsSnapshot(generation.contextAttachments);
+    const images = attachments.filter((attachment) => attachment.kind === 'image');
+    const documentAttachments = attachments.filter((attachment) => attachment.kind === 'document');
+    const contextDocuments =
+      documentAttachments.length > 0 ? await this.sources.resolveContextDocuments(documentAttachments) : [];
+
+    if (
+      images.length > 0 &&
+      (await this.ai.supportsVision?.({ userId, orgId: null, feature: NOTE_GENERATE_AI_FEATURE }, target)) === false
+    ) {
+      // Re-checked here because the model setting can change between the request and the claim.
+      throw new KvoxAiError(
+        'capability',
+        `The model "${generation.model}" cannot read images, so this note cannot be generated with image attachments. ` +
+          'Remove the images, or regenerate with a model that accepts them.',
+      );
+    }
+
     const prompt = assemblePrompt({
       templateInstructions: template.instructions,
       templateOutputFormat: template.outputFormat,
@@ -284,6 +305,8 @@ export class NoteGenerateHandler implements KvoxJobHandler, OnModuleInit {
       templateTone: template.tone,
       templateLength: template.length,
       contextText: generation.contextText,
+      contextDocuments,
+      contextImageCount: images.length,
       sourceText: source.text,
     });
 
@@ -323,6 +346,9 @@ export class NoteGenerateHandler implements KvoxJobHandler, OnModuleInit {
         system: prompt.systemPrompt,
         user: prompt.userContent,
         maxOutputTokens: outputTokensForPrompt(budget, promptTokens),
+        ...(images.length > 0
+          ? { images: images.map((image) => ({ storageObjectId: image.objectId })) }
+          : {}),
       },
     )) {
       if (event.type === 'delta') {

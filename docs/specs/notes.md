@@ -590,6 +590,8 @@ function assemblePrompt(input: {
   templateTone: string | null;
   templateLength: string | null;
   contextText: string | null;
+  contextDocuments?: { filename: string; text: string }[]; // issue #810
+  contextImageCount?: number;                              // issue #810
   sourceText: string;
 }): { systemPrompt: string; userContent: string };
 ```
@@ -615,7 +617,18 @@ that fixed order**:
    overridden or diluted by whatever the source text turns out to contain —
    this is "the job," and it needs to stay stable regardless of how large or
    strange the transcript that follows is.
-2. **Context, immediately after, still ahead of the source.** Short,
+2. **Context, immediately after, still ahead of the source.** Since issue
+   #810 the Context block is up to three kinds of section, in this fixed
+   order, each optional: the user's own context text, then each attached
+   **document** (in attachment order), then one line stating how many
+   **images** ride along. A document renders as `Attached file: <name>`, a
+   `----- BEGIN FILE CONTENT -----` line, its extracted text, and a
+   `----- END OF ATTACHED FILE: <name> -----` line that names the file so one
+   fence is never mistaken for another's. Sections are separated by a blank
+   line under the one `Context provided by the user:` heading. The images
+   themselves are not text: they are sent as image content parts on the same
+   user message (§3.1.1). A note with no attachments assembles byte for byte
+   as it did before the feature. Short,
    user-authored, and orienting — a participant list, a project name, a term
    the transcript uses without defining — deliberately placed close to the
    instructions rather than appended after a potentially enormous source
@@ -637,6 +650,41 @@ that fixed order**:
    lines between paragraphs and simple numbered lines for lists"* instead.
    Nothing about the trust-boundary sentence itself changes between the two —
    only the clause naming what "only the note" is allowed to look like.
+
+#### 3.1.1 Context attachments in the prompt (issue #810)
+
+A user may attach up to `MAX_CONTEXT_ATTACHMENTS` (10) files as context
+besides the text box, when creating a note or regenerating one.
+
+- **Documents** (txt, md, pdf, docx, pptx) go through the existing
+  `note.source.extract` job (§4.7) unchanged. Only their extracted text
+  reaches the prompt, so documents work with every provider.
+- **Images** (png, jpeg, webp, gif) are stored and ready at once (nothing to
+  extract). The generate handler passes each as `images: [{ storageObjectId }]`
+  on the AI port's `generateText` call (`ports/ai.port.ts`); the runtime
+  resolves the object, so the bytes never cross the port and never leave the
+  object store through the notes slice. The upload verifies the leading bytes
+  against the declared type.
+- **A vision-capable model is required for images.** Create and regenerate ask
+  the port's optional `supportsVision(ctx, target)` before anything is
+  created: `false` is a 409 with `details.reason: ai_model_no_vision`;
+  `true`, `null` (the host does not know) or a port without the method let the
+  call through, and an unknown model surfaces the provider's own error. The
+  handler checks again at claim time, because the model setting can change
+  between the request and the job; there it fails the generation with a
+  `capability` error.
+- **Privacy is unchanged in kind.** Attached text and images leave the deployment exactly as the source does (§9): to the user's own provider, under the user's own key, and nowhere else.
+- **The prompt is built from a snapshot.** The files a generation was asked
+  with are written to `note_generations.context_attachments` (§4.9) at request
+  time; the handler reads that snapshot, never the note's live attachments, so
+  a later replace or clear does not rewrite a past generation's context.
+- **The stored `userContent` includes the documents' text**, so the context
+  view (`GET /api/notes/:id/context`) shows exactly what was sent. When the
+  source is redacted (§4.4), the redaction walks the Context block section by
+  section (an attached document is walked past by its own closing line) and
+  cuts only at the `Source material:` heading; a row it cannot walk is
+  withheld in full (fail closed). Context responses also carry `attachments`,
+  the snapshot as it was.
 
 ### 3.2 Where the source text comes from, per source kind
 
@@ -793,6 +841,16 @@ now-larger source pushes the prompt back over budget is caught as an
 `AiRefusalError`-classified domain failure (§2.2) rather than silently
 generating from stale, no-longer-accurate content or silently truncating the
 new state.
+
+**Attachments in the budget (issue #810).** The request-time check assembles
+the prompt with the attached documents' extracted text in it, so their tokens
+count against the budget and an oversized attachment is refused early, with
+the same numbers as an oversized source. **Images are not estimated**: their
+token cost depends on the model and on the `detail` setting, which `countTokens`
+cannot know, so only the one-line "Attached images: N" note is counted. A
+model that is short of room for its images answers with the provider's own
+error. A document still extracting, or one whose extraction found no text, is
+a 409 `context_attachment_not_ready` at this step, not a budget error.
 
 ### 3.4 Naming the note: three ranks, and a title a person chose is never touched
 
@@ -1137,7 +1195,7 @@ back to `notes` for a generation that might have no note to join to.
 |---|---|
 | Identity | `id`, `note_id?` (FK `notes`, **Cascade**, `NULL` for a preview), `kind` (`'create' \| 'regenerate' \| 'preview'`), `job_id?` (`@unique`, `SetNull`) |
 | State | `status` (`GenerationStatus`, §1.2), `error_class?` (`'auth' \| 'refusal' \| 'rate_limit' \| 'other'`), `error_detail?` |
-| Inputs (denormalized) | `template_id?` (FK `note_templates`, `SetNull`), `template_name_snapshot`, `context_text?`, `source_type`, `source_transcript_id?`, `source_note_id?`, `source_object_id?`, `provider_id`, `model` |
+| Inputs (denormalized) | `template_id?` (FK `note_templates`, `SetNull`), `template_name_snapshot`, `context_text?`, `context_attachments?` (JSONB snapshot, §4.9), `source_type`, `source_transcript_id?`, `source_note_id?`, `source_object_id?`, `provider_id`, `model` |
 | The stream | `content` (`@db.Text`, append-only), `last_event_id` (int, default 0, §5's SSE `id:`) |
 | Usage | `prompt_tokens?`, `completion_tokens?` |
 | Lifecycle | `expires_at?` (only set for `kind: 'preview'` — §7's TTL sweep), `started_at?`, `completed_at?`, `created_at`, `updated_at` |
@@ -1279,6 +1337,15 @@ otherwise; #596), which answers `{ objectId, status, message, characters }`
 from the source object's `noteSourceExtraction` metadata block, not from
 `GET /api/storage/objects/:id`. The storage layout above is unchanged.
 
+Context attachments (§4.9) reuse this path as is: an attached **document** is
+stored and extracted exactly like a source document (`managed_by: notes`, the
+same extracted-text object recorded in the raw object's metadata, the same
+extraction status block), and its readiness is read from
+`GET /api/notes/context/attachments/:objectId`, which answers from that same
+block. Only the way the text is consumed differs: `note.generate` renders it
+inside the Context block (§3.1) instead of as the source. An attached image has
+no extraction and no second object.
+
 ### 4.8 Resolving the ultimate origin transcript (issue #309)
 
 `source_transcript_id`/`source_note_id`/`source_object_id` (§4.1) record only
@@ -1356,6 +1423,69 @@ on every call regardless of what a cached note response claims, so the actual
 capability — playing the recording — is never granted on stale information,
 even if a stale `originTranscript.id` briefly outlives the share that once
 made it reachable.
+
+### 4.9 Context attachments (issue #810)
+
+A new table, `note_context_attachments` (a `kvox-db` domain migration,
+`20261106120000_add_note_context_attachments`), and one column on
+`note_generations`.
+
+| Column | Notes |
+|---|---|
+| `id` | uuid primary key |
+| `note_id` | FK `notes`, **Cascade**: attachments are a property of the note and go with it |
+| `object_id` | FK `storage_objects`, **Restrict** (the `notes.source_object_id` reasoning: only `note.purge`, deleting the referencing row first, may remove the object) |
+| `kind` | `'document' \| 'image'`, a `CHECK` constraint in the migration |
+| `filename`, `mime_type` | display name and canonical stored type |
+| `ordinal` | the order the model sees them in |
+| `created_at` | |
+
+`@@unique([note_id, object_id])` and an index on `object_id`.
+`note_generations.context_attachments` is a nullable JSONB snapshot,
+`[{ objectId, kind, filename, mimeType }]`, with **no foreign key**: it records
+what was sent even after an attachment is removed. `NULL` when none were
+attached, and for every generation that predates the feature (no backfill).
+
+**Upload.** `POST /api/notes/context/attachments` (`notes:write`) accepts one
+file. A document is stored through the source-document path and queues
+`note.source.extract`; an image is stored and is `ready` at once. Both are
+stored `managed_by: notes`, owned by the uploader, so they are absent from the
+generic files list. The size ceiling is `ai.maxDocumentBytes`. An unsupported
+type, or an image whose bytes do not match its declared type, is a 400
+`context_attachment_unsupported_type`. The attachment is **not** tied to a note
+until a create or regenerate request names its object id.
+
+**Create and regenerate.** `contextAttachmentIds` on `POST /api/notes` and on
+`POST /api/notes/:id/regenerate` lists the uploaded object ids, in order. Every
+id must be the caller's (404 otherwise, never 403), of a supported kind, and
+ready; more than 10, or duplicates, is a 400 (`context_attachment_limit` for
+the count). The checks run before a note, a generation or a job exists.
+
+**Keep, replace, clear on regenerate**, the same three-way semantics
+`contextText` has:
+
+| `contextAttachmentIds` | Effect |
+|---|---|
+| omitted | keep: the note's current attachments are used and left alone |
+| an array | replace: the old rows are deleted and the new ones written in order, in the same transaction that queues the generation |
+| `[]` or `null` | clear: the note has no attachments from now on |
+
+The replacement governs later regenerations too, like `contextText`. Either
+way the generation snapshots what it was asked with (§3.1.1).
+
+**Purge.** The attachment rows cascade with their note. `note.purge` also
+deletes each attached object, and for a document its extracted-text object,
+**unless another note still attaches the same object or names it as its source
+document** (it asks after the note row is gone, as it does for the source
+document). The owner-level purge of the Danger Zone reaches them through the
+same per-note purge (`docs/specs/user-data-deletion.md`).
+
+**Known gap: orphaned uploads are not swept.** An upload that no note ever
+names (the user abandons the form, or removes the file before generating) leaves
+its object in storage, owned by the user, with no `note_context_attachments`
+row. Nothing sweeps it today. It is removed by the owner-level data purge, and
+it is bounded per user by the upload ceiling, but a housekeeping sweep for
+unreferenced note-managed context uploads is not built.
 
 ## 5. The streaming contract
 

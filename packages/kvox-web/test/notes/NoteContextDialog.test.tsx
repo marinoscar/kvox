@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
@@ -281,5 +281,28 @@ describe('NoteContextDialog — accessibility', () => {
     renderDialog();
 
     expect(await axe(document.body, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+describe('NoteContextDialog — attached files (#810)', () => {
+  it('lists the files attached to this generation', () => {
+    mockResult({
+      context: context({
+        attachments: [
+          { objectId: 'o1', kind: 'document', filename: 'agenda.pdf', mimeType: 'application/pdf' },
+          { objectId: 'o2', kind: 'image', filename: 'board.png', mimeType: 'image/png' },
+        ],
+      }),
+    });
+    renderDialog();
+    const list = screen.getByRole('list', { name: 'Attached files' });
+    expect(within(list).getByText('agenda.pdf')).toBeInTheDocument();
+    expect(within(list).getByText('board.png')).toBeInTheDocument();
+  });
+
+  it('shows nothing about attachments for a generation without any', () => {
+    mockResult({ context: context() });
+    renderDialog();
+    expect(screen.queryByRole('list', { name: 'Attached files' })).toBeNull();
   });
 });

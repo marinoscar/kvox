@@ -981,6 +981,12 @@ The domain tables below (transcripts, notes, search, the `kg_*` graph tables, As
   `docs/specs/notes.md` §8). `jobId` is `@unique`/nullable/`SetNull`; the row's own 7-day
   expiry is independent of `job.history.purge`'s retention schedule for the underlying `jobs`
   row.
+- `note_context_attachments` - The documents and images a user attaches to a note as extra
+  generation context (issue #810). `note_id` is **Cascade**, `object_id` (`storage_objects`) is
+  **Restrict** (only `note.purge` removes the object), `kind` is `document` or `image` (a `CHECK`),
+  `ordinal` is the order the model sees them, `@@unique([note_id, object_id])`. A generation's
+  snapshot of what it was sent lives in `note_generations.context_attachments` (JSONB, no FK,
+  `NULL` when none). Detail: `docs/specs/notes.md` §4.9.
 - `user_hidden_note_templates` - Per-user, per-template "hide from my picker" preference
   (issue #310, epic #306), `@@id([userId, templateId])`, both FKs **Cascade**. A join table
   rather than a `user_settings` namespace (real FK integrity, plain indexed `WHERE user_id =`

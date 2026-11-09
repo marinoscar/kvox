@@ -143,6 +143,16 @@ and never catch a foreign-key violation to force a delete through:
 - `notes.source_note_id` is cleared on every note derived from one of the user's
   notes, the same way.
 
+- `note_context_attachments` (issue #810) needs no clearing for the notes themselves:
+  its `note_id` is `Cascade`, so the rows go with their note. Its `object_id` is
+  `Restrict`, so `note.purge` deletes the attachment rows first (with the note), then
+  removes each attached object (and a document's extracted-text object) **unless another
+  note still attaches it or names it as its source document**. Because the owner-level
+  run queues that same per-item purge for every note, a `content` or `notes` deletion
+  leaves no attachment object behind. The attachment objects are note-managed
+  (`kvox_object_ownership`), so the `files` scope never touches them. An upload no note
+  ever named is not reached by this purge (see `docs/specs/notes.md` §4.9, known gap).
+
 The per-item 409 guards (`NotesService.remove` while a note is generating or has a
 derived note; the transcript delete while a note cites it) are deliberately **not**
 applied to a bulk deletion: the user was shown an inventory and typed the scope's

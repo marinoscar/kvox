@@ -86,6 +86,9 @@ import type { NotesActor as RequestUser } from './notes-actor.js';
 import { SEARCH_DOC_NOTE, SearchIndexService } from '../search/index.js';
 import { NoteAccessService } from './access/note-access.service.js';
 import { NoteVersionWriter } from './note-version-writer.js';
+import { NoteContextAttachmentsService } from './note-context-attachments.service.js';
+import { NoteInputError } from './generation/ai-support.js';
+import { NOTE_CONTEXT_ATTACHMENT_REASONS, type NoteContextAttachment } from '@marinoscar/kvox-contract/notes';
 import { noteExcerpt } from './note-excerpt.js';
 import { NoteOriginService, type NoteOriginTranscript } from './note-origin.service.js';
 import { NoteSourceNameService, noteSourceNameKey } from './note-source-name.service.js';
@@ -217,6 +220,9 @@ export class NotesService {
     // Optional so a hand-built service (tests, the test factory) keeps its
     // nine-argument shape; the fallback is the same writer over the same client.
     @Optional() versionWriter?: NoteVersionWriter,
+    // Optional for the same reason (issue #810): a hand-built service has no attachments, and
+    // `resolveAttachments` refuses ids it cannot validate rather than ignoring them.
+    @Optional() private readonly contextAttachments?: NoteContextAttachmentsService,
   ) {
     this.versionWriter = versionWriter ?? new NoteVersionWriter(prisma);
   }
@@ -259,10 +265,16 @@ export class NotesService {
 
     const contextText = dto.contextText?.trim() ? dto.contextText.trim() : null;
 
+    // Context attachments (#810): owned, ready, within the limit, and an image only on a model
+    // that can read it. Refused HERE, before anything is created.
+    const attachments = await this.resolveAttachments(dto.contextAttachmentIds, user.id);
+    if (attachments.length > 0) await this.requests.assertVisionSupported(user.id, target, attachments);
+
     await this.assertPromptFits({
       template,
       selector,
       contextText,
+      attachments,
       providerId,
       model,
       target,
@@ -305,12 +317,15 @@ export class NotesService {
         },
       });
 
+      if (attachments.length > 0) await this.replaceAttachments(tx, note.id, attachments);
+
       return this.queueGeneration(tx, {
         note,
         kind: 'create',
         templateId: template.id,
         templateName: template.name,
         contextText,
+        attachments,
         selector,
         providerId,
         model,
@@ -333,7 +348,7 @@ export class NotesService {
     );
 
     return {
-      note: await this.shape(created.note),
+      note: await this.shape(created.note, attachments),
       generationId: created.generationId,
       jobId: created.jobId,
       providerId,
@@ -796,10 +811,19 @@ export class NotesService {
           ? dto.contextText.trim()
           : null;
 
+    // keep (undefined) / replace (array) / clear (null), exactly as `contextText` behaves (#810).
+    const replacing = dto.contextAttachmentIds !== undefined;
+    const attachments: NoteContextAttachment[] = !replacing
+      ? ((await this.contextAttachments?.forNote(note.id)) ?? [])
+      : await this.resolveAttachments(dto.contextAttachmentIds, user.id);
+
+    if (attachments.length > 0) await this.requests.assertVisionSupported(user.id, target, attachments);
+
     await this.assertPromptFits({
       template,
       selector,
       contextText,
+      attachments,
       providerId,
       model,
       target,
@@ -818,12 +842,15 @@ export class NotesService {
         data: { templateId: template.id, contextText, failureReason: null },
       });
 
+      if (replacing) await this.replaceAttachments(tx, note.id, attachments);
+
       return this.queueGeneration(tx, {
         note: refreshed,
         kind: 'regenerate',
         templateId: template.id,
         templateName: template.name,
         contextText,
+        attachments,
         selector,
         providerId,
         model,
@@ -844,7 +871,7 @@ export class NotesService {
     );
 
     return {
-      note: await this.shape(queued.note),
+      note: await this.shape(queued.note, attachments),
       generationId: queued.generationId,
       jobId: queued.jobId,
       providerId,
@@ -1167,6 +1194,7 @@ export class NotesService {
       templateId: string;
       templateName: string;
       contextText: string | null;
+      attachments: readonly NoteContextAttachment[];
       selector: SourceSelector;
       providerId: string;
       model: string;
@@ -1181,6 +1209,10 @@ export class NotesService {
         templateId: input.templateId,
         templateNameSnapshot: input.templateName,
         contextText: input.contextText,
+        // The snapshot (#810): what the model is shown, kept apart from the note's live
+        // attachments so a later replace or clear never rewrites this generation's context.
+        contextAttachments:
+          input.attachments.length > 0 ? (input.attachments.map((a) => ({ ...a })) as JsonValue) : null,
         sourceType: input.selector.sourceType,
         sourceTranscriptId: input.selector.sourceTranscriptId,
         sourceNoteId: input.selector.sourceNoteId,
@@ -1233,12 +1265,32 @@ export class NotesService {
     };
     selector: SourceSelector;
     contextText: string | null;
+    attachments: readonly NoteContextAttachment[];
     providerId: ResolvedModel['providerId'];
     model: string;
     target: ResolvedModel['target'];
     caps: ResolvedModel['caps'];
   }): Promise<void> {
     const source = await this.sources.resolve(input.selector);
+
+    // The attached documents' text counts toward the budget (#810). Images cost tokens too, but
+    // how many depends on the model and the detail, so they are not estimated here.
+    let contextDocuments: Array<{ filename: string; text: string }> = [];
+
+    const documentAttachments = input.attachments.filter((attachment) => attachment.kind === 'document');
+
+    try {
+      if (documentAttachments.length > 0) {
+        contextDocuments = await this.sources.resolveContextDocuments(documentAttachments);
+      }
+    } catch (error) {
+      if (!(error instanceof NoteInputError)) throw error;
+
+      throw new ConflictException({
+        message: error.message,
+        details: { reason: NOTE_CONTEXT_ATTACHMENT_REASONS.NOT_READY },
+      });
+    }
 
     const prompt = assemblePrompt({
       templateInstructions: input.template.instructions,
@@ -1248,6 +1300,8 @@ export class NotesService {
       templateTone: input.template.tone,
       templateLength: input.template.length,
       contextText: input.contextText,
+      contextDocuments,
+      contextImageCount: input.attachments.filter((attachment) => attachment.kind === 'image').length,
       sourceText: source.text,
     });
 
@@ -1350,10 +1404,10 @@ export class NotesService {
   }
 
   /** The detail projection. One definition, used by every route that returns a note. */
-  private async shape(note: Note): Promise<NoteResponse> {
+  private async shape(note: Note, known?: readonly NoteContextAttachment[]): Promise<NoteResponse> {
     // Both reads in parallel: they are independent, and the detail route is the
     // one a user waits on with a spinner.
-    const [template, sourceName, originTranscript] = await Promise.all([
+    const [template, sourceName, originTranscript, attachments] = await Promise.all([
       note.templateId
         ? this.prisma.noteTemplate.findUnique({
             where: { id: note.templateId },
@@ -1368,9 +1422,47 @@ export class NotesService {
       // or summary page (those go through `listShape`), so the per-hop reads
       // this may cost are paid once per request, not once per row.
       this.origins.resolve(note, note.ownerId),
+      // The note's context attachments (#810); a create or regenerate already holds them.
+      known ? Promise.resolve([...known]) : (this.contextAttachments?.forNote(note.id) ?? Promise.resolve([])),
     ]);
 
-    return detailShape(note, template?.name ?? null, sourceName, originTranscript);
+    return detailShape(note, template?.name ?? null, sourceName, originTranscript, attachments);
+  }
+
+  /** The attachments a request names, validated; none when it names none. */
+  private async resolveAttachments(
+    ids: readonly string[] | null | undefined,
+    userId: string,
+  ): Promise<NoteContextAttachment[]> {
+    if (!ids || ids.length === 0) return [];
+
+    if (!this.contextAttachments) {
+      throw new ConflictException('Context attachments are not available on this host.');
+    }
+
+    return this.contextAttachments.resolve(ids, userId);
+  }
+
+  /** Make `attachments` the note's attachments: the old rows go, the new ones are written in order. */
+  private async replaceAttachments(
+    tx: KvoxNotesTx,
+    noteId: string,
+    attachments: readonly NoteContextAttachment[],
+  ): Promise<void> {
+    await tx.noteContextAttachment.deleteMany({ where: { noteId } });
+
+    for (const [ordinal, attachment] of attachments.entries()) {
+      await tx.noteContextAttachment.create({
+        data: {
+          noteId,
+          objectId: attachment.objectId,
+          kind: attachment.kind,
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+          ordinal,
+        },
+      });
+    }
   }
 
   /** One audit row. `targetType: 'note'`, matching the subject naming. */
@@ -1396,6 +1488,7 @@ export function detailShape(
   templateName: string | null,
   sourceName: string | null = null,
   originTranscript: NoteOriginTranscript | null = null,
+  contextAttachments: readonly NoteContextAttachment[] = [],
 ): NoteResponse {
   return {
     id: note.id,
@@ -1416,6 +1509,7 @@ export function detailShape(
     sourceName,
     originTranscript,
     contextText: note.contextText,
+    contextAttachments: contextAttachments.map((attachment) => ({ ...attachment })),
     currentGenerationId: note.currentGenerationId,
     failureReason: note.failureReason,
     createdAt: note.createdAt.toISOString(),
@@ -1434,7 +1528,7 @@ export function listShape(
   // called once per row, which is the N+1 this field exists to remove.
   sourceName: string | null = null,
 ): NoteListItem {
-  const { body, contextText, originTranscript, ...rest } = detailShape(
+  const { body, contextText, contextAttachments, originTranscript, ...rest } = detailShape(
     note,
     note.template?.name ?? null,
     sourceName,
@@ -1442,6 +1536,7 @@ export function listShape(
 
   void body;
   void contextText;
+  void contextAttachments;
   void originTranscript;
 
   return { ...rest, excerpt: noteExcerpt(note.body, note.bodyFormat) };

@@ -333,6 +333,38 @@ export class NoteSourceService {
       throw new NoteInputError('This note names a document source but carries no object id.');
     }
 
+    const document = await this.readDocument(objectId);
+
+    return { text: document.text, describe: document.describe, sourceVersion: null };
+  }
+
+  /**
+   * The extracted text of each document a note carries as CONTEXT (issue #810), in the order
+   * given, with the name each was uploaded under. Same reads and the same refusals as a document
+   * source: a context document whose text is gone fails the generation with a sentence.
+   *
+   * @param attachments - the document attachments (images are not read here).
+   * @returns one `{ filename, text }` per attachment.
+   */
+  async resolveContextDocuments(
+    attachments: ReadonlyArray<{ objectId: string }>,
+  ): Promise<Array<{ filename: string; text: string }>> {
+    const out: Array<{ filename: string; text: string }> = [];
+
+    for (const attachment of attachments) {
+      const document = await this.readDocument(attachment.objectId);
+
+      out.push({ filename: document.name, text: document.text });
+    }
+
+    return out;
+  }
+
+  /** One document object's extracted text. Shared by the source read and the context read. */
+  private async readDocument(
+    objectId: string,
+  ): Promise<{ text: string; describe: string; name: string }> {
+
     // `describe` reports the display name (`name`) and the metadata the extraction recorded.
     const object = (await this.store.describe([objectId])).get(objectId);
 
@@ -375,7 +407,7 @@ export class NoteSourceService {
     return {
       text,
       describe: `document ${object.id} (extracted text ${extractedObjectId})`,
-      sourceVersion: null,
+      name: object.name,
     };
   }
 

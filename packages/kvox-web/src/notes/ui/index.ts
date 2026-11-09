@@ -50,6 +50,8 @@ export type {
 } from './library/importBatchRows.js';
 export { ImportStageFunnel, importFunnelSteps } from './components/ImportStageFunnel.js';
 export type { ImportFunnelStep, ImportStageFunnelProps } from './components/ImportStageFunnel.js';
+export { ContextAttachmentsField, ContextAttachmentList } from './components/ContextAttachmentsField.js';
+export type { ContextAttachmentsFieldProps, ContextAttachmentListProps } from './components/ContextAttachmentsField.js';
 export { NoteLibraryCard, noteLibraryPath } from './components/NoteLibraryCard.js';
 export type { NoteLibraryCardProps } from './components/NoteLibraryCard.js';
 export {

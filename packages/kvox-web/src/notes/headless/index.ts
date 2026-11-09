@@ -17,6 +17,7 @@ export * from './hooks/useNoteGenerationContext.js';
 export * from './hooks/useNoteAiRevision.js';
 export * from './hooks/useTemplatePreview.js';
 export * from './hooks/useNoteLibraries.js';
+export * from './hooks/useContextAttachments.js';
 
 // Library sync and ad-hoc import: the orchestration KVox Desktop calls too.
 export * from './sync/librarySync.js';
@@ -33,3 +34,4 @@ export * from './upload/BatchUploadContext.js';
 // Pure helpers other screens use.
 export * from './utils/noteSource.js';
 export * from './utils/noteImportFailure.js';
+export * from './utils/contextAttachments.js';

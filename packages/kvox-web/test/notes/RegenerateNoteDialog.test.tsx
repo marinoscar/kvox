@@ -40,7 +40,7 @@ function note(overrides: Partial<Note> = {}): Note {
     templateId: 'tpl-1',
     templateName: 'Meeting minutes',
     sourceName: null,
-    contextText: 'Anders and Bram were there.',
+    contextText: 'Person A and Person B were there.',
     currentGenerationId: 'gen-1',
     failureReason: null,
     createdAt: '2024-03-12T10:00:00.000Z',
@@ -136,7 +136,7 @@ describe('RegenerateNoteDialog — what it opens on', () => {
     renderDialog();
 
     expect(screen.getByLabelText('Template')).toHaveTextContent('Meeting minutes');
-    expect(screen.getByLabelText('Context')).toHaveValue('Anders and Bram were there.');
+    expect(screen.getByLabelText('Context')).toHaveValue('Person A and Person B were there.');
     // The model's LABEL, not its vendor id.
     expect(screen.getByLabelText('Model')).toHaveTextContent('GPT-4o mini');
   });
@@ -219,10 +219,10 @@ describe('RegenerateNoteDialog — the body it confirms with', () => {
 
     const box = screen.getByLabelText('Context');
     await user.clear(box);
-    await user.type(box, '  Only Anders this time.  ');
+    await user.type(box, '  Only Person A this time.  ');
     await confirm(user);
 
-    expect(onConfirm).toHaveBeenCalledWith({ contextText: 'Only Anders this time.' });
+    expect(onConfirm).toHaveBeenCalledWith({ contextText: 'Only Person A this time.' });
   });
 
   it('stops the context at the API’s own ceiling rather than letting it 400', () => {
@@ -485,5 +485,51 @@ describe('RegenerateNoteDialog — confirming a changed template only', () => {
     await confirm(user);
 
     expect(onConfirm).toHaveBeenCalledWith({ templateId: 'tpl-2' });
+  });
+});
+
+describe('RegenerateNoteDialog — context attachments (#810)', () => {
+  const ATTACHED = [
+    { objectId: 'o1', kind: 'document' as const, filename: 'agenda.pdf', mimeType: 'application/pdf' },
+    { objectId: 'o2', kind: 'image' as const, filename: 'board.png', mimeType: 'image/png' },
+  ];
+
+  it('opens with the note’s own attachments listed', async () => {
+    renderDialog({ note: note({ contextAttachments: ATTACHED }) });
+    const dialog = await screen.findByRole('dialog');
+    const list = within(dialog).getByRole('list', { name: 'Attached files' });
+    expect(within(list).getByText('agenda.pdf')).toBeInTheDocument();
+    expect(within(list).getByText('board.png')).toBeInTheDocument();
+  });
+
+  it('keeps them — omits the field — when they are left alone', async () => {
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog({ note: note({ contextAttachments: ATTACHED }) });
+    await confirm(user);
+    expect(onConfirm).toHaveBeenCalledWith({});
+  });
+
+  it('replaces them with the remaining list when one is removed', async () => {
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog({ note: note({ contextAttachments: ATTACHED }) });
+    await user.click(await screen.findByRole('button', { name: 'Remove agenda.pdf' }));
+    await confirm(user);
+    expect(onConfirm).toHaveBeenCalledWith({ contextAttachmentIds: ['o2'] });
+  });
+
+  it('clears them with an explicit null when every one is removed', async () => {
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog({ note: note({ contextAttachments: ATTACHED }) });
+    await user.click(await screen.findByRole('button', { name: 'Remove agenda.pdf' }));
+    await user.click(screen.getByRole('button', { name: 'Remove board.png' }));
+    await confirm(user);
+    expect(onConfirm).toHaveBeenCalledWith({ contextAttachmentIds: null });
+  });
+
+  it('sends nothing about attachments for a note that has none', async () => {
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog();
+    await confirm(user);
+    expect(onConfirm).toHaveBeenCalledWith({});
   });
 });

@@ -15,7 +15,8 @@ Status: filled (Epic 7, issue 7.4).
 ## Entry point
 
 - `@marinoscar/kvox-web/notes/headless`: the clients (`getNotes`, `getNote`, `getNoteSummary`, `createNote`, `updateNote`, `regenerateNote`, `retitleNote`, the version, context and document calls (`getNoteDocumentExtraction` polls `GET /api/notes/sources/documents/{objectId}`, not the storage object), the note-template calls, the export calls; each takes the host first), `connectNoteStream` and `connectNoteGenerationStream` (the generation stream over `host.sse`), the hooks above, `noteConflictReason` and the wire types. No component, no `@mui/*`, no router, and none of the optional editor peers.
-- `@marinoscar/kvox-web/notes/ui`: the pages, `NotesLibraryView`, `SourceLine`, `TranscriptNotesSection`, `MarkdownView`, `NoteStatusChip`, `NotesSlotBoundary`, the slot and AI types (`NotePageSlots`, `NotesLibrarySlots`, `NotesAiAccess`), `kvoxNotesDestinations`, `kvoxNotesDestinationRoutes`, `kvoxNotesUserSettingsSections` and `kvoxNotesRoutes`.
+- Context attachments (#810), also from `headless`: `uploadNoteContextAttachment` (`POST /api/notes/context/attachments`), `getNoteContextAttachmentStatus` (the poll), the `useContextAttachments` hook (uploads, polls each document until it is ready, exposes the items, the ids to send and a reason that blocks Generate) and the pure helpers (`NOTE_CONTEXT_ATTACHMENT_ACCEPT`, `checkContextAttachmentFile`, `contextAttachmentIds`, `contextAttachmentsBlockingReason`, ...).
+- `@marinoscar/kvox-web/notes/ui`: the pages, `ContextAttachmentsField` (multi-file picker and drop zone, per-file upload and extraction status) and `ContextAttachmentList` (the read-only list used by the context views), `NotesLibraryView`, `SourceLine`, `TranscriptNotesSection`, `MarkdownView`, `NoteStatusChip`, `NotesSlotBoundary`, the slot and AI types (`NotePageSlots`, `NotesLibrarySlots`, `NotesAiAccess`), `kvoxNotesDestinations`, `kvoxNotesDestinationRoutes`, `kvoxNotesUserSettingsSections` and `kvoxNotesRoutes`.
 
 The slice depends on `core`, `transcripts` and `search`. The app spreads `kvoxNotesDestinations` into its destination table directly after Transcripts, `kvoxNotesDestinationRoutes` into its ownership table, `kvoxNotesUserSettingsSections.account` into its `Account` group directly after `AI Provider`, and renders `kvoxNotesRoutes` (the four `/notes` routes and `/settings/note-templates`) where its literal routes used to be.
 
@@ -34,6 +35,10 @@ The hooks and pages read their host (`useKvoxHost`); there is no other configura
 - `host.viewer()`: which of `notes:read`, `notes:write` gate the controls.
 
 The pages that need AI take `ai` (`NotesAiAccess`): a hook returning `{ isLoading, loadError, keyConfigured, available, models, defaultModel }` and the "add your AI key" state. Without it the page behaves as for a viewer with no AI.
+
+### Upgrade notes
+
+Context attachments (#810) are additive, a minor bump: `NewNotePage` and `RegenerateNoteDialog` show the attachment field and hold Generate and Regenerate until every file is ready, and send `contextAttachmentIds` (only when the user changed them, like the other regenerate fields). The context dialogs list the attachment snapshot. No existing export changed.
 
 ## Extension-point catalog
 
