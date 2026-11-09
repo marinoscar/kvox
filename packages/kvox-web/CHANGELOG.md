@@ -1,5 +1,27 @@
 # @marinoscar/kvox-web
 
+## 0.1.0-next.25
+
+### Minor Changes
+
+- 7153811: Bulk document import (#811). The notes import accepts ZIP archives, expanded in the browser (`expandZipArchive`, `prepareNoteImport`), and shows a pre-flight dialog before any upload. With `BatchUploadProvider` mounted, the batch page opens at once while files upload in the background (pause, resume, cancel, retry). The batch page is a virtualized table with search, sort, throughput and ETA, and a CSV export of failures. `GET /notes/import-batches/:id/items` takes `q` and `updatedSince` and pages up to 500 items (`noteImportBatchItemsQuerySchema`).
+- 82eadd9: Graph extraction cites the stored source text of a note that was generated from a document (#789, epic #773). `kg.extract` used to read only the generated summary, so a span of the full document could not be cited. It now reads the document's extracted text (`{ extractedObjectId }`, spec notes §4.7) as the input, chunked as in #777, with the generated note shown whole as context, and the model cites the text as `D`.
+
+  `@marinoscar/kvox-db` adds the migration `20261107120000_add_kg_evidence_source_text`: `kg_evidence.source_object_id` (the stored text, `SET NULL`) and `kg_evidence.source_text_length` (the length its `char_start`/`char_end` index, and the durable marker of this anchor kind because it survives the `SET NULL`), plus the `kg_evidence_source_text_chk` constraint. The deferred `kg_assert_has_evidence` no-orphans trigger is unchanged and counts a source-text citation like any other evidence row.
+
+  `@marinoscar/kvox-contract`: `EvidenceInput` gains `sourceObjectId` and `sourceTextLength` (both default `null`; a source-text citation also carries the note), `EvidenceLink.source` gains `kind: 'source_text'` (with the deep link `/notes/<id>?source=<start>-<end>`), `EvidenceView.source` gains `'source_text'` and the evidence span input gains `source: 'source_text'`.
+
+  `@marinoscar/kvox-api`: `EvidenceValidator`, `GraphEvidenceService`, the proposal view mapper, the span validator (`SpanValidator.prepare` reads the source text before the transaction) and the proposal commit handle the new anchor; the RDF export leaves out the offsets of a source-text citation, which index the document and not the note version. `ExtractionInputLoader` takes an optional `KVOX_OBJECT_STORE`; `ExtractionInput.sourceText`, `ExtractionContext.source`, `SOURCE_ALIAS` and `readNoteSourceText` are new. Every code that builds an `EvidenceInput` literal sets the two new fields to `null`.
+
+  `@marinoscar/kvox-web`: the evidence chip, the explorer evidence card and the proposal review evidence list render a source-text citation ("Source of <note>", "Open source document").
+
+- 72db610: Attach files as note context (issue #810). A note can carry up to 10 files besides the text box when it is created or regenerated: documents (txt, md, pdf, docx, pptx) go through the existing extraction job and their text is rendered in the prompt's Context block under an `Attached file: <name>` fence; images (png, jpeg, webp, gif) are sent as vision input and need a vision-capable model (409 `ai_model_no_vision`). Additive: new routes `POST/GET /api/notes/context/attachments`, optional `contextAttachmentIds` on create and regenerate, `contextAttachments` on the note and `attachments` on the generation context, four new error codes, an optional `images` on `KVOX_AI.generateText` and an optional `supportsVision`, and `ContextAttachmentsField`, `ContextAttachmentList`, `useContextAttachments`, `uploadNoteContextAttachment` and `getNoteContextAttachmentStatus` in the web package. A host that ignores `images` drops them silently, so KVox Desktop must implement them or refuse.
+
+### Patch Changes
+
+- 82eadd9: A failed graph extraction now says why (#759). The proposal's `stats.failure.errorClass` gains `network`, `timeout` and `unavailable` (the provider could not be reached, did not answer in time, or answered 5xx) with a fixed, safe sentence each; an unrecognised failure still reads "unexpected error" but now carries the job id as a reference, and no thrown message reaches the user. `KvoxAiError` carries an optional `transient` reason (`unreachable`, `network`, `timeout`, `provider_unavailable`), set by `toKvoxAiError` from the provider adapter's transport detail and the cause chain's system code (`EAI_AGAIN`, `ECONNRESET`, ...). `kg.extract` retries a request that never left the host (DNS failure, connection refused) with a back-off of 2, 5 and 15 seconds; a reset or timeout mid-call is not retried because it may have been billed.
+- be176a5: Example person names in fixtures, tests, prompts, docs and sample data are now clearly invented placeholders instead of names that read like real people. The golden evaluation meetings, the Ask question set, the ontology examples, the exported transcript schema and the demo scenario use the new names consistently (labels, aliases, nicknames, ids and file names), and the recorded parity requests and prompt snapshots were regenerated. Behaviour is unchanged.
+
 ## 0.1.0-next.24
 
 ## 0.1.0-next.23
