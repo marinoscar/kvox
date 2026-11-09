@@ -10,7 +10,8 @@
 //   name (the BASE — the best of whichever arms found the candidate)
 //     exact alias/label                 0.80
 //     trigram similarity s ≥ 0.4        0.40 + 0.40 × (s − 0.4) / 0.6   (0.40 → 0.80)
-//     vector-only, cosine c             0.30 + 0.30 × max(0, (c − 0.75) / 0.25)
+//     vector-only, cosine c             0.30 + 0.30 × max(0, (c − F) / (1 − F)),  F = the model's
+//                                       calibrated vector floor (#681; OpenAI 0.75)
 //   strong (capped together at +0.20)
 //     same-meeting attendee/speaker     +0.15
 //     organization co-mention           +0.15
@@ -69,7 +70,7 @@ export interface ScoredCandidate {
 const round = (n: number): number => Math.round(n * 10_000) / 10_000;
 
 /** The three name bases, each null when its arm does not apply. */
-function nameBases(f: CandidateFeatures): Array<{ arm: NameArm; base: number }> {
+function nameBases(f: CandidateFeatures, vectorFloor: number): Array<{ arm: NameArm; base: number }> {
   const w = SCORE_WEIGHTS;
   const out: Array<{ arm: NameArm; base: number }> = [];
   if (f.aliasExact) out.push({ arm: 'alias_exact', base: w.exact });
@@ -79,14 +80,18 @@ function nameBases(f: CandidateFeatures): Array<{ arm: NameArm; base: number }> 
   }
   if (f.cosine !== null) {
     const c = Math.min(1, f.cosine);
-    out.push({ arm: 'vector', base: w.vectorBase + w.vectorSpan * Math.max(0, (c - w.vectorFloor) / (1 - w.vectorFloor)) });
+    out.push({ arm: 'vector', base: w.vectorBase + w.vectorSpan * Math.max(0, (c - vectorFloor) / (1 - vectorFloor)) });
   }
   return out;
 }
 
-export function scoreCandidate(features: CandidateFeatures): ScoredCandidate {
+/**
+ * @param vectorFloor - the cosine at which vector evidence starts to count; the model's
+ *   calibrated value (#681). Defaults to the OpenAI baseline in `SCORE_WEIGHTS`.
+ */
+export function scoreCandidate(features: CandidateFeatures, vectorFloor: number = SCORE_WEIGHTS.vectorFloor): ScoredCandidate {
   const w = SCORE_WEIGHTS;
-  const bases = nameBases(features);
+  const bases = nameBases(features, vectorFloor);
   // The strongest arm supplies the base; ties go to the earlier (more exact) arm.
   const best = bases.reduce<{ arm: NameArm; base: number } | null>(
     (acc, b) => (acc === null || b.base > acc.base ? b : acc),

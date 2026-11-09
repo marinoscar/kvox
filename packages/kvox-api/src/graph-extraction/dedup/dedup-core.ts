@@ -22,6 +22,7 @@ import type {
   ProposalResolution,
   RelationPayload,
 } from '../proposals/proposal-payload.schema.js';
+import { DEFAULT_GRAPH_CALIBRATION, type GraphCalibration } from '../resolution/graph-calibration.js';
 import { planTemporalInsert, rangeFromPrecision, type CandidateEdge, type TemporalEdge, type TemporalPlan, type TemporalRule, type ValidPrecision, type ValidRange, normalizeAlias } from '../../graph/index.js';
 
 // -----------------------------------------------------------------------------
@@ -32,9 +33,12 @@ export const WORK_ITEM_DEDUP_STAGE = { name: 'work-item-dedup', order: 200 } as 
 export const TEMPORAL_CLOSING_STAGE = { name: 'temporal-closing', order: 300 } as const;
 export const REJECTION_MEMORY_STAGE = { name: 'rejection-memory', order: 400 } as const;
 
-/** §7: a candidate needs cosine ≥ 0.80 to be adjudicated at all. */
+/**
+ * §7: a candidate needs cosine ≥ 0.80 to be adjudicated at all (OpenAI text-embedding-3-small).
+ * The model's own value (#681) is `GraphCalibration.itemCosine`; these are the baseline defaults.
+ */
 export const ITEM_COSINE_THRESHOLD = 0.8;
-/** `same` at or above this cosine is not flagged `possible_duplicate`. */
+/** `same` at or above this cosine is not flagged `possible_duplicate` (OpenAI baseline; per model: `itemSameConfidentCosine`). */
 export const ITEM_SAME_CONFIDENT_COSINE = 0.92;
 /** The lexical fallback's token-set Jaccard threshold. */
 export const ITEM_LEXICAL_THRESHOLD = 0.5;
@@ -240,10 +244,13 @@ export function candidateScore(c: ItemCandidate): number {
 }
 
 /** Keep the top 5 that clear their arm's threshold, best first, ties by id. */
-export function selectCandidates(candidates: readonly ItemCandidate[]): ItemCandidate[] {
+export function selectCandidates(
+  candidates: readonly ItemCandidate[],
+  calibration: Pick<GraphCalibration, 'itemCosine'> = DEFAULT_GRAPH_CALIBRATION,
+): ItemCandidate[] {
   return candidates
     .filter((c) =>
-      c.cosine !== null ? c.cosine >= ITEM_COSINE_THRESHOLD : (c.lexical ?? 0) >= ITEM_LEXICAL_THRESHOLD,
+      c.cosine !== null ? c.cosine >= calibration.itemCosine : (c.lexical ?? 0) >= ITEM_LEXICAL_THRESHOLD,
     )
     .sort((a, b) => candidateScore(b) - candidateScore(a) || (a.itemId < b.itemId ? -1 : a.itemId > b.itemId ? 1 : 0))
     .slice(0, ITEM_MAX_CANDIDATES);
@@ -270,8 +277,9 @@ export function mapItemVerdicts(
   candidates: readonly ItemCandidate[],
   verdicts: ReadonlyMap<string, ItemAdjudication> | null,
   unavailableReason: string | null = null,
+  calibration: Pick<GraphCalibration, 'itemCosine' | 'itemSameConfidentCosine'> = DEFAULT_GRAPH_CALIBRATION,
 ): { dedup: ItemDedup; flags: ProposalItemFlag[] } {
-  const ranked = selectCandidates(candidates);
+  const ranked = selectCandidates(candidates, calibration);
   if (ranked.length === 0) {
     return { dedup: { verdict: 'new', targetItemId: null, changes: {}, rationale: null, score: null }, flags: [] };
   }
@@ -312,7 +320,7 @@ export function mapItemVerdicts(
     if (v.changes.status !== null) changes.status = v.changes.status;
     if (v.changes.dueAt !== null) changes.dueAt = v.changes.dueAt;
   }
-  const confident = winner.cosine !== null && winner.cosine >= ITEM_SAME_CONFIDENT_COSINE;
+  const confident = winner.cosine !== null && winner.cosine >= calibration.itemSameConfidentCosine;
   return {
     dedup: { verdict: 'same', targetItemId: winner.itemId, changes, rationale, score: winner.cosine },
     flags: confident ? [] : ['possible_duplicate'],

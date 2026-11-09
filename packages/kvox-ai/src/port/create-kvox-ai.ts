@@ -351,10 +351,12 @@ class KvoxAi implements KvoxAiPort {
         structuredOutput: readiness.ok,
         toolCalling: readiness.ok && (flags.toolCalling ?? true),
         embeddings: {
+          provider: this.entry.provider,
           model: this.entry.model,
           dimensions: this.entry.storageDimensions,
           nativeDimensions: this.entry.dimensions,
           ...(this.entry.minSimilarity !== undefined ? { minSimilarity: this.entry.minSimilarity } : {}),
+          ...(this.entry.graphCalibration !== undefined ? { graphCalibration: { ...this.entry.graphCalibration } } : {}),
         },
         graphEnabled,
       };

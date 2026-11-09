@@ -360,6 +360,7 @@ export class KgTopicsPromoteHandler implements KvoxJobHandler, OnModuleInit {
           context: emptyContext(),
         })),
         thresholds,
+        embedded.calibration,
       );
 
       const middle = part.filter((m) => outcomes.get(m.key)!.band === 'middle');

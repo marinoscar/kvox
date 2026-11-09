@@ -34,3 +34,18 @@ describe('the embedding catalog', () => {
     expect(KVOX_LOCAL_EMBEDDING.minSimilarity).toBe(0.45);
   });
 });
+
+describe('graph calibration (#681)', () => {
+  it('leaves the web edition\'s model on the graph\'s OpenAI baseline', () => {
+    expect(KVOX_EMBEDDING.graphCalibration).toBeUndefined();
+  });
+
+  it('gives the on-device model cut-offs above the OpenAI baseline, in a sane order', () => {
+    const cal = KVOX_LOCAL_EMBEDDING.graphCalibration!;
+    expect(cal.vectorFloor).toBeGreaterThan(0.75);
+    expect(cal.itemCosine).toBeGreaterThan(0.8);
+    expect(cal.itemSameConfidentCosine).toBeGreaterThan(0.92);
+    expect(cal.itemSameConfidentCosine).toBeGreaterThanOrEqual(cal.itemCosine);
+    expect(Object.values(cal).every((n) => n > 0 && n < 1)).toBe(true);
+  });
+});

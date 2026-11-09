@@ -25,3 +25,26 @@ describe('CandidateService synonym expansion (#767)', () => {
     expect(syn.some((v) => Array.isArray(v) && v.length === 1 && v[0] === 'oac')).toBe(true);
   });
 });
+
+describe('CandidateService vector arm never crosses embedding models (#681)', () => {
+  it("filters the kNN on the mention vector's own model, so a bge vector never links to an OpenAI one", async () => {
+    const calls: unknown[][] = [];
+    const db = {
+      $queryRaw: jest.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        calls.push([strings.join('?'), ...values]);
+        return [];
+      }),
+      kgDistinctPair: { findMany: jest.fn() },
+      kgEntity: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new CandidateService(db as never);
+    await service.forMention(
+      OWNER,
+      { type: 'Person', label: 'Person A', aliases: [], vector: { values: [0.1, 0.2], model: 'bge-small-en-v1.5-int8' } },
+      db as never,
+    );
+    const knn = calls.find((c) => String(c[0]).includes('e.embedding <=>'))!;
+    expect(String(knn[0])).toContain('e.embedding_model =');
+    expect(knn).toContain('bge-small-en-v1.5-int8');
+  });
+});

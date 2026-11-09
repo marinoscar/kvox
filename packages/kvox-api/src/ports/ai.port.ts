@@ -70,11 +70,33 @@ export interface KvoxAiContext {
 }
 
 /**
+ * The cosine cut-offs the graph's entity resolution and item dedup use for one embedding model (#681).
+ *
+ * @remarks
+ * Models differ in how similar unrelated texts look (bge-style models sit well above
+ * OpenAI's), so a cut-off tuned to one model silently over-links on another. A host that
+ * offers a model records its own here; a model that records none gets the OpenAI
+ * text-embedding-3-small numbers the graph was tuned with.
+ *
+ * @stability experimental
+ */
+export interface KvoxGraphCalibration {
+  /** Entity resolution: the cosine at which vector evidence starts to count (OpenAI: 0.75). */
+  vectorFloor: number;
+  /** Item dedup: the cosine a candidate needs to be adjudicated at all (OpenAI: 0.80). */
+  itemCosine: number;
+  /** Item dedup: a `same` verdict at or above this cosine is not flagged `possible_duplicate` (OpenAI: 0.92). */
+  itemSameConfidentCosine: number;
+}
+
+/**
  * The embeddings model a host offers.
  *
  * @stability experimental
  */
 export interface KvoxEmbeddingsInfo {
+  /** The provider that serves the model (`local` for an on-device model); absent means `openai`. */
+  provider?: string;
   /** The embeddings model id. */
   model: string;
   /** The width of every STORED vector it returns (the column width; a narrower model is zero-padded). */
@@ -83,6 +105,8 @@ export interface KvoxEmbeddingsInfo {
   nativeDimensions?: number;
   /** The cosine similarity below which a semantic hit is noise, when the model needs a floor. */
   minSimilarity?: number;
+  /** The graph's per-model resolution and dedup cut-offs; absent means the OpenAI defaults. */
+  graphCalibration?: KvoxGraphCalibration;
 }
 
 /**

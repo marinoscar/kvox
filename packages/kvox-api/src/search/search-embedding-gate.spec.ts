@@ -16,6 +16,13 @@ describe('embeddingGateFor', () => {
     ).toEqual({ ok: true, model: 'bge', dimensions: 1536, nativeDimensions: 384, minSimilarity: 0.5 });
   });
 
+  it('carries the provider and the graph calibration of a catalog entry (#681)', () => {
+    const graphCalibration = { vectorFloor: 0.83, itemCosine: 0.87, itemSameConfidentCosine: 0.95 };
+    expect(
+      embeddingGateFor(caps({ provider: 'local', model: 'bge', dimensions: 1536, graphCalibration })),
+    ).toEqual({ ok: true, provider: 'local', model: 'bge', dimensions: 1536, graphCalibration });
+  });
+
   it('omits both when the model declares neither', () => {
     expect(embeddingGateFor(caps({ model: 'm', dimensions: 1536 }))).toEqual({
       ok: true,

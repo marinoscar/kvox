@@ -47,6 +47,7 @@ export { DistinctPairService } from './resolution/distinct-pair.service.js';
 export { AliasLearningService } from './resolution/alias-learning.service.js';
 export { AdjudicationService } from './resolution/adjudication.service.js';
 export { GraphEmbedder } from './resolution/graph-embedder.service.js';
+export { DEFAULT_GRAPH_CALIBRATION, resolveGraphCalibration, type GraphCalibration } from './resolution/graph-calibration.js';
 export { ItemCandidateService } from './dedup/item-candidates.service.js';
 export { KgEmbedHandler } from './handlers/kg-embed.handler.js';
 export { KgResolveHandler } from './handlers/kg-resolve.handler.js';
