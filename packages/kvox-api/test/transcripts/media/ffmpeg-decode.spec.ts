@@ -58,7 +58,7 @@ async function rejection(promise: Promise<unknown>): Promise<Error> {
 }
 
 describe('decodePcm16kMono (fake binary)', () => {
-  it('builds the argument vector: aselect over the joined windows, 16 kHz mono signed 16-bit to stdout', async () => {
+  it('builds the argument vector: atrim + concat over the windows, 16 kHz mono signed 16-bit to stdout', async () => {
     const fake = fakeBinary('ok', `printf '\\000\\000'`);
     await service(fake.path).decodePcm16kMono({
       input: SIGNED,
@@ -77,10 +77,13 @@ describe('decodePcm16kMono (fake binary)', () => {
       '-i',
       SIGNED,
       '-vn',
+      '-filter_complex',
+      '[0:a:0]aresample=16000,aformat=channel_layouts=mono,asplit=2[s0][s1];' +
+        '[s0]atrim=start=0.000:end=1.500,asetpts=PTS-STARTPTS[w0];' +
+        '[s1]atrim=start=3.000:end=4.250,asetpts=PTS-STARTPTS[w1];' +
+        '[w0][w1]concat=n=2:v=0:a=1[out]',
       '-map',
-      '0:a:0',
-      '-af',
-      'aselect=between(t\\,0.000\\,1.500)+between(t\\,3.000\\,4.250),asetpts=N/SR/TB',
+      '[out]',
       '-ac',
       '1',
       '-ar',
@@ -110,8 +113,32 @@ describe('decodePcm16kMono (fake binary)', () => {
       ],
       timeoutMs: 10_000,
     });
-    const select = fake.argv()[fake.argv().indexOf('-af') + 1];
-    expect(select).toBe('aselect=between(t\\,0.000\\,1.000),asetpts=N/SR/TB');
+    const graph = fake.argv()[fake.argv().indexOf('-filter_complex') + 1];
+    expect(graph).toBe(
+      '[0:a:0]aresample=16000,aformat=channel_layouts=mono,atrim=start=0.000:end=1.000,asetpts=PTS-STARTPTS[out]',
+    );
+  });
+
+  it('sorts windows given out of order and merges overlapping ones', async () => {
+    const fake = fakeBinary('merge', `printf '\\000\\000'`);
+    await service(fake.path).decodePcm16kMono({
+      input: '/tmp/a.wav',
+      windows: [
+        { startMs: 5000, endMs: 6000 },
+        { startMs: 1000, endMs: 2500 },
+        { startMs: 2000, endMs: 3000 },
+        { startMs: 0, endMs: 500 },
+      ],
+      timeoutMs: 10_000,
+    });
+    const graph = fake.argv()[fake.argv().indexOf('-filter_complex') + 1];
+    expect(graph).toBe(
+      '[0:a:0]aresample=16000,aformat=channel_layouts=mono,asplit=3[s0][s1][s2];' +
+        '[s0]atrim=start=0.000:end=0.500,asetpts=PTS-STARTPTS[w0];' +
+        '[s1]atrim=start=1.000:end=3.000,asetpts=PTS-STARTPTS[w1];' +
+        '[s2]atrim=start=5.000:end=6.000,asetpts=PTS-STARTPTS[w2];' +
+        '[w0][w1][w2]concat=n=3:v=0:a=1[out]',
+    );
   });
 
   it('returns an empty array without spawning anything when no window is usable', async () => {
@@ -137,9 +164,9 @@ describe('decodePcm16kMono (fake binary)', () => {
     expect(samples).toHaveLength(1);
   });
 
-  it('caps the output at the windows total plus one second: more than that fails, never buffers on', async () => {
-    // 1 s of window -> (1 s + 1 s slack) * 32 000 B/s = 64 000 B. The fake prints 200 000.
-    const fake = fakeBinary('flood', `head -c 200000 /dev/zero`);
+  it('kills and fails when output blows far past the expected size (hard cap), never buffers on', async () => {
+    // 1 s of window -> 64 000 B expected; hard cap = 2 x 64 000 + 1 MiB. The fake prints 3 MB.
+    const fake = fakeBinary('flood', `head -c 3000000 /dev/zero`);
     const failure = await rejection(
       service(fake.path).decodePcm16kMono({ input: SIGNED, windows: [{ startMs: 0, endMs: 1000 }], timeoutMs: 10_000 }),
     );
@@ -147,10 +174,10 @@ describe('decodePcm16kMono (fake binary)', () => {
     expect(failure.message).not.toContain('SECRETSIGNATURE');
   });
 
-  it('accepts output right up to the cap', async () => {
-    const fake = fakeBinary('cap', `head -c 64000 /dev/zero`);
+  it('truncates a little extra output to the expected sample count instead of failing', async () => {
+    const fake = fakeBinary('extra', `head -c 70000 /dev/zero`);
     const samples = await service(fake.path).decodePcm16kMono({ input: 'x', windows: [{ startMs: 0, endMs: 1000 }], timeoutMs: 10_000 });
-    expect(samples).toHaveLength(32_000);
+    expect(samples).toHaveLength(16_000);
   });
 
   describe('a signed URL never appears in a thrown error', () => {
