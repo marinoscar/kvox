@@ -15,6 +15,8 @@ export { TranscriptStatusChip } from './components/TranscriptStatusChip.js';
 export { IMPORT_TRANSCRIPT_LABEL, ImportTranscriptButton } from './components/ImportTranscriptButton.js';
 export type { ImportTranscriptButtonProps } from './components/ImportTranscriptButton.js';
 export type { TranscriptStatusChipProps } from './components/TranscriptStatusChip.js';
+export { SpeakerVoiceSuggestions, formatVoiceMatchScore } from './components/SpeakerVoiceSuggestions.js';
+export type { SpeakerVoiceSuggestionsProps } from './components/SpeakerVoiceSuggestions.js';
 export { SlotBoundary } from './slots.js';
 export type {
   SlotBoundaryProps,
@@ -26,6 +28,8 @@ export type {
   TranscriptShareDialogProps,
   TranscriptSharingAdapter,
   TranscriptSpeakerPeople,
+  TranscriptSpeakerSuggestion,
+  TranscriptSpeakerSuggestions,
   TranscriptsLibrarySlots,
 } from './slots.js';
 export { kvoxTranscriptsDestinationRoutes, kvoxTranscriptsDestinations } from './navigation.js';

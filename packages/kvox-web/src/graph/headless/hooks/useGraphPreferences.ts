@@ -76,6 +76,13 @@ export interface GraphPreferencesSettings {
     /** The Person entity id. */
     entityId: string | null;
   };
+  /** Speaker voiceprints (#825, #827): absent means off. Biometric, so off until the user opts in. */
+  voiceprints?: {
+    /** Whether names are suggested from voices. */
+    enabled: boolean;
+    /** When the user consented (stamped by the server), or null. */
+    consentAt: string | null;
+  };
 }
 
 /**
@@ -119,6 +126,14 @@ export interface GraphPreferencesPatch {
   self?: {
     /** The Person entity id to set, or null to clear it. */
     entityId?: string | null;
+  } | null;
+  /**
+   * Speaker voiceprints (#827). `enabled: true` stamps the consent time on the server and starts a
+   * backfill; `enabled: false` (or `null`) clears the sub-object, consent included.
+   */
+  voiceprints?: {
+    /** Turn suggestions from voices on or off. */
+    enabled?: boolean | null;
   } | null;
 }
 

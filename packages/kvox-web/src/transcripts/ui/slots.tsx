@@ -34,6 +34,45 @@ export interface TranscriptSpeakerPeople {
 }
 
 /**
+ * One voice-based suggestion of who a still-unnamed speaker is (#827).
+ *
+ * @stability experimental
+ */
+export interface TranscriptSpeakerSuggestion {
+  /** The suggestion's id, passed back to `accept` / `dismiss`. */
+  id: string;
+  /** The speaker it is about. */
+  speakerId: string;
+  /** The suggested person's name. */
+  personName: string;
+  /** How close the voices are, 0 to 1. */
+  score: number;
+}
+
+/**
+ * What a speaker-suggestions slot returns: the pending voice-based name
+ * suggestions of one transcript and how to decide them (#827).
+ *
+ * @stability experimental
+ */
+export interface TranscriptSpeakerSuggestions {
+  /** `speakerId` to its best pending suggestion. */
+  bySpeaker: Readonly<Record<string, TranscriptSpeakerSuggestion>>;
+  /** The viewer may accept or dismiss (the page also requires edit access). */
+  canDecide: boolean;
+  /** The suggestion an accept or dismiss is in flight for, else `null`. */
+  busyId: string | null;
+  /** Why the last accept or dismiss failed, else `null`. */
+  error: string | null;
+  /** Clears `error`. */
+  clearError: () => void;
+  /** Names the speaker after the suggested person. Resolves `true` when it landed. */
+  accept: (id: string) => Promise<boolean>;
+  /** Dismisses the suggestion. Resolves `true` when it landed. */
+  dismiss: (id: string) => Promise<boolean>;
+}
+
+/**
  * The props of the "selection actions" slot.
  *
  * @stability experimental
@@ -76,6 +115,17 @@ export interface TranscriptPageSlots {
    * hooks; `enabled` is `false` until the transcript is ready.
    */
   useSpeakerPeople?: (transcriptId: string | undefined, enabled: boolean) => TranscriptSpeakerPeople | null;
+  /**
+   * A hook that tells which still-unnamed speakers sound like a person the
+   * viewer has named before (#827), and accepts or dismisses that. The page
+   * draws a "Sounds like …" suggestion near those speakers. Called on every
+   * render; `enabled` is `false` until the transcript is ready and while it has
+   * no placeholder speaker (`Speaker A`), so nothing is fetched then.
+   */
+  useSpeakerSuggestions?: (
+    transcriptId: string | undefined,
+    enabled: boolean,
+  ) => TranscriptSpeakerSuggestions | null;
   /**
    * An action over a text selection inside one line (for example "Add to
    * graph"). Rendered once the transcript is ready.

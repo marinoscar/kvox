@@ -12,7 +12,9 @@
  *      edits (#586): "Set manager", "Set employer", "Add role", and Remove.
  *   4. Timeline — with the opt-in sensitive-facts switch.
  *   5. Mentions.
- *   6. Merged from (#765) — the entities merged into this one, with Undo.
+ *   6. Voice (#827, Person only) — what was learned of the person's voice, and
+ *      "Forget voice" (`graph:write`).
+ *   7. Merged from (#765) — the entities merged into this one, with Undo.
  *
  * MERGE (#765). "Merge into…" in the header's menu (`graph:write`) opens
  * `MergeEntityDialog`. After a merge the page REPLACES its history entry with
@@ -55,6 +57,7 @@ import { EntityEditDialog } from '../components/EntityEditDialog.js';
 import { EntityHeader } from '../components/EntityHeader.js';
 import { EntityMentionsList } from '../components/EntityMentionsList.js';
 import { EntityMergedFromList } from '../components/EntityMergedFromList.js';
+import { EntityVoiceprintSection } from '../components/EntityVoiceprintSection.js';
 import { MergeEntityDialog } from '../components/MergeEntityDialog.js';
 import type { MergeOutcome } from '../components/MergeEntityDialog.js';
 import { EntityPageSkeleton } from '../components/EntityPageSkeleton.js';
@@ -431,6 +434,10 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
         />
         <EntityTimeline entityId={detail.id} ontology={ontology} />
         <EntityMentionsList entityId={detail.id} />
+        {/* #827: what was learned of a Person's voice; nothing for any other type. */}
+        {detail.type === 'Person' && (
+          <EntityVoiceprintSection entityId={detail.id} label={detail.label} canForget={canWrite} />
+        )}
         <EntityMergedFromList
           merges={merges.data}
           canUndo={canWrite}
