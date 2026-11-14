@@ -82,6 +82,8 @@ export function personForgottenMeta(counts: KgPurgeCounts): Record<string, numbe
     evidence: counts.evidence,
     mentions: counts.mentions,
     proposalItems: counts.proposalItems,
+    voiceprints: counts.voiceprints,
+    speakerSuggestions: counts.speakerSuggestions,
   };
 }
 
