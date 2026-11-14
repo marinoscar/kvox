@@ -10,8 +10,8 @@
  * touched.
  *
  * WHAT LIVES HERE: the caller's own `graph` user-settings namespace
- * (automatic extraction, resolution thresholds/mode/adjudication, domains)
- * and their own attribute definitions. Every preference control saves ON
+ * (automatic extraction, resolution thresholds/mode/adjudication, domains,
+ * voice recognition (#827)) and their own attribute definitions. Every preference control saves ON
  * CHANGE through `PATCH /api/user-settings { graph: {...} }` — sliders on
  * commit, never on drag — and says whether the save landed.
  *
@@ -55,6 +55,7 @@ import { KvoxLoadingSpinner } from '../../../core/ui/index.js';
 import { AttributeDefsBrowser } from '../components/settings/AttributeDefsBrowser.js';
 import { SelfIdentitySection } from '../components/settings/SelfIdentitySection.js';
 import { TopicsPromoteSection } from '../components/settings/TopicsPromoteSection.js';
+import { VoiceRecognitionSection } from '../components/settings/VoiceRecognitionSection.js';
 import { useGraphAiConfig } from '../../headless/hooks/useGraphAiConfig.js';
 import { useGraphEffectiveOntology } from '../../headless/hooks/useGraphAttributeDefs.js';
 import {
@@ -464,6 +465,11 @@ export function UserKnowledgeGraphPage() {
             );
           })}
         </List>
+      </Section>
+
+      {/* 4b. Voice recognition (#827): biometric, off until the user consents. */}
+      <Section title="Voice recognition" id="kg-voice-heading">
+        <VoiceRecognitionSection update={update} />
       </Section>
 
       {/* 5. Attributes */}

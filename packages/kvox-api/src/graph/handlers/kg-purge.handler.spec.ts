@@ -31,6 +31,8 @@ function harness() {
     mentions: 3,
     proposalItems: 6,
     merges: 1,
+    voiceprints: 2,
+    speakerSuggestions: 1,
   };
   const purge = {
     purgePerson: jest.fn().mockResolvedValue({ counts, entityIds: [ENTITY, TOMBSTONE] }),
@@ -110,6 +112,8 @@ describe('KgPurgeHandler.process', () => {
           evidence: 15,
           mentions: 3,
           proposalItems: 6,
+          voiceprints: 2,
+          speakerSuggestions: 1,
           entityIds: [ENTITY, TOMBSTONE],
         },
       },

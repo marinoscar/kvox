@@ -562,6 +562,23 @@ jobs:
       # database is unseeded, as it was when this ran inside `smoke`.
       - run: npm run prisma:migrate --workspace=api
 
+      # The PostgreSQL client must match the service's major (16). The dump and
+      # restore specs (test/db-backup/*.db.spec.ts) call `pg_dump`/`pg_restore`
+      # from PATH, and the runner image's preinstalled client moved past 16
+      # (ubuntu-26.04, 2026-11): a pg_dump 17+ archive starts with
+      # `SET transaction_timeout`, which a 16 server refuses, so the restore spec
+      # went red for a reason no diff caused. Install the 16 client from PGDG and
+      # put it first on PATH. Moving to another major moves the service image and
+      # this pin together (docs/runbooks/postgres-client-version.md §3).
+      - name: Pin the PostgreSQL client to the service major (16)
+        run: |
+          sudo apt-get install -y -qq --no-install-recommends postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq --no-install-recommends postgresql-client-16
+          echo /usr/lib/postgresql/16/bin >> "$GITHUB_PATH"
+          /usr/lib/postgresql/16/bin/pg_dump --version
+          /usr/lib/postgresql/16/bin/pg_restore --version
+
       # NODE_ENV=test matches what these specs assume when they build their own
       # connection string from the POSTGRES_* vars above.
       #

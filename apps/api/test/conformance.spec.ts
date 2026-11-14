@@ -727,6 +727,7 @@ describe('kvox-guarded routes', () => {
       'TranscriptionConfigController',
       'TranscriptionSettingsController',
       'TranscriptsController',
+      'VoiceprintsController',
     ]);
   });
 

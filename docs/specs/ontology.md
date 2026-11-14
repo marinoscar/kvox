@@ -1601,6 +1601,89 @@ shows — an identification, a versioned batch that renames, clears, creates or
 merges away a speaker, and a version restore — not only after
 `identify()`.
 
+### 8.1 Voiceprint suggestions (epic #821; calibration #822)
+
+Naming a speaker once teaches the system what that person sounds like, so the
+next recording can offer the name. A **suggestion is never a write**: only a
+person accepting it names the speaker, through the ordinary naming path above.
+
+**Flow.** (1) `kg.speaker_link` links a speaker to a `Person` and, for an owner
+who opted in, enqueues `kg.voiceprint_enroll`, which decodes that speaker's
+speech and stores a voiceprint sample for the `Person`. (2) When a transcript
+becomes ready, the ids-only `transcript.ready` bus event enqueues
+`kg.voice_match`, which compares each still-unnamed speaker with the owner's
+stored voiceprints and writes a pending row to `kg_speaker_suggestions`. (3) The
+transcript page shows a **Voice match** block per speaker; **Accept** names the
+speaker with the `Person`'s canonical name (so `kg.speaker_link` runs as for any
+rename), **Dismiss** marks the pair dismissed and it is never suggested again.
+Only speakers that are still placeholders and `Person`s that are still live are
+listed. `kg.voiceprint_backfill` runs when the user turns the feature on and
+enrols speakers they had already linked (newest links first, at most 3 source
+speakers per `Person`, at most 200 links, one enrol job per transcript).
+
+**Model and policy** (`@marinoscar/kvox-ai/voiceprints`,
+[README](../../packages/kvox-ai/src/voiceprints/README.md)). CAM++ (3D-Speaker,
+English VoxCeleb, 512 dimensions, Apache-2.0), run on the server with
+`onnxruntime-web` WASM in a worker thread over a Kaldi-style filterbank written
+in TypeScript. No key and no network after the one-time download of the model
+(a pinned GitHub release asset, SHA-256 verified).
+
+| Parameter | Value |
+|---|---|
+| Speech window | at least 1.5 s per segment, 200 ms trimmed from each edge, longest first, 30 s cap |
+| Minimum speech for a sample | 3 s per speaker |
+| Suggestion threshold | cosine score at least 0.52 |
+| Margin | at least 0.05 over the runner-up |
+| Samples per `Person` | at most 10 |
+| Candidates compared per speaker | 5 nearest people |
+
+**Opt-in and consent.** Off by default. The `graph.voiceprints`
+`{ enabled, consentAt }` preference ([API](../API.md)) is set
+from the Knowledge graph settings card, **Voice recognition**, behind a consent
+dialog that stamps `consentAt`. Turning it off stops new work but does not
+delete anything; **Delete all voiceprints** does. Every job re-checks consent.
+
+**Privacy rules.** A voiceprint is biometric data. It is owner-scoped; stored as
+a vector only (the feature retains no audio); never exported (the user-data
+export excludes `kg_person_voiceprints`); never sent to an AI provider, to Ask
+or to the RDF export; never logged (ids, counts and reason codes only). It is
+deleted with the `Person` (forget, merge-away), with the source recording or
+speaker, with the user, by **Forget this voice** on the person page, by
+`DELETE /api/graph/voiceprints`, and by `kg.purge` (a `voiceprints` step). Every
+foreign key cascades. See
+[SECURITY-ARCHITECTURE](../SECURITY-ARCHITECTURE.md#biometric-data-voiceprints).
+
+**Jobs** (§11). `kg.voiceprint_enroll`, `kg.voice_match` and
+`kg.voiceprint_backfill` are server-only and are **not** AI jobs. The jobs, not
+the listeners, decode audio (`FfmpegService.decodePcm16kMono`) and download the
+model, so all of it is queue work; the listeners only enqueue.
+
+**Failure modes.**
+
+| Situation | Behaviour |
+|---|---|
+| Owner not opted in, port unbound (Desktop today) or no voiceprints stored | No `kg.voice_match` job is enqueued; the Voice match block is absent |
+| `ffmpeg` missing or the audio cannot be decoded | The speaker is skipped (reason code only); the job retries up to its `maxAttempts` |
+| Model download fails (egress blocked, hash mismatch, redirect to another host) | The job fails and retries (`maxAttempts: 3`); nothing is installed |
+| Speaker has under 3 s of speech | No sample or suggestion for that speaker |
+| Best score under 0.52, or lead under 0.05 | No suggestion (an unknown voice is the expected outcome) |
+| Speaker named, `Person` merged away or forgotten before a decision | The suggestion is no longer listed; accept answers `409` `SPEAKER_ALREADY_NAMED` |
+
+**Limitations.** The thresholds were calibrated on read speech only
+(LibriSpeech dev and test clean, synthetic cross-session open-set sets, issue
+#822): top-1 about 96 to 97 percent, coverage about 93 to 96 percent at no more
+than 5 percent wrong suggestions, and at most 3 percent unknown-voice false
+accepts. Conversational, noisy, telephone or cross-talk audio is not covered and
+will score lower; very short turns, and similar voices (relatives, same-sex
+colleagues in one room) are the likely wrong suggestions, which is why a person
+confirms. Cost: about 3.9 s of CPU per 60 s of audio and about 330 MB resident
+memory while the model is loaded.
+
+**Follow-ups.** A worker-node executor (the compute and persist steps of the
+jobs are already separate, but no node ships the model, so the types declare
+neither `nodeResultSchema` nor `persistNodeResult`); a KVox Desktop binding of
+`KVOX_VOICEPRINTS` (Desktop binds none today, so the feature is inert there).
+
 ## 9. Retrieval
 
 ### 9.1 Entity brief
@@ -2047,6 +2130,9 @@ directory:
 | `kg.import` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | §18.3 — server-only, one attempt: a half-applied import must surface as a failed job a person looks at, never silently resume minutes later, the identical reasoning `user.data.purge` gives for its own `maxAttempts: 1` |
 | `kg.library_reconcile` | `{ maxRuntimeMs: 2m, maxAttempts: 2 }` | **No** | Note libraries ([notes §8.8](notes.md#88-note-libraries-and-import-batches-epic-708), [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md)). Queues `kg.extract` again for library notes the graph has not read at their current version: a note edited in the product, an import that finished after `note_ready` was missed or declined, a model that was not configured at the time. Selection is pure (`selectReconcileNotes`): the owner's library files whose note is `ready` with `current_version > coalesce(extracted_version, 0)`, whose library has `auto_extract` on, with no extraction in flight and no proposal already covering that version. Each is queued through `GraphExtractionService.enqueueForReadyNote(…, { bulk: true })`, which holds the gates (graph enabled, `graph:write`, the `autoExtract` preference, a resolvable model). At most 500 per run; a longer tail is a continuation run 30 s later. Subject `user`/ownerId (one pending run per owner), payload `{ ownerId, libraryId?, batchId? }`. Triggered by `kvox.notes.import_batch_settled` (a subscriber that only enqueues), the retry route and its own continuation. It only enqueues; it makes no AI call itself |
 | `kg.autocommit` | `{ maxRuntimeMs: 5m, maxAttempts: 2 }` | **No** | The auto-commit of [ADR-0007](../decisions/0007-bulk-graph-review-and-opt-in-auto-commit.md). Commits the **safe** rows of one freshly drafted extraction proposal through `ProposalBatchCommitService.commitSafe` (the safe policy, then `ProposalCommitService` and `GraphWriteService`): no new write path. Subject `kg_proposal`/proposalId, payload `{ proposalId, ownerId }`. Triggered by `kvox.graph.proposal_drafted`, raised by `kg.extract` after the draft committed; its only listener enqueues this job. It applies to **every note's** draft: it is on when the note's library has set `auto_commit` (true or false, which wins), else when the owner's `graph.review.autoCommitSafeRows` preference is on (the default; a note outside any library follows the preference). It no-ops (returns normally, nothing retried) when the proposal is not an open `extraction` draft of the owner (so a repeated run after the commit is harmless), the note moved on (stale), auto-commit is off for the note, the graph is disabled, or the owner no longer holds `graph:write`. Audit `graph:autocommit` carries ids and counts, never a statement or evidence text. Server-only: no AI key is involved here, and the job writes the graph |
+| `kg.voiceprint_enroll` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | §8.1 — decodes a just-named speaker's speech and stores a voiceprint of the `Person`; idempotent (one sample per Person and speaker). Biometric and needs the on-device model, which no node ships; not an AI job |
+| `kg.voice_match` | `{ maxRuntimeMs: 10m, maxAttempts: 3 }` | **No** | §8.1 — enqueued on `transcript.ready`, writes pending `kg_speaker_suggestions`; server-only for the same reason as the enrol job; not an AI job |
+| `kg.voiceprint_backfill` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | §8.1 — on opt-in, only queries and enqueues `kg.voiceprint_enroll` for existing links (at most 3 speakers per Person, 200 links) |
 | `ask.respond` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §21.3 — identical reasoning to `kg.extract`: the user's own AI key, `maxAttempts: 1` because a retried agent turn would silently re-spend the user's provider credit to produce a different, non-deterministic answer to a question the user already saw partway through. Throttled on `aiProviderThrottleKey(userId)` exactly like every other AI-calling type in this table. **Built, issue #378** (`apps/api/src/ask/handlers/ask-respond.handler.ts`), enqueued at priority −10 with the assistant message as its subject (`ask_message`) |
 
 **Priorities.** `kg.extract` runs at priority **−5** — someone is plausibly
@@ -2422,6 +2508,10 @@ evidence — **the underlying transcript or note text is left untouched**,
 because that recording is the account holder's own content, not the third
 party's, and this design's authority to delete stops at the graph it built,
 not at the primary source it was built from.
+
+**Voiceprints** (§8.1) are biometric: opt-in with recorded consent, vectors only,
+never exported, never sent to a provider and never read by Ask or the RDF
+export.
 
 **The Danger Zone scopes gain the graph** (§11's `kg.purge` note) — deleting
 one's own `content` or `everything` now includes one's own graph rows,

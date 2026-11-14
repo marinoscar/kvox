@@ -258,6 +258,8 @@ describe('SpeakerLinkReconciler', () => {
       expect(s.write.addAliases).not.toHaveBeenCalled();
       expect(s.write.createRelation.mock.calls[0][1]).toMatchObject({ toId: 'p-sasha' });
       expect(summary).toMatchObject({ linked: 1, created: 0, createdPersonIds: [] });
+      // #825: the pair the voiceprint enrol job learns from.
+      expect(summary.links).toEqual([{ speakerId: SPEAKER_A, entityId: 'p-sasha' }]);
       expect(s.audits()[0].meta).toEqual({
         transcriptId: TRANSCRIPT,
         speakerId: SPEAKER_A,
@@ -291,6 +293,7 @@ describe('SpeakerLinkReconciler', () => {
       const s = setup({ edges: [{ id: 'e-1', speakerId: SPEAKER_A, personId: 'p-sasha', label: 'Sasha Example' }] });
       const summary = await s.run();
       expect(summary).toMatchObject({ linked: 0, created: 0, unlinked: 0 });
+      expect(summary.links).toEqual([]);
       noWrites(s);
     });
 
@@ -383,6 +386,8 @@ describe('SpeakerLinkReconciler', () => {
       const summary = await s.run();
 
       expect(summary).toMatchObject({ linked: 0, created: 0, unlinked: 1 });
+      // An unlink teaches no voice.
+      expect(summary.links).toEqual([]);
       expect(s.tx.kgRelation.delete).toHaveBeenCalledWith({ where: { id: 'e-1' } });
       expect(s.tx.kgEntity.delete).toHaveBeenCalledWith({ where: { id: 'p-sasha' } });
       expect(s.write.createRelation).not.toHaveBeenCalled();

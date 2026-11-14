@@ -500,3 +500,115 @@ describe('UserKnowledgeGraphPage', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
+
+describe('UserKnowledgeGraphPage — Voice recognition (#827)', () => {
+  const CONSENT_AT = '2026-03-04T10:00:00.000Z';
+  let samples: number;
+  let deletes: number;
+
+  beforeEach(() => {
+    samples = 0;
+    deletes = 0;
+  });
+
+  function useVoiceHandlers() {
+    server.use(
+      http.get(`${API_BASE}/graph/voiceprints/summary`, () => {
+        const enabled = stored.graph?.voiceprints?.enabled === true;
+        return HttpResponse.json({
+          data: { enabled, consentAt: enabled ? CONSENT_AT : null, people: samples > 0 ? 2 : 0, samples },
+        });
+      }),
+      http.delete(`${API_BASE}/graph/voiceprints`, () => {
+        deletes += 1;
+        const deleted = samples;
+        samples = 0;
+        return HttpResponse.json({ data: { deletedSamples: deleted, deletedSuggestions: 1 } });
+      }),
+    );
+  }
+
+  async function voiceSection() {
+    const heading = await screen.findByRole('heading', { level: 2, name: 'Voice recognition' });
+    const section = heading.closest('section') as HTMLElement;
+    await within(section).findByRole('switch', { name: 'Suggest speaker names from voices' });
+    return section;
+  }
+
+  it('is a section of this page, off by default, with the consent text', async () => {
+    useVoiceHandlers();
+    await renderPage();
+    const section = await voiceSection();
+    expect(within(section).getByRole('switch', { name: 'Suggest speaker names from voices' })).not.toBeChecked();
+    expect(section).toHaveTextContent('A voiceprint is biometric data');
+    expect(section).toHaveTextContent('never exported or sent to AI providers');
+  });
+
+  it('turns on only after the consent is confirmed, then shows the date and the counts', async () => {
+    const user = userEvent.setup();
+    useVoiceHandlers();
+    await renderPage();
+    const section = await voiceSection();
+
+    await user.click(within(section).getByRole('switch', { name: 'Suggest speaker names from voices' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Turn on voice recognition?' });
+    const turnOn = within(dialog).getByRole('button', { name: 'Turn on' });
+    expect(turnOn).toBeDisabled();
+    expect(patches).toEqual([]);
+
+    await user.click(within(dialog).getByRole('checkbox', { name: /I understand and agree/ }));
+    expect(turnOn).toBeEnabled();
+    samples = 5;
+    await user.click(turnOn);
+
+    await waitFor(() => expect(patches).toEqual([{ graph: { voiceprints: { enabled: true } } }]));
+    await waitFor(() =>
+      expect(within(section).getByRole('switch', { name: 'Suggest speaker names from voices' })).toBeChecked(),
+    );
+    expect(section).toHaveTextContent(/On since Mar 4, 2026/);
+    expect(section).toHaveTextContent('2 people · 5 samples');
+  });
+
+  it('cancelling the consent sends nothing', async () => {
+    const user = userEvent.setup();
+    useVoiceHandlers();
+    await renderPage();
+    const section = await voiceSection();
+    await user.click(within(section).getByRole('switch', { name: 'Suggest speaker names from voices' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Turn on voice recognition?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(patches).toEqual([]);
+    expect(within(section).getByRole('switch', { name: 'Suggest speaker names from voices' })).not.toBeChecked();
+  });
+
+  it('turns off without asking', async () => {
+    const user = userEvent.setup();
+    useVoiceHandlers();
+    await renderPage({ voiceprints: { enabled: true, consentAt: CONSENT_AT } });
+    const section = await voiceSection();
+    const toggle = within(section).getByRole('switch', { name: 'Suggest speaker names from voices' });
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+    await waitFor(() => expect(patches).toEqual([{ graph: { voiceprints: { enabled: false } } }]));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('deletes all voiceprints after a confirmation and shows what was deleted', async () => {
+    const user = userEvent.setup();
+    samples = 7;
+    useVoiceHandlers();
+    await renderPage({ voiceprints: { enabled: true, consentAt: CONSENT_AT } });
+    const section = await voiceSection();
+    expect(section).toHaveTextContent('2 people · 7 samples');
+
+    await user.click(within(section).getByRole('button', { name: 'Delete all voiceprints' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete all voiceprints?' });
+    expect(deletes).toBe(0);
+    await user.click(within(dialog).getByRole('button', { name: 'Delete all' }));
+
+    await waitFor(() => expect(deletes).toBe(1));
+    expect(await within(section).findByText(/Deleted 7 voiceprint samples and 1 pending suggestion/)).toBeInTheDocument();
+    await waitFor(() => expect(section).toHaveTextContent('0 people · 0 samples'));
+  });
+});

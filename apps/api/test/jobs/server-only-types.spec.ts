@@ -42,6 +42,10 @@ const MUST_BE_SERVER_ONLY = [
   'kg.migrate',
   'kg.library_reconcile',
   'kg.autocommit',
+  // on-device voiceprints: no key, but no node executor ships the model yet (#825)
+  'kg.voiceprint_enroll',
+  'kg.voice_match',
+  'kg.voiceprint_backfill',
   // transcription provider types carry the provider key
   'transcription.submit',
   'transcription.poll',

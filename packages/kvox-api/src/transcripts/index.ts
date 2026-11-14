@@ -48,6 +48,7 @@ export {
 } from './job-types.js';
 
 export { TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT, TranscriptSpeakersIdentifiedEvent } from './events/transcript-speakers-identified.event.js';
+export { TRANSCRIPT_READY_BUS_EVENT, TranscriptReadyBusEvent } from './events/transcript-ready.event.js';
 
 export { ApiDataResponse } from './api-data-response.js';
 export { TranscriptsService, encodeCursor } from './transcripts.service.js';

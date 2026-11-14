@@ -36,6 +36,7 @@ describe('resolveGraphPreferences', () => {
       domains: { core: true, work: true, personal: false },
       review: { minConfidence: 0.7, autoCommitSafeRows: true },
       self: { entityId: null },
+      voiceprints: { enabled: false, consentAt: null },
     });
   });
 

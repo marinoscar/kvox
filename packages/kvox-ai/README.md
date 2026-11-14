@@ -19,6 +19,7 @@ Entry points:
 - `@marinoscar/kvox-ai/copilot`: the GitHub Copilot provider adapter (`createCopilotAdapter`, `createSdkCopilotTransport`, `createCopilotMockTransport`), issue #581. Not re-exported by the root: it is the only entry that loads the optional peer `@github/copilot-sdk`. Slice README: [copilot](src/copilot/README.md).
 
 - `@marinoscar/kvox-ai/local-embeddings`: the on-device embedding model `KVOX_LOCAL_EMBEDDING` (download, embedder, runtime), issue #660. Not re-exported by the root: it is the only entry that loads the optional peers `onnxruntime-web` and `@huggingface/tokenizers`. Slice README: [local-embeddings](src/local-embeddings/README.md).
+- `@marinoscar/kvox-ai/voiceprints`: on-device speaker voiceprints (CAM++ model download, Kaldi fbank, embedder, worker-thread wrapper, suggestion policy), issue #823. Not re-exported by the root; loads only the optional peer `onnxruntime-web`. Slice README: [voiceprints](src/voiceprints/README.md).
 
 ## Install and peer dependencies
 
@@ -26,7 +27,7 @@ Entry points:
 npm install @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/platform-ai-providers@0.1.0-next.7 zod
 ```
 
-Every slice except `copilot` and `local-embeddings` is universal, so every peer in this table is required (the one optional peer, the Copilot SDK, is [below](#optional-the-github-copilot-adapter)):
+Every slice except `copilot`, `local-embeddings` and `voiceprints` is universal, so every peer in this table is required (the one optional peer, the Copilot SDK, is [below](#optional-the-github-copilot-adapter)):
 
 | Package | Range | Needed by |
 |---|---|---|
@@ -46,7 +47,7 @@ npm install @github/copilot-sdk
 
 ### Optional: local embeddings
 
-`onnxruntime-web` (`1.30.0`, exact) and `@huggingface/tokenizers` (`0.2.0`, exact) are OPTIONAL peers, needed only by `@marinoscar/kvox-ai/local-embeddings`, and only by `createLocalEmbedder`, which `require`s them lazily. Install them in the process that embeds (KVox Desktop's utility process).
+`onnxruntime-web` (`1.30.0`, exact) and `@huggingface/tokenizers` (`0.2.0`, exact) are OPTIONAL peers, needed only by `@marinoscar/kvox-ai/local-embeddings`, and only by `createLocalEmbedder`, which `require`s them lazily. Install them in the process that embeds (KVox Desktop's utility process). `@marinoscar/kvox-ai/voiceprints` needs only `onnxruntime-web`, likewise loaded lazily.
 
 The per-slice data is `packages/kvox-slice-peers.json`; `node scripts/kvox-packages/check-slice-peers.mjs --table` prints it.
 

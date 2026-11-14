@@ -71,6 +71,7 @@ describe('TranscriptionIngestHandler', () => {
     markFailed: jest.Mock;
     enqueueSnapshot: jest.Mock;
     enqueueSearchIndex: jest.Mock;
+    announceReady: jest.Mock;
     notifyReady: jest.Mock;
   };
   let runtime: { resolve: jest.Mock };
@@ -122,6 +123,8 @@ describe('TranscriptionIngestHandler', () => {
       enqueueSnapshot: jest.fn().mockResolvedValue(false),
       // #188: the first of the four content events that index a transcript.
       enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
+      // #825: ids-only `transcript.ready`, announced after the search-index enqueue.
+      announceReady: jest.fn(),
       notifyReady: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -295,6 +298,23 @@ describe('TranscriptionIngestHandler', () => {
         expect.objectContaining({ id: TRANSCRIPT_ID, ownerId: 'user-1' }),
         'Fake Provider',
       );
+    });
+
+    it('announces the transcript ready (ids only) after the search index was queued (#825)', async () => {
+      await handler.process(job());
+
+      expect(pipeline.announceReady).toHaveBeenCalledTimes(1);
+      expect(pipeline.announceReady).toHaveBeenCalledWith(TRANSCRIPT_ID, 'user-1');
+      expect(pipeline.enqueueSearchIndex.mock.invocationCallOrder[0]).toBeLessThan(
+        pipeline.announceReady.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('does not announce a transcript whose ingest transaction failed (#825)', async () => {
+      prisma.$transaction.mockRejectedValue(new Error('commit failed'));
+
+      await expect(handler.process(job())).rejects.toThrow('commit failed');
+      expect(pipeline.announceReady).not.toHaveBeenCalled();
     });
 
     it('asks for a snapshot, which is a no-op until #27 registers the handler', async () => {

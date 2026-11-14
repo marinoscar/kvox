@@ -126,6 +126,11 @@
       "installedDir": "20261107120000_add_kg_evidence_source_text",
       "originId": "kvox:20261107120000_add_kg_evidence_source_text",
       "sha256": "f7743ab58eabc1a4a536912ede5948e09b636eed3c7194a23f11c16a165a6b17"
+    },
+    {
+      "installedDir": "20261114182148_add_kg_voiceprints",
+      "originId": "kvox:20261114182148_add_kg_voiceprints",
+      "sha256": "7ad400d93cb1c19329706c70117d46f69424c63cdebe6d059eab32a8a7558846"
     }
   ]
 }

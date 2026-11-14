@@ -53,6 +53,10 @@
       "table": "kg_relations"
     },
     {
+      "name": "kg_speaker_suggestions_status_chk",
+      "table": "kg_speaker_suggestions"
+    },
+    {
       "name": "kg_synonyms_cardinality_chk",
       "table": "kg_synonyms"
     },

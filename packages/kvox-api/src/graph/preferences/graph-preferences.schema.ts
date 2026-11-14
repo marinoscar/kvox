@@ -170,6 +170,17 @@ const graphLensSchema = z
   })
   .strict();
 
+/**
+ * Speaker voiceprints (#825): OFF unless `enabled === true`. A voiceprint is biometric data about
+ * the people in a user's recordings, so it is an explicit opt-in; `consentAt` records when.
+ */
+const graphVoiceprintsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    consentAt: z.iso.datetime().optional(),
+  })
+  .strict();
+
 const graphLensesSchema = z.array(graphLensSchema).max(GRAPH_LENSES_MAX);
 
 const graphExplorerSchema = z.object({ lenses: graphLensesSchema.optional() }).strict();
@@ -205,6 +216,10 @@ export const graphPreferencesSchema = z
      * Who the account owner is in the graph (#778).
      */
     self: graphSelfSchema.optional(),
+    /**
+     * Speaker voiceprints: learn named people's voices and suggest names (#825). Off by default.
+     */
+    voiceprints: graphVoiceprintsSchema.optional(),
   })
   .strict();
 
@@ -268,6 +283,11 @@ export const graphPreferencesPatchSchema = z
       .optional(),
     self: z
       .object({ entityId: z.uuid().nullable().optional() })
+      .strict()
+      .nullable()
+      .optional(),
+    voiceprints: z
+      .object({ enabled: z.boolean().nullable().optional(), consentAt: z.iso.datetime().nullable().optional() })
       .strict()
       .nullable()
       .optional(),

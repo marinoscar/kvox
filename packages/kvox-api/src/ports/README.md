@@ -78,6 +78,7 @@ Every token and its port interface are `@extensionPoint`s: a host implements the
 | `KVOX_IDENTITY` | `KvoxIdentityPort` | `identity/platform-kvox-identity.adapter.ts` over `JwtAuthGuard` | one local user |
 | `KVOX_NOTIFY` | `KvoxNotifyPort` | `notify/platform-kvox-notify.adapter.ts` over `NotificationsService` | operating-system notifications |
 | `KVOX_EVENTS` | `KvoxEventsPort` | `events/platform-kvox-events.adapter.ts` over the host core `EVENT_BUS` | `KvoxEventEmitterEvents` over `EventEmitter2` |
+| `KVOX_VOICEPRINTS` | `KvoxVoiceprintsPort` | `voiceprints/platform-kvox-voiceprints.adapter.ts` over `@marinoscar/kvox-ai/voiceprints` (model installed on first use inside a job; unbound means `NOOP_KVOX_VOICEPRINTS`) | the same package, on the device |
 | `KVOX_PRISMA` | `KvoxPrismaClientLike` | `useExisting: PrismaService` | the Desktop client on embedded PostgreSQL |
 | `KVOX_SETTINGS` | `KvoxSettingsPort` | `settings/platform-kvox-settings.adapter.ts` over the platform settings registries | a local JSON file or table |
 | `KVOX_SECRETS` | `KvoxSecretsPort` | `secrets/platform-kvox-secrets.adapter.ts` over `CredentialsService` | the operating-system keychain |

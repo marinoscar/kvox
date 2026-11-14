@@ -20,6 +20,7 @@ import { PlatformKvoxNotifyAdapter } from './notify/platform-kvox-notify.adapter
 import { PlatformKvoxObjectStoreAdapter } from './object-store/platform-kvox-object-store.adapter';
 import { PlatformKvoxSecretsAdapter } from './secrets/platform-kvox-secrets.adapter';
 import { PlatformKvoxSettingsAdapter } from './settings/platform-kvox-settings.adapter';
+import { PlatformKvoxVoiceprintsAdapter } from './voiceprints/platform-kvox-voiceprints.adapter';
 import { PlatformKvoxWebhooksAdapter } from './webhooks/platform-kvox-webhooks.adapter';
 import { webhooksModule } from '../platform/webhooks/webhooks.config';
 
@@ -46,6 +47,7 @@ import { webhooksModule } from '../platform/webhooks/webhooks.config';
 //   KVOX_SECRETS       -> secrets/   the platform encrypted `CredentialsService`
 //   KVOX_AUDIT         -> audit/     the platform `AUDIT_SINK`
 //   KVOX_WEBHOOKS      -> webhooks/  `WebhooksService.emit` (optional port; #795)
+//   KVOX_VOICEPRINTS   -> voiceprints/  `@marinoscar/kvox-ai/voiceprints` (optional port; #825)
 //
 // GLOBAL, because `KvoxPortsModule` is: a domain module imports nothing to inject a
 // port. Imported in `app.module.ts` before every domain module. A missing binding is a
@@ -87,6 +89,7 @@ export const platformKvoxPorts: KvoxPortBindings = {
   events: { useClass: PlatformKvoxEventsAdapter },
   audit: { useClass: PlatformKvoxAuditAdapter },
   webhooks: { useClass: PlatformKvoxWebhooksAdapter },
+  voiceprints: { useClass: PlatformKvoxVoiceprintsAdapter },
   imports: [PlatformKvoxDepsModule],
 };
 

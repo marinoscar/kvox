@@ -120,7 +120,7 @@ describe('user-data model hints', () => {
     expect(graphHints.map((entry) => entry.model).sort()).toEqual(
       [
         'KgAttributeDef', 'KgDistinctPair', 'KgEntity', 'KgEntityAlias', 'KgEntityDigest', 'KgEntityView',
-        'KgEvidence', 'KgExport', 'KgGraphLayout', 'KgItem', 'KgMention', 'KgMerge', 'KgProposal', 'KgRelation', 'KgSynonym',
+        'KgEvidence', 'KgExport', 'KgGraphLayout', 'KgItem', 'KgMention', 'KgMerge', 'KgPersonVoiceprint', 'KgProposal', 'KgRelation', 'KgSpeakerSuggestion', 'KgSynonym',
       ].sort(),
     );
     for (const entry of graphHints) {

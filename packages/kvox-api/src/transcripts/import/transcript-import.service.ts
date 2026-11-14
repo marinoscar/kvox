@@ -240,6 +240,7 @@ export class TranscriptImportService {
       this.pipeline.enqueueSnapshot(transcriptId, 1),
     );
     await this.pipeline.enqueueSearchIndex(transcriptId);
+    this.pipeline.announceReady(transcriptId, user.id);
 
     // The graph links named speakers to people on this event (`kg.speaker_link`);
     // a note's extraction then turns those people into ATTENDED relations.

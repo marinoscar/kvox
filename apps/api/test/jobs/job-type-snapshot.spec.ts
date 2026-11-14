@@ -80,6 +80,9 @@ const KVOX_JOB_TYPES = [
   'kg.topics_promote',
   'kg.library_reconcile',
   'kg.autocommit',
+  'kg.voiceprint_enroll',
+  'kg.voice_match',
+  'kg.voiceprint_backfill',
   // ask, search, user data
   'ask.respond',
   'search.index',

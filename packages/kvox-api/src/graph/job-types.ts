@@ -154,6 +154,27 @@ export const KG_LIBRARY_RECONCILE_JOB_TYPE = 'kg.library_reconcile';
  */
 export const KG_AUTOCOMMIT_JOB_TYPE = 'kg.autocommit';
 
+// #825 (epic #820) — on-device speaker voiceprints. NOT AI jobs: no provider key, no network
+// after the one-time model download. Subject: the transcript.
+/**
+ * The kg voiceprint enroll job type: learns what a just-named person sounds like.
+ *
+ * @stability experimental
+ */
+export const KG_VOICEPRINT_ENROLL_JOB_TYPE = 'kg.voiceprint_enroll';
+/**
+ * The kg voice match job type: suggests names for a new transcript's unnamed speakers.
+ *
+ * @stability experimental
+ */
+export const KG_VOICE_MATCH_JOB_TYPE = 'kg.voice_match';
+/**
+ * The kg voiceprint backfill job type: on opt-in, queues `kg.voiceprint_enroll` for speakers the user already linked to Persons. Subject: the user.
+ *
+ * @stability experimental
+ */
+export const KG_VOICEPRINT_BACKFILL_JOB_TYPE = 'kg.voiceprint_backfill';
+
 /** `storage_objects.managed_by` for every file the graph module writes (#386). */
 /**
  * GRAPH_MANAGED_BY.

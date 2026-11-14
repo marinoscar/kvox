@@ -20,7 +20,10 @@ import {
   KVOX_PRISMA,
   KVOX_SECRETS,
   KVOX_SETTINGS,
+  KVOX_VOICEPRINTS,
   KVOX_WEBHOOKS,
+  NOOP_KVOX_VOICEPRINTS,
+  type KvoxVoiceprintsPort,
   type KvoxAiPort,
   type KvoxAuditPort,
   type KvoxWebhooksPort,
@@ -124,6 +127,8 @@ export interface KvoxPortBindings {
   audit?: KvoxPortBinding<KvoxAuditPort>;
   /** The webhook port, bound to `KVOX_WEBHOOKS`. Optional; defaults to a no-op (Desktop binds none). */
   webhooks?: KvoxPortBinding<KvoxWebhooksPort>;
+  /** The voiceprint port, bound to `KVOX_VOICEPRINTS`. Optional; defaults to unavailable (the voiceprint jobs do nothing). */
+  voiceprints?: KvoxPortBinding<KvoxVoiceprintsPort>;
   /** Modules the bindings' providers need (a binding by `useClass` resolves its dependencies from them). */
   imports?: ModuleMetadata['imports'];
 }
@@ -165,7 +170,7 @@ export const NOOP_KVOX_WEBHOOKS: KvoxWebhooksPort = Object.freeze({
   },
 });
 
-type RequiredPort = Exclude<keyof KvoxPortBindings, 'events' | 'audit' | 'webhooks' | 'imports'>;
+type RequiredPort = Exclude<keyof KvoxPortBindings, 'events' | 'audit' | 'webhooks' | 'voiceprints' | 'imports'>;
 
 /** Required ports in the order they are reported, with their tokens. */
 const REQUIRED: ReadonlyArray<readonly [RequiredPort, symbol, string]> = [
@@ -270,6 +275,9 @@ export class KvoxPortsModule {
       isBinding(bindings.webhooks)
         ? provider(KVOX_WEBHOOKS, bindings.webhooks as KvoxPortBinding<unknown>)
         : { provide: KVOX_WEBHOOKS, useValue: NOOP_KVOX_WEBHOOKS },
+      isBinding(bindings.voiceprints)
+        ? provider(KVOX_VOICEPRINTS, bindings.voiceprints as KvoxPortBinding<unknown>)
+        : { provide: KVOX_VOICEPRINTS, useValue: NOOP_KVOX_VOICEPRINTS },
       { provide: KVOX_BRAND, useValue: options.brand ?? DEFAULT_KVOX_BRAND },
       KvoxTimeZoneService,
     );
@@ -279,7 +287,7 @@ export class KvoxPortsModule {
       global: true,
       imports: bindings.imports ?? [],
       providers,
-      exports: [...REQUIRED.map(([, token]) => token), KVOX_EVENTS, KVOX_AUDIT, KVOX_WEBHOOKS, KVOX_BRAND, KvoxTimeZoneService],
+      exports: [...REQUIRED.map(([, token]) => token), KVOX_EVENTS, KVOX_AUDIT, KVOX_WEBHOOKS, KVOX_VOICEPRINTS, KVOX_BRAND, KvoxTimeZoneService],
     };
   }
 }

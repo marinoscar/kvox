@@ -9,3 +9,4 @@ export * from './settings.port.js';
 export * from './secrets.port.js';
 export * from './audit.port.js';
 export * from './webhooks.port.js';
+export * from './voiceprints.port.js';

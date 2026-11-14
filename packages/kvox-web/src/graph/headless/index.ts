@@ -5,6 +5,7 @@
 // The API client. Each call takes the `KvoxWebHost` first.
 export * from './clients/graph.js';
 export * from './clients/reviewQueue.js';
+export * from './clients/voiceprints.js';
 
 // The hooks.
 export * from './hooks/graphHookUtils.js';
@@ -34,6 +35,9 @@ export * from './hooks/useReviewQueue.js';
 export * from './hooks/useGraphTimeline.js';
 export * from './hooks/useGraphTranscriptPeople.js';
 export * from './hooks/useTopicsPromote.js';
+export * from './hooks/useSpeakerSuggestions.js';
+export * from './hooks/useEntityVoiceprint.js';
+export * from './hooks/useVoiceprintSettings.js';
 export * from './utils/selection.js';
 
 // Pure helpers.

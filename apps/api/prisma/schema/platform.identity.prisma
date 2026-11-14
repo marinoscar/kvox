@@ -155,6 +155,10 @@ model User {
   // reproducible artefact with its own 7-day expiry, like `note_exports`.
   kgExports       KgExport[]
 
+  // #821 — voiceprints (biometric) and speaker suggestions. CASCADE with the user.
+  kgPersonVoiceprints  KgPersonVoiceprint[]
+  kgSpeakerSuggestions KgSpeakerSuggestion[]
+
   // composed from app:kvox.notes.prisma
   // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
   // Notes (issue #48, epic #45). Four relations to the note tables, split by

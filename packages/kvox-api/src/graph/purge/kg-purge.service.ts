@@ -40,6 +40,12 @@
 // ⚠ AN EXPLICIT PLAN, NOT FK CASCADES
 // -----------------------------------------------------------------------------
 //
+// The same goes for `kg_person_voiceprints` (biometric voiceprints) and
+// `kg_speaker_suggestions` (#828): both cascade from `kg_entities`, but the
+// `voiceprints` step deletes them explicitly, in batches, BEFORE `entities`, so
+// the counts reach the audit row. Only ids are selected: the `embedding` vector
+// is never read, returned, counted from or logged.
+//
 // `kg_evidence` is polymorphic with NO foreign key to its subject, and a draft
 // proposal holds entity ids inside JSON. Deleting `kg_entities` and trusting
 // `ON DELETE CASCADE` would leave both behind: citations (with their quotes —
@@ -111,6 +117,9 @@ export const KG_PURGE_PERSON_PLAN = [
   'relations',
   'entityRows',
   'draftProposalItems',
+  // #828 — the person set's biometric voiceprints and speaker suggestions,
+  // named here (and audited by count) rather than left to the FK cascade.
+  'voiceprints',
   'entities',
   // #386 — every export file of the owner's graph: each may name this person.
   'exports',
@@ -130,6 +139,9 @@ export const KG_PURGE_ALL_PLAN = [
   'items',
   'relations',
   'aliases',
+  // #828 — every voiceprint and speaker suggestion the owner has, before the
+  // entities they hang from.
+  'voiceprints',
   'entities',
   'evidence',
   'attributeDefs',
@@ -163,6 +175,10 @@ export interface KgPurgeCounts {
   graphLayouts: number;
   exports: number;
   imports: number;
+  /** `kg_person_voiceprints` rows (biometric; counted, never read back). */
+  voiceprints: number;
+  /** `kg_speaker_suggestions` rows. */
+  speakerSuggestions: number;
 }
 
 /** What `purgePerson` reports: the counts, and the set of ids it forgot. */
@@ -190,6 +206,8 @@ export function emptyKgPurgeCounts(): KgPurgeCounts {
     graphLayouts: 0,
     exports: 0,
     imports: 0,
+    voiceprints: 0,
+    speakerSuggestions: 0,
   };
 }
 
@@ -332,6 +350,9 @@ export class KgPurgeService {
         });
         await this.stripDistinctFrom(userId, set);
         return;
+
+      case 'voiceprints':
+        return this.purgeVoiceprints(userId, { entityIds: set }, counts);
 
       case 'entities':
         for (const ids of chunk(set)) {
@@ -505,6 +526,9 @@ export class KgPurgeService {
           counts.aliases += (await tx.kgEntityAlias.deleteMany({ where: { id: { in: ids } } })).count;
         });
 
+      case 'voiceprints':
+        return this.purgeVoiceprints(userId, null, counts);
+
       case 'entities':
         return this.drain(step, () => this.prisma.kgEntity.findMany({ where: owned, ...byId }), (tx, ids) =>
           this.deleteEntities(tx, userId, ids, counts),
@@ -537,6 +561,56 @@ export class KgPurgeService {
       case 'imports':
         return this.purgeImports(userId, counts);
     }
+  }
+
+  /**
+   * The owner's `kg_person_voiceprints` and `kg_speaker_suggestions` rows (#828):
+   * those of `scope.entityIds` for a person purge, all of them for `null`.
+   * Both tables are raw SQL here (the vector column is `Unsupported`); only ids
+   * are selected, never the embedding. Re-entrant like every step.
+   */
+  private async purgeVoiceprints(
+    userId: string,
+    scope: { entityIds: string[] } | null,
+    counts: KgPurgeCounts,
+  ): Promise<void> {
+    const ids = scope?.entityIds ?? null;
+
+    await this.drain(
+      'voiceprints',
+      () =>
+        ids
+          ? this.prisma.$queryRaw<Array<{ id: string }>>`
+              SELECT id::text AS id FROM kg_person_voiceprints
+               WHERE owner_id = ${userId}::uuid AND entity_id = ANY(${ids}::uuid[])
+               LIMIT ${KG_PURGE_BATCH}`
+          : this.prisma.$queryRaw<Array<{ id: string }>>`
+              SELECT id::text AS id FROM kg_person_voiceprints
+               WHERE owner_id = ${userId}::uuid
+               LIMIT ${KG_PURGE_BATCH}`,
+      async (tx, batch) => {
+        counts.voiceprints += await tx.$executeRaw`
+          DELETE FROM kg_person_voiceprints WHERE id = ANY(${batch}::uuid[])`;
+      },
+    );
+
+    await this.drain(
+      'speakerSuggestions',
+      () =>
+        ids
+          ? this.prisma.$queryRaw<Array<{ id: string }>>`
+              SELECT id::text AS id FROM kg_speaker_suggestions
+               WHERE owner_id = ${userId}::uuid AND entity_id = ANY(${ids}::uuid[])
+               LIMIT ${KG_PURGE_BATCH}`
+          : this.prisma.$queryRaw<Array<{ id: string }>>`
+              SELECT id::text AS id FROM kg_speaker_suggestions
+               WHERE owner_id = ${userId}::uuid
+               LIMIT ${KG_PURGE_BATCH}`,
+      async (tx, batch) => {
+        counts.speakerSuggestions += await tx.$executeRaw`
+          DELETE FROM kg_speaker_suggestions WHERE id = ANY(${batch}::uuid[])`;
+      },
+    );
   }
 
   /**

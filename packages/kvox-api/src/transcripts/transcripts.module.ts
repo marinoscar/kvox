@@ -183,7 +183,10 @@ export class TranscriptsModule {
       ...exporters,
     ];
 
-    if (transcode) providers.push(FfmpegService, MediaAudioTranscodeHandler);
+    // `FfmpegService` is always provided (and exported): the graph's voiceprint jobs decode audio
+    // with it (#825) even when the playback transcode is off. The transcode handler stays gated.
+    providers.push(FfmpegService);
+    if (transcode) providers.push(MediaAudioTranscodeHandler);
 
     if (options.schedules !== false) {
       const { TranscriptsHousekeepingTask } =
@@ -220,6 +223,8 @@ export class TranscriptsModule {
         TranscriptImportService,
         // The notes slice (#495) asks which transcripts are shared with a user.
         TranscriptSharing,
+        // The graph's voiceprint jobs decode audio windows through it (#825).
+        FfmpegService,
       ],
     };
   }

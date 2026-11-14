@@ -129,6 +129,7 @@ What a host implements, binds or registers. The per-port table (web adapter path
 | `KVOX_AI`, `KvoxAiPort` | ports | Model calls: streamed text, structured output, tool-calling chat, embeddings, capabilities. |
 | `KVOX_OBJECT_STORE`, `KvoxObjectStorePort` | ports | Resumable upload, put, read, signed URL, delete, upload-completed hook. |
 | `KVOX_JOBS`, `KvoxJobsPort`, `KvoxJobHandler` | ports | Enqueue with dedup, handler registration; what a slice registers. |
+| `KVOX_VOICEPRINTS`, `KvoxVoiceprintsPort` | ports | Speaker voiceprints: embed, select windows, decide a suggestion; the default is unavailable. |
 | `KVOX_IDENTITY`, `KvoxIdentityPort` | ports | Authenticate a request into a normalised principal. |
 | `KVOX_NOTIFY`, `KvoxNotifyPort` | ports | Declare notification events and raise them, detached. |
 | `KVOX_EVENTS`, `KvoxEventsPort` | ports | In-process domain events (optional). |

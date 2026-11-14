@@ -94,6 +94,15 @@ export const graphHandlers = [
 
   http.get(`${API_BASE}/graph/entities/:id/brief`, () => HttpResponse.json({ data: briefFixture() })),
 
+  // #827: no voice learned, voice recognition off and no voice matches by default; a test overrides them.
+  http.get(`${API_BASE}/graph/entities/:id/voiceprint`, () =>
+    HttpResponse.json({ data: { enrolled: false, samples: 0, speechMs: 0, lastUpdatedAt: null, modelId: null } }),
+  ),
+  http.get(`${API_BASE}/graph/voiceprints/summary`, () =>
+    HttpResponse.json({ data: { enabled: false, consentAt: null, people: 0, samples: 0 } }),
+  ),
+  http.get(`${API_BASE}/graph/speaker-suggestions`, () => HttpResponse.json({ data: [] })),
+
   // #765: nothing merged into any entity by default; a test overrides it.
   http.get(`${API_BASE}/graph/entities/:id/merges`, () => HttpResponse.json({ data: { merges: [] } })),
   // #766: no possible duplicates by default; the duplicates suite overrides it.

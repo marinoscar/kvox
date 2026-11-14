@@ -2321,6 +2321,7 @@ Forty-two type strings are pinned. A type string is permanent once rows exist.
 | `note.library.import` | notes | One job per library import item; server-only (writes the note, version, item and file row together) |
 | `notes.housekeeping` | notes | Enqueued by a cron; `orgId` null |
 | `kg.purge`, `kg.resolve`, `kg.embed`, `kg.speaker_link`, `kg.export`, `kg.import`, `kg.graph_layout`, `kg.migrate`, `kg.topics_promote`, `kg.library_reconcile`, `kg.autocommit` | graph | Server-only. `kg.graph_layout` computes clusters, positions and the insight connectors; `kg.topics_promote` turns past meeting topics into draft Topic proposals; `kg.library_reconcile` only enqueues `kg.extract` for library notes the graph has not read; `kg.autocommit` commits the safe rows of a draft for a library that opted in |
+| `kg.voiceprint_enroll`, `kg.voice_match`, `kg.voiceprint_backfill` | graph | Server-only, **not** AI jobs (no key; the CAM++ model runs on the server). Biometric speaker voiceprints ([ontology §8.1](ontology.md#81-voiceprint-suggestions-epic-821-calibration-822)); no node ships the model, so none declares `nodeResultSchema` or `persistNodeResult` (a node executor is a follow-up). `kg.voiceprint_backfill` only enqueues |
 | `kg.extract`, `kg.entity_digest` | graph | AI jobs, the requesting user's own key; server-only |
 | `ask.respond` | ask | AI job; server-only |
 | `search.index` | search | Server-only |
