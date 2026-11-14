@@ -64,7 +64,8 @@
     "routing": [],
     "download": [],
     "copilot": ["download"],
-    "local-embeddings": ["download", "embedding", "runtime"]
+    "local-embeddings": ["download", "embedding", "runtime"],
+    "voiceprints": ["download"]
   },
   "kvox-eval": {
     "ask": [],
