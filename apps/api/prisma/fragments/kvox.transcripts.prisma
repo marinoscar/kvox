@@ -280,6 +280,10 @@ model Transcript {
   kgEvidence KgEvidence[]
   kgMentions KgMention[]
 
+  // #821 — voiceprints sampled from, and speaker suggestions on, this recording. Cascade.
+  kgVoiceprints        KgPersonVoiceprint[]
+  kgSpeakerSuggestions KgSpeakerSuggestion[]
+
   // "This owner's transcripts, newest first" — the transcript list view.
   @@index([ownerId, updatedAt(sort: Desc)])
   // "This owner's transcripts by when they were recorded" (issue #352).
@@ -317,6 +321,10 @@ model TranscriptSpeaker {
   // comment above `KgRelation` for why this is a real FK to a speaker
   // rather than a polymorphic `from_kind`/`from_id` pair.
   kgRelationsAsSpeaker KgRelation[]
+
+  // #821 — voice samples taken from this speaker and suggestions for it. Cascade.
+  kgVoiceprints        KgPersonVoiceprint[]
+  kgSpeakerSuggestions KgSpeakerSuggestion[]
 
   @@map("transcript_speakers")
 }

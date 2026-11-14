@@ -380,6 +380,10 @@ model KgEntity {
   // conversation's side — forgetting or merging a person drops the scope
   // link, never the user's own conversation.
   askConversationsScoped  AskConversation[]
+  // #821 — voice samples of this Person and speaker suggestions pointing at them.
+  // Both Cascade: forgetting the Person deletes their biometric data.
+  voiceprints             KgPersonVoiceprint[]
+  speakerSuggestions      KgSpeakerSuggestion[]
 
   // "This owner's entities of type X, by review state" and "this owner's
   // entities, recently updated" — the two shapes an entity list/filter reads.
@@ -1084,4 +1088,66 @@ model KgGraphLayout {
 
   @@index([ownerId, computedAt(sort: Desc)])
   @@map("kg_graph_layouts")
+}
+
+// -----------------------------------------------------------------------------
+// Voiceprints and speaker suggestions (issue #821).
+// -----------------------------------------------------------------------------
+// BIOMETRIC DATA. A voiceprint is a speaker embedding taken from one diarized
+// speaker of one recording and attached to a Person. It is never exported,
+// never sent to an AI provider, and is deleted with the Person, the user, or
+// the source recording/speaker (every FK below is Cascade — minimisation:
+// the sample cannot outlive the audio it was taken from).
+// `embedding` uses the escaped-parentheses form (see `KgEntity.embedding`).
+// Both tables follow the section header's conventions (owner_id Cascade, no
+// org_id, no RLS).
+// -----------------------------------------------------------------------------
+model KgPersonVoiceprint {
+  id                String   @id @default(uuid()) @db.Uuid
+  ownerId           String   @map("owner_id") @db.Uuid
+  entityId          String   @map("entity_id") @db.Uuid
+  sourceTranscriptId String  @map("source_transcript_id") @db.Uuid
+  sourceSpeakerId   String   @map("source_speaker_id") @db.Uuid
+  // Written/read only via raw SQL, like the other vector columns.
+  embedding         Unsupported("vector\u0028512\u0029")
+  // e.g. `campplus-en-voxceleb-16k`.
+  modelId           String   @map("model_id")
+  speechMs          Int      @map("speech_ms")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  owner            User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  entity           KgEntity          @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  sourceTranscript Transcript        @relation(fields: [sourceTranscriptId], references: [id], onDelete: Cascade)
+  sourceSpeaker    TranscriptSpeaker @relation(fields: [sourceSpeakerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, entityId])
+  @@index([sourceSpeakerId])
+  // No HNSW: a per-user gallery is tens to hundreds of rows; an exact scan is fine.
+  @@map("kg_person_voiceprints")
+}
+
+// A pending/decided suggestion that a diarized speaker is a known Person.
+// HAND-WRITTEN in migration.sql only: `kg_speaker_suggestions_status_chk`.
+model KgSpeakerSuggestion {
+  id           String    @id @default(uuid()) @db.Uuid
+  ownerId      String    @map("owner_id") @db.Uuid
+  speakerId    String    @map("speaker_id") @db.Uuid
+  transcriptId String    @map("transcript_id") @db.Uuid
+  entityId     String    @map("entity_id") @db.Uuid
+  score        Float
+  margin       Float?
+  modelId      String    @map("model_id")
+  // pending | accepted | dismissed
+  status       String    @default("pending")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  decidedAt    DateTime? @map("decided_at") @db.Timestamptz
+
+  owner      User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  speaker    TranscriptSpeaker @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  transcript Transcript        @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  entity     KgEntity          @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([speakerId, entityId])
+  @@index([ownerId, transcriptId, status])
+  @@map("kg_speaker_suggestions")
 }

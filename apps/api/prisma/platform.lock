@@ -34,7 +34,8 @@
     "20261026184116_add_kg_synonyms",
     "20261027120000_note_library_auto_commit_inherit",
     "20261106120000_add_note_context_attachments",
-    "20261107120000_add_kg_evidence_source_text"
+    "20261107120000_add_kg_evidence_source_text",
+    "20261114182148_add_kg_voiceprints"
   ],
   "deviations": [
     {
