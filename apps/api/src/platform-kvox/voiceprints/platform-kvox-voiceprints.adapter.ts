@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { APP_SLUG } from '@app/shared';
 import type { KvoxVoiceprintsPort, KvoxVoiceWindow } from '@marinoscar/kvox-api/ports';
 import {
   VOICEPRINT_DIMENSIONS,
@@ -23,7 +24,7 @@ import {
 // call `available()`), which is where long work belongs; the embedder then runs in a
 // worker thread so the event loop is never blocked.
 //
-// Model folder: a `kvox-models` directory under the OS temp directory. No environment
+// Model folder: a `<app slug>-models` directory under the OS temp directory. No environment
 // variable (root rule); a container restart re-downloads the model once, and a deployment
 // that wants it persistent can mount a volume at that path.
 //
@@ -41,7 +42,7 @@ export class PlatformKvoxVoiceprintsAdapter implements KvoxVoiceprintsPort, OnAp
 
   readonly maxSamplesPerPerson = VOICEPRINT_MAX_SAMPLES_PER_PERSON;
 
-  private readonly directory = join(tmpdir(), 'kvox-models');
+  private readonly directory = join(tmpdir(), `${APP_SLUG}-models`);
 
   private embedder: VoiceprintEmbedder | null = null;
 

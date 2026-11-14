@@ -658,7 +658,7 @@ Three checks once the update is healthy, signed in as an administrator:
 Voice-based speaker suggestions ([ontology §8.1](../specs/ontology.md#81-voiceprint-suggestions-epic-821-calibration-822)) are off until a user opts in, and need no environment variable and no migration step beyond the usual `prisma:migrate` (`add_kg_voiceprints`). Three things for the operator:
 
 - **Egress for the model.** The first job that needs the speaker model (`kg.voiceprint_enroll`, `kg.voice_match`) downloads it once, about 30 MB, from a pinned GitHub release asset. The API container must reach `github.com` and `release-assets.githubusercontent.com` (the download is refused if a redirect leaves the allowed hosts, and refused if the SHA-256 does not match). With no egress the jobs fail and retry; nothing else is affected.
-- **The model is re-downloaded after a container restart** because it is stored under the container's temp directory (`<os tmpdir>/kvox-models`). Mount a volume there if the download on every recreate is a problem.
+- **The model is re-downloaded after a container restart** because it is stored under the container's temp directory (`<os tmpdir>/<app slug>-models`). Mount a volume there if the download on every recreate is a problem.
 - **ffmpeg** is required to decode the audio and is already in the API image. Resource cost while matching: about 4 s of CPU per minute of audio and about 330 MB of resident memory with the model loaded, in a worker thread.
 
 ### The generated infrastructure files (#483)

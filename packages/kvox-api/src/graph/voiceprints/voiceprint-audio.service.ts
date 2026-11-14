@@ -61,9 +61,8 @@ export class VoiceprintAudioService {
   /**
    * Computes the voiceprint of each given speaker of a transcript.
    *
-   * @param input.transcriptId - the transcript.
-   * @param input.ownerId - its owner (the transcript must belong to them).
-   * @param input.speakerIds - the speakers to embed.
+   * @param input - the request: `transcriptId` is the transcript, `ownerId` its owner (the
+   * transcript must belong to them) and `speakerIds` the speakers to embed.
    * @returns the speakers that had enough speech and embedded cleanly.
    */
   async computeSpeakerVoices(input: {

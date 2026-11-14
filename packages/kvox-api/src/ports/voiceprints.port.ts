@@ -22,7 +22,11 @@
  */
 export const KVOX_VOICEPRINTS = Symbol.for('@marinoscar/kvox/KVOX_VOICEPRINTS');
 
-/** A time window of a recording, in milliseconds. */
+/**
+ * A time window of a recording, in milliseconds.
+ *
+ * @stability experimental
+ */
 export interface KvoxVoiceWindow {
   /** Start, in milliseconds. */
   startMs: number;
@@ -30,7 +34,11 @@ export interface KvoxVoiceWindow {
   endMs: number;
 }
 
-/** One scored candidate for {@link KvoxVoiceprintsPort.decide}. */
+/**
+ * One scored candidate for {@link KvoxVoiceprintsPort.decide}.
+ *
+ * @stability experimental
+ */
 export interface KvoxVoiceCandidate {
   /** The person (entity) id. */
   entityId: string;
@@ -38,7 +46,11 @@ export interface KvoxVoiceCandidate {
   score: number;
 }
 
-/** A confident suggestion. */
+/**
+ * A confident suggestion.
+ *
+ * @stability experimental
+ */
 export interface KvoxVoiceDecision {
   /** The suggested person. */
   entityId: string;
@@ -73,7 +85,12 @@ export interface KvoxVoiceprintsPort {
    */
   embed(samples: Float32Array): Promise<Float32Array>;
   /** Picks which windows of a speaker's segments to decode, and how much speech they hold. */
-  selectWindows(segments: ReadonlyArray<KvoxVoiceWindow>): { windows: KvoxVoiceWindow[]; speechMs: number };
+  selectWindows(segments: ReadonlyArray<KvoxVoiceWindow>): {
+    /** The windows chosen for decoding. */
+    windows: KvoxVoiceWindow[];
+    /** The total speech, in milliseconds, those windows hold. */
+    speechMs: number;
+  };
   /** The best candidate when it is confident and clearly ahead, else `null`. */
   decide(candidates: ReadonlyArray<KvoxVoiceCandidate>): KvoxVoiceDecision | null;
 }

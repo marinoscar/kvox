@@ -3,7 +3,7 @@
  * epic #820).
  *
  * Enrolled: "Voice learned from N recordings · M min of speech · updated
- * <relative date>", and "Forget voice" (`graph:write`) behind a confirmation
+ * (relative date)", and "Forget voice" (`graph:write`) behind a confirmation
  * that says the samples are deleted and suggestions for this person stop.
  * Not enrolled: a muted "No voice learned yet" hint. A failed read is said in
  * the section alone; the page carries on.

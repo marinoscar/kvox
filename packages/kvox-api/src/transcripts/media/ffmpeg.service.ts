@@ -145,9 +145,9 @@ export class FfmpegService {
    * regenerated), so the result is the speech of one speaker concatenated. The input may be a
    * presigned URL; as everywhere here the argument vector never reaches an error message.
    *
-   * @param options.input - a local path or a signed URL.
-   * @param options.windows - `{ startMs, endMs }` windows, any order; empty returns an empty array.
-   * @param options.timeoutMs - a wall-clock bound on the one spawn.
+   * @param options - `input` is a local path or a signed URL, `windows` are `{ startMs, endMs }`
+   * windows in any order (empty returns an empty array) and `timeoutMs` is a wall-clock bound on
+   * the one spawn.
    * @returns samples in [-1, 1] at 16 kHz, at most the windows' total length plus a little slack.
    */
   async decodePcm16kMono(options: {

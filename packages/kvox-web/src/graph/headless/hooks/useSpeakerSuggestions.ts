@@ -49,7 +49,11 @@ export interface UseSpeakerSuggestionsResult {
   refresh: () => Promise<void>;
 }
 
-/** Shown when an accept lost the race to a rename. */
+/**
+ * Shown when an accept lost the race to a rename.
+ *
+ * @stability experimental
+ */
 export const SPEAKER_ALREADY_NAMED_MESSAGE = 'This speaker was named in the meantime.';
 
 function actionMessage(err: unknown, fallback: string): string {

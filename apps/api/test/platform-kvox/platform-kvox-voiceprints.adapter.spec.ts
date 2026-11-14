@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { Logger } from '@nestjs/common';
+import { APP_SLUG } from '@app/shared';
 
 const downloadVoiceprintModel = jest.fn();
 const voiceprintModelStatus = jest.fn();
@@ -32,7 +33,7 @@ import {
 
 import { PlatformKvoxVoiceprintsAdapter } from '../../src/platform-kvox/voiceprints/platform-kvox-voiceprints.adapter';
 
-const MODEL_DIR = join(tmpdir(), 'kvox-models');
+const MODEL_DIR = join(tmpdir(), `${APP_SLUG}-models`);
 
 function embedder() {
   return { embed: jest.fn().mockResolvedValue(new Float32Array([0.6, 0.8])), dispose: jest.fn().mockResolvedValue(undefined) };
