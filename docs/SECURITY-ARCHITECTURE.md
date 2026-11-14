@@ -2008,6 +2008,18 @@ Notable properties of this behaviour:
 
 `CredentialsService.describe(purpose, name)` and `.list(purpose)` — the presentation reads used to show what credentials exist — select only `{ purpose, name, hint, label, updatedByUserId, createdAt, updatedAt }` and never select the `secret` column at all. Consequently they work correctly with no encryption key configured, and would keep working even if the configured key could never decrypt a single row, because the ciphertext is never fetched. Only `getSecret(purpose, name)` — server-side only, never called from a controller — returns plaintext, and on a decrypt failure it throws rather than silently returning `null`, so a key change or corruption cannot silently disable a feature.
 
+### Biometric data (voiceprints)
+
+A speaker voiceprint (epic #821, [ontology §8.1](specs/ontology.md#81-voiceprint-suggestions-epic-821-calibration-822)) identifies a person by voice, so it is treated as biometric data.
+
+- **Opt-in with recorded consent.** Off by default; the `graph.voiceprints` user preference (`enabled`, `consentAt`) is turned on from a consent dialog and the server stamps the time. Every job re-checks it. Turning it off stops new work; stored voiceprints are removed only by an explicit delete.
+- **Owner-scoped, no sharing.** Rows carry `owner_id` and are read only with the owner's own session; there is no `*:read_any`. No access answers 404.
+- **Vectors only.** `kg_person_voiceprints` stores a 512-wide vector, the model id and the amount of speech, never audio. Audio is decoded in memory for the job and discarded.
+- **Never leaves the deployment.** The model runs on the server; no voiceprint, vector or audio goes to an AI provider, to Ask, to the RDF export or to the user-data export (excluded in `user-owned-models.ts`). Logs, spans, audit rows and errors carry ids, counts and reason codes, never a vector or a score table. API responses carry none either.
+- **Deletion paths.** Cascade with the Person (forget or merge-away), the recording or speaker, and the user; "Forget this voice" per Person; "Delete all voiceprints" (`DELETE /api/graph/voiceprints`); and a `voiceprints` step of `kg.purge`.
+- **Model supply chain.** One pinned release asset, SHA-256 verified in a staging directory before an atomic install; https only; an exact-host allowlist on the first URL and on every redirect hop (`github.com`, `release-assets.githubusercontent.com`, `objects.githubusercontent.com`); a byte cap; a failure installs nothing.
+- **A suggestion is advice, not identity.** Matching never names a speaker or writes to the graph; a person accepts or dismisses it.
+
 ---
 
 ## Conclusion
