@@ -1,8 +1,10 @@
+import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
 import { KVOX_JOBS, KVOX_NOTIFY, KVOX_PRISMA } from '../../src/ports/index.js';
 import { SearchIndexService } from '../../src/search/index.js';
 import { TranscriptionSettingsService } from '../../src/transcription/index.js';
+import { TRANSCRIPT_READY_BUS_EVENT, TranscriptReadyBusEvent } from '../../src/transcripts/events/transcript-ready.event.js';
 import {
   TRANSCODE_JOB_TYPE,
   TRANSCRIPT_SNAPSHOT_JOB_TYPE,
@@ -330,5 +332,45 @@ describe('readPollDelayMs', () => {
     ['an absent key', {}],
   ] as Array<[string, unknown]>)('is null for %s', (_label, value) => {
     expect(readPollDelayMs(value as never)).toBeNull();
+  });
+});
+
+describe('TranscriptPipelineService.announceReady (#825)', () => {
+  function build(events?: { emit: jest.Mock }) {
+    return new TranscriptPipelineService(
+      {} as never,
+      {} as never,
+      {} as never,
+      resolveTranscriptsOptions({}),
+      {} as never,
+      {} as never,
+      events as never,
+    );
+  }
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('emits transcript.ready with the ids and nothing else', () => {
+    const events = { emit: jest.fn() };
+    build(events).announceReady(TRANSCRIPT_ID, 'user-1');
+
+    expect(events.emit).toHaveBeenCalledTimes(1);
+    const [name, payload] = events.emit.mock.calls[0]!;
+    expect(name).toBe(TRANSCRIPT_READY_BUS_EVENT);
+    expect(name).toBe('transcript.ready');
+    expect(payload).toBeInstanceOf(TranscriptReadyBusEvent);
+    expect({ ...payload }).toEqual({ transcriptId: TRANSCRIPT_ID, ownerId: 'user-1' });
+  });
+
+  it('is a no-op when no events port is bound', () => {
+    expect(() => build(undefined).announceReady(TRANSCRIPT_ID, 'user-1')).not.toThrow();
+  });
+
+  it('is contained: a failing emit is logged with the transcript id and never thrown', () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const events = { emit: jest.fn().mockImplementation(() => { throw new Error('bus down'); }) };
+
+    expect(() => build(events).announceReady(TRANSCRIPT_ID, 'user-1')).not.toThrow();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(TRANSCRIPT_ID));
   });
 });

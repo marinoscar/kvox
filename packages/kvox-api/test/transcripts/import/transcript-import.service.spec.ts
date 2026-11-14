@@ -38,7 +38,11 @@ function build(options: Parameters<typeof createImportRecordingDb>[0] = {}) {
     emit: (name, payload) => void emitted.push({ name, payload }),
     subscribe: () => () => undefined,
   };
-  const pipeline = { enqueueSnapshot: jest.fn().mockResolvedValue(true), enqueueSearchIndex: jest.fn().mockResolvedValue(undefined) };
+  const pipeline = {
+    enqueueSnapshot: jest.fn().mockResolvedValue(true),
+    enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
+    announceReady: jest.fn(),
+  };
   const service = new TranscriptImportService(
     recording.db,
     events,
@@ -106,6 +110,11 @@ describe('TranscriptImportService', () => {
 
     expect(pipeline.enqueueSnapshot).toHaveBeenCalledWith(transcriptId, 1);
     expect(pipeline.enqueueSearchIndex).toHaveBeenCalledWith(transcriptId);
+    // #825: the import announces the transcript ready (ids only), after the index enqueue.
+    expect(pipeline.announceReady).toHaveBeenCalledWith(transcriptId, USER.id);
+    expect(pipeline.enqueueSearchIndex.mock.invocationCallOrder[0]).toBeLessThan(
+      pipeline.announceReady.mock.invocationCallOrder[0]!,
+    );
     expect(emitted).toEqual([
       {
         name: TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
