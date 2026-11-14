@@ -105,6 +105,8 @@ export interface SpeakerLinkSummary {
   unlinked: number;
   /** Persons this run created — the handler enqueues `kg.embed` for them. */
   createdPersonIds: string[];
+  /** The (speaker, Person) pairs linked in this run: `kg.voiceprint_enroll` learns each voice (#825). */
+  links: Array<{ speakerId: string; entityId: string }>;
   /**
    * The audit events of this run, for the caller to record once the transaction has committed
    * (the audit port is not part of the caller's transaction, and an event for a rolled-back link
@@ -189,7 +191,7 @@ export function effectiveSpeakerNames(
 }
 
 function emptySummary(skipped: SpeakerLinkSkip | null, ownerId: string | null): SpeakerLinkSummary {
-  return { skipped, ownerId, linked: 0, created: 0, unlinked: 0, createdPersonIds: [], audit: [] };
+  return { skipped, ownerId, linked: 0, created: 0, unlinked: 0, createdPersonIds: [], links: [], audit: [] };
 }
 
 @Injectable()
@@ -335,6 +337,7 @@ export class SpeakerLinkReconciler {
         schema,
       );
       summary.linked += 1;
+      summary.links.push({ speakerId, entityId: personId });
 
       // 7. Audit — ids only, never the name.
       this.audit(summary, ownerId, SPEAKER_LINKED_ACTION, transcriptId, {

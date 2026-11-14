@@ -153,6 +153,24 @@ export function mergeGraphPreferences(
     else merged.self = { entityId: patch.self.entityId };
   }
 
+  // `voiceprints` (#825): stored only once chosen. Turning it on stamps the consent time when the
+  // patch gives none; turning it off (or `null`) clears the whole sub-object, consent included.
+  if (patch.voiceprints === null) {
+    delete merged.voiceprints;
+  } else if (patch.voiceprints !== undefined) {
+    const base = merged.voiceprints ?? {};
+    const enabled = patch.voiceprints.enabled === undefined ? base.enabled : (patch.voiceprints.enabled ?? undefined);
+    if (enabled !== true) {
+      delete merged.voiceprints;
+    } else {
+      const consentAt =
+        patch.voiceprints.consentAt === undefined
+          ? (base.consentAt ?? new Date().toISOString())
+          : (patch.voiceprints.consentAt ?? new Date().toISOString());
+      merged.voiceprints = { enabled: true, consentAt };
+    }
+  }
+
   // `explorer.lenses` (GIC-17): the whole list is replaced; `null` deletes it (and the empty object).
   if (patch.explorer === null) {
     delete merged.explorer;

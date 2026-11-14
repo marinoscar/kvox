@@ -21,20 +21,29 @@
 // ⚠ Logs carry ids and counts only, never a name.
 // =============================================================================
 
-import { Injectable, Logger, OnModuleInit, Inject } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Inject, Optional } from '@nestjs/common';
 import { z } from 'zod';
 
-import { KG_EMBED_JOB_TYPE, KG_SPEAKER_LINK_JOB_TYPE, KG_SUBJECT_USER } from '../job-types.js';
+import {
+  KG_EMBED_JOB_TYPE,
+  KG_SPEAKER_LINK_JOB_TYPE,
+  KG_SUBJECT_TRANSCRIPT,
+  KG_SUBJECT_USER,
+  KG_VOICEPRINT_ENROLL_JOB_TYPE,
+} from '../job-types.js';
+import { GraphPreferencesService } from '../preferences/graph-preferences.service.js';
 import { SpeakerLinkReconciler, type SpeakerLinkInput } from '../speaker-link/speaker-link.reconciler.js';
 import {
   KVOX_AUDIT,
   KVOX_JOBS,
   KVOX_PRISMA,
+  KVOX_VOICEPRINTS,
   type KvoxAuditPort,
   type KvoxJob,
   type KvoxJobHandler,
   type KvoxJobProfile,
   type KvoxJobsPort,
+  type KvoxVoiceprintsPort,
 } from '../../ports/index.js';
 import type { KvoxGraphDb } from '../data/graph-db.js';
 
@@ -64,6 +73,8 @@ export class KgSpeakerLinkHandler implements KvoxJobHandler, OnModuleInit {
     @Inject(KVOX_PRISMA) private readonly prisma: KvoxGraphDb,
     private readonly reconciler: SpeakerLinkReconciler,
     @Inject(KVOX_AUDIT) private readonly auditPort: KvoxAuditPort,
+    @Optional() private readonly preferences?: GraphPreferencesService,
+    @Optional() @Inject(KVOX_VOICEPRINTS) private readonly voiceprints?: KvoxVoiceprintsPort,
   ) {}
 
   onModuleInit(): void {
@@ -107,6 +118,40 @@ export class KgSpeakerLinkHandler implements KvoxJobHandler, OnModuleInit {
 
     if (summary.ownerId && summary.createdPersonIds.length > 0) {
       await this.enqueueEmbed(summary.ownerId, summary.createdPersonIds);
+    }
+
+    if (summary.ownerId && (summary.links?.length ?? 0) > 0) {
+      await this.enqueueVoiceprintEnroll(summary.ownerId, input.transcriptId, summary.links);
+    }
+  }
+
+  /**
+   * `kg.voiceprint_enroll` for the (speaker, Person) pairs this run linked (#825), only when the
+   * owner opted in to voiceprints, the port can run and the handler is registered. Post-commit
+   * and contained, like the embed follow-up.
+   */
+  private async enqueueVoiceprintEnroll(
+    ownerId: string,
+    transcriptId: string,
+    links: Array<{ speakerId: string; entityId: string }>,
+  ): Promise<void> {
+    try {
+      if (!this.jobs.isRegistered(KG_VOICEPRINT_ENROLL_JOB_TYPE)) return;
+      if (!this.preferences || !this.voiceprints || this.voiceprints.dimensions === 0) return;
+      if (!(await this.preferences.voiceprintsEnabled(ownerId))) return;
+      await this.jobs.enqueue({
+        type: KG_VOICEPRINT_ENROLL_JOB_TYPE,
+        reason: 'rerun',
+        subjectType: KG_SUBJECT_TRANSCRIPT,
+        subjectId: transcriptId,
+        skipDedup: true,
+        payload: { transcriptId, links: links.slice(0, 50) },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `${KG_SPEAKER_LINK_JOB_TYPE}: ${KG_VOICEPRINT_ENROLL_JOB_TYPE} enqueue failed: ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 

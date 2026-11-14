@@ -65,5 +65,7 @@ export function graphUserDataModels(): Array<UserDataModelHint<Prisma.ModelName>
     graphModel('KgExport'),
     graphModel('KgGraphLayout'),
     graphModel('KgEntityView'),
+    graphModel('KgPersonVoiceprint'),
+    graphModel('KgSpeakerSuggestion'),
   ];
 }

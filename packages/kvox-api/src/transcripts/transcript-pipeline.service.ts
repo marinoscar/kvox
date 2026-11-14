@@ -27,15 +27,18 @@
 // things the queue can retry. This is state and scheduling only.
 // =============================================================================
 
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
 import {
+  KVOX_EVENTS,
   KVOX_JOBS,
   KVOX_NOTIFY,
   KVOX_PRISMA,
+  type KvoxEventsPort,
   type KvoxJobsPort,
   type KvoxNotifyPort,
 } from '../ports/index.js';
+import { TRANSCRIPT_READY_BUS_EVENT, TranscriptReadyBusEvent } from './events/transcript-ready.event.js';
 import type { KvoxTranscriptsDb, TranscriptRow, TranscriptionStatusValue } from './data/transcripts-db.js';
 import {
   TRANSCRIPT_FAILED_EVENT,
@@ -117,6 +120,7 @@ export class TranscriptPipelineService {
     @Inject(TRANSCRIPTS_MODULE_OPTIONS) private readonly options: ResolvedTranscriptsOptions,
     private readonly transcriptionSettings: TranscriptionSettingsService,
     private readonly searchIndex: SearchIndexService,
+    @Optional() @Inject(KVOX_EVENTS) private readonly events?: KvoxEventsPort,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -409,6 +413,21 @@ export class TranscriptPipelineService {
     } catch (error) {
       this.logger.error(
         `Could not queue a semantic re-index of transcript ${transcriptId}: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Tell listeners a transcript has just become readable (`transcript.ready`, ids only). Call it
+   * after the commit that made it ready. Contained: a failure is logged, never thrown.
+   */
+  announceReady(transcriptId: string, ownerId: string): void {
+    try {
+      this.events?.emit(TRANSCRIPT_READY_BUS_EVENT, new TranscriptReadyBusEvent(transcriptId, ownerId));
+    } catch (error) {
+      this.logger.warn(
+        `Could not emit ${TRANSCRIPT_READY_BUS_EVENT} for transcript ${transcriptId}: ` +
           `${error instanceof Error ? error.message : String(error)}`,
       );
     }

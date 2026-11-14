@@ -344,6 +344,9 @@ export class TranscriptionIngestHandler implements KvoxJobHandler, OnModuleInit 
     // one of them.
     await this.pipeline.enqueueSearchIndex(transcript.id);
 
+    // #825: tell listeners (the graph's voice matcher) the transcript is readable. Ids only.
+    this.pipeline.announceReady(transcript.id, transcript.ownerId);
+
     const fresh = await this.prisma.transcript.findUnique({
       where: { id: transcript.id },
       select: {

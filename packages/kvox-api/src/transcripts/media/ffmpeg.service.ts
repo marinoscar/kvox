@@ -138,6 +138,84 @@ export class FfmpegService {
   }
 
   /**
+   * Decode the given time windows of an input into one 16 kHz mono float stream, for the
+   * speaker-voice embedder (#825).
+   *
+   * The windows are selected with `aselect` and joined back to back (timestamps are
+   * regenerated), so the result is the speech of one speaker concatenated. The input may be a
+   * presigned URL; as everywhere here the argument vector never reaches an error message.
+   *
+   * @param options.input - a local path or a signed URL.
+   * @param options.windows - `{ startMs, endMs }` windows, any order; empty returns an empty array.
+   * @param options.timeoutMs - a wall-clock bound on the one spawn.
+   * @returns samples in [-1, 1] at 16 kHz, at most the windows' total length plus a little slack.
+   */
+  async decodePcm16kMono(options: {
+    input: string;
+    windows: ReadonlyArray<{ startMs: number; endMs: number }>;
+    timeoutMs: number;
+  }): Promise<Float32Array> {
+    const windows = options.windows.filter((w) => Number.isFinite(w.startMs) && Number.isFinite(w.endMs) && w.endMs > w.startMs);
+    if (windows.length === 0) return new Float32Array(0);
+
+    const sec = (ms: number): string => (Math.max(0, ms) / 1000).toFixed(3);
+    // `\,` is the filtergraph escape of a comma inside one filter's argument.
+    const select = windows.map((w) => `between(t\\,${sec(w.startMs)}\\,${sec(w.endMs)})`).join('+');
+    const args = [
+      '-nostdin',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-i',
+      options.input,
+      '-vn',
+      '-map',
+      '0:a:0',
+      '-af',
+      `aselect=${select},asetpts=N/SR/TB`,
+      '-ac',
+      '1',
+      '-ar',
+      '16000',
+      '-f',
+      's16le',
+      'pipe:1',
+    ];
+
+    const totalMs = windows.reduce((sum, w) => sum + (w.endMs - w.startMs), 0);
+    // 16 000 samples/s at 2 bytes; slack of one second covers rounding at window edges.
+    const maxBytes = Math.ceil(((totalMs + 1000) / 1000) * 32_000);
+
+    const raw = await new Promise<Buffer>((resolve, reject) => {
+      execFile(
+        this.ffmpeg,
+        args,
+        { encoding: 'buffer', maxBuffer: maxBytes, timeout: options.timeoutMs > 0 ? options.timeoutMs : undefined },
+        (error, stdout, stderr) => {
+          if (error) {
+            const detail = Buffer.from(stderr ?? '').toString('utf8').trim().slice(-STDERR_LIMIT) || error.message;
+            const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
+            // Never `error.message` for a spawn failure with args: it can carry the signed URL.
+            reject(
+              new FfmpegError(
+                this.ffmpeg,
+                missing ? `"${this.ffmpeg}" is not installed on this machine` : `${this.ffmpeg} failed: ${detail.replace(/https?:\/\/\S+/g, '<url>')}`,
+              ),
+            );
+            return;
+          }
+          resolve(Buffer.from(stdout));
+        },
+      );
+    });
+
+    const count = Math.floor(raw.length / 2);
+    const out = new Float32Array(count);
+    for (let i = 0; i < count; i += 1) out[i] = raw.readInt16LE(i * 2) / 32768;
+    return out;
+  }
+
+  /**
    * One spawn, promisified by hand rather than through `promisify(execFile)`.
    *
    * `promisify` rejects with an `Error` whose `message` is the command line —

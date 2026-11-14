@@ -12,6 +12,10 @@ import { KVOX_SETTINGS, type KvoxSettingsPort } from '../ports/index.js';
 import { NotesModule } from '../notes/index.js';
 import { SearchModule } from '../search/index.js';
 import { TranscriptsModule } from '../transcripts/index.js';
+import { VoiceprintAudioService } from './voiceprints/voiceprint-audio.service.js';
+import { KgVoiceprintEnrollHandler } from './voiceprints/handlers/kg-voiceprint-enroll.handler.js';
+import { KgVoiceMatchHandler } from './voiceprints/handlers/kg-voice-match.handler.js';
+import { VoiceprintReadyListener } from './voiceprints/voiceprint-ready.listener.js';
 import { GraphAccessService } from './access/graph-access.service.js';
 import { GraphAttributeDefsController } from './attribute-defs/graph-attribute-defs.controller.js';
 import { GraphAttributeDefsService } from './attribute-defs/graph-attribute-defs.service.js';
@@ -191,6 +195,11 @@ export class GraphModule {
       SpeakerLinkReconciler,
       KgSpeakerLinkHandler,
       SpeakerIdentifiedListener,
+      // On-device speaker voiceprints (#825): learn a named person's voice, suggest names for new transcripts.
+      VoiceprintAudioService,
+      KgVoiceprintEnrollHandler,
+      KgVoiceMatchHandler,
+      VoiceprintReadyListener,
       // `kg.graph_layout`: the whole-graph overview snapshot, its three enqueue triggers
       // (refresh, bootstrap, material change) and the read (#371).
       GraphLayoutEnqueuer,
