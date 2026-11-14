@@ -74,6 +74,8 @@ export const KVOX_MODEL_OWNERSHIP: readonly Def[] = [
   user('KgEntityView', 'One user’s saved view of an entity.'),
   user('KgExport', 'An export of one user’s graph.'),
   user('KgGraphLayout', 'A computed layout of one user’s graph.'),
+  user('KgPersonVoiceprint', 'A voiceprint of a person in one user’s graph (opt-in biometric data).'),
+  user('KgSpeakerSuggestion', 'A suggestion of who a speaker is, for one user’s transcript.'),
 
   // Ask
   user('AskConversation', 'A conversation between one user and the graph agent.'),

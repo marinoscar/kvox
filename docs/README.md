@@ -44,6 +44,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Touch the transcript editor or correction model | [specs/transcription.md](specs/transcription.md) (§4), [specs/transcript-name-correction.md](specs/transcript-name-correction.md) |
 | Add a transcript or note export format | [specs/transcription.md](specs/transcription.md), [specs/notes.md](specs/notes.md), [specs/transcript-export.v1.schema.json](specs/transcript-export.v1.schema.json) |
 | Touch notes, templates or the AI layer | [specs/notes.md](specs/notes.md), [runbooks/ai-provider-keys.md](runbooks/ai-provider-keys.md), [runbooks/ai-platform-migration.md](runbooks/ai-platform-migration.md) |
+| Work on voice-based speaker name suggestions (voiceprints: jobs, consent, privacy, deletion) | [specs/ontology.md §8.1](specs/ontology.md#81-voiceprint-suggestions-epic-821-calibration-822), [../packages/kvox-ai/src/voiceprints/README.md](../packages/kvox-ai/src/voiceprints/README.md) |
 | Touch the knowledge graph or the Ask agent | [specs/ontology.md](specs/ontology.md), [runbooks/ontology-migration.md](runbooks/ontology-migration.md) |
 | Change search | [specs/search.md](specs/search.md) |
 | Change onboarding | [specs/onboarding.md](specs/onboarding.md) |

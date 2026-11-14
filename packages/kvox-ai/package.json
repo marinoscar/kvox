@@ -35,6 +35,10 @@
       "types": "./dist/local-embeddings/index.d.ts",
       "default": "./dist/local-embeddings/index.js"
     },
+    "./voiceprints": {
+      "types": "./dist/voiceprints/index.d.ts",
+      "default": "./dist/voiceprints/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

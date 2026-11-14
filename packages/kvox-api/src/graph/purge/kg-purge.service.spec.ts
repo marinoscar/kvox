@@ -174,7 +174,7 @@ describe('KgPurgeService.collectPersonSet — the merged-set closure', () => {
 
 describe('KgPurgeService.purgePerson', () => {
   it('declares its plan in the order the issue fixes', () => {
-    expect(KG_PURGE_PERSON_PLAN).toEqual(['items', 'relations', 'entityRows', 'draftProposalItems', 'entities', 'exports', 'imports']);
+    expect(KG_PURGE_PERSON_PLAN).toEqual(['items', 'relations', 'entityRows', 'draftProposalItems', 'voiceprints', 'entities', 'exports', 'imports']);
   });
 
   it('runs items → relations → rows about the entities → draft proposal items → entities, evidence with its subject', async () => {
@@ -228,6 +228,31 @@ describe('KgPurgeService.purgePerson', () => {
       .filter((c) => c.key === 'tx.kgEvidence.deleteMany')
       .map((c) => (c.args as { where: { subjectKind: string } }).where.subjectKind);
     expect(evidenceKinds).toEqual(['item', 'relation', 'proposal_item', 'entity']);
+  });
+
+  it('deletes the person set’s voiceprints and speaker suggestions explicitly, before the entities (#828)', async () => {
+    const { prisma, log, calls } = fakePrisma({
+      'kgEntity.findUnique': () => person,
+      'kgEntity.findMany': queue([[{ id: P_PRIME }], []]),
+      // 1st raw select: draft proposal items (none); then voiceprints, then suggestions
+      $queryRaw: queue([[], [{ id: 'vp-1' }, { id: 'vp-2' }], [], [{ id: 'sg-1' }]]),
+      '$executeRaw': queue([0, 2, 1]),
+    });
+
+    const result = await new KgPurgeService(prisma, fakeObjects()).purgePerson(USER, P);
+
+    expect(result?.counts.voiceprints).toBe(2);
+    expect(result?.counts.speakerSuggestions).toBe(1);
+
+    const deletes = log.filter((k) => k === 'tx.$executeRaw' || k === 'tx.kgEntity.deleteMany');
+    expect(deletes).toEqual(['tx.$executeRaw', 'tx.$executeRaw', 'tx.kgEntity.deleteMany']);
+
+    const selects = calls.filter((c) => c.key === '$queryRaw').map((c) => c.args as { sql: string; values: unknown[] });
+    const voiceprintSelect = selects.find((c) => c.sql.includes('kg_person_voiceprints'))!;
+    expect(voiceprintSelect.sql).toContain('entity_id = ANY');
+    expect(voiceprintSelect.sql).not.toContain('embedding');
+    expect(voiceprintSelect.values).toContainEqual([P, P_PRIME]);
+    expect(selects.find((c) => c.sql.includes('kg_speaker_suggestions'))!.values).toContainEqual([P, P_PRIME]);
   });
 
   it('selects items where the person is subject, owner or counterparty, and relations on either end', async () => {
@@ -326,6 +351,7 @@ describe('KgPurgeService.purgeAll', () => {
       'items',
       'relations',
       'aliases',
+      'voiceprints',
       'entities',
       'evidence',
       'attributeDefs',
@@ -333,6 +359,27 @@ describe('KgPurgeService.purgeAll', () => {
       'exports',
       'imports',
     ]);
+  });
+
+  it('deletes every voiceprint and speaker suggestion the owner has, before the entities (#828)', async () => {
+    const { prisma, log, calls } = fakePrisma({
+      $queryRaw: queue([[{ id: 'vp-1' }], [], [{ id: 'sg-1' }, { id: 'sg-2' }]]),
+      '$executeRaw': queue([1, 2]),
+      'kgEntity.findMany': queue([[{ id: P }]]),
+    });
+
+    const counts = await new KgPurgeService(prisma, fakeObjects()).purgeAll(USER);
+
+    expect(counts.voiceprints).toBe(1);
+    expect(counts.speakerSuggestions).toBe(2);
+    expect(log.indexOf('tx.$executeRaw')).toBeGreaterThan(-1);
+    expect(log.indexOf('tx.$executeRaw')).toBeLessThan(log.indexOf('tx.kgEntity.deleteMany'));
+
+    const selects = calls.filter((c) => c.key === '$queryRaw').map((c) => c.args as { sql: string; values: unknown[] });
+    expect(selects[0].sql).toContain('kg_person_voiceprints');
+    expect(selects[0].sql).not.toContain('entity_id');
+    expect(selects[0].sql).not.toContain('embedding');
+    expect(selects[0].values).toContain(USER);
   });
 
   it('deletes the owner’s uploaded import files after the exports (#387)', async () => {

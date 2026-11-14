@@ -86,6 +86,7 @@ describeWithDb('Transcript JSON import round trip (real Postgres)', () => {
   let importService: TranscriptImportService;
   let enqueueSnapshot: jest.Mock;
   let enqueueSearchIndex: jest.Mock;
+  let announceReady: jest.Mock;
   let emit: jest.Mock;
 
   let user: RequestUser;
@@ -151,6 +152,7 @@ describeWithDb('Transcript JSON import round trip (real Postgres)', () => {
 
     enqueueSnapshot = jest.fn().mockResolvedValue(true);
     enqueueSearchIndex = jest.fn().mockResolvedValue(undefined);
+    announceReady = jest.fn();
     emit = jest.fn();
 
     // The graph's speaker-link listener is not part of this module graph (it lives in the
@@ -161,7 +163,7 @@ describeWithDb('Transcript JSON import round trip (real Postgres)', () => {
       { emit, subscribe: jest.fn() },
       createDbAudit(prisma),
       objects,
-      { enqueueSnapshot, enqueueSearchIndex } as unknown as TranscriptPipelineService,
+      { enqueueSnapshot, enqueueSearchIndex, announceReady } as unknown as TranscriptPipelineService,
     );
 
     const account = await prisma.user.create({
@@ -203,6 +205,7 @@ describeWithDb('Transcript JSON import round trip (real Postgres)', () => {
     await cleanup();
     enqueueSnapshot.mockClear();
     enqueueSearchIndex.mockClear();
+    announceReady.mockClear();
     emit.mockClear();
   });
 
@@ -549,6 +552,7 @@ describeWithDb('Transcript JSON import round trip (real Postgres)', () => {
     // ---- what the import queued after the commit -----------------------------
     expect(enqueueSnapshot).toHaveBeenCalledWith(transcriptId, 1);
     expect(enqueueSearchIndex).toHaveBeenCalledWith(transcriptId);
+    expect(announceReady).toHaveBeenCalledWith(transcriptId, ownerId);
 
     // The graph's speaker link listens for this event; only the NAMED speakers are in it.
     expect(emit).toHaveBeenCalledTimes(1);

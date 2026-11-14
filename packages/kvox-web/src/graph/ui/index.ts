@@ -100,6 +100,7 @@ export {
   graphTranscriptPageSlots,
   graphTranscriptsLibrarySlots,
   useGraphSpeakerPeople,
+  useGraphSpeakerSuggestions,
 } from './slots/GraphTranscriptSlots.js';
 
 export {

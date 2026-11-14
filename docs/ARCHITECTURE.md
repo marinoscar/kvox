@@ -1121,6 +1121,18 @@ The domain tables below (transcripts, notes, search, the `kg_*` graph tables, As
   `stats` (counts only), a short `error_message`, `expires_at` = request + 7 days. `owner_id` Cascade;
   `object_id` **Restrict** into a graph-owned storage object (`kvox_object_ownership.managed_by = 'graph'`) (the sweep and `kg.purge` clear it
   first); `job_id` `@unique`/SetNull. No hand-written SQL.
+- `kg_person_voiceprints` - A voiceprint sample of a Person the owner named (epic #821, §8.1 of
+  `docs/specs/ontology.md`): `owner_id`, `entity_id` (the Person), `source_transcript_id` and
+  `source_speaker_id` (the speech it was taken from), `embedding vector(512)` (written and read by
+  raw SQL, no HNSW: a per-user gallery is small), `model_id` (vectors of different models are not
+  comparable), `speech_ms`. **Biometric**; every FK is **Cascade** so a sample cannot outlive the
+  Person, the recording, the speaker or the user. Registered in `user-owned-models.ts`: purged with
+  the user, **never exported**. Migration `add_kg_voiceprints`.
+- `kg_speaker_suggestions` - A pending or decided "this speaker is probably this Person" row from
+  `kg.voice_match`: `speaker_id`, `transcript_id`, `entity_id`, `score`, `margin`, `model_id`,
+  `status` (`pending | accepted | dismissed`, check constraint hand-written in the migration),
+  `decided_at`. `@@unique([speakerId, entityId])`, so a dismissed pair is never suggested again.
+  Every FK **Cascade**; carries no vector.
 - `ask_conversations` - One saved Ask conversation (issue #376, epic #348). `owner_id`
   **Cascade**; `scope_entity_id` **SetNull** into `kg_entities` — forgetting or merging the
   scoped entity drops the link, never the conversation; `title` null until the first message.
@@ -2174,7 +2186,7 @@ holds no queue or fleet code: `apps/api/src/jobs` and `apps/api/src/nodes` are
 gone. KVox's part is the composition and host ports in
 `apps/api/src/platform/jobs/` (`jobs.config.ts`, `jobs-host.module.ts`, the
 `NODE_JOB_INPUTS` adapter, and `NODE_OBJECT_STORE` bound with the platform's `nodeObjectStoreBinding`), the handlers that live
-beside their features, and the 52 pinned job type strings (`note.library.import`, `kg.library_reconcile` and `kg.autocommit` belong to note libraries; `kg.graph_layout` also computes the insight connectors)
+beside their features, and the 52 pinned job type strings (`note.library.import`, `kg.library_reconcile` and `kg.autocommit` belong to note libraries; `kg.graph_layout` also computes the insight connectors; `kg.voiceprint_enroll`, `kg.voice_match` and `kg.voiceprint_backfill` are the on-device speaker voiceprint jobs, server-only and not AI jobs)
 (`apps/api/test/jobs/job-type-snapshot.spec.ts`; table in
 [`job-queue.md`](specs/job-queue.md#the-job-types)). Jobs carry `org_id`, the
 Jobs, Job Insights and Worker Nodes admin pages are the platform's, and the

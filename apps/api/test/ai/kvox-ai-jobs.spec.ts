@@ -391,6 +391,8 @@ const AI_METHODS = new Set(['generateStructured', 'streamText', 'embed', 'chat']
 const EXEMPT: Readonly<Record<string, string>> = {
   'platform-kvox/ai/traced-kvox-ai-port.ts':
     'the bound `KVOX_AI` (`createKvoxAi` wrapped for the web spans, #490, #579) is a pass-through for a slice that calls the model; the bucket is registered per job by `PlatformKvoxJobsAdapter` from the job row `provider_key` (set by `enqueue({ throttleKey })`) before the handler runs, proved in test/platform-kvox/platform-kvox-adapters.spec.ts',
+  'platform-kvox/voiceprints/platform-kvox-voiceprints.adapter.ts':
+    'the local on-device CAM++ speaker-embedding model of the voiceprint slice (`@marinoscar/kvox-ai/voiceprints`, onnxruntime-web in a worker thread, epic #821, #825): no AI provider, no user key and no provider rate limit, so there is no per-user throttle bucket to register; the voiceprint jobs are not AI jobs (not `usesAi`, not in `KVOX_AI_JOB_TYPES`), proved in test/jobs/server-only-types.spec.ts and test/platform-kvox/platform-kvox-voiceprints.adapter.spec.ts',
 };
 
 function walk(dir: string): string[] {
@@ -439,8 +441,12 @@ describe('(c) the per-user throttle key is registered before the first model cal
     .filter(({ calls }) => calls.length > 0);
 
   it('finds the model call sites at all, so a broken scan cannot pass vacuously', () => {
-    // Only the bound `KVOX_AI` wrapper: the graph's calls moved into `@marinoscar/kvox-api` (#496) and Ask's (#497), scanned below.
-    expect(files.map(({ rel }) => rel).sort()).toEqual(['platform-kvox/ai/traced-kvox-ai-port.ts']);
+    // The bound `KVOX_AI` wrapper: the graph's calls moved into `@marinoscar/kvox-api` (#496) and Ask's (#497), scanned below.
+    // The voiceprints adapter calls the LOCAL on-device speaker-embedding model, not a provider (exempt above, #821, #825).
+    expect(files.map(({ rel }) => rel).sort()).toEqual([
+      'platform-kvox/ai/traced-kvox-ai-port.ts',
+      'platform-kvox/voiceprints/platform-kvox-voiceprints.adapter.ts',
+    ]);
   });
 
   it('every file that calls the model registers the key above its first call (or is exempt, with a reason)', () => {

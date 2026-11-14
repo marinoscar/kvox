@@ -272,6 +272,21 @@ export const KVOX_USER_OWNED_MODELS: readonly Def[] = [
     rationale: 'A computed layout of the graph; derived and large.',
   },
   {
+    model: 'KgPersonVoiceprint',
+    ownerField: 'ownerId',
+    purge: 'delete',
+    export: 'exclude',
+    rationale:
+      'Biometric voiceprint of a person the owner named (#825); opt-in, deleted with the user (and with the person, by cascade) and never exported: a vector identifies a voice and is meaningless to the user.',
+  },
+  {
+    model: 'KgSpeakerSuggestion',
+    ownerField: 'ownerId',
+    purge: 'delete',
+    export: 'exclude',
+    rationale: 'A derived, transient suggestion of who a speaker is (#825); deleted with the user and rebuilt on demand.',
+  },
+  {
     model: 'KgEntityView',
     ownerField: 'userId',
     purge: 'delete',

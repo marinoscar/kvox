@@ -135,6 +135,7 @@ import { SlotBoundary } from '../slots.js';
 import type {
   TranscriptAiAccess,
   TranscriptPageSlots,
+  TranscriptSpeakerSuggestions,
   TranscriptSharingAdapter,
   TranscriptSpeakerPeople,
 } from '../slots.js';
@@ -153,6 +154,7 @@ import type { TextRange } from '../components/SegmentList.js';
 import { SpeakerActions } from '../components/SpeakerActions.js';
 import { SpeakerFilter, computeSpeakerStats } from '../components/SpeakerFilter.js';
 import { SpeakerMergeDialog, planSpeakerMerge } from '../components/SpeakerMergeDialog.js';
+import { SpeakerVoiceSuggestions } from '../components/SpeakerVoiceSuggestions.js';
 import type { SpeakerMergePlan } from '../components/SpeakerMergeDialog.js';
 import { SplitSegmentDialog } from '../components/SplitSegmentDialog.js';
 import { TranscriptPipeline } from '../components/TranscriptPipeline.js';
@@ -233,6 +235,11 @@ function useNoSpeakerPeople(): TranscriptSpeakerPeople | null {
   return null;
 }
 
+/** The speaker-suggestions slot's default: no voice matching. */
+function useNoSpeakerSuggestions(): TranscriptSpeakerSuggestions | null {
+  return null;
+}
+
 /**
  * The props of {@link TranscriptPage}.
  *
@@ -264,6 +271,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
   const SelectionActions = slots?.SelectionActions;
   const HeaderActions = slots?.HeaderActions;
   const useSpeakerPeople = slots?.useSpeakerPeople ?? useNoSpeakerPeople;
+  const useSpeakerSuggestions = slots?.useSpeakerSuggestions ?? useNoSpeakerSuggestions;
   const { id } = useParams<{ id: string }>();
   const theme = useTheme();
   const navigate = useNavigate();
@@ -351,6 +359,22 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
   // deep link `?segment=<id>&t=<ms>` that an EvidenceChip's ▶ lands on.
   // ---------------------------------------------------------------------------
   const speakerPeople = useSpeakerPeople(id, isReady);
+
+  // Voice matches (#827): asked for only while a speaker is still a placeholder
+  // ("Speaker A"), and offered only on those speakers.
+  const placeholderSpeakerIds = useMemo(
+    () => new Set(speakers.filter((speaker) => isGenericSpeakerName(speaker.displayName)).map((speaker) => speaker.id)),
+    [speakers],
+  );
+  const speakerSuggestions = useSpeakerSuggestions(id, isReady && placeholderSpeakerIds.size > 0);
+  const voiceSuggestionsBySpeaker = useMemo(() => {
+    const all = speakerSuggestions?.bySpeaker ?? {};
+    const open: Record<string, (typeof all)[string]> = {};
+    for (const [speakerId, suggestion] of Object.entries(all)) {
+      if (placeholderSpeakerIds.has(speakerId)) open[speakerId] = suggestion;
+    }
+    return open;
+  }, [placeholderSpeakerIds, speakerSuggestions?.bySpeaker]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [deepLinkSegmentId, setDeepLinkSegmentId] = useState<string | null>(null);
@@ -497,6 +521,21 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
       setRenamePrompt({ speakerId, name, key: Date.now() });
     },
     [ops],
+  );
+
+  /**
+   * Accept a voice match (#827): the server renames the speaker through its own
+   * endpoint, so every typed edit goes first and the transcript is re-read
+   * afterwards, the way the AI name corrections adopt a server-side change.
+   */
+  const handleAcceptVoiceSuggestion = useCallback(
+    async (suggestionId: string) => {
+      if (!speakerSuggestions) return;
+      await ops.settle();
+      const accepted = await speakerSuggestions.accept(suggestionId);
+      if (accepted) await ops.reload();
+    },
+    [ops, speakerSuggestions],
   );
 
   const handleNameAccept = useCallback(
@@ -791,6 +830,24 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
       <SlotBoundary name="NotesSection">
         <NotesSection transcriptId={id} />
       </SlotBoundary>
+    ) : null;
+
+  /**
+   * Voice matches for the unnamed speakers (#827), under the speaker list.
+   * Deciding one renames a speaker, so it also needs edit access here.
+   */
+  const voiceSuggestions =
+    speakerSuggestions && (Object.keys(voiceSuggestionsBySpeaker).length > 0 || speakerSuggestions.error) ? (
+      <SpeakerVoiceSuggestions
+        speakers={speakers}
+        bySpeaker={voiceSuggestionsBySpeaker}
+        canDecide={speakerSuggestions.canDecide && canEdit}
+        busyId={speakerSuggestions.busyId}
+        error={speakerSuggestions.error}
+        onClearError={speakerSuggestions.clearError}
+        onAccept={(suggestionId) => void handleAcceptVoiceSuggestion(suggestionId)}
+        onDismiss={(suggestionId) => void speakerSuggestions.dismiss(suggestionId)}
+      />
     ) : null;
 
   const pageMenu = (
@@ -1482,6 +1539,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
                   }
                   onMerge={() => setMergeOpen(true)}
                 />
+                {voiceSuggestions && <Box sx={{ mt: 1.5 }}>{voiceSuggestions}</Box>}
               </Paper>
               {notesSection}
             </Box>
@@ -1512,6 +1570,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
             setSpeakerMenu({ speakerId, anchor })
           }
         />
+        {voiceSuggestions && <Box sx={{ mt: 1 }}>{voiceSuggestions}</Box>}
       </Box>
       {playerNotice && <Box sx={{ mb: 2 }}>{playerNotice}</Box>}
       {deepLinkPlayChip && <Box sx={{ mb: 1.5 }}>{deepLinkPlayChip}</Box>}

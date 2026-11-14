@@ -43,4 +43,13 @@ export class GraphPreferencesService {
     const value = await this.settings.readUser<GraphPreferencesValue | undefined>(userId, 'graph');
     return resolveGraphPreferences(value ?? undefined);
   }
+
+  /**
+   * Whether the user opted in to speaker voiceprints (#825). A plain read; off unless the stored
+   * value says `enabled: true`.
+   */
+  async voiceprintsEnabled(userId: string): Promise<boolean> {
+    const value = await this.settings.readUser<GraphPreferencesValue | undefined>(userId, 'graph');
+    return value?.voiceprints?.enabled === true;
+  }
 }

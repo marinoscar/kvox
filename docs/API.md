@@ -1072,6 +1072,7 @@ carries all of its fields.
 | `graph.resolution.autoLinkThreshold` | 0.80–0.99 | `0.90` |
 | `graph.resolution.newThreshold` | 0.30–0.94, and at least 0.05 below `autoLinkThreshold` | `0.55` |
 | `graph.resolution.adjudication` | `llm` \| `off` — ask the AI (on the caller's own key) about uncertain matches | `llm` |
+| `graph.voiceprints` | object `{ enabled, consentAt }` — speaker voiceprints ([ontology §8.1](specs/ontology.md#81-voiceprint-suggestions-epic-821-calibration-822)); biometric, so **off until you opt in**. `enabled` boolean (default `false`); `consentAt` ISO time or `null`, stamped by the server when `enabled` turns on. Turning it off keeps stored voiceprints (delete them with `DELETE /graph/voiceprints`); `null` resets it | `{ enabled: false, consentAt: null }` |
 | `graph.domains.work` | boolean — `core` is always on and never stored | `true` |
 | `graph.domains.personal` | boolean — the `personal` ontology domain (family, friends, interests, trips, life events; #383). Enabling it is not consent to show personal facts to a model | `false` |
 
@@ -6301,6 +6302,132 @@ just asked this deployment to forget).
 entity is not a Person · `401` · `403` your own entity without
 `graph:write` · `404` `Entity not found` — no such entity, another user's,
 or merged.
+
+#### Speaker voiceprints and name suggestions
+
+Voice-based name suggestions for unnamed transcript speakers (epic #821;
+`docs/specs/ontology.md` §8.1). **Biometric: no response carries a voiceprint
+or audio**, only counts, durations, ids and a suggestion's scores. Suggestions
+come from the `kg.voice_match` job and exist only for owners who opted in with
+the `graph.voiceprints` preference. No access answers **404**, never 403.
+
+##### GET /graph/speaker-suggestions?transcriptId=
+
+Pending suggestions that a still-unnamed speaker of the transcript is a Person
+in your graph, best first. Only speakers that are still placeholders and
+Persons that are still live are listed.
+
+**Requires:** `graph:read` and read access to the transcript.
+
+**Response:** `200`
+```json
+{
+  "data": [
+    {
+      "id": "7c1d2e3f-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+      "speakerId": "2f9a1b8c-3d4e-4f50-9a6b-7c8d9e0f1a2b",
+      "entityId": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
+      "entityName": "Person A",
+      "score": 0.71,
+      "margin": 0.18,
+      "createdAt": "2026-11-14T10:00:00.000Z"
+    }
+  ],
+  "meta": { "timestamp": "2026-11-14T10:00:05.000Z" }
+}
+```
+
+**Errors:** `400` `transcriptId` missing or not a UUID · `401` · `403` missing
+`graph:read` · `404` no such transcript or no access.
+
+##### POST /graph/speaker-suggestions/{id}/accept
+
+Names the speaker with the Person's canonical name, the same way renaming it in
+the transcript does (so the graph link follows through `kg.speaker_link`), and
+marks the suggestion accepted. Accepting an accepted suggestion is a no-op.
+
+**Requires:** `graph:write`, `transcripts:write` and edit access to the transcript.
+
+**Response:** `200` `{ "data": { "id": "…", "status": "accepted", "decidedAt": "…" } }`
+
+**Errors:** `401` · `403` · `404` no such pending suggestion of yours, or no
+access to the transcript · `409` `details.reason: SPEAKER_ALREADY_NAMED`, the
+speaker has been named since.
+
+##### POST /graph/speaker-suggestions/{id}/dismiss
+
+Marks the suggestion dismissed; the same speaker and Person pair is never
+suggested again. No body.
+
+**Requires:** `graph:write`, `transcripts:write` and edit access to the transcript.
+
+**Response:** `200` `{ "data": { "id": "…", "status": "dismissed", "decidedAt": "…" } }`
+
+**Errors:** `401` · `403` · `404` no such pending suggestion of yours, or no
+access to the transcript.
+
+##### GET /graph/voiceprints/summary
+
+Whether voiceprints are on, when you agreed, and how much is stored.
+
+**Requires:** `graph:read`.
+
+**Response:** `200`
+```json
+{
+  "data": { "enabled": true, "consentAt": "2026-11-01T09:30:00.000Z", "people": 4, "samples": 9 },
+  "meta": { "timestamp": "2026-11-14T10:00:05.000Z" }
+}
+```
+
+`people` counts Persons with at least one voiceprint; `samples` counts stored
+voiceprints (at most 10 per Person).
+
+##### DELETE /graph/voiceprints
+
+Deletes every voiceprint sample and every pending name suggestion of yours.
+Turning the preference off does **not** do this.
+
+**Requires:** `graph:write`.
+
+**Response:** `200` `{ "data": { "deletedSamples": 9, "deletedSuggestions": 2 } }`
+
+##### GET /graph/entities/{id}/voiceprint
+
+What is stored about a Person's voice. Never the voiceprint itself.
+
+**Requires:** `graph:read`.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "enrolled": true,
+    "samples": 3,
+    "speechMs": 94000,
+    "lastUpdatedAt": "2026-11-12T16:20:00.000Z",
+    "modelId": "campplus-en-voxceleb-16k"
+  },
+  "meta": { "timestamp": "2026-11-14T10:00:05.000Z" }
+}
+```
+
+A Person with no voiceprint answers `enrolled: false`, `samples: 0`,
+`speechMs: 0`, `lastUpdatedAt: null`, `modelId: null`.
+
+**Errors:** `401` · `403` · `404` no such entity, not yours, merged, or not a Person.
+
+##### DELETE /graph/entities/{id}/voiceprint
+
+"Forget this voice": deletes your voiceprint samples of this Person and the
+pending suggestions that point at them. The Person and your recordings are
+unchanged.
+
+**Requires:** `graph:write`.
+
+**Response:** `204`, no body.
+
+**Errors:** `401` · `403` · `404` no such Person.
 
 #### POST /graph/entities/{id}/relations
 

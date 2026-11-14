@@ -33,7 +33,7 @@
 // it short; the cap is for the case where it does not.
 // =============================================================================
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
 import { TRANSCRIPTS_MODULE_OPTIONS, type ResolvedTranscriptsOptions } from '../transcripts.options.js';
@@ -135,6 +135,146 @@ export class FfmpegService {
     );
 
     await this.run(this.ffmpeg, args, 0);
+  }
+
+  /**
+   * Decode the given time windows of an input into one 16 kHz mono float stream, for the
+   * speaker-voice embedder (#825).
+   *
+   * Each window is cut with `atrim` (sample-accurate, unlike the frame-granular `aselect`, whose
+   * output differs between ffmpeg versions) and the cuts are joined with `concat` in one
+   * `-filter_complex`. Windows are sorted by start and overlapping ones merged, so the result is
+   * the speech of one speaker in time order. The input may be a presigned URL; as everywhere here
+   * the argument vector never reaches an error message.
+   *
+   * The stream is truncated to the expected sample count, so a little extra output is harmless; a
+   * hard memory bound (twice the expected size plus 1 MiB) kills the process and throws.
+   *
+   * @param options - `input` is a local path or a signed URL, `windows` are `{ startMs, endMs }`
+   * windows in any order (empty returns an empty array) and `timeoutMs` is a wall-clock bound on
+   * the one spawn.
+   * @returns samples in [-1, 1] at 16 kHz, at most the merged windows' total length.
+   */
+  async decodePcm16kMono(options: {
+    input: string;
+    windows: ReadonlyArray<{ startMs: number; endMs: number }>;
+    timeoutMs: number;
+  }): Promise<Float32Array> {
+    const sorted = options.windows
+      .filter((w) => Number.isFinite(w.startMs) && Number.isFinite(w.endMs) && w.endMs > w.startMs)
+      .map((w) => ({ startMs: Math.max(0, w.startMs), endMs: w.endMs }))
+      .sort((x, y) => x.startMs - y.startMs || x.endMs - y.endMs);
+    const windows: Array<{ startMs: number; endMs: number }> = [];
+    for (const w of sorted) {
+      const last = windows[windows.length - 1];
+      if (last && w.startMs <= last.endMs) last.endMs = Math.max(last.endMs, w.endMs);
+      else windows.push({ ...w });
+    }
+    if (windows.length === 0) return new Float32Array(0);
+
+    const sec = (ms: number): string => (ms / 1000).toFixed(3);
+    const k = windows.length;
+    const head = '[0:a:0]aresample=16000,aformat=channel_layouts=mono';
+    let graph: string;
+    if (k === 1) {
+      const w = windows[0]!;
+      graph = `${head},atrim=start=${sec(w.startMs)}:end=${sec(w.endMs)},asetpts=PTS-STARTPTS[out]`;
+    } else {
+      const parts = [`${head},asplit=${k}${windows.map((_, i) => `[s${i}]`).join('')}`];
+      windows.forEach((w, i) => {
+        parts.push(`[s${i}]atrim=start=${sec(w.startMs)}:end=${sec(w.endMs)},asetpts=PTS-STARTPTS[w${i}]`);
+      });
+      parts.push(`${windows.map((_, i) => `[w${i}]`).join('')}concat=n=${k}:v=0:a=1[out]`);
+      graph = parts.join(';');
+    }
+    const args = [
+      '-nostdin',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-i',
+      options.input,
+      '-vn',
+      '-filter_complex',
+      graph,
+      '-map',
+      '[out]',
+      '-ac',
+      '1',
+      '-ar',
+      '16000',
+      '-f',
+      's16le',
+      'pipe:1',
+    ];
+
+    const totalMs = windows.reduce((sum, w) => sum + (w.endMs - w.startMs), 0);
+    // 16 samples per ms at 2 bytes each.
+    const expectedSamples = Math.ceil(totalMs * 16);
+    const expectedBytes = expectedSamples * 2;
+    const hardCapBytes = expectedBytes * 2 + 1024 * 1024;
+    const redact = (text: string): string => text.replace(/https?:\/\/\S+/g, '<url>');
+
+    const raw = await new Promise<Buffer>((resolve, reject) => {
+      const child = spawn(this.ffmpeg, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      const out: Buffer[] = [];
+      let outBytes = 0;
+      let stderr = '';
+      let settled = false;
+      let timer: NodeJS.Timeout | undefined;
+
+      const finish = (error: FfmpegError | null): void => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        if (error) {
+          child.kill('SIGKILL');
+          reject(error);
+        } else {
+          resolve(Buffer.concat(out, outBytes));
+        }
+      };
+
+      if (options.timeoutMs > 0) {
+        timer = setTimeout(() => finish(new FfmpegError(this.ffmpeg, `${this.ffmpeg} failed: timed out after ${options.timeoutMs} ms`)), options.timeoutMs);
+      }
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        outBytes += chunk.length;
+        if (outBytes > hardCapBytes) {
+          finish(new FfmpegError(this.ffmpeg, `${this.ffmpeg} failed: output exceeded ${hardCapBytes} bytes`));
+          return;
+        }
+        out.push(chunk);
+      });
+      child.stderr.on('data', (chunk: Buffer) => {
+        // Keep only the tail: it is all an error message may carry.
+        stderr = (stderr + chunk.toString('utf8')).slice(-STDERR_LIMIT * 2);
+      });
+      child.on('error', (error: NodeJS.ErrnoException) => {
+        // Never `error.message` for a spawn failure with args: it can carry the signed URL.
+        finish(
+          new FfmpegError(
+            this.ffmpeg,
+            error.code === 'ENOENT' ? `"${this.ffmpeg}" is not installed on this machine` : `${this.ffmpeg} failed: could not start`,
+          ),
+        );
+      });
+      child.on('close', (code, signal) => {
+        if (code === 0) {
+          finish(null);
+          return;
+        }
+        const detail = stderr.trim().slice(-STDERR_LIMIT) || `exited with ${signal ?? `code ${code}`}`;
+        finish(new FfmpegError(this.ffmpeg, `${this.ffmpeg} failed: ${redact(detail)}`));
+      });
+    });
+
+    // The embedder needs at most the windows' length; anything beyond is dropped.
+    const count = Math.min(Math.floor(raw.length / 2), expectedSamples);
+    const out = new Float32Array(count);
+    for (let i = 0; i < count; i += 1) out[i] = raw.readInt16LE(i * 2) / 32768;
+    return out;
   }
 
   /**
