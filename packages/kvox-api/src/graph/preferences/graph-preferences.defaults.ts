@@ -100,6 +100,15 @@ export interface GraphPreferences {
      */
     readonly entityId: string | null;
   };
+  /**
+   * Speaker voiceprints (#825): biometric, so off until the user opts in. `consentAt` is when they did.
+   */
+  readonly voiceprints: {
+    /** Whether the user opted in. */
+    readonly enabled: boolean;
+    /** When they opted in (ISO 8601), or null. */
+    readonly consentAt: string | null;
+  };
   /** `core` is always on and never stored; it is here so callers need no special case. */
   readonly domains: {
     /**
@@ -133,6 +142,7 @@ export const GRAPH_PREFERENCE_DEFAULTS: GraphPreferences = Object.freeze({
   review: Object.freeze({ minConfidence: 0.7, autoCommitSafeRows: true }),
   domains: Object.freeze({ core: true as const, work: true, personal: false }),
   self: Object.freeze({ entityId: null }),
+  voiceprints: Object.freeze({ enabled: false, consentAt: null }),
 });
 
 /** The sub-objects of the `graph` namespace, in a stable order. */
@@ -147,6 +157,7 @@ export const GRAPH_PREFERENCE_SECTIONS = [
   'review',
   'domains',
   'self',
+  'voiceprints',
 ] as const;
 /**
  * The graph preference section type.
@@ -186,6 +197,10 @@ export function resolveGraphPreferences(
       personal: value?.domains?.personal ?? d.domains.personal,
     },
     self: { entityId: value?.self?.entityId ?? d.self.entityId },
+    voiceprints: {
+      enabled: value?.voiceprints?.enabled === true,
+      consentAt: value?.voiceprints?.consentAt ?? d.voiceprints.consentAt,
+    },
   };
 }
 

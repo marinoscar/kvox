@@ -168,6 +168,12 @@ export const KG_VOICEPRINT_ENROLL_JOB_TYPE = 'kg.voiceprint_enroll';
  * @stability experimental
  */
 export const KG_VOICE_MATCH_JOB_TYPE = 'kg.voice_match';
+/**
+ * The kg voiceprint backfill job type: on opt-in, queues `kg.voiceprint_enroll` for speakers the user already linked to Persons. Subject: the user.
+ *
+ * @stability experimental
+ */
+export const KG_VOICEPRINT_BACKFILL_JOB_TYPE = 'kg.voiceprint_backfill';
 
 /** `storage_objects.managed_by` for every file the graph module writes (#386). */
 /**

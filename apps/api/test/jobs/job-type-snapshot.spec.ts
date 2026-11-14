@@ -82,6 +82,7 @@ const KVOX_JOB_TYPES = [
   'kg.autocommit',
   'kg.voiceprint_enroll',
   'kg.voice_match',
+  'kg.voiceprint_backfill',
   // ask, search, user data
   'ask.respond',
   'search.index',

@@ -110,6 +110,7 @@ describe('GraphPreferencesChangeForwarder', () => {
           domains: { core: true, work: true, personal: false },
           review: { minConfidence: 0.7, autoCommitSafeRows: true },
           self: { entityId: null },
+          voiceprints: { enabled: false, consentAt: null },
         },
         next: {
           extraction: { autoExtract: true },
@@ -117,6 +118,7 @@ describe('GraphPreferencesChangeForwarder', () => {
           domains: { core: true, work: false, personal: false },
           review: { minConfidence: 0.7, autoCommitSafeRows: true },
           self: { entityId: null },
+          voiceprints: { enabled: false, consentAt: null },
         },
       });
     });
