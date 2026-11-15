@@ -3,8 +3,10 @@
 # =============================================================================
 # prod.compose.yml fixes the API at 512M and the web container at 128M. A VPS
 # can be sized differently, so the limits read API_MEM_LIMIT and WEB_MEM_LIMIT
-# (app.env.example; the defaults equal the fixed values, so a .env without them
-# changes nothing). They are set at the SAME key prod.compose.yml uses
+# (app.env.example). The API default is 1G here, not prod's 512M: the speaker
+# voiceprint embedder (issue #825) adds about 300 MB of resident memory in its
+# worker thread. The web default still equals prod's value. A deployment whose
+# .env already sets API_MEM_LIMIT keeps it (`deploy doctor` warns below 1G). They are set at the SAME key prod.compose.yml uses
 # (`deploy.resources.limits.memory`), not the legacy `mem_limit`: Compose
 # refuses a service that sets distinct values on both, and an overlay only
 # replaces the scalar it names.
@@ -15,7 +17,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${API_MEM_LIMIT:-512M}
+          memory: ${API_MEM_LIMIT:-1G}
   web:
     deploy:
       resources:

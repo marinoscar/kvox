@@ -1,0 +1,28 @@
+# =============================================================================
+# App overlay (scope prod: applies to prod and vps) - persistent voice model
+# =============================================================================
+# Speaker voiceprints (issue #825) need a ~30 MB model that is downloaded once.
+# Without a volume it lives in the container's writable layer, which `deploy
+# update` throws away on every re-create, so each release re-downloaded it
+# (and a host with no route to github.com lost voice matching altogether).
+#
+# The named volume below is mounted at /var/lib/voiceprint-models, the fixed
+# directory `resolveVoiceprintModelDir` (apps/api/src/platform-kvox/voiceprints/
+# voiceprint-model-dir.ts) uses whenever it exists and is writable. The deploy
+# step `voice-model` fills it right after the health check; no environment
+# variable is involved (root rule).
+#
+# `deploy uninstall` and the volume: the engine runs `docker compose down -v`
+# for the project, so this named volume is removed with the database volume
+# (the engine's own, unchanged behaviour). That is harmless: the model is
+# public and pinned by checksum, so the next install or update downloads it
+# again. `deploy update` never removes volumes.
+# =============================================================================
+
+services:
+  api:
+    volumes:
+      - voiceprint-models:/var/lib/voiceprint-models
+
+volumes:
+  voiceprint-models:
