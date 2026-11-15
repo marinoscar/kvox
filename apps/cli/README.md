@@ -17,7 +17,7 @@ have; everything else is documented in the package's README and in
 | --- | --- |
 | `src/app.ts` | `APP_CLI_OPTIONS`: the identity (from `packages/shared/identity.json`), the version (`package.json`), the node executor, this app's `.env.example` key metadata, one deploy check and the proxy stream paths |
 | `src/executors/media-audio-transcode.executor.ts` | the node executor for `media.audio.transcode` and its `ffmpeg` + `ffprobe` requirement (a node without them refuses to claim the type, naming the missing tool) |
-| `src/extensions/` | the pre-platform `deploy` flags and commands the platform lacks ([the table below](#flags-and-commands-that-changed-in-110)), `deploy update --check`, the `deploy uninstall` name confirmation and `.env` backup, the `docker-network-devnet` check (the port guard is the platform's `bind-port-owner`), and the app env-key metadata |
+| `src/extensions/` | the pre-platform `deploy` flags and commands the platform lacks ([the table below](#flags-and-commands-that-changed-in-110)), `deploy update --check`, the `deploy uninstall` name confirmation and `.env` backup, the `docker-network-devnet` check, the speaker-voice checks and the `voice-model` deploy step (the port guard is the platform's `bind-port-owner`), and the app env-key metadata |
 | `src/run.ts` | one invocation: translate legacy flags, answer `update --check`, otherwise `createCli(...).run` |
 
 Run with no arguments in an interactive terminal and it opens a full-screen
@@ -610,6 +610,16 @@ Check that this server meets the prerequisites
 | `--json` | Print a machine-readable report on stdout |
 | `--no-color` | Disable colour even on a terminal |
 
+**Checks this app adds** (issue #831; each reports `skip` when it needs the running `api` container and there is none, or when Docker cannot be asked, which the platform's `docker-daemon` check owns):
+
+| Check id | Severity | Warns or fails when | Remedy |
+| --- | --- | --- | --- |
+| `voiceprint-model-egress` | recommended | the speaker voice model's download URL is not reachable from the host, or from inside the `api` container (a ranged GET, 10 s timeout, redirects limited to the allowed GitHub hosts) | allow outbound HTTPS to `github.com` and `release-assets.githubusercontent.com` |
+| `api-memory-limit` | recommended | `API_MEM_LIMIT` is below `1G` (the embedder adds about 300 MB), or above 75% of the host's RAM; skipped on a fresh host with no `.env` (the default is now `1G`) | set `API_MEM_LIMIT=1G` in `<deployRoot>/repo/infra/compose/.env`, then `kvox deploy update --force` |
+| `pgvector-extension` | **required** | the `vector` extension is not installed in the application database (never blocks a fresh install: it skips while no `api` container runs) | `CREATE EXTENSION IF NOT EXISTS vector;` as a superuser in the application database; see [application-role](../../docs/runbooks/application-role.md) |
+| `api-ffmpeg` | recommended | `ffmpeg -version` fails in the `api` container | `kvox deploy update --force` (rebuilds the image) |
+| `voiceprint-model-cache` | recommended | the voice model is not installed in the `api` container | `kvox deploy update --force`, or leave it: the first voice job downloads it |
+
 #### `kvox deploy install`
 
 Install this application on this server
@@ -692,6 +702,8 @@ Bring this server up to the latest revision
 | `--no-version-bump` | Deploy the current version: no write, no commit, no push |
 | `--maintenance` | Serve a 503 from before the build until just after restart, instead of whatever the stop/migrate/restart window looks like underneath |
 | `--json` | Print a machine-readable result on stdout |
+
+**The `voice-model` step** (issue #831) runs in both `install` and `update`, right after `health`: it runs `node /app/apps/api/scripts/voiceprint-model.js ensure` inside the running `api` container (5 minute budget), which downloads the roughly 30 MB speaker voice model if it is missing, verifies its SHA-256 and prints one JSON line. The model lives in the named volume `voiceprint-models` (`infra/compose/app.prod.voiceprint-models.compose.yml`, mounted at `/var/lib/voiceprint-models`), so later updates find it already installed. The step is **never fatal**: on a failure it logs a warning with the remedy (allow egress to the two hosts above, re-run `kvox deploy update --force`, or let the first voice job download it) and the deploy continues. It adds no flag and no environment variable. `deploy uninstall` runs `docker compose down -v`, which removes this volume with the others; the next install downloads the model again.
 
 #### `kvox deploy status`
 

@@ -51,7 +51,10 @@ export const APP_ENV_SPEC: EnvSpecFragment = {
     // --- Resources -----------------------------------------------------------
     APP_BIND_PORT: { validate: validatePort },
     JOBS_WORKER_CONCURRENCY: { validate: validatePositiveInteger },
-    API_MEM_LIMIT: { validate: validateMemorySize },
+    API_MEM_LIMIT: {
+      validate: validateMemorySize,
+      help: 'The API container memory limit, a size such as 1G or 2G. 1G is the recommended minimum: the speaker voiceprint embedder adds about 300 MB on top of the API itself, and below that the container can be killed for memory.',
+    },
     WEB_MEM_LIMIT: { validate: validateMemorySize },
 
     // --- Database ------------------------------------------------------------

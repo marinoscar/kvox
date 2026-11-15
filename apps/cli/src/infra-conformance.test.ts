@@ -103,6 +103,7 @@ describe('the overlays of this app', () => {
     const files = composeFilesForMode('vps', { telemetry: false, overlays: readdirSync(COMPOSE_DIR) });
     expect(files.filter((file) => file.startsWith('app.'))).toEqual([
       'app.prod.memory-limits.compose.yml',
+      'app.prod.voiceprint-models.compose.yml',
       'app.vps.no-stack-agent.compose.yml',
     ]);
     expect(composeFilesForMode('devdb', { overlays: readdirSync(COMPOSE_DIR) }).filter((file) => file.startsWith('app.'))).toEqual([
@@ -146,14 +147,25 @@ describe.skipIf(!COMPOSE)('docker compose config, with the overlays', () => {
     expect(services.web?.deploy?.resources?.limits?.memory).toBe(String(256 * 1024 ** 2));
   });
 
-  it('vps: without API_MEM_LIMIT the limits equal prod.compose.yml (512M and 128M)', () => {
+  it('vps: without API_MEM_LIMIT the API gets 1G (the voiceprint embedder, #831) and the web container prod.compose.yml\'s 128M', () => {
     const env = ENV_180.replace(/^(API|WEB)_MEM_LIMIT=.*\n/gm, '');
     const { dir, files } = stackWith(`${env}STACK_AGENT_TOKEN=${'a1'.repeat(32)}\n`);
     const { status, output, services } = render(dir, files);
 
     expect(status, output).toBe(0);
-    expect(services.api?.deploy?.resources?.limits?.memory).toBe(String(512 * 1024 ** 2));
+    expect(services.api?.deploy?.resources?.limits?.memory).toBe(String(1024 ** 3));
     expect(services.web?.deploy?.resources?.limits?.memory).toBe(String(128 * 1024 ** 2));
+  });
+
+  it('vps: the api mounts the persistent voice model volume (#831), the web container does not', () => {
+    const { dir, files } = stackWith(`${ENV_180}STACK_AGENT_TOKEN=${'a1'.repeat(32)}\n`);
+    const { status, output, services } = render(dir, files);
+
+    expect(status, output).toBe(0);
+    expect(services.api?.volumes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ source: 'voiceprint-models', target: '/var/lib/voiceprint-models' })]),
+    );
+    expect((services.web?.volumes ?? []).map((volume) => volume.source)).not.toContain('voiceprint-models');
   });
 
   it('devdb and test use the pgvector image the migrations need', () => {
