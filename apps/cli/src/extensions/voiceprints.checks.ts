@@ -245,8 +245,10 @@ export function createVoiceprintChecks(deps: VoiceprintCheckDeps = DEFAULT_DEPS)
 export const PGVECTOR_SCRIPT = `
 const { Client } = require('pg');
 const e = process.env;
-const url = e.DATABASE_URL || ('postgresql://' + encodeURIComponent(e.POSTGRES_USER || 'postgres') + ':' + encodeURIComponent(e.POSTGRES_PASSWORD || 'postgres') + '@' + (e.POSTGRES_HOST || 'localhost') + ':' + (e.POSTGRES_PORT || '5432') + '/' + (e.POSTGRES_DB || 'appdb') + (e.POSTGRES_SSL === 'true' ? '?sslmode=require' : ''));
-const c = new Client({ connectionString: url, connectionTimeoutMillis: 8000 });
+// The container's own settings only: no credential defaults are invented here.
+const c = new Client(e.DATABASE_URL
+  ? { connectionString: e.DATABASE_URL, connectionTimeoutMillis: 8000 }
+  : { host: e.POSTGRES_HOST, port: Number(e.POSTGRES_PORT || 5432), user: e.POSTGRES_USER, password: e.POSTGRES_PASSWORD, database: e.POSTGRES_DB, ssl: e.POSTGRES_SSL === 'true' ? true : undefined, connectionTimeoutMillis: 8000 });
 const out = (v) => { console.log(JSON.stringify(v)); };
 c.connect()
   .then(() => c.query("SELECT (SELECT count(*)::int FROM pg_available_extensions WHERE name = 'vector') AS available, (SELECT count(*)::int FROM pg_extension WHERE extname = 'vector') AS installed"))
