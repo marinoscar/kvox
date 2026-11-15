@@ -8,6 +8,8 @@ import { githubRawManifest, type CreateCliOptions } from '@marinoscar/platform-c
 import { mediaAudioTranscodeExecutor } from './executors/media-audio-transcode.executor.js';
 import { dockerNetworkCheck } from './extensions/docker-network.check.js';
 import { APP_ENV_SPEC } from './extensions/env-spec.js';
+import { voiceModelSteps } from './extensions/voice-model.step.js';
+import { voiceprintChecks } from './extensions/voiceprints.checks.js';
 
 // =============================================================================
 // This app's CLI, composed on the platform engine  (issue #482, epic #478)
@@ -23,10 +25,14 @@ import { APP_ENV_SPEC } from './extensions/env-spec.js';
 //   - the shared host proxy's unbuffered, long-timeout locations for this app's
 //     server-sent-event routes (`proxy.streamPaths`);
 //   - the metadata of the `.env.example` keys that are this app's own;
-//   - one deploy check: `docker-network-devnet` (recommended: the external network
+//   - deploy checks: `docker-network-devnet` (recommended: the external network
 //     `base.compose.yml` needs, which install creates; the deploy end-to-end workflow
-//     asserts it). The port guard is the platform's `bind-port-owner` (issue #745);
-//     this app no longer carries its own;
+//     asserts it) and the five speaker-voiceprint checks of issue #831
+//     (`voiceprint-model-egress`, `api-memory-limit`, `pgvector-extension`,
+//     `api-ffmpeg`, `voiceprint-model-cache`). The port guard is the platform's
+//     `bind-port-owner` (issue #745); this app no longer carries its own;
+//   - one deploy step, `voice-model`, after `health` in both `install` and `update`
+//     (#831): pre-installs the voiceprint model in the running api container, never fatal;
 //   - the manifests the deploy version step versions (`deploy.versionedManifests`):
 //     apps/api, apps/web and packages/shared, never apps/cli, which keeps its own version;
 //   - the pre-platform `deploy` flags the platform dropped are translated in
@@ -139,7 +145,8 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   version: readVersion(),
   nodeExecutors: [mediaAudioTranscodeExecutor],
   envSpecFragments: [APP_ENV_SPEC],
-  deployChecks: [dockerNetworkCheck],
+  deployChecks: [dockerNetworkCheck, ...voiceprintChecks],
+  deploySteps: voiceModelSteps,
   proxy: { streamPaths: APP_STREAM_PATHS },
   deploy: { versionedManifests: APP_VERSIONED_MANIFESTS },
   updateNotice: APP_UPDATE_NOTICE,

@@ -1,6 +1,4 @@
 import { Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { APP_SLUG } from '@app/shared';
 import type { KvoxVoiceprintsPort, KvoxVoiceWindow } from '@marinoscar/kvox-api/ports';
 import {
@@ -15,6 +13,8 @@ import {
   type VoiceprintEmbedder,
 } from '@marinoscar/kvox-ai/voiceprints';
 
+import { resolveVoiceprintModelDir } from './voiceprint-model-dir';
+
 // =============================================================================
 // KVOX_VOICEPRINTS -> `@marinoscar/kvox-ai/voiceprints` (issue #825)
 // =============================================================================
@@ -24,9 +24,10 @@ import {
 // call `available()`), which is where long work belongs; the embedder then runs in a
 // worker thread so the event loop is never blocked.
 //
-// Model folder: a `<app slug>-models` directory under the OS temp directory. No environment
-// variable (root rule); a container restart re-downloads the model once, and a deployment
-// that wants it persistent can mount a volume at that path.
+// Model folder (`resolveVoiceprintModelDir`, issue #831): the fixed `/var/lib/voiceprint-models`
+// when it exists and is writable (production mounts a named volume there, so the model survives
+// container re-creation and the deploy step pre-installs it), else a `<app slug>-models`
+// directory under the OS temp directory (development). No environment variable (root rule).
 //
 // A download failure is thrown (not swallowed as "unavailable") so the job retries.
 // Biometric data: nothing here logs audio or vectors.
@@ -42,7 +43,7 @@ export class PlatformKvoxVoiceprintsAdapter implements KvoxVoiceprintsPort, OnAp
 
   readonly maxSamplesPerPerson = VOICEPRINT_MAX_SAMPLES_PER_PERSON;
 
-  private readonly directory = join(tmpdir(), `${APP_SLUG}-models`);
+  private readonly directory = resolveVoiceprintModelDir(APP_SLUG);
 
   private embedder: VoiceprintEmbedder | null = null;
 

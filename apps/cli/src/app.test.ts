@@ -122,8 +122,15 @@ describe('the command surface', () => {
 });
 
 describe('the deploy checks this app adds', () => {
-  it('registers only docker-network-devnet, which the deploy end-to-end workflow relies on', () => {
-    expect((APP_CLI_OPTIONS.deployChecks ?? []).map((check) => check.id)).toEqual(['docker-network-devnet']);
+  it('registers docker-network-devnet (the deploy end-to-end workflow relies on it) and the five voiceprint checks (#831)', () => {
+    expect((APP_CLI_OPTIONS.deployChecks ?? []).map((check) => check.id)).toEqual([
+      'docker-network-devnet',
+      'voiceprint-model-egress',
+      'api-memory-limit',
+      'pgvector-extension',
+      'api-ffmpeg',
+      'voiceprint-model-cache',
+    ]);
   });
 
   it('carries no port guard of its own: the platform\'s bind-port-owner decides (issue #745)', () => {

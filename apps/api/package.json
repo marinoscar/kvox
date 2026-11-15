@@ -45,6 +45,7 @@
     "storage:purge": "node dist/storage-purge.js",
     "ai:migrate-legacy": "node dist/ai-port/migrate/ai-legacy-migrate.js",
     "smoke": "node scripts/smoke-test.mjs",
+    "voiceprints:model": "node scripts/voiceprint-model.js",
     "catalog:permissions": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-permission-catalog.ts",
     "catalog:settings": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-settings-catalog.ts",
     "openapi:dump": "ts-node -P scripts/tsconfig.json --transpile-only scripts/dump-openapi.ts",

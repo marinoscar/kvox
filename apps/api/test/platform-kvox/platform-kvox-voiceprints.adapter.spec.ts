@@ -21,6 +21,13 @@ jest.mock('@marinoscar/kvox-ai/voiceprints', () => ({
   createThreadedVoiceprintEmbedder: (...args: unknown[]) => createThreadedVoiceprintEmbedder(...args),
 }));
 
+const resolveVoiceprintModelDir = jest.fn();
+
+jest.mock('../../src/platform-kvox/voiceprints/voiceprint-model-dir', () => ({
+  ...jest.requireActual('../../src/platform-kvox/voiceprints/voiceprint-model-dir'),
+  resolveVoiceprintModelDir: (...args: unknown[]) => resolveVoiceprintModelDir(...args),
+}));
+
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -41,12 +48,26 @@ function embedder() {
 
 describe('PlatformKvoxVoiceprintsAdapter', () => {
   beforeEach(() => {
+    resolveVoiceprintModelDir.mockReset().mockReturnValue(MODEL_DIR);
     downloadVoiceprintModel.mockReset().mockResolvedValue({ path: '/models/fresh' });
     voiceprintModelStatus.mockReset().mockResolvedValue({ installed: false });
     createThreadedVoiceprintEmbedder.mockReset().mockImplementation(() => embedder());
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
   });
   afterEach(() => jest.restoreAllMocks());
+
+  describe('model directory (#831)', () => {
+    it('asks the shared resolver with the app slug and installs into what it returns', async () => {
+      resolveVoiceprintModelDir.mockReturnValue('/var/lib/voiceprint-models');
+      const adapter = new PlatformKvoxVoiceprintsAdapter();
+
+      await adapter.available();
+
+      expect(resolveVoiceprintModelDir).toHaveBeenCalledWith(APP_SLUG);
+      expect(voiceprintModelStatus).toHaveBeenCalledWith('/var/lib/voiceprint-models');
+      expect(downloadVoiceprintModel).toHaveBeenCalledWith({ directory: '/var/lib/voiceprint-models' });
+    });
+  });
 
   describe('policy defaults', () => {
     it('exposes the model id, the vector width and the per-person cap of kvox-ai', () => {
