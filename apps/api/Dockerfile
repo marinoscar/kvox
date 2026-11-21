@@ -16,7 +16,7 @@
 # -----------------------------------------------------------------------------
 # Base stage
 # -----------------------------------------------------------------------------
-FROM node:24-alpine AS base
+FROM node:26-alpine AS base
 WORKDIR /app
 # Prisma needs the OpenSSL RUNTIME to pick its query-engine binary on musl.
 #
