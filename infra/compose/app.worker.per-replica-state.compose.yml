@@ -1,0 +1,54 @@
+# =============================================================================
+# App compose overlay: several worker nodes per machine (APP-OWNED, INTERIM)
+# =============================================================================
+# Lets one machine run N worker nodes:
+#
+#   WORKER_REPLICAS=8 WORKER_CPUS=8 WORKER_MEMORY=30g \
+#     docker compose --env-file .env.worker -f worker.compose.yml \
+#     -f app.worker.per-replica-state.compose.yml up -d
+#
+# `--scale worker=N` still works and overrides WORKER_REPLICAS.
+#
+# WHY. The generated worker.compose.yml mounts ONE named volume, `worker-state`,
+# and Compose gives every replica of a service the SAME named volume. All
+# replicas then share one `node.pid` and one `node.sock`; each container is its
+# own PID namespace, so the pid in the pidfile (PID 1) looks alive to every
+# other replica and replicas 2..N refuse to start ("A worker is already running
+# here"). Verified: `--scale worker=3` starts 1 of 3.
+#
+# WHAT. An anonymous volume belongs to ONE container, so each replica gets its
+# own state directory (pidfile, socket, logs, heap snapshots, scratch). It
+# survives a restart, so a replica re-attaches to its node row and keeps the
+# snapshot the memory watchdog writes before its deliberate exit. `!override`
+# drops the base file's `worker-state` mount. `down -v` removes the volumes.
+# `WORKER_CPUS` / `WORKER_MEMORY` limit each replica (0 or empty: no limit).
+#
+# Leave KVOX_NODE_NAME and KVOX_NODE_ID EMPTY: setting either makes every
+# replica reattach to the same node row.
+#
+# LIMITS UNTIL THE PLATFORM RELEASE THAT CARRIES THIS IS INSTALLED
+# (@marinoscar/platform-* > 0.1.0-next.12, EnterpriseAppBase changeset
+# worker-multi-replica-per-host):
+#   - A worker still sizes its default concurrency and heap to the WHOLE host,
+#     so on a large machine set KVOX_CONCURRENCY per replica explicitly (for
+#     example 7 for 8 CPUs) and KVOX_HEAP_LIMIT_MB below WORKER_MEMORY.
+#   - After SIGKILL or an OOM kill the pidfile survives and a restarted replica
+#     refuses to start. Remove it with its volume, then bring the stack up:
+#       docker rm -f -v <container> && docker compose ... up -d
+#
+# REMOVE THIS FILE when the platform packages are bumped and
+# `npm run platform:infra:sync` renders the same behaviour into
+# worker.compose.yml itself.
+#
+# Applies only to worker modes: the `worker` scope in the file name keeps it out
+# of base, dev and prod.
+# =============================================================================
+
+services:
+  worker:
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+    mem_limit: ${WORKER_MEMORY:-0}
+    cpus: ${WORKER_CPUS:-0}
+    volumes: !override
+      - /var/lib/worker

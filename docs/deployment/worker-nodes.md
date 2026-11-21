@@ -69,27 +69,97 @@ Containers are the recommended shape for more than one or two workers.
 ```bash
 cd infra/compose
 cp .env.worker.example .env.worker      # server URL + node credential
-docker compose --env-file .env.worker -f worker.compose.yml up -d --scale worker=4
+docker compose --env-file .env.worker -f worker.compose.yml up -d
 ```
 
-That is the whole configuration. Each replica registers as its own node and
-they load-balance through the database — nothing coordinates them, and nothing
-needs to. Every variable either file may set —
+One replica needs only that. To run several workers on one machine, add the
+app-owned overlay `app.worker.per-replica-state.compose.yml` and set the replica
+count and per-replica limits:
+
+```bash
+WORKER_REPLICAS=4 WORKER_CPUS=4 WORKER_MEMORY=16g \
+  docker compose --env-file .env.worker \
+  -f worker.compose.yml -f app.worker.per-replica-state.compose.yml up -d
+```
+
+Each replica registers as its own node and they load-balance through the
+database — nothing coordinates them, and nothing needs to. Every variable either
+file may set —
 [generated from `WORKER_ENV`](../../apps/cli/README.md#worker-environment-variables),
 never hand-copied — is in `apps/cli/README.md`'s own reference; this guide
 does not restate it.
+
+> **Plain `--scale worker=N` with the generated file alone starts one replica.**
+> `worker.compose.yml` mounts a single named volume, and Compose gives every
+> replica the same one. All replicas then share one `node.pid`; each container
+> has its own PID namespace, so the pid in the file (PID 1) looks alive to every
+> other replica, and replicas 2 to N exit with `A worker is already running
+> here`. Always add the overlay when running more than one.
 
 > **Leave `KVOX_NODE_NAME` and `KVOX_NODE_ID` empty when scaling.** Setting
 > either makes every replica reattach to the same node row, and the server's
 > per-node claim cap is then shared between processes that each believe they
 > own it.
 
+### Sizing several workers on one host
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `WORKER_REPLICAS` | Number of worker containers; `--scale worker=N` overrides it | `1` |
+| `WORKER_CPUS` | CPU limit per replica; `0` or empty is no limit | no limit |
+| `WORKER_MEMORY` | Memory limit per replica (for example `30g`); `0` or empty is no limit | no limit |
+
+Example for a 64-core, 256 GB host: 8 replicas of 8 CPUs and 30 GB each, which
+leaves headroom for the operating system. Set the concurrency and heap per
+replica too, in `.env.worker`:
+
+```bash
+KVOX_CONCURRENCY=7          # one below WORKER_CPUS
+KVOX_HEAP_LIMIT_MB=8192     # the ceiling; a larger value is clamped to it, and it stays below WORKER_MEMORY (30g)
+```
+
+```bash
+WORKER_REPLICAS=8 WORKER_CPUS=8 WORKER_MEMORY=30g \
+  docker compose --env-file .env.worker \
+  -f worker.compose.yml -f app.worker.per-replica-state.compose.yml up -d
+```
+
+Until the platform release that carries multi-replica support is installed, a
+worker sizes its default concurrency and heap to the **whole host**, not to its
+container limit. Setting `KVOX_CONCURRENCY` and `KVOX_HEAP_LIMIT_MB` explicitly
+(both apply to each replica) is therefore required, not optional, on a large
+machine.
+
+The overlay gives each replica its own anonymous volume at `/var/lib/worker`
+(pidfile, socket, logs, heap snapshots, scratch). The volume survives a restart,
+so a replica re-attaches to its node row and keeps the snapshot the memory valve
+writes before its deliberate exit. `docker compose ... down -v` removes the
+volumes with the containers; plain `down` leaves them behind as orphans.
+
+Two interim limits apply until the overlay is removed:
+
+- **Whole-host default sizing.** See above: set `KVOX_CONCURRENCY` and
+  `KVOX_HEAP_LIMIT_MB` per replica.
+- **Restart after `SIGKILL` or an OOM kill needs the volume removed.** The
+  pidfile survives the kill, and the restarted replica refuses to start. Remove
+  the container together with its volume, then bring the stack up again:
+
+  ```bash
+  docker rm -f -v <container>
+  docker compose --env-file .env.worker -f worker.compose.yml \
+    -f app.worker.per-replica-state.compose.yml up -d
+  ```
+
+The overlay is removed when the platform packages are bumped to the release that
+carries the EnterpriseAppBase changeset `worker-multi-replica-per-host` and
+`npm run platform:infra:sync` renders the same behaviour into `worker.compose.yml`.
+
 | Setting | Why it is there |
 |---|---|
 | `restart: unless-stopped` | The memory valve exits deliberately; without this a clean drain leaves the worker down |
 | `stop_grace_period: 300s` | Long enough for a real drain before Docker escalates to `SIGKILL` |
 | Exec-form `ENTRYPOINT` | Shell form wraps PID 1 in `/bin/sh -c`, which does not forward `SIGTERM` — the drain would never run |
-| A volume at `/var/lib/worker` | State survives a restart, so a replica re-attaches instead of leaking a node row |
+| A volume at `/var/lib/worker` | State survives a restart, so a replica re-attaches instead of leaking a node row. `worker.compose.yml` mounts one shared named volume (`worker-state`); the overlay replaces it with one anonymous volume per replica |
 
 The worker makes only **outbound** connections: no ports, no inbound firewall
 rule, and no database access.
@@ -343,6 +413,7 @@ and detaching leaves it running untouched.
 | Symptom | Likely cause | What to do |
 |---|---|---|
 | `A worker is already running here (pid N)` | A live daemon holds this state directory | `kvox node stop`, or use a different `KVOX_STATE_DIR` |
+| A replica exits with `A worker is already running here` | Replicas share one state volume (`--scale` without the overlay), or a killed replica left its pidfile behind | Add `-f app.worker.per-replica-state.compose.yml`; after a `SIGKILL` or OOM kill run `docker rm -f -v <container>` and `up -d` again |
 | Starts, then exits with code `70` | An advertised job type is missing a required capability | The message names both — install it, or drop the type from `--types` |
 | `doctor` says reachable but refused (401) | The credential was revoked or belongs to another server | `kvox node enroll` again |
 | `doctor` says refused (403) | The account lacks `nodes:read`/`nodes:write` | Ask an administrator to grant them |
