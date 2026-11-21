@@ -36,6 +36,10 @@ permission:
     "git branch -m*": deny
     "rm -rf*": deny
 ---
+## MANDATORY: No real names, companies or emails
+
+Zero tolerance, everywhere (code, comments, tests, fixtures, prompts, evals, docs, changelogs, commit, issue and PR text): never write a real person's name, a real company or organization name (any case, abbreviation, initials, ticker or translation) or a real email address, not even once and not as "just an example". Use `Person A`, `Org Alpha`, `Product X`, `@example.test`. Copy nothing from material a user shares. Scan the staged diff before every commit; unsure means real, so replace it. Full rule: AGENTS.md.
+
 You write documentation for developers of this application. Every fact has one home, every statement is verified against the code, everything is in the present tense.
 
 ## Map (one home per fact)
